@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Line Coach — Rehearse Your Play Lines & Cues</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">🎭</span>
+      <h1>Line Coach</h1>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button class="tab" data-view="library">Library</button>
+      <button class="tab" data-view="script">Script</button>
+      <button class="tab" data-view="rehearse">Rehearse</button>
+      <button class="tab" data-view="cues">Cue Cards</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ============ LIBRARY VIEW ============ -->
+    <section class="view" id="view-library">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Your Scripts</h2>
+          <button class="btn btn-primary" id="new-script-btn">+ New Script</button>
+        </div>
+        <ul class="script-list" id="script-list"></ul>
+        <p class="empty-hint" id="library-empty">
+          No scripts yet. Create one to get started, or load the sample to see how it works.
+        </p>
+        <div class="row gap">
+          <button class="btn" id="load-sample-btn">Load sample scene</button>
+          <button class="btn" id="import-btn">Import…</button>
+          <input type="file" id="import-file" accept="application/json" hidden />
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SCRIPT EDITOR VIEW ============ -->
+    <section class="view" id="view-script">
+      <div class="panel">
+        <div class="panel-head">
+          <h2 id="script-title-display">Script</h2>
+          <div class="row gap">
+            <button class="btn" id="export-btn">Export</button>
+            <button class="btn btn-danger" id="delete-script-btn">Delete</button>
+          </div>
+        </div>
+
+        <label class="field">
+          <span>Title</span>
+          <input type="text" id="script-title" placeholder="e.g. Romeo &amp; Juliet — Act II" />
+        </label>
+
+        <label class="field">
+          <span>Paste your script</span>
+          <small class="hint">
+            One line per speech, in the form <code>CHARACTER: dialogue</code>.
+            Stage directions on their own line are kept as context. Blank lines are fine.
+          </small>
+          <textarea id="script-raw" rows="14" placeholder="JULIET: O Romeo, Romeo! wherefore art thou Romeo?&#10;ROMEO: Shall I hear more, or shall I speak at this?&#10;JULIET: 'Tis but thy name that is my enemy."></textarea>
+        </label>
+
+        <div class="row gap between">
+          <button class="btn btn-primary" id="parse-btn">Parse &amp; Save</button>
+          <div class="field inline" id="character-picker-wrap" hidden>
+            <span>I am playing:</span>
+            <select id="my-character"></select>
+          </div>
+        </div>
+
+        <div id="parse-summary" class="summary" hidden></div>
+      </div>
+    </section>
+
+    <!-- ============ REHEARSE VIEW ============ -->
+    <section class="view" id="view-rehearse">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Rehearse</h2>
+          <div class="row gap">
+            <label class="toggle">
+              <input type="checkbox" id="hide-mine" checked />
+              <span>Hide my lines</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="auto-reveal-cue" checked />
+              <span>Highlight cues</span>
+            </label>
+          </div>
+        </div>
+        <div class="rehearse-meta" id="rehearse-meta"></div>
+        <div class="transcript" id="transcript"></div>
+        <p class="empty-hint" id="rehearse-empty">Pick a script and your character first.</p>
+      </div>
+    </section>
+
+    <!-- ============ CUE CARDS VIEW ============ -->
+    <section class="view" id="view-cues">
+      <div class="panel cue-panel">
+        <div class="panel-head">
+          <h2>Cue Cards</h2>
+          <div class="progress-pill" id="cue-progress">0 / 0</div>
+        </div>
+
+        <div class="cue-stage" id="cue-stage">
+          <div class="cue-card" id="cue-card">
+            <div class="cue-label">Your cue</div>
+            <div class="cue-prompt" id="cue-prompt">—</div>
+            <div class="cue-answer" id="cue-answer" hidden>
+              <div class="cue-label">Your line</div>
+              <div class="cue-answer-text" id="cue-answer-text"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="cue-controls">
+          <button class="btn" id="cue-prev">‹ Prev</button>
+          <button class="btn btn-primary" id="cue-reveal">Reveal line</button>
+          <button class="btn btn-good" id="cue-got">Got it ✓</button>
+          <button class="btn btn-warn" id="cue-miss">Missed ✗</button>
+          <button class="btn" id="cue-next">Next ›</button>
+        </div>
+        <div class="cue-controls">
+          <button class="btn" id="cue-shuffle">🔀 Shuffle</button>
+          <button class="btn" id="cue-reset">Reset progress</button>
+          <label class="toggle">
+            <input type="checkbox" id="cue-only-missed" />
+            <span>Drill missed only</span>
+          </label>
+        </div>
+        <p class="empty-hint" id="cues-empty">Pick a script and your character first.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <span id="active-script-name">No script selected</span>
+    <span class="dot">•</span>
+    <span>Everything is saved in this browser only.</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
