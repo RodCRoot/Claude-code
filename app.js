@@ -160,6 +160,38 @@
     setView("script");
   });
 
+  $("#load-odyssey-btn").addEventListener("click", () => {
+    if (!window.ODYSSEY_SCRIPT) { alert("Couldn't find the Odyssey script file."); return; }
+    const data = window.ODYSSEY_SCRIPT;
+    const id = uid();
+    state.scripts[id] = {
+      title: data.title,
+      raw: data.raw,
+      speeches: parseScript(data.raw),
+      myCharacter: data.myCharacter,
+      cueProgress: {},
+    };
+    state.activeId = id;
+    save();
+    setView("rehearse");
+  });
+
+  /* ---------------- Read-aloud (Web Speech API) ---------------- */
+  function speak(text) {
+    if (!("speechSynthesis" in window)) {
+      alert("This browser can't read text aloud. Try Chrome, Safari or Edge.");
+      return;
+    }
+    // Drop parenthetical stage directions so only the spoken words are read.
+    const clean = String(text).replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
+    if (!clean) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(clean);
+    u.rate = 0.95;
+    u.pitch = 1;
+    window.speechSynthesis.speak(u);
+  }
+
   /* ---------------- Editor ---------------- */
   function renderEditor() {
     const sc = activeScript();
@@ -286,6 +318,7 @@
     empty.hidden = true;
     const hideMine = $("#hide-mine").checked;
     const showCues = $("#auto-reveal-cue").checked;
+    const tapToSpeak = $("#speak-cues").checked;
     const mineName = sc.myCharacter;
     const lineSpeeches = sc.speeches;
 
@@ -306,7 +339,21 @@
 
       const who = document.createElement("div");
       who.className = "who";
-      who.textContent = s.speaker || "stage";
+      const whoLabel = document.createElement("span");
+      whoLabel.textContent = s.speaker || "stage";
+      who.appendChild(whoLabel);
+
+      // Speaker button to hear this speech read aloud.
+      if (s.text) {
+        const sBtn = document.createElement("button");
+        sBtn.className = "speak-btn";
+        sBtn.type = "button";
+        sBtn.title = "Read this line aloud";
+        sBtn.textContent = "🔊";
+        sBtn.addEventListener("click", (e) => { e.stopPropagation(); speak(s.text); });
+        who.appendChild(sBtn);
+      }
+
       const what = document.createElement("div");
       what.className = "what";
 
@@ -316,6 +363,11 @@
         what.addEventListener("click", () => what.classList.toggle("revealed"));
       } else {
         what.textContent = s.text;
+        // When "Read cues aloud" is on, tapping a non-hidden line speaks it.
+        if (tapToSpeak && s.text) {
+          what.style.cursor = "pointer";
+          what.addEventListener("click", () => speak(s.text));
+        }
       }
       div.appendChild(who);
       div.appendChild(what);
@@ -326,6 +378,7 @@
 
   $("#hide-mine").addEventListener("change", renderRehearse);
   $("#auto-reveal-cue").addEventListener("change", renderRehearse);
+  $("#speak-cues").addEventListener("change", renderRehearse);
 
   /* ---------------- Cue Cards ----------------
      Each "card" is one of my lines, prompted by the preceding speech (my cue). */
@@ -414,6 +467,13 @@
     const cardEl = $("#cue-card");
     cardEl.style.borderColor =
       status === "got" ? "var(--good)" : status === "missed" ? "var(--warn)" : "var(--line)";
+
+    if ($("#cue-autospeak").checked) speak(card.cueText);
+  }
+
+  function speakCurrentCue() {
+    const card = cueCards[cueDeck[cuePos]];
+    if (card) speak(card.cueText);
   }
 
   function mark(status) {
@@ -435,6 +495,7 @@
     showCard();
   }
 
+  $("#cue-hear").addEventListener("click", speakCurrentCue);
   $("#cue-reveal").addEventListener("click", () => { $("#cue-answer").hidden = false; });
   $("#cue-next").addEventListener("click", nextCard);
   $("#cue-prev").addEventListener("click", prevCard);
@@ -473,6 +534,7 @@
     else if (e.key === "ArrowLeft") prevCard();
     else if (e.key.toLowerCase() === "g") mark("got");
     else if (e.key.toLowerCase() === "m") mark("missed");
+    else if (e.key.toLowerCase() === "h") speakCurrentCue();
   });
 
   /* ---------------- Footer ---------------- */

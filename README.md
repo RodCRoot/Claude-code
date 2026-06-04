@@ -13,7 +13,8 @@ GitHub Pages.)
 
 ## How to use
 
-1. **Library** → *New Script* (or *Load sample scene* to try it out).
+1. **Library** → *New Script* (or **🎭 Load my Odyssey (CREW 4)** to jump straight
+   into your part, or *Load sample scene* to try the demo).
 2. **Script** → paste your script and click *Parse & Save*. Use the format:
 
    ```
@@ -29,11 +30,13 @@ GitHub Pages.)
 3. **Rehearse** → read through the scene with **your lines hidden**. The speech
    right before each of your lines (your **cue**) is highlighted. Tap a hidden
    line to reveal and check yourself. Toggles let you show/hide your lines or
-   turn off cue highlighting.
+   turn off cue highlighting. Tap the **🔊** next to any line to hear it read
+   aloud, or switch on *Read cues aloud* to tap any line to hear it.
 
 4. **Cue Cards** → flashcard drills. You see the **cue**, recite your line from
    memory, then *Reveal*. Mark **Got it ✓** or **Missed ✗** to track progress,
-   *Shuffle* the order, or **Drill missed only** to focus on weak spots.
+   *Shuffle* the order, or **Drill missed only** to focus on weak spots. Use
+   **🔊 Hear cue** (or *Auto-read cue*) to have each cue spoken to you.
 
 ### Keyboard shortcuts (Cue Cards)
 

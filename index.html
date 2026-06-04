@@ -34,6 +34,7 @@
           No scripts yet. Create one to get started, or load the sample to see how it works.
         </p>
         <div class="row gap">
+          <button class="btn btn-primary" id="load-odyssey-btn">🎭 Load my Odyssey (CREW 4)</button>
           <button class="btn" id="load-sample-btn">Load sample scene</button>
           <button class="btn" id="import-btn">Import…</button>
           <input type="file" id="import-file" accept="application/json" hidden />
@@ -94,6 +95,12 @@
             </label>
           </div>
         </div>
+        <div class="panel-head" style="margin-bottom:8px">
+          <label class="toggle">
+            <input type="checkbox" id="speak-cues" />
+            <span>🔊 Read cues aloud (tap any line to hear it)</span>
+          </label>
+        </div>
         <div class="rehearse-meta" id="rehearse-meta"></div>
         <div class="transcript" id="transcript"></div>
         <p class="empty-hint" id="rehearse-empty">Pick a script and your character first.</p>
@@ -120,6 +127,13 @@
         </div>
 
         <div class="cue-controls">
+          <button class="btn" id="cue-hear">🔊 Hear cue</button>
+          <label class="toggle">
+            <input type="checkbox" id="cue-autospeak" />
+            <span>Auto-read cue</span>
+          </label>
+        </div>
+        <div class="cue-controls">
           <button class="btn" id="cue-prev">‹ Prev</button>
           <button class="btn btn-primary" id="cue-reveal">Reveal line</button>
           <button class="btn btn-good" id="cue-got">Got it ✓</button>
@@ -145,6 +159,7 @@
     <span>Everything is saved in this browser only.</span>
   </footer>
 
+  <script src="data-odyssey.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

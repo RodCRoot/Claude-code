@@ -223,7 +223,23 @@ select { cursor: pointer; }
   text-transform: uppercase;
   color: var(--text-dim);
   margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
+.speak-btn {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+  border-radius: 7px;
+  padding: 1px 7px;
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: pointer;
+  opacity: 0.65;
+  transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+.speak-btn:hover { opacity: 1; border-color: var(--accent); }
 .speech.is-mine .who { color: var(--mine); }
 .speech .what { font-size: 16.5px; }
 .speech.stage .what { font-style: italic; color: var(--text-dim); font-size: 15px; }
