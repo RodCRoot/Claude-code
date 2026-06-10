@@ -1,0 +1,200 @@
+// Vantage data model.
+//
+// Dev uses SQLite for zero-setup local runs. To move to Postgres for prod,
+// change `provider` to "postgresql" and point DATABASE_URL at your instance —
+// the models below are written to port cleanly (no SQLite-only constructs).
+//
+// NOTE: SQLite doesn't support native enums or scalar lists, so role/source/
+// direction fields are Strings validated in the app layer (see src/constants.ts),
+// and "list" fields (tags, muscle groups) are stored as JSON strings.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Identity & tenancy
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  users      User[]
+  athletes   Athlete[]
+  exercises  Exercise[]
+  workouts   Workout[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         String   @default("ATHLETE") // ADMIN | COACH | ATHLETE
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id])
+  athlete      Athlete?     // populated when role == ATHLETE
+  createdAt    DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Athletes
+// ---------------------------------------------------------------------------
+
+model Athlete {
+  id         String   @id @default(cuid())
+  firstName  String
+  lastName   String
+  sex        String   // M | F
+  birthDate  DateTime
+  sport      String
+  position   String?
+  gradYear   Int?
+  heightCm   Float?
+  weightKg   Float?
+  orgId      String
+  org        Organization @relation(fields: [orgId], references: [id])
+  userId     String?      @unique
+  user       User?        @relation(fields: [userId], references: [id])
+  createdAt  DateTime @default(now())
+
+  metrics        MetricRecord[]
+  assignments    WorkoutAssignment[]
+
+  @@index([orgId, sport])
+}
+
+// ---------------------------------------------------------------------------
+// Metrics catalog + records
+// ---------------------------------------------------------------------------
+
+// A measurable test/metric. Seeded with the standard battery but extensible.
+model MetricType {
+  id         String   @id @default(cuid())
+  key        String   @unique // e.g. "cmj_jump_height", "sprint_10m"
+  name       String           // human label
+  unit       String           // cm, s, W/kg, etc.
+  category   String           // JUMP | SPEED | STRENGTH | POWER | OTHER
+  source     String           // HAWKIN | OVR | TIMING | MANUAL
+  // For ranking: does a higher value mean better performance?
+  higherIsBetter Boolean @default(true)
+  createdAt  DateTime @default(now())
+
+  records    MetricRecord[]
+  benchmarks Benchmark[]
+}
+
+model MetricRecord {
+  id           String   @id @default(cuid())
+  athleteId    String
+  athlete      Athlete  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  metricTypeId String
+  metricType   MetricType @relation(fields: [metricTypeId], references: [id])
+  value        Float
+  recordedAt   DateTime @default(now())
+  source       String   @default("MANUAL") // HAWKIN | OVR | TIMING | MANUAL | CSV
+  rawJson      String?  // original device payload when synced from an API
+  notes        String?
+  createdAt    DateTime @default(now())
+
+  @@index([athleteId, metricTypeId, recordedAt])
+}
+
+// Reference data for the rating engine: research "elite" norms and any other
+// external population. Gym-wide and cohort norms are computed live from records.
+model Benchmark {
+  id           String   @id @default(cuid())
+  metricTypeId String
+  metricType   MetricType @relation(fields: [metricTypeId], references: [id])
+  sport        String?  // null = applies across sports
+  sex          String?  // M | F | null = both
+  ageMin       Int?
+  ageMax       Int?
+  level        String   // ELITE | GOOD | AVERAGE
+  mean         Float
+  sd           Float?   // standard deviation if known (enables z-scores)
+  sourceName   String?  // citation / where the norm came from
+  createdAt    DateTime @default(now())
+
+  @@index([metricTypeId, sport, sex])
+}
+
+// ---------------------------------------------------------------------------
+// Exercise library + workout builder
+// ---------------------------------------------------------------------------
+
+model Exercise {
+  id           String   @id @default(cuid())
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id])
+  name         String
+  description  String?
+  videoUrl     String?
+  category     String   // e.g. LOWER | UPPER | OLYMPIC | PLYO | CORE | CONDITIONING
+  equipment    String?
+  muscleGroups String?  // JSON string array
+  tags         String?  // JSON string array
+  createdAt    DateTime @default(now())
+
+  items        WorkoutItem[]
+
+  @@index([orgId, category])
+}
+
+model Workout {
+  id          String   @id @default(cuid())
+  orgId       String
+  org         Organization @relation(fields: [orgId], references: [id])
+  name        String
+  description String?
+  createdById String
+  createdAt   DateTime @default(now())
+
+  blocks      WorkoutBlock[]
+  assignments WorkoutAssignment[]
+}
+
+model WorkoutBlock {
+  id        String  @id @default(cuid())
+  workoutId String
+  workout   Workout @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  name      String  // e.g. "A. Power", "B. Strength"
+  order     Int
+  items     WorkoutItem[]
+}
+
+model WorkoutItem {
+  id         String  @id @default(cuid())
+  blockId    String
+  block      WorkoutBlock @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  exerciseId String
+  exercise   Exercise @relation(fields: [exerciseId], references: [id])
+  order      Int
+  sets       Int?
+  reps       String?  // free-form: "5", "3-5", "AMRAP", "30s"
+  load       String?  // "70% 1RM", "RPE 8", "bodyweight"
+  tempo      String?
+  restSec    Int?
+  notes      String?
+}
+
+model WorkoutAssignment {
+  id           String   @id @default(cuid())
+  workoutId    String
+  workout      Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  athleteId    String
+  athlete      Athlete  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  assignedDate DateTime @default(now())
+  dueDate      DateTime?
+  status       String   @default("ASSIGNED") // ASSIGNED | IN_PROGRESS | COMPLETED
+  completedAt  DateTime?
+
+  @@index([athleteId, status])
+}

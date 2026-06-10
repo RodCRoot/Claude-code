@@ -1,60 +1,120 @@
-# 🎭 Line Coach
+# ▲ Vantage — Athlete Performance Platform
 
-A simple, no-install website to help actors memorise their **play lines** and the
-**cue lines** that come before them. Everything runs in your browser — no server,
-no accounts, no sign-up. Your scripts are saved locally on your device.
+A TeamBuildr-style strength & conditioning platform with a performance-rating
+engine at its core. Track athlete testing data (sprint times, Hawkin CMJ,
+OVR vertical/drop jumps, strength), see each athlete **rated against peers in
+their sport + age group, gym-wide, and research "elite" norms**, build an
+exercise library, and program workouts.
 
-## Open it
+This is the foundation build: a real API + database with auth and roles, a
+responsive web client, and a working rating engine seeded with demo data.
 
-Just open `index.html` in any modern browser. That's it.
+> The repo also contains a separate, unrelated browser app, **Line Coach**
+> (`index.html`, `app.js`, `styles.css`, `LineCoach.html`) — see
+> [`docs/line-coach.md`](docs/line-coach.md). Vantage lives in `server/` and `web/`.
 
-(Or host the three files — `index.html`, `styles.css`, `app.js` — anywhere, e.g.
-GitHub Pages.)
+---
 
-## How to use
+## Architecture
 
-1. **Library** → *New Script* (or **🎭 Load my Odyssey (CREW 4)** to jump straight
-   into your part, or *Load sample scene* to try the demo).
-2. **Script** → paste your script and click *Parse & Save*. Use the format:
+```
+server/   Node + TypeScript + Express + Prisma (SQLite dev → Postgres prod)
+          JWT auth · coach/athlete roles · rating engine · CSV import
+web/      React + Vite + TypeScript · Recharts · responsive UI
+```
 
-   ```
-   JULIET: O Romeo, Romeo! wherefore art thou Romeo?
-   ROMEO: Shall I hear more, or shall I speak at this?
-   ```
+API-first by design so a future native mobile app reuses the same endpoints.
 
-   - One speech per line as `CHARACTER: dialogue`.
-   - Long speeches can wrap onto continuation lines (no colon needed).
-   - Lines in `(parentheses)` or `[brackets]` are kept as stage directions.
-   - Then pick **"I am playing:"** to tell the app which lines are yours.
+### The four pillars (all wired up in this build)
 
-3. **Rehearse** → read through the scene with **your lines hidden**. The speech
-   right before each of your lines (your **cue**) is highlighted. Tap a hidden
-   line to reveal and check yourself. Toggles let you show/hide your lines or
-   turn off cue highlighting. Tap the **🔊** next to any line to hear it read
-   aloud, or switch on *Read cues aloud* to tap any line to hear it.
+1. **Athlete dashboard** — per-athlete metric trends, a composite **Vantage
+   Score**, and per-metric rating cards.
+2. **Rating / comparison engine** (`server/src/rating.ts`) — percentile rank
+   within configurable cohorts (sport peers · age+sex · gym-wide) plus z-score
+   vs. research **elite** benchmarks, rolled into a 0–100 composite + tier
+   (Elite / Advanced / Proficient / Developing / Foundational).
+3. **Exercise database** — searchable library with video links, categories,
+   equipment, and muscle groups.
+4. **Workout builder** — blocks → exercises with sets/reps/load/rest, save and
+   assign to athletes (TeamBuildr-style).
 
-4. **Cue Cards** → flashcard drills. You see the **cue**, recite your line from
-   memory, then *Reveal*. Mark **Got it ✓** or **Missed ✗** to track progress,
-   *Shuffle* the order, or **Drill missed only** to focus on weak spots. Use
-   **🔊 Hear cue** (or *Auto-read cue*) to have each cue spoken to you.
+### Data in / integrations
 
-### Keyboard shortcuts (Cue Cards)
+- **Manual entry** and **CSV import** (`POST /api/import/metrics-csv`) work today
+  — drop in Hawkin / OVR / timing-gate exports.
+- The data model is **integration-ready**: `MetricRecord.source` + `rawJson`
+  fields are there for live **Hawkin Cloud / OVR** API syncs to populate later
+  without schema changes.
 
-| Key | Action |
-| --- | --- |
-| `Space` / `Enter` | Reveal your line |
-| `→` / `←` | Next / previous card |
-| `G` | Mark *Got it* |
-| `M` | Mark *Missed* |
+---
 
-## Backup & sharing
+## Run it locally
 
-Use **Export** on the Script tab to save a script as a `.json` file, and
-**Import** in the Library to load it back (handy for moving between devices or
-sharing a scene with a scene partner).
+Two terminals.
 
-## Notes
+**1) API**
+```bash
+cd server
+cp .env.example .env
+npm install
+npm run setup     # prisma generate + db push + seed demo data
+npm run dev       # http://localhost:4000
+```
 
-- Data is stored in your browser's `localStorage` under the key `lineCoach.v1`.
-  Clearing your browser data will remove saved scripts — export anything you want
-  to keep.
+**2) Web**
+```bash
+cd web
+npm install
+npm run dev       # http://localhost:5173 (proxies /api to :4000)
+```
+
+### Demo logins
+| Role | Email | Password |
+| --- | --- | --- |
+| Coach | `coach@vantage.dev` | `password123` |
+| Athlete | `athlete@vantage.dev` | `password123` |
+
+Coaches see the full roster, can log/import metrics, and build workouts.
+Athletes land on their own dashboard.
+
+---
+
+## Rating engine, briefly
+
+For each metric we take an athlete's best value and compute:
+- **Cohort percentiles** — where they rank among sport peers (same sport, sex,
+  age ±1), among age+sex across sports, and gym-wide. "Lower is better" metrics
+  (sprint times) are inverted so a fast time always scores high.
+- **Elite comparison** — ratio to the elite mean and, when a standard deviation
+  is known, a z-score → normal-CDF percentile.
+
+The **composite Vantage Score** is the mean of per-metric scores. Elite norms
+seeded in `prisma/seed.ts` are **placeholders** — swap in cited research values
+(stored in the `Benchmark` table, filterable by sport/sex/age) to make ratings
+authoritative.
+
+---
+
+## Going to production
+- Switch Prisma `provider` to `postgresql` and point `DATABASE_URL` at Postgres
+  (`prisma migrate deploy`). No model changes needed.
+- Set a strong `JWT_SECRET`.
+- Build: `npm run build` in each of `server/` and `web/`; serve the web `dist/`
+  behind the API or a CDN.
+
+## Roadmap (next)
+- Live Hawkin Cloud / OVR API sync workers writing to `MetricRecord`.
+- Athlete self-logging of completed workouts (set logs).
+- Native mobile app on the existing API.
+- Richer benchmark dataset + per-position norms.
+
+## API reference (quick)
+| Method | Path | Notes |
+| --- | --- | --- |
+| POST | `/api/auth/register` · `/login` · GET `/me` | JWT auth |
+| GET/POST | `/api/athletes` · GET `/:id` · `/:id/rating` | roster + rating card |
+| GET | `/api/metrics/types` · `/series` | catalog + chart series |
+| POST | `/api/metrics` | log one result (coach) |
+| POST | `/api/import/metrics-csv` | bulk CSV import (coach) |
+| GET/POST | `/api/exercises` · GET `/:id` | library |
+| GET/POST | `/api/workouts` · GET `/:id` · POST `/:id/assign` | builder + assign |
