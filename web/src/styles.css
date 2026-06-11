@@ -146,3 +146,41 @@ button.secondary { background: var(--panel-2); border: 1px solid var(--border); 
 .log-item { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px; }
 .log-item:first-of-type { border-top: none; }
 .log-item-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+
+/* analytics + reports */
+.stat-grid { grid-template-columns: repeat(4, 1fr); }
+.stat { text-align: center; }
+.stat-value { font-size: 1.8rem; font-weight: 700; color: var(--text); }
+.filters { display: flex; gap: 8px; }
+.analytics-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 12px; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.data-table th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.data-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); }
+.data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.data-table a { color: var(--accent); }
+.num.up { color: #4ade80; }
+.num.down { color: #f87171; }
+.integration { background: var(--panel-2); }
+.spark { width: 96px; }
+
+/* printable report */
+.report { max-width: 900px; }
+.report-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.report-head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid var(--border); padding-bottom: 14px; margin-bottom: 8px; }
+.report-metrics td, .report-metrics th { vertical-align: middle; }
+.report-foot { margin-top: 24px; border-top: 1px solid var(--border); padding-top: 10px; }
+
+@media (max-width: 900px) {
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .analytics-cols { grid-template-columns: 1fr; }
+}
+
+@media print {
+  .sidebar, .no-print { display: none !important; }
+  .app { display: block; }
+  .content { padding: 0; }
+  body, .report, .card { background: white !important; color: #111 !important; }
+  .card, .data-table th, .data-table td { border-color: #ccc !important; }
+  .muted { color: #555 !important; }
+  a { color: #111 !important; text-decoration: none; }
+}

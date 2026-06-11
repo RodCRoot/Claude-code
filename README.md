@@ -36,15 +36,27 @@ API-first by design so a future native mobile app reuses the same endpoints.
 3. **Exercise database** — searchable library with video links, categories,
    equipment, and muscle groups.
 4. **Workout builder** — blocks → exercises with sets/reps/load/rest, save and
-   assign to athletes (TeamBuildr-style).
+   assign to athletes (TeamBuildr-style). Athletes **log sets/reps/load/RPE**
+   from their Training view.
+
+### Coach analytics & reports
+
+- **Team analytics** (`/analytics`, coach-only) — roster overview, a metric
+  explorer with team-average **trends**, a **leaderboard** (direction- and
+  bodyweight-aware), **biggest movers** (improving/declining), and a
+  **workout-compliance** table that flags who's falling behind.
+- **Printable athlete report** (`/athletes/:id/report`) — profile, Vantage Score,
+  per-metric ratings with sparklines, elite comparison, and training compliance.
+  One click to **Print / Save PDF** for parent meetings or recruiting.
 
 ### Data in / integrations
 
-- **Manual entry** and **CSV import** (`POST /api/import/metrics-csv`) work today
-  — drop in Hawkin / OVR / timing-gate exports.
-- The data model is **integration-ready**: `MetricRecord.source` + `rawJson`
-  fields are there for live **Hawkin Cloud / OVR** API syncs to populate later
-  without schema changes.
+- **Manual entry** and **CSV import** (`POST /api/import/metrics-csv`) — drop in
+  Hawkin / OVR / timing-gate exports.
+- **Device sync** (`server/src/integrations/`) — pluggable **Hawkin Cloud** and
+  **OVRtrain** adapters. Set `HAWKIN_API_TOKEN` / `OVR_API_KEY` for live sync, or
+  run a **sample import** from the analytics page to try the flow with no
+  credentials. Syncs are **idempotent** (deduped by the provider's external id).
 
 ---
 

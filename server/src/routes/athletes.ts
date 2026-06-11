@@ -72,3 +72,72 @@ athletesRouter.get("/:id/rating", async (req: AuthedRequest, res) => {
   }
   res.json(await getAthleteRating(req.params.id));
 });
+
+// A self-contained, printable progress report: profile, rating card, per-metric
+// history (for sparklines), and workout compliance.
+athletesRouter.get("/:id/report", async (req: AuthedRequest, res) => {
+  const athlete = await prisma.athlete.findUnique({
+    where: { id: req.params.id },
+    include: { org: { select: { name: true } } },
+  });
+  if (!athlete || athlete.orgId !== req.auth!.orgId) {
+    return res.status(404).json({ error: "Athlete not found" });
+  }
+  if (req.auth!.role === "ATHLETE" && req.auth!.athleteId !== athlete.id) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const [rating, records, assignments] = await Promise.all([
+    getAthleteRating(req.params.id),
+    prisma.metricRecord.findMany({
+      where: { athleteId: req.params.id },
+      include: { metricType: { select: { key: true } } },
+      orderBy: { recordedAt: "asc" },
+    }),
+    prisma.workoutAssignment.findMany({
+      where: { athleteId: req.params.id },
+      include: { workout: { select: { name: true } } },
+      orderBy: { assignedDate: "desc" },
+    }),
+  ]);
+
+  // Group records into per-metric series keyed by metric key.
+  const history: Record<string, { value: number; recordedAt: Date; source: string }[]> = {};
+  for (const r of records) {
+    (history[r.metricType.key] ||= []).push({ value: r.value, recordedAt: r.recordedAt, source: r.source });
+  }
+
+  const completed = assignments.filter((a) => a.status === "COMPLETED").length;
+  const compliance = {
+    total: assignments.length,
+    completed,
+    inProgress: assignments.filter((a) => a.status === "IN_PROGRESS").length,
+    notStarted: assignments.filter((a) => a.status === "ASSIGNED").length,
+    completionRate: assignments.length ? Math.round((completed / assignments.length) * 100) : 0,
+    recent: assignments.slice(0, 8).map((a) => ({
+      name: a.workout.name,
+      status: a.status,
+      assignedDate: a.assignedDate,
+      completedAt: a.completedAt,
+    })),
+  };
+
+  res.json({
+    athlete: {
+      id: athlete.id,
+      firstName: athlete.firstName,
+      lastName: athlete.lastName,
+      sex: athlete.sex,
+      sport: athlete.sport,
+      position: athlete.position,
+      gradYear: athlete.gradYear,
+      heightCm: athlete.heightCm,
+      weightKg: athlete.weightKg,
+      orgName: athlete.org.name,
+    },
+    rating,
+    history,
+    compliance,
+    generatedAt: new Date().toISOString(),
+  });
+});

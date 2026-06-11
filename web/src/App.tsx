@@ -6,11 +6,14 @@ import AthleteDetail from "./pages/AthleteDetail";
 import Exercises from "./pages/Exercises";
 import WorkoutBuilder from "./pages/WorkoutBuilder";
 import Training from "./pages/Training";
+import Analytics from "./pages/Analytics";
+import ReportPage from "./pages/Report";
 
 export default function App() {
   const { user, loading } = useAuth();
   if (loading) return <div className="center muted">Loading…</div>;
   if (!user) return <Login />;
+  const isCoach = user.role === "COACH" || user.role === "ADMIN";
 
   return (
     <div className="app">
@@ -19,9 +22,11 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/athletes/:id" element={<AthleteDetail />} />
+          <Route path="/athletes/:id/report" element={<ReportPage />} />
           <Route path="/training" element={<Training />} />
           <Route path="/exercises" element={<Exercises />} />
-          <Route path="/workouts" element={<WorkoutBuilder />} />
+          {isCoach && <Route path="/workouts" element={<WorkoutBuilder />} />}
+          {isCoach && <Route path="/analytics" element={<Analytics />} />}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
@@ -43,6 +48,7 @@ function Sidebar() {
       <div className="brand">▲ Vantage</div>
       <nav>
         {link("/", isCoach ? "Roster" : "My Dashboard")}
+        {isCoach && link("/analytics", "Analytics")}
         {link("/training", "Training")}
         {link("/exercises", "Exercises")}
         {isCoach && link("/workouts", "Workout Builder")}

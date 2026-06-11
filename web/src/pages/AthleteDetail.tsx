@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
@@ -77,6 +77,7 @@ export default function AthleteDetail() {
           <div>
             <div className="muted small">Vantage Score</div>
             <div className={`tier tier-${rating.tier.toLowerCase()}`}>{rating.tier}</div>
+            <Link className="link-btn" to={`/athletes/${athlete.id}/report`}>Printable report →</Link>
           </div>
         </div>
       </header>

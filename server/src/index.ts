@@ -11,6 +11,8 @@ import { exercisesRouter } from "./routes/exercises";
 import { workoutsRouter } from "./routes/workouts";
 import { assignmentsRouter } from "./routes/assignments";
 import { benchmarksRouter } from "./routes/benchmarks";
+import { analyticsRouter } from "./routes/analytics";
+import { integrationsRouter } from "./routes/integrations";
 
 const app = express();
 
@@ -29,6 +31,8 @@ app.use("/api/exercises", exercisesRouter);
 app.use("/api/workouts", workoutsRouter);
 app.use("/api/assignments", assignmentsRouter);
 app.use("/api/benchmarks", benchmarksRouter);
+app.use("/api/analytics", analyticsRouter);
+app.use("/api/integrations", integrationsRouter);
 
 // In production, serve the built web client and let the SPA handle routing.
 // WEB_DIST can override the location; default points at the monorepo web build.
