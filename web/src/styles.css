@@ -102,6 +102,10 @@ button.secondary { background: var(--panel-2); border: 1px solid var(--border); 
 .bar-label { position: absolute; right: 6px; top: 0; font-size: 0.72rem; line-height: 18px; }
 .elite { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--border); padding-top: 10px; }
 .badge { background: var(--accent); color: #042; font-weight: 700; font-size: 0.68rem; padding: 2px 7px; border-radius: 5px; }
+.conf { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; cursor: help; }
+.conf-high { background: #064e3b; color: #6ee7b7; }
+.conf-medium { background: #3b3a1e; color: #fde047; }
+.conf-low { background: #3f1e1e; color: #fca5a5; }
 
 /* quick entry */
 .quick-entry { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }

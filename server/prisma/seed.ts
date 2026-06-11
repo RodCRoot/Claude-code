@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import benchmarkData from "./benchmarks.json";
 
 const prisma = new PrismaClient();
 
@@ -16,31 +17,26 @@ function gaussian(mean: number, sd: number) {
 }
 
 // --- Metric catalog ---------------------------------------------------------
+// `relativeToBw` flags metrics the rating engine judges relative to bodyweight.
 const METRIC_TYPES = [
-  { key: "sprint_10m", name: "10m Sprint", unit: "s", category: "SPEED", source: "TIMING", higherIsBetter: false },
-  { key: "sprint_40yd", name: "40yd Dash", unit: "s", category: "SPEED", source: "TIMING", higherIsBetter: false },
-  { key: "cmj_height", name: "CMJ Jump Height", unit: "cm", category: "JUMP", source: "HAWKIN", higherIsBetter: true },
-  { key: "cmj_rsi_mod", name: "CMJ RSI-Modified", unit: "", category: "POWER", source: "HAWKIN", higherIsBetter: true },
-  { key: "cmj_peak_power", name: "CMJ Peak Power", unit: "W/kg", category: "POWER", source: "HAWKIN", higherIsBetter: true },
-  { key: "dj_rsi", name: "Drop Jump RSI", unit: "", category: "JUMP", source: "OVR", higherIsBetter: true },
-  { key: "vertical_jump", name: "Vertical Jump", unit: "cm", category: "JUMP", source: "OVR", higherIsBetter: true },
-  { key: "back_squat_1rm", name: "Back Squat 1RM", unit: "kg", category: "STRENGTH", source: "MANUAL", higherIsBetter: true },
+  { key: "sprint_10m", name: "10m Sprint", unit: "s", category: "SPEED", source: "TIMING", higherIsBetter: false, relativeToBw: false },
+  { key: "sprint_40yd", name: "40yd Dash", unit: "s", category: "SPEED", source: "TIMING", higherIsBetter: false, relativeToBw: false },
+  { key: "cmj_height", name: "CMJ Jump Height", unit: "cm", category: "JUMP", source: "HAWKIN", higherIsBetter: true, relativeToBw: false },
+  { key: "cmj_rsi_mod", name: "CMJ RSI-Modified", unit: "", category: "POWER", source: "HAWKIN", higherIsBetter: true, relativeToBw: false },
+  { key: "cmj_peak_power", name: "CMJ Peak Power", unit: "W/kg", category: "POWER", source: "HAWKIN", higherIsBetter: true, relativeToBw: false },
+  { key: "dj_rsi", name: "Drop Jump RSI", unit: "", category: "JUMP", source: "OVR", higherIsBetter: true, relativeToBw: false },
+  { key: "vertical_jump", name: "Vertical Jump", unit: "cm", category: "JUMP", source: "OVR", higherIsBetter: true, relativeToBw: false },
+  { key: "back_squat_1rm", name: "Back Squat 1RM", unit: "kg", category: "STRENGTH", source: "MANUAL", higherIsBetter: true, relativeToBw: true },
 ];
 
-// --- Elite reference norms (illustrative; replace with cited research) -------
-// mean/sd describe an "elite" population for the rating engine's z-scores.
-const BENCHMARKS = [
-  { key: "cmj_height", sex: "M", level: "ELITE", mean: 60, sd: 6, sourceName: "Elite collegiate male norms (placeholder)" },
-  { key: "cmj_height", sex: "F", level: "ELITE", mean: 48, sd: 5, sourceName: "Elite collegiate female norms (placeholder)" },
-  { key: "cmj_rsi_mod", sex: null, level: "ELITE", mean: 0.55, sd: 0.08, sourceName: "Elite RSImod norms (placeholder)" },
-  { key: "cmj_peak_power", sex: null, level: "ELITE", mean: 55, sd: 6, sourceName: "Elite peak power norms (placeholder)" },
-  { key: "dj_rsi", sex: null, level: "ELITE", mean: 2.6, sd: 0.4, sourceName: "Elite drop-jump RSI norms (placeholder)" },
-  { key: "vertical_jump", sex: "M", level: "ELITE", mean: 71, sd: 7, sourceName: "Elite male vertical norms (placeholder)" },
-  { key: "vertical_jump", sex: "F", level: "ELITE", mean: 56, sd: 6, sourceName: "Elite female vertical norms (placeholder)" },
-  { key: "sprint_10m", sex: "M", level: "ELITE", mean: 1.62, sd: 0.06, sourceName: "Elite male 10m norms (placeholder)" },
-  { key: "sprint_40yd", sex: "M", level: "ELITE", mean: 4.5, sd: 0.15, sourceName: "Elite male 40yd norms (placeholder)" },
-  { key: "back_squat_1rm", sex: "M", level: "ELITE", mean: 180, sd: 25, sourceName: "Elite male squat norms (placeholder)" },
-];
+// Elite reference norms come from the editable, cited dataset in benchmarks.json.
+const BENCHMARKS = benchmarkData.benchmarks;
+
+// Positions per sport, used to demo position-aware ratings.
+const POSITIONS: Record<string, string[]> = {
+  Basketball: ["Guard", "Big"],
+  Soccer: ["Forward", "Midfielder", "Defender"],
+};
 
 // Per-metric population centers used to synthesize athlete data.
 const POP: Record<string, { M: number; F: number; sd: number }> = {
@@ -96,17 +92,24 @@ async function main() {
     typeByKey[t.key] = created.id;
   }
 
-  // Benchmarks
+  // Benchmarks (from the editable, cited dataset)
   for (const b of BENCHMARKS) {
+    if (!typeByKey[b.metricKey]) {
+      console.warn(`  ! benchmark references unknown metricKey "${b.metricKey}" — skipped`);
+      continue;
+    }
     await prisma.benchmark.create({
       data: {
-        metricTypeId: typeByKey[b.key],
-        sport: null,
-        sex: b.sex,
+        metricTypeId: typeByKey[b.metricKey],
+        sport: b.sport ?? null,
+        position: b.position ?? null,
+        sex: b.sex ?? null,
         level: b.level,
         mean: b.mean,
-        sd: b.sd,
-        sourceName: b.sourceName,
+        sd: b.sd ?? null,
+        sourceName: b.source ?? null,
+        confidence: b.confidence ?? null,
+        notes: b.notes ?? null,
       },
     });
   }
@@ -133,6 +136,9 @@ async function main() {
     // give a spread of ability per athlete
     const ability = gaussian(0, 1);
 
+    const positions = POSITIONS[sport] ?? [];
+    const position = positions.length ? positions[i % positions.length] : null;
+
     const athlete = await prisma.athlete.create({
       data: {
         firstName: FIRST[i],
@@ -140,6 +146,7 @@ async function main() {
         sex,
         birthDate,
         sport,
+        position,
         gradYear: 2026 + (18 - age),
         heightCm: Math.round(gaussian(sex === "M" ? 180 : 168, 8)),
         weightKg: Math.round(gaussian(sex === "M" ? 75 : 63, 9)),

@@ -22,10 +22,12 @@ interface Cohort { label: string; n: number; percentile: number | null; }
 interface Elite {
   level: string; mean: number; ratio: number; zScore: number | null;
   percentileOfElite: number | null; sourceName: string | null;
+  confidence: string | null; matchedOn: string; notes: string | null;
 }
 interface MetricRating {
   metricKey: string; metricName: string; unit: string; higherIsBetter: boolean;
-  value: number; score: number; cohorts: Cohort[]; elite: Elite | null;
+  relativeToBw: boolean; value: number; ratingValue: number;
+  score: number; cohorts: Cohort[]; elite: Elite | null;
 }
 interface Rating {
   compositeScore: number | null; tier: string; ageYears: number; metrics: MetricRating[];
@@ -109,6 +111,7 @@ export default function AthleteDetail() {
               <div>
                 <div className="metric-name">{m.metricName}</div>
                 <div className="metric-value">{m.value}<span className="unit"> {m.unit}</span></div>
+                {m.relativeToBw && <div className="muted small">{m.ratingValue}× bodyweight</div>}
               </div>
               <ScoreRing score={m.score} />
             </div>
@@ -123,9 +126,15 @@ export default function AthleteDetail() {
             {m.elite && (
               <div className="elite">
                 <span className="badge">ELITE</span>
+                {m.elite.confidence && (
+                  <span className={`conf conf-${m.elite.confidence.toLowerCase()}`} title={m.elite.notes ?? ""}>
+                    {m.elite.confidence === "LOW" ? "estimate" : m.elite.confidence.toLowerCase()}
+                  </span>
+                )}
                 <span className="muted small">
-                  {Math.round(m.elite.ratio * 100)}% of elite mean ({m.elite.mean}{m.unit ? ` ${m.unit}` : ""})
-                  {m.elite.percentileOfElite != null && ` · ${m.elite.percentileOfElite}th pct of elite`}
+                  {Math.round(m.elite.ratio * 100)}% of elite ({m.elite.mean}{m.relativeToBw ? "×BW" : m.unit ? ` ${m.unit}` : ""})
+                  {m.elite.percentileOfElite != null && ` · ${m.elite.percentileOfElite}th pct`}
+                  {m.elite.matchedOn !== "general" && ` · vs ${m.elite.matchedOn}`}
                 </span>
               </div>
             )}

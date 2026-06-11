@@ -82,16 +82,26 @@ Athletes land on their own dashboard.
 ## Rating engine, briefly
 
 For each metric we take an athlete's best value and compute:
-- **Cohort percentiles** — where they rank among sport peers (same sport, sex,
-  age ±1), among age+sex across sports, and gym-wide. "Lower is better" metrics
-  (sprint times) are inverted so a fast time always scores high.
-- **Elite comparison** — ratio to the elite mean and, when a standard deviation
-  is known, a z-score → normal-CDF percentile.
+- **Cohort percentiles** — where they rank among **sport + position peers**
+  (same sport, position, sex, age ±1), sport peers, age+sex across sports, and
+  gym-wide. "Lower is better" metrics (sprint times) are inverted so a fast time
+  always scores high.
+- **Relative strength** — metrics flagged `relativeToBw` (e.g. back squat) are
+  divided by bodyweight before comparison, so a 60 kg and a 90 kg athlete are
+  judged fairly. Benchmarks for these are in ×bodyweight units.
+- **Elite comparison** — the engine picks the **most specific** elite benchmark
+  available (sport + position + sex > sport + sex > sex > generic), then reports
+  ratio to the elite mean and a z-score → normal-CDF percentile, along with the
+  source and a **confidence flag** (HIGH/MEDIUM/LOW; LOW shows as "estimate").
 
-The **composite Vantage Score** is the mean of per-metric scores. Elite norms
-seeded in `prisma/seed.ts` are **placeholders** — swap in cited research values
-(stored in the `Benchmark` table, filterable by sport/sex/age) to make ratings
-authoritative.
+The **composite Vantage Score** is the mean of per-metric scores.
+
+### Tuning the benchmarks
+Elite norms live in **`server/prisma/benchmarks.json`** — an editable, cited
+dataset keyed by metric/sport/position/sex with `mean`, `sd`, `source`, and
+`confidence`. Edit it and re-run `npm run seed`, or manage rows live via the
+`/api/benchmarks` admin API. The seeded values are **research-backed drafts
+pending review** — adjust before relying on ratings.
 
 ---
 
@@ -102,11 +112,13 @@ authoritative.
 - Build: `npm run build` in each of `server/` and `web/`; serve the web `dist/`
   behind the API or a CDN.
 
-## Roadmap (next)
-- Live Hawkin Cloud / OVR API sync workers writing to `MetricRecord`.
-- Athlete self-logging of completed workouts (set logs).
-- Native mobile app on the existing API.
-- Richer benchmark dataset + per-position norms.
+## Roadmap
+- [x] Athlete self-logging of completed workouts (set logs).
+- [x] Position-aware benchmarks + bodyweight-relative strength rating.
+- [ ] Finalize benchmark values with Rod (review the drafts in `benchmarks.json`).
+- [ ] Live Hawkin Cloud / OVR API sync workers writing to `MetricRecord`.
+- [ ] Match TeamBuildr UI/flows from screenshots.
+- [ ] Native mobile app on the existing API.
 
 ## API reference (quick)
 | Method | Path | Notes |
@@ -118,3 +130,5 @@ authoritative.
 | POST | `/api/import/metrics-csv` | bulk CSV import (coach) |
 | GET/POST | `/api/exercises` · GET `/:id` | library |
 | GET/POST | `/api/workouts` · GET `/:id` · POST `/:id/assign` | builder + assign |
+| GET | `/api/assignments` · GET `/:id` · POST `/:id/logs` · `/:id/complete` | athlete logging |
+| GET/POST/DELETE | `/api/benchmarks` | view/edit elite norms |

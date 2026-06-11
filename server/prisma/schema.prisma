@@ -85,6 +85,10 @@ model MetricType {
   source     String           // HAWKIN | OVR | TIMING | MANUAL
   // For ranking: does a higher value mean better performance?
   higherIsBetter Boolean @default(true)
+  // When true, the rating engine divides the value by bodyweight (kg) before
+  // comparing — so strength is judged relative to size. Benchmarks for these
+  // metrics are stored in xBodyweight units.
+  relativeToBw Boolean @default(false)
   createdAt  DateTime @default(now())
 
   records    MetricRecord[]
@@ -114,6 +118,7 @@ model Benchmark {
   metricTypeId String
   metricType   MetricType @relation(fields: [metricTypeId], references: [id])
   sport        String?  // null = applies across sports
+  position     String?  // null = any position (e.g. "Guard", "Lineman", "Skill")
   sex          String?  // M | F | null = both
   ageMin       Int?
   ageMax       Int?
@@ -121,9 +126,11 @@ model Benchmark {
   mean         Float
   sd           Float?   // standard deviation if known (enables z-scores)
   sourceName   String?  // citation / where the norm came from
+  confidence   String?  // HIGH | MEDIUM | LOW (data quality flag)
+  notes        String?
   createdAt    DateTime @default(now())
 
-  @@index([metricTypeId, sport, sex])
+  @@index([metricTypeId, sport, position, sex])
 }
 
 // ---------------------------------------------------------------------------

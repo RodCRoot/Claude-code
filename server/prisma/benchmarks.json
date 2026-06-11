@@ -1,0 +1,57 @@
+{
+  "_readme": [
+    "EDITABLE BENCHMARK DATASET — tune these freely, then re-run `npm run seed` (or",
+    "use the admin API: GET/POST /api/benchmarks) to load them.",
+    "",
+    "Each row defines a reference value the rating engine compares athletes against.",
+    "Matching precedence (most specific wins): sport+position+sex > sport+sex > sex > generic.",
+    "",
+    "Fields:",
+    "  metricKey   – must match a MetricType.key",
+    "  sport       – null applies to all sports; else 'Basketball', 'Soccer', 'Football', ...",
+    "  position    – null applies to all positions; else 'Guard', 'Big', 'Skill', 'Lineman', ...",
+    "  sex         – 'M' | 'F' | null (both)",
+    "  level       – 'ELITE' | 'GOOD' | 'AVERAGE'",
+    "  mean, sd    – population mean and standard deviation (sd enables z-scores)",
+    "  unitsNote   – the unit the mean is expressed in (e.g. 'cm', 's', 'xBodyweight')",
+    "  source      – citation",
+    "  confidence  – 'HIGH' | 'MEDIUM' | 'LOW' (surfaced in the UI; LOW = treat as estimate)",
+    "  notes       – caveats (protocol, population, etc.)",
+    "",
+    "NOTE: back_squat_1rm means are in xBodyweight because that metric is rated",
+    "relative to bodyweight. All others are in the metric's native unit.",
+    "These are DRAFT values pending Rod's review — adjust before relying on ratings."
+  ],
+  "benchmarks": [
+    { "metricKey": "cmj_height", "sport": null, "position": null, "sex": "M", "level": "ELITE", "mean": 41.1, "sd": 4.5, "unitsNote": "cm", "source": "Laffaye et al. 2014 (189 M college/pro)", "confidence": "HIGH", "notes": "Mixed-sport college/pro. Sport-specific sprinters reach 60+ cm. Protocol: hands-on-hips CMJ." },
+    { "metricKey": "cmj_height", "sport": null, "position": null, "sex": "F", "level": "ELITE", "mean": 25.5, "sd": 2.9, "unitsNote": "cm", "source": "Laffaye et al. 2014 (84 F college/pro)", "confidence": "HIGH", "notes": "Hands-on-hips CMJ; arm-swing protocols read higher." },
+    { "metricKey": "cmj_height", "sport": "Basketball", "position": "Guard", "sex": "M", "level": "ELITE", "mean": 48, "sd": 6, "unitsNote": "cm", "source": "Merrigan et al. 2024 D-I basketball (adapted)", "confidence": "MEDIUM", "notes": "Position example — guards jump higher than bigs." },
+    { "metricKey": "cmj_height", "sport": "Basketball", "position": "Big", "sex": "M", "level": "ELITE", "mean": 42, "sd": 6, "unitsNote": "cm", "source": "Merrigan et al. 2024 D-I basketball (adapted)", "confidence": "MEDIUM", "notes": "Position example." },
+
+    { "metricKey": "cmj_rsi_mod", "sport": null, "position": null, "sex": "M", "level": "ELITE", "mean": 0.42, "sd": 0.10, "unitsNote": "ratio", "source": "Suchomel et al. 2019, NCAA D-I (n=76)", "confidence": "HIGH", "notes": "90th pct ~0.55+." },
+    { "metricKey": "cmj_rsi_mod", "sport": null, "position": null, "sex": "F", "level": "ELITE", "mean": 0.31, "sd": 0.09, "unitsNote": "ratio", "source": "Suchomel et al. 2019, NCAA D-I (n=75)", "confidence": "HIGH", "notes": "" },
+
+    { "metricKey": "cmj_peak_power", "sport": null, "position": null, "sex": "M", "level": "ELITE", "mean": 55, "sd": 6, "unitsNote": "W/kg (peak)", "source": "Estimate; cf. Merrigan 2024 avg propulsive 36.6 W/kg", "confidence": "LOW", "notes": "CLARIFY: peak vs average propulsive power. Cited 36.6 W/kg is AVERAGE propulsive; peak runs higher." },
+    { "metricKey": "cmj_peak_power", "sport": null, "position": null, "sex": "F", "level": "ELITE", "mean": 47, "sd": 6, "unitsNote": "W/kg (peak)", "source": "Estimate", "confidence": "LOW", "notes": "Needs sex-specific source." },
+
+    { "metricKey": "dj_rsi", "sport": null, "position": null, "sex": "M", "level": "ELITE", "mean": 2.8, "sd": 0.4, "unitsNote": "ratio (JH/GCT)", "source": "ScienceForSport / sprinter literature", "confidence": "LOW", "notes": "Elite sprinters 3.0-4.0; drop height & protocol dependent." },
+    { "metricKey": "dj_rsi", "sport": null, "position": null, "sex": "F", "level": "ELITE", "mean": 2.3, "sd": 0.4, "unitsNote": "ratio (JH/GCT)", "source": "Extrapolated", "confidence": "LOW", "notes": "Sparse female DJ-RSI data." },
+
+    { "metricKey": "vertical_jump", "sport": "Basketball", "position": "Guard", "sex": "M", "level": "ELITE", "mean": 65, "sd": 7, "unitsNote": "cm", "source": "Ziv & Lidor 2009 basketball review (adapted)", "confidence": "MEDIUM", "notes": "Approach vs standing protocol matters." },
+    { "metricKey": "vertical_jump", "sport": "Basketball", "position": "Big", "sex": "M", "level": "ELITE", "mean": 58, "sd": 7, "unitsNote": "cm", "source": "Ziv & Lidor 2009 (adapted)", "confidence": "MEDIUM", "notes": "Position example." },
+    { "metricKey": "vertical_jump", "sport": null, "position": null, "sex": "M", "level": "ELITE", "mean": 60, "sd": 8, "unitsNote": "cm", "source": "Ziv & Lidor 2009", "confidence": "MEDIUM", "notes": "Generic male fallback." },
+    { "metricKey": "vertical_jump", "sport": null, "position": null, "sex": "F", "level": "ELITE", "mean": 45, "sd": 7, "unitsNote": "cm", "source": "Ziv & Lidor 2009", "confidence": "MEDIUM", "notes": "Generic female fallback." },
+
+    { "metricKey": "sprint_10m", "sport": null, "position": null, "sex": "M", "level": "ELITE", "mean": 1.65, "sd": 0.07, "unitsNote": "s", "source": "Output Sports / soccer norms", "confidence": "MEDIUM", "notes": "Standing-start dependent." },
+    { "metricKey": "sprint_10m", "sport": null, "position": null, "sex": "F", "level": "ELITE", "mean": 1.85, "sd": 0.08, "unitsNote": "s", "source": "Extrapolated", "confidence": "LOW", "notes": "" },
+
+    { "metricKey": "sprint_40yd", "sport": "Football", "position": "Skill", "sex": "M", "level": "ELITE", "mean": 4.50, "sd": 0.15, "unitsNote": "s", "source": "NFL Combine skill positions (WR/CB/RB)", "confidence": "MEDIUM", "notes": "Position example." },
+    { "metricKey": "sprint_40yd", "sport": "Football", "position": "Lineman", "sex": "M", "level": "ELITE", "mean": 5.10, "sd": 0.20, "unitsNote": "s", "source": "NFL Combine OL/DL", "confidence": "MEDIUM", "notes": "Position example — linemen are slower; rating them vs skill norms would be unfair." },
+    { "metricKey": "sprint_40yd", "sport": null, "position": null, "sex": "M", "level": "ELITE", "mean": 4.60, "sd": 0.18, "unitsNote": "s", "source": "NFL Combine (mixed)", "confidence": "MEDIUM", "notes": "Generic male fallback." },
+    { "metricKey": "sprint_40yd", "sport": null, "position": null, "sex": "F", "level": "ELITE", "mean": 5.20, "sd": 0.20, "unitsNote": "s", "source": "Estimate (sparse data)", "confidence": "LOW", "notes": "" },
+
+    { "metricKey": "back_squat_1rm", "sport": null, "position": null, "sex": "M", "level": "ELITE", "mean": 2.0, "sd": 0.3, "unitsNote": "xBodyweight", "source": "NSCA / powerlifting norms", "confidence": "MEDIUM", "notes": "Rated relative to bodyweight." },
+    { "metricKey": "back_squat_1rm", "sport": null, "position": null, "sex": "F", "level": "ELITE", "mean": 1.5, "sd": 0.25, "unitsNote": "xBodyweight", "source": "NSCA / powerlifting norms", "confidence": "MEDIUM", "notes": "Rated relative to bodyweight." },
+    { "metricKey": "back_squat_1rm", "sport": "Football", "position": "Lineman", "sex": "M", "level": "ELITE", "mean": 2.3, "sd": 0.3, "unitsNote": "xBodyweight", "source": "Adapted", "confidence": "LOW", "notes": "Position example — linemen squat heavier relative to BW." }
+  ]
+}
