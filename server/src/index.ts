@@ -1,4 +1,6 @@
 import "dotenv/config";
+import path from "path";
+import fs from "fs";
 import express from "express";
 import cors from "cors";
 import { authRouter } from "./routes/auth";
@@ -27,6 +29,18 @@ app.use("/api/exercises", exercisesRouter);
 app.use("/api/workouts", workoutsRouter);
 app.use("/api/assignments", assignmentsRouter);
 app.use("/api/benchmarks", benchmarksRouter);
+
+// In production, serve the built web client and let the SPA handle routing.
+// WEB_DIST can override the location; default points at the monorepo web build.
+const webDist = process.env.WEB_DIST || path.resolve(__dirname, "../../web/dist");
+if (fs.existsSync(path.join(webDist, "index.html"))) {
+  app.use(express.static(webDist));
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api/")) return next();
+    res.sendFile(path.join(webDist, "index.html"));
+  });
+  console.log(`Serving web client from ${webDist}`);
+}
 
 // Fallback error handler.
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

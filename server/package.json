@@ -10,9 +10,11 @@
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prepare-db": "node scripts/prepare-db.js",
     "db:push": "prisma db push",
     "seed": "ts-node --transpile-only prisma/seed.ts",
-    "setup": "prisma generate && prisma db push && npm run seed"
+    "setup": "prisma generate && prisma db push && npm run seed",
+    "deploy:db": "node scripts/prepare-db.js && prisma generate && prisma db push --skip-generate --accept-data-loss && npm run seed"
   },
   "prisma": {
     "seed": "ts-node --transpile-only prisma/seed.ts"

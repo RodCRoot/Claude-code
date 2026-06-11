@@ -68,6 +68,14 @@ const EXERCISES = [
 ];
 
 async function main() {
+  // Safety guard: never wipe a populated database (e.g. on a redeploy).
+  // Set FORCE_SEED=1 to override and reseed from scratch.
+  const existing = await prisma.user.count().catch(() => 0);
+  if (existing > 0 && !process.env.FORCE_SEED) {
+    console.log(`Database already has ${existing} users — skipping seed. Set FORCE_SEED=1 to reseed.`);
+    return;
+  }
+
   console.log("Seeding Vantage...");
 
   // Clean slate (dev only).

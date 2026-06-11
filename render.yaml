@@ -1,0 +1,29 @@
+# One-click deploy to Render (https://render.com).
+# In Render: New → Blueprint → connect this repo → Apply.
+# Creates a free Postgres database + a web service that serves both the API
+# and the web client. JWT secret is generated for you.
+
+databases:
+  - name: vantage-db
+    plan: free
+
+services:
+  - type: web
+    name: vantage
+    runtime: node
+    plan: free
+    branch: claude/athlete-training-platform-426cq0
+    buildCommand: ./scripts/build.sh
+    startCommand: cd server && node dist/index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vantage-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: NODE_ENV
+        value: production
+      - key: WEB_DIST
+        value: /opt/render/project/src/web/dist

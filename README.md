@@ -105,12 +105,14 @@ pending review** — adjust before relying on ratings.
 
 ---
 
-## Going to production
-- Switch Prisma `provider` to `postgresql` and point `DATABASE_URL` at Postgres
-  (`prisma migrate deploy`). No model changes needed.
-- Set a strong `JWT_SECRET`.
-- Build: `npm run build` in each of `server/` and `web/`; serve the web `dist/`
-  behind the API or a CDN.
+## Deploy it live
+See **[DEPLOY.md](DEPLOY.md)**. Quick paths:
+- **Render** — one-click blueprint (`render.yaml`): provisions Postgres + a web
+  service, generates `JWT_SECRET`, gives you a public HTTPS URL.
+- **Docker** — `docker compose up --build`, then open http://localhost:4000.
+
+In production the server serves the built web client, and the Prisma provider
+auto-switches to Postgres based on `DATABASE_URL` (no schema edits needed).
 
 ## Roadmap
 - [x] Athlete self-logging of completed workouts (set logs).
