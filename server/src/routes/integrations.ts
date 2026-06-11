@@ -67,7 +67,8 @@ integrationsRouter.post("/:provider/sync", async (req: AuthedRequest, res) => {
   let created = 0,
     skipped = 0,
     unmatchedAthlete = 0,
-    unknownMetric = 0;
+    unknownMetric = 0,
+    errors = 0;
   const unmatchedNames = new Set<string>();
 
   for (const rec of external) {
@@ -77,18 +78,24 @@ integrationsRouter.post("/:provider/sync", async (req: AuthedRequest, res) => {
     const metricTypeId = metricByKey.get(rec.metricKey);
     if (!metricTypeId) { unknownMetric++; continue; }
 
-    await prisma.metricRecord.create({
-      data: {
-        athleteId,
-        metricTypeId,
-        value: rec.value,
-        source: adapter.key,
-        recordedAt: new Date(rec.recordedAt),
-        rawJson: JSON.stringify({ externalId: rec.externalId, payload: rec.raw }),
-      },
-    });
-    seen.add(rec.externalId);
-    created++;
+    try {
+      await prisma.metricRecord.create({
+        data: {
+          athleteId,
+          metricTypeId,
+          value: rec.value,
+          source: adapter.key,
+          recordedAt: new Date(rec.recordedAt),
+          rawJson: JSON.stringify({ externalId: rec.externalId, payload: rec.raw }),
+        },
+      });
+      seen.add(rec.externalId);
+      created++;
+    } catch (e) {
+      // One bad record shouldn't abort the whole import; report a count instead.
+      errors++;
+      console.error(`Sync ${adapter.key} record ${rec.externalId} failed:`, e);
+    }
   }
 
   res.json({
@@ -99,6 +106,7 @@ integrationsRouter.post("/:provider/sync", async (req: AuthedRequest, res) => {
     skipped,
     unmatchedAthlete,
     unknownMetric,
+    errors,
     unmatchedNames: [...unmatchedNames],
   });
 });

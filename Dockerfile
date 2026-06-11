@@ -35,4 +35,4 @@ COPY --from=build /app/web/dist web/dist
 EXPOSE 4000
 # On boot: match the Prisma provider to DATABASE_URL, sync schema, seed once
 # (no-op if data already exists), then start the server.
-CMD ["sh", "-c", "cd server && node scripts/prepare-db.js && npx prisma generate && npx prisma db push --skip-generate --accept-data-loss && npm run seed && node dist/index.js"]
+CMD ["sh", "-c", "cd server && node scripts/prepare-db.js && npx prisma generate && npx prisma db push --skip-generate && npm run seed && node dist/index.js"]

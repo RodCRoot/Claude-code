@@ -69,7 +69,9 @@ async function liveFetch(since?: Date): Promise<ExternalRecord[]> {
   const out: ExternalRecord[] = [];
   for (const t of tests) {
     const athleteName = [t.athlete?.name, `${t.athlete?.firstName ?? ""} ${t.athlete?.lastName ?? ""}`.trim()].find(Boolean);
-    const recordedAt = new Date((t.timestamp ?? t.testDate ?? Date.now()) * (t.timestamp ? 1000 : 1)).toISOString();
+    // timestamp is unix seconds; testDate is an ISO string. Handle both safely.
+    const d = typeof t.timestamp === "number" ? new Date(t.timestamp * 1000) : new Date(t.testDate ?? Date.now());
+    const recordedAt = (isNaN(d.getTime()) ? new Date() : d).toISOString();
     const pushIf = (metricKey: string, value: unknown) => {
       if (athleteName && typeof value === "number") {
         out.push({ externalId: `hawkin-${metricKey}-${t.id}`, athleteName, metricKey, value, recordedAt, raw: t });

@@ -26,8 +26,13 @@ interface Report {
 export default function ReportPage() {
   const { id } = useParams();
   const [data, setData] = useState<Report | null>(null);
+  const [error, setError] = useState("");
 
-  useEffect(() => { api.get<Report>(`/athletes/${id}/report`).then(setData); }, [id]);
+  useEffect(() => {
+    setError("");
+    api.get<Report>(`/athletes/${id}/report`).then(setData).catch((e) => setError((e as Error).message));
+  }, [id]);
+  if (error) return <div className="card error">Couldn't load report: {error}</div>;
   if (!data) return <div className="muted">Building report…</div>;
 
   const a = data.athlete;
@@ -118,10 +123,12 @@ export default function ReportPage() {
   );
 }
 
+// Mirrors the server's tierForScore thresholds (server/src/rating.ts) so the
+// printed report's tier colors match the app's ratings.
 function tierFor(score: number) {
-  if (score >= 85) return "elite";
-  if (score >= 70) return "advanced";
+  if (score >= 90) return "elite";
+  if (score >= 75) return "advanced";
   if (score >= 50) return "proficient";
-  if (score >= 30) return "developing";
+  if (score >= 25) return "developing";
   return "foundational";
 }

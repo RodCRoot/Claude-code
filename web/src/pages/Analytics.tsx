@@ -12,7 +12,7 @@ interface Overview {
   records: { total: number; last30Days: number };
   assignments: { assigned: number; inProgress: number; completed: number; completionRate: number; completedLast30Days: number };
 }
-interface LeaderRow { athleteId: string; name: string; sport: string; position: string | null; value: number; recordedAt: string; }
+interface LeaderRow { athleteId: string; name: string; sport: string; position: string | null; value: number; rankedValue: number; recordedAt: string; }
 interface Mover { athleteId: string; name: string; sport: string; from: number; to: number; delta: number; pct: number; samples: number; }
 interface ComplianceRow { athleteId: string; name: string; sport: string; total: number; completed: number; inProgress: number; notStarted: number; completionRate: number; lastActivity: string | null; }
 interface Integration { key: string; name: string; configured: boolean; credentialEnv: string[]; }
@@ -82,10 +82,11 @@ function MetricExplorer({ metricKey, sport }: { metricKey: string; sport: string
   const [improving, setImproving] = useState<Mover[]>([]);
   const [declining, setDeclining] = useState<Mover[]>([]);
   const [unit, setUnit] = useState("");
+  const [relativeToBw, setRelativeToBw] = useState(false);
 
   useEffect(() => {
     const q = `metricKey=${metricKey}${sport ? `&sport=${encodeURIComponent(sport)}` : ""}`;
-    api.get<{ metric: Metric; rows: LeaderRow[] }>(`/analytics/leaderboard?${q}&limit=10`).then((r) => { setLeaders(r.rows); setUnit(r.metric.unit); });
+    api.get<{ metric: Metric & { relativeToBw: boolean }; rows: LeaderRow[] }>(`/analytics/leaderboard?${q}&limit=10`).then((r) => { setLeaders(r.rows); setUnit(r.metric.unit); setRelativeToBw(r.metric.relativeToBw); });
     api.get<{ points: { month: string; average: number }[] }>(`/analytics/trends?${q}`).then((r) => setTrend(r.points));
     api.get<{ improving: Mover[]; declining: Mover[] }>(`/analytics/movers?${q}`).then((r) => { setImproving(r.improving.slice(0, 5)); setDeclining(r.declining.slice(0, 5)); });
   }, [metricKey, sport]);
@@ -112,7 +113,11 @@ function MetricExplorer({ metricKey, sport }: { metricKey: string; sport: string
                 <tr key={r.athleteId}>
                   <td className="muted">{i + 1}</td>
                   <td><Link to={`/athletes/${r.athleteId}`}>{r.name}</Link> <span className="muted small">{r.sport}</span></td>
-                  <td className="num">{r.value}<span className="unit"> {unit}</span></td>
+                  <td className="num">
+                    {relativeToBw
+                      ? <>{Math.round(r.rankedValue * 100) / 100}<span className="unit"> ×BW</span></>
+                      : <>{r.value}<span className="unit"> {unit}</span></>}
+                  </td>
                 </tr>
               ))}
               {leaders.length === 0 && <tr><td colSpan={3} className="muted">No data yet.</td></tr>}
@@ -125,16 +130,18 @@ function MetricExplorer({ metricKey, sport }: { metricKey: string; sport: string
           <table className="data-table">
             <thead><tr><th>Athlete</th><th>Change</th></tr></thead>
             <tbody>
+              {/* Arrow conveys direction (improvement is metric-aware), so the
+                  magnitude is shown unsigned to avoid "▲ … (-8%)" for sprint times. */}
               {improving.map((m) => (
                 <tr key={m.athleteId}>
                   <td><Link to={`/athletes/${m.athleteId}`}>{m.name}</Link></td>
-                  <td className="num up">▲ {Math.abs(m.delta)} ({m.pct > 0 ? "+" : ""}{m.pct}%)</td>
+                  <td className="num up">▲ {Math.abs(m.delta)} ({Math.abs(m.pct)}%)</td>
                 </tr>
               ))}
               {declining.map((m) => (
                 <tr key={m.athleteId}>
                   <td><Link to={`/athletes/${m.athleteId}`}>{m.name}</Link></td>
-                  <td className="num down">▼ {Math.abs(m.delta)} ({m.pct}%)</td>
+                  <td className="num down">▼ {Math.abs(m.delta)} ({Math.abs(m.pct)}%)</td>
                 </tr>
               ))}
               {improving.length + declining.length === 0 && <tr><td colSpan={2} className="muted">Need ≥2 results to show change.</td></tr>}
