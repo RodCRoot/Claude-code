@@ -183,6 +183,7 @@ model WorkoutItem {
   tempo      String?
   restSec    Int?
   notes      String?
+  setLogs    SetLog[]
 }
 
 model WorkoutAssignment {
@@ -196,5 +197,25 @@ model WorkoutAssignment {
   status       String   @default("ASSIGNED") // ASSIGNED | IN_PROGRESS | COMPLETED
   completedAt  DateTime?
 
+  setLogs      SetLog[]
+
   @@index([athleteId, status])
+}
+
+// What the athlete actually performed for a given workout item, set by set.
+model SetLog {
+  id            String  @id @default(cuid())
+  assignmentId  String
+  assignment    WorkoutAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  workoutItemId String
+  workoutItem   WorkoutItem @relation(fields: [workoutItemId], references: [id], onDelete: Cascade)
+  setNumber     Int
+  reps          Int?
+  loadKg        Float?
+  rpe           Float?
+  completed     Boolean @default(true)
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  @@unique([assignmentId, workoutItemId, setNumber])
 }

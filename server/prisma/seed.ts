@@ -124,6 +124,7 @@ async function main() {
 
   // Athletes (with a linked login for the first one)
   const now = Date.now();
+  const athleteIds: string[] = [];
   for (let i = 0; i < 12; i++) {
     const sex = i % 2 === 0 ? "M" : "F";
     const sport = SPORTS[i % SPORTS.length];
@@ -145,6 +146,7 @@ async function main() {
         orgId: org.id,
       },
     });
+    athleteIds.push(athlete.id);
 
     // Link a login to the first athlete so you can log in as an athlete too.
     if (i === 0) {
@@ -203,7 +205,7 @@ async function main() {
 
   // A sample workout
   const coach = await prisma.user.findUnique({ where: { email: "coach@vantage.dev" } });
-  await prisma.workout.create({
+  const workout = await prisma.workout.create({
     data: {
       orgId: org.id,
       name: "Lower Power — Day A",
@@ -234,6 +236,15 @@ async function main() {
         ],
       },
     },
+  });
+
+  // Assign the sample workout to every athlete so there's something to log.
+  await prisma.workoutAssignment.createMany({
+    data: athleteIds.map((athleteId) => ({
+      workoutId: workout.id,
+      athleteId,
+      dueDate: new Date(now + 2 * 24 * 3600 * 1000),
+    })),
   });
 
   console.log("Seed complete.");

@@ -133,3 +133,12 @@ button.secondary { background: var(--panel-2); border: 1px solid var(--border); 
 .item-table td { padding: 3px; }
 .item-table .tiny { width: 70px; }
 .builder-actions { display: flex; gap: 10px; }
+
+/* assignment buttons styled as cards (override the default button look) */
+.as-button { background: var(--panel); color: var(--text); font-weight: 400; text-align: left; width: 100%; cursor: pointer; }
+.as-button:hover { filter: none; border-color: var(--accent-2); }
+
+/* workout logging */
+.log-item { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px; }
+.log-item:first-of-type { border-top: none; }
+.log-item-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }

@@ -5,6 +5,7 @@ import Dashboard from "./pages/Dashboard";
 import AthleteDetail from "./pages/AthleteDetail";
 import Exercises from "./pages/Exercises";
 import WorkoutBuilder from "./pages/WorkoutBuilder";
+import Training from "./pages/Training";
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -18,6 +19,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/athletes/:id" element={<AthleteDetail />} />
+          <Route path="/training" element={<Training />} />
           <Route path="/exercises" element={<Exercises />} />
           <Route path="/workouts" element={<WorkoutBuilder />} />
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -41,6 +43,7 @@ function Sidebar() {
       <div className="brand">▲ Vantage</div>
       <nav>
         {link("/", isCoach ? "Roster" : "My Dashboard")}
+        {link("/training", "Training")}
         {link("/exercises", "Exercises")}
         {isCoach && link("/workouts", "Workout Builder")}
       </nav>

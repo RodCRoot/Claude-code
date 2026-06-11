@@ -7,6 +7,7 @@ import { metricsRouter } from "./routes/metrics";
 import { importRouter } from "./routes/import";
 import { exercisesRouter } from "./routes/exercises";
 import { workoutsRouter } from "./routes/workouts";
+import { assignmentsRouter } from "./routes/assignments";
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.use("/api/metrics", metricsRouter);
 app.use("/api/import", importRouter);
 app.use("/api/exercises", exercisesRouter);
 app.use("/api/workouts", workoutsRouter);
+app.use("/api/assignments", assignmentsRouter);
 
 // Fallback error handler.
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
