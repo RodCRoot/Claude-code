@@ -3,9 +3,19 @@ import { z } from "zod";
 import { prisma } from "../db";
 import { requireAuth, requireRole, AuthedRequest } from "../auth";
 import { getAthleteRating } from "../rating";
+import { repMaxTo1rm, e1rmFromLoadVelocity, mvtForExercise } from "../prescription";
 
 export const athletesRouter = Router();
 athletesRouter.use(requireAuth);
+
+// Confirm the caller may view this athlete (same org; athletes only themselves).
+// Returns the athlete or null.
+async function authorizeAthlete(req: AuthedRequest, athleteId: string) {
+  const athlete = await prisma.athlete.findUnique({ where: { id: athleteId } });
+  if (!athlete || athlete.orgId !== req.auth!.orgId) return null;
+  if (req.auth!.role === "ATHLETE" && req.auth!.athleteId !== athlete.id) return null;
+  return athlete;
+}
 
 // List athletes in the caller's org. Athletes only see themselves.
 athletesRouter.get("/", async (req: AuthedRequest, res) => {
@@ -140,4 +150,90 @@ athletesRouter.get("/:id/report", async (req: AuthedRequest, res) => {
     compliance,
     generatedAt: new Date().toISOString(),
   });
+});
+
+// --- Max / e1RM profiles ----------------------------------------------------
+
+// An athlete's max history (most recent first), with the exercise name.
+athletesRouter.get("/:id/maxes", async (req: AuthedRequest, res) => {
+  const athlete = await authorizeAthlete(req, req.params.id);
+  if (!athlete) return res.status(404).json({ error: "Athlete not found" });
+  const maxes = await prisma.maxProfile.findMany({
+    where: { athleteId: req.params.id },
+    include: { exercise: { select: { id: true, name: true } } },
+    orderBy: { recordedAt: "desc" },
+  });
+  res.json({ maxes });
+});
+
+// Create a max via one of three methods:
+//  - DIRECT:  { exerciseId, e1rmKg }
+//  - rep-max: { exerciseId, repWeightKg, reps, method: "EPLEY"|"BRZYCKI" }
+//  - VBT:     { exerciseId, lvPoints: [{loadKg, velocity}], method: "VBT_LV" }
+const maxSchema = z.object({
+  exerciseId: z.string(),
+  e1rmKg: z.number().positive().optional(),
+  repWeightKg: z.number().positive().optional(),
+  reps: z.number().int().min(1).max(20).optional(),
+  lvPoints: z.array(z.object({ loadKg: z.number().positive(), velocity: z.number().positive() })).optional(),
+  method: z.enum(["DIRECT", "EPLEY", "BRZYCKI", "VBT_LV"]).optional(),
+  recordedAt: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+athletesRouter.post("/:id/maxes", requireRole("ADMIN", "COACH"), async (req: AuthedRequest, res) => {
+  const athlete = await authorizeAthlete(req, req.params.id);
+  if (!athlete) return res.status(404).json({ error: "Athlete not found" });
+  const parsed = maxSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const { exerciseId, e1rmKg, repWeightKg, reps, lvPoints, method, recordedAt, notes } = parsed.data;
+
+  const exercise = await prisma.exercise.findUnique({ where: { id: exerciseId } });
+  if (!exercise || exercise.orgId !== req.auth!.orgId) {
+    return res.status(400).json({ error: "Unknown exercise" });
+  }
+
+  let e1rm: number | null = null;
+  let resolvedMethod = method || "DIRECT";
+  let lvJson: string | null = null;
+
+  if (lvPoints && lvPoints.length >= 2) {
+    e1rm = e1rmFromLoadVelocity(lvPoints, mvtForExercise(exercise));
+    resolvedMethod = "VBT_LV";
+    lvJson = JSON.stringify(lvPoints);
+    if (e1rm == null) return res.status(400).json({ error: "Load-velocity points don't yield a valid 1RM (velocity must fall as load rises)." });
+  } else if (repWeightKg != null && reps != null) {
+    e1rm = repMaxTo1rm(repWeightKg, reps, method === "BRZYCKI" ? "BRZYCKI" : "EPLEY");
+    resolvedMethod = method === "BRZYCKI" ? "BRZYCKI" : "EPLEY";
+  } else if (e1rmKg != null) {
+    e1rm = e1rmKg;
+    resolvedMethod = "DIRECT";
+  } else {
+    return res.status(400).json({ error: "Provide e1rmKg, a rep-max (repWeightKg+reps), or lvPoints." });
+  }
+
+  const max = await prisma.maxProfile.create({
+    data: {
+      athleteId: req.params.id,
+      exerciseId,
+      e1rmKg: Math.round(e1rm! * 10) / 10,
+      method: resolvedMethod,
+      source: resolvedMethod === "VBT_LV" ? "VBT" : "MANUAL",
+      lvJson,
+      notes: notes ?? (repWeightKg != null && reps != null ? `${repWeightKg}kg x ${reps}` : null),
+      recordedAt: recordedAt ? new Date(recordedAt) : new Date(),
+    },
+  });
+  res.status(201).json({ max });
+});
+
+// Delete a max (coach/admin, org-scoped).
+athletesRouter.delete("/maxes/:maxId", requireRole("ADMIN", "COACH"), async (req: AuthedRequest, res) => {
+  const max = await prisma.maxProfile.findUnique({
+    where: { id: req.params.maxId },
+    include: { athlete: { select: { orgId: true } } },
+  });
+  if (!max || max.athlete.orgId !== req.auth!.orgId) return res.status(404).json({ error: "Max not found" });
+  await prisma.maxProfile.delete({ where: { id: req.params.maxId } });
+  res.status(204).end();
 });

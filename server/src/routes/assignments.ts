@@ -2,6 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db";
 import { requireAuth, AuthedRequest } from "../auth";
+import { computeTargets } from "../prescription";
+import { latestMaxesByExercise } from "../maxprofiles";
 
 export const assignmentsRouter = Router();
 assignmentsRouter.use(requireAuth);
@@ -59,7 +61,23 @@ assignmentsRouter.get("/:id", async (req: AuthedRequest, res) => {
       setLogs: true,
     },
   });
-  res.json({ assignment });
+
+  // Attach per-set targets computed from this athlete's current maxes.
+  const maxes = await latestMaxesByExercise(ok.athleteId);
+  const withTargets = assignment && {
+    ...assignment,
+    workout: {
+      ...assignment.workout,
+      blocks: assignment.workout.blocks.map((b) => ({
+        ...b,
+        items: b.items.map((it) => ({
+          ...it,
+          targets: computeTargets(it, maxes[it.exerciseId] ?? null),
+        })),
+      })),
+    },
+  };
+  res.json({ assignment: withTargets });
 });
 
 const logSchema = z.object({
@@ -70,6 +88,8 @@ const logSchema = z.object({
       reps: z.number().int().optional(),
       loadKg: z.number().optional(),
       rpe: z.number().optional(),
+      velocity: z.number().optional(),
+      peakVelocity: z.number().optional(),
       completed: z.boolean().default(true),
       notes: z.string().optional(),
     })
@@ -93,7 +113,7 @@ assignmentsRouter.post("/:id/logs", async (req: AuthedRequest, res) => {
         },
       },
       create: { assignmentId: req.params.id, ...l },
-      update: { reps: l.reps, loadKg: l.loadKg, rpe: l.rpe, completed: l.completed, notes: l.notes },
+      update: { reps: l.reps, loadKg: l.loadKg, rpe: l.rpe, velocity: l.velocity, peakVelocity: l.peakVelocity, completed: l.completed, notes: l.notes },
     });
   }
 

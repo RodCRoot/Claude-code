@@ -184,3 +184,10 @@ button.secondary { background: var(--panel-2); border: 1px solid var(--border); 
   .muted { color: #555 !important; }
   a { color: #111 !important; text-decoration: none; }
 }
+
+/* VBT targets + velocity feedback */
+.target-row { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; }
+.target-text { color: var(--accent); font-size: 0.9rem; font-weight: 600; }
+.vel-good { color: #4ade80; border-color: #4ade80 !important; }
+.vel-warn { color: #fbbf24; border-color: #fbbf24 !important; }
+.vel-low  { color: #f87171; border-color: #f87171 !important; }
