@@ -39,6 +39,23 @@ API-first by design so a future native mobile app reuses the same endpoints.
    assign to athletes (TeamBuildr-style). Athletes **log sets/reps/load/RPE**
    from their Training view.
 
+### Velocity-based training (VBT) & the athlete experience
+
+- **e1RM from bar speed** (`server/src/prescription.ts`) — estimate 1RM from a
+  load-velocity profile (no true-max testing), or from a rep-max (Epley/Brzycki),
+  or set it directly. Managed per athlete in the **Maxes / e1RM** panel.
+- **Velocity-based prescription** — in the Workout Builder, prescribe each item by
+  **% e1RM**, **target velocity (m/s)**, or **velocity zone**. The athlete logger
+  shows the **auto-calculated load + velocity target** per set with live
+  green/amber/red feedback on bar speed, and captures velocity.
+- **Athlete "Today" home** — today's plan with per-set targets, **personal bests**,
+  a **PR** banner, and **"your rank"** cards.
+- **Age-group × sex leaderboards** (`/leaderboards`) — rank by any test or lift
+  e1RM, filter by age group (U10…Open) and sex; the athlete's own row is
+  highlighted.
+- **Teams & Groups** (`/groups`) — organize athletes into teams / squads /
+  private-client groups.
+
 ### Coach analytics & reports
 
 - **Team analytics** (`/analytics`, coach-only) — roster overview, a metric
