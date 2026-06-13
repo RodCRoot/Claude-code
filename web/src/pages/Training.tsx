@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
 
 interface AssignmentSummary {
@@ -29,8 +30,9 @@ interface FullAssignment {
 }
 
 export default function Training() {
+  const [params, setParams] = useSearchParams();
   const [assignments, setAssignments] = useState<AssignmentSummary[]>([]);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(params.get("open"));
 
   function load() {
     api.get<{ assignments: AssignmentSummary[] }>("/assignments").then((r) => setAssignments(r.assignments));
@@ -38,7 +40,7 @@ export default function Training() {
   useEffect(() => { load(); }, []);
 
   if (openId) {
-    return <AssignmentLogger id={openId} onBack={() => { setOpenId(null); load(); }} />;
+    return <AssignmentLogger id={openId} onBack={() => { setOpenId(null); if (params.get("open")) setParams({}, { replace: true }); load(); }} />;
   }
 
   return (

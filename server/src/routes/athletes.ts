@@ -4,6 +4,7 @@ import { prisma } from "../db";
 import { requireAuth, requireRole, AuthedRequest } from "../auth";
 import { getAthleteRating } from "../rating";
 import { repMaxTo1rm, e1rmFromLoadVelocity, mvtForExercise } from "../prescription";
+import { buildToday } from "../today";
 
 export const athletesRouter = Router();
 athletesRouter.use(requireAuth);
@@ -150,6 +151,14 @@ athletesRouter.get("/:id/report", async (req: AuthedRequest, res) => {
     compliance,
     generatedAt: new Date().toISOString(),
   });
+});
+
+// Coach (or the athlete) view of an athlete's "Today" screen.
+athletesRouter.get("/:id/today", async (req: AuthedRequest, res) => {
+  const athlete = await authorizeAthlete(req, req.params.id);
+  if (!athlete) return res.status(404).json({ error: "Athlete not found" });
+  const data = await buildToday(req.params.id);
+  res.json(data);
 });
 
 // --- Max / e1RM profiles ----------------------------------------------------

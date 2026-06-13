@@ -191,3 +191,16 @@ button.secondary { background: var(--panel-2); border: 1px solid var(--border); 
 .vel-good { color: #4ade80; border-color: #4ade80 !important; }
 .vel-warn { color: #fbbf24; border-color: #fbbf24 !important; }
 .vel-low  { color: #f87171; border-color: #f87171 !important; }
+
+/* athlete Today home */
+.pr-banner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; border: 1px solid var(--accent); margin-bottom: 16px; }
+.pr-list { display: flex; gap: 14px; flex-wrap: wrap; }
+.pr-chip { color: var(--text); font-size: 0.92rem; }
+.rank-card .rank-value { color: var(--accent); font-weight: 600; margin-top: 2px; }
+.plan-block { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 8px; }
+.plan-block:first-of-type { border-top: none; }
+.plan-item { display: flex; align-items: baseline; gap: 10px; padding: 4px 0; }
+.plan-item .metric-name { min-width: 140px; }
+.plan-item .target-text { margin-left: auto; }
+.pb-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid var(--border); }
+.pb-row:last-child { border-bottom: none; }

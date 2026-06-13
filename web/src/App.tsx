@@ -8,6 +8,7 @@ import WorkoutBuilder from "./pages/WorkoutBuilder";
 import Training from "./pages/Training";
 import Analytics from "./pages/Analytics";
 import ReportPage from "./pages/Report";
+import Today from "./pages/Today";
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -20,7 +21,7 @@ export default function App() {
       <Sidebar />
       <main className="content">
         <Routes>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/" element={isCoach ? <Dashboard /> : <Today />} />
           <Route path="/athletes/:id" element={<AthleteDetail />} />
           <Route path="/athletes/:id/report" element={<ReportPage />} />
           <Route path="/training" element={<Training />} />
