@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 
 interface Exercise { id: string; name: string; category: string; }
-interface Item { exerciseId: string; sets?: number; reps?: string; load?: string; restSec?: number; notes?: string; }
+interface Item {
+  exerciseId: string; sets?: number; reps?: string; load?: string; restSec?: number; notes?: string;
+  prescribeBy?: "PCT" | "VELOCITY" | "ZONE" | "TEXT";
+  targetPctE1rm?: number; targetVelocity?: number; velocityZone?: string;
+}
 interface Block { name: string; items: Item[]; }
 interface WorkoutSummary { id: string; name: string; _count: { blocks: number; assignments: number }; }
 
@@ -72,10 +76,12 @@ export default function WorkoutBuilder() {
             />
             <table className="item-table">
               <thead>
-                <tr><th>Exercise</th><th>Sets</th><th>Reps</th><th>Load</th><th>Rest(s)</th><th></th></tr>
+                <tr><th>Exercise</th><th>Sets</th><th>Reps</th><th>Prescribe by</th><th>Target</th><th>Rest(s)</th><th></th></tr>
               </thead>
               <tbody>
-                {b.items.map((it, ii) => (
+                {b.items.map((it, ii) => {
+                  const by = it.prescribeBy ?? "TEXT";
+                  return (
                   <tr key={ii}>
                     <td>
                       <select value={it.exerciseId} onChange={(e) => updateItem(bi, ii, { exerciseId: e.target.value })}>
@@ -84,11 +90,33 @@ export default function WorkoutBuilder() {
                     </td>
                     <td><input className="tiny" type="number" value={it.sets ?? ""} onChange={(e) => updateItem(bi, ii, { sets: Number(e.target.value) })} /></td>
                     <td><input className="tiny" value={it.reps ?? ""} onChange={(e) => updateItem(bi, ii, { reps: e.target.value })} /></td>
-                    <td><input className="tiny" value={it.load ?? ""} onChange={(e) => updateItem(bi, ii, { load: e.target.value })} /></td>
+                    <td>
+                      <select value={by} onChange={(e) => updateItem(bi, ii, { prescribeBy: e.target.value as Item["prescribeBy"], targetPctE1rm: undefined, targetVelocity: undefined, velocityZone: undefined })}>
+                        <option value="TEXT">Text/Load</option>
+                        <option value="PCT">% e1RM</option>
+                        <option value="VELOCITY">Velocity</option>
+                        <option value="ZONE">Zone</option>
+                      </select>
+                    </td>
+                    <td>
+                      {by === "TEXT" && <input className="tiny" placeholder="e.g. RPE 8" value={it.load ?? ""} onChange={(e) => updateItem(bi, ii, { load: e.target.value })} />}
+                      {by === "PCT" && <input className="tiny" type="number" placeholder="% (e.g. 75)" value={it.targetPctE1rm != null ? Math.round(it.targetPctE1rm * 100) : ""} onChange={(e) => updateItem(bi, ii, { targetPctE1rm: e.target.value === "" ? undefined : Number(e.target.value) / 100 })} />}
+                      {by === "VELOCITY" && <input className="tiny" type="number" step="0.01" placeholder="m/s" value={it.targetVelocity ?? ""} onChange={(e) => updateItem(bi, ii, { targetVelocity: e.target.value === "" ? undefined : Number(e.target.value) })} />}
+                      {by === "ZONE" && (
+                        <select value={it.velocityZone ?? ""} onChange={(e) => updateItem(bi, ii, { velocityZone: e.target.value })}>
+                          <option value="">—</option>
+                          <option value="STRENGTH">Strength</option>
+                          <option value="STRENGTH_SPEED">Strength-Speed</option>
+                          <option value="SPEED_STRENGTH">Speed-Strength</option>
+                          <option value="SPEED">Speed</option>
+                        </select>
+                      )}
+                    </td>
                     <td><input className="tiny" type="number" value={it.restSec ?? ""} onChange={(e) => updateItem(bi, ii, { restSec: Number(e.target.value) })} /></td>
                     <td><button className="link-btn" onClick={() => removeItem(bi, ii)}>✕</button></td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
             <button className="secondary" onClick={() => addItem(bi)}>+ Add exercise</button>

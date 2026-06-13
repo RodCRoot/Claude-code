@@ -10,6 +10,7 @@ import Analytics from "./pages/Analytics";
 import ReportPage from "./pages/Report";
 import Today from "./pages/Today";
 import Leaderboards from "./pages/Leaderboards";
+import Groups from "./pages/Groups";
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/training" element={<Training />} />
           <Route path="/exercises" element={<Exercises />} />
           {isCoach && <Route path="/workouts" element={<WorkoutBuilder />} />}
+          {isCoach && <Route path="/groups" element={<Groups />} />}
           {isCoach && <Route path="/analytics" element={<Analytics />} />}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
@@ -56,6 +58,7 @@ function Sidebar() {
         {link("/training", "Training")}
         {link("/exercises", "Exercises")}
         {isCoach && link("/workouts", "Workout Builder")}
+        {isCoach && link("/groups", "Teams & Groups")}
       </nav>
       <div className="sidebar-foot">
         <div className="user-name">{user?.name}</div>

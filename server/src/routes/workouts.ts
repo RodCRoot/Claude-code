@@ -14,6 +14,11 @@ const itemSchema = z.object({
   tempo: z.string().optional(),
   restSec: z.number().int().optional(),
   notes: z.string().optional(),
+  // VBT prescription
+  prescribeBy: z.enum(["PCT", "VELOCITY", "ZONE", "RPE", "TEXT"]).optional(),
+  targetPctE1rm: z.number().positive().max(2).optional(),
+  targetVelocity: z.number().positive().max(3).optional(),
+  velocityZone: z.enum(["STRENGTH", "STRENGTH_SPEED", "SPEED_STRENGTH", "SPEED"]).optional(),
 });
 
 const blockSchema = z.object({
@@ -63,6 +68,10 @@ workoutsRouter.post("/", requireRole("ADMIN", "COACH"), async (req: AuthedReques
               tempo: it.tempo,
               restSec: it.restSec,
               notes: it.notes,
+              prescribeBy: it.prescribeBy,
+              targetPctE1rm: it.targetPctE1rm,
+              targetVelocity: it.targetVelocity,
+              velocityZone: it.velocityZone,
             })),
           },
         })),

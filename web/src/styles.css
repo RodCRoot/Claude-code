@@ -207,3 +207,9 @@ button.secondary { background: var(--panel-2); border: 1px solid var(--border); 
 
 .me-row { background: rgba(79,209,197,0.10); }
 .me-row td { font-weight: 600; }
+
+/* maxes panel + builder VBT + group selection */
+.maxes-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+.lv-grid { display: flex; flex-direction: column; gap: 4px; }
+.lv-row { display: flex; gap: 4px; }
+.active-card { outline: 2px solid var(--accent-2); }
