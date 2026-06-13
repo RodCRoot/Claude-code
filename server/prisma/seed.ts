@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import benchmarkData from "./benchmarks.json";
+import { e1rmFromLoadVelocity } from "../src/prescription";
 
 const prisma = new PrismaClient();
 
@@ -54,14 +55,17 @@ const SPORTS = ["Basketball", "Soccer"];
 const FIRST = ["Jordan", "Taylor", "Alex", "Morgan", "Casey", "Riley", "Jamie", "Drew", "Sam", "Quinn", "Avery", "Reese"];
 const LAST = ["Smith", "Johnson", "Lee", "Garcia", "Brown", "Davis", "Martinez", "Clark", "Lewis", "Walker", "Hall", "Young"];
 
-const EXERCISES = [
-  { name: "Back Squat", category: "LOWER", equipment: "Barbell", muscleGroups: ["Quads", "Glutes"], videoUrl: "https://www.youtube.com/watch?v=ultWZbUMPL8", description: "Bilateral lower-body strength. Brace, sit between the hips, drive through midfoot." },
+const EXERCISES: {
+  name: string; category: string; equipment: string; muscleGroups: string[];
+  videoUrl: string; description: string; mvt?: number;
+}[] = [
+  { name: "Back Squat", category: "LOWER", equipment: "Barbell", muscleGroups: ["Quads", "Glutes"], videoUrl: "https://www.youtube.com/watch?v=ultWZbUMPL8", description: "Bilateral lower-body strength. Brace, sit between the hips, drive through midfoot.", mvt: 0.3 },
   { name: "Trap Bar Deadlift", category: "LOWER", equipment: "Trap Bar", muscleGroups: ["Glutes", "Hamstrings"], videoUrl: "https://www.youtube.com/watch?v=Va4Qh3z6IqA", description: "Hip-dominant pull, athlete-friendly bar path for triple extension." },
   { name: "Power Clean", category: "OLYMPIC", equipment: "Barbell", muscleGroups: ["Full Body"], videoUrl: "https://www.youtube.com/watch?v=KwYJTpQ_x5A", description: "Triple extension power. Violent hip drive, fast elbows under the bar." },
   { name: "Hex Bar Jump", category: "PLYO", equipment: "Trap Bar", muscleGroups: ["Quads", "Glutes"], videoUrl: "https://www.youtube.com/watch?v=4tF7nWvltQ8", description: "Loaded jump for power. Light load, maximal intent, soft landing." },
   { name: "Depth Drop to Pogo", category: "PLYO", equipment: "Box", muscleGroups: ["Calves", "Quads"], videoUrl: "https://www.youtube.com/watch?v=8diUmAFktA4", description: "Reactive strength. Minimize ground contact, stiff ankles." },
   { name: "Nordic Hamstring Curl", category: "LOWER", equipment: "Pad", muscleGroups: ["Hamstrings"], videoUrl: "https://www.youtube.com/watch?v=1Q3IkmTPmgQ", description: "Eccentric hamstring strength for sprint resilience." },
-  { name: "Bench Press", category: "UPPER", equipment: "Barbell", muscleGroups: ["Chest", "Triceps"], videoUrl: "https://www.youtube.com/watch?v=rT7DgCr-3pg", description: "Upper-body pressing strength." },
+  { name: "Bench Press", category: "UPPER", equipment: "Barbell", muscleGroups: ["Chest", "Triceps"], videoUrl: "https://www.youtube.com/watch?v=rT7DgCr-3pg", description: "Upper-body pressing strength.", mvt: 0.17 },
   { name: "Pull-Up", category: "UPPER", equipment: "Bar", muscleGroups: ["Back", "Biceps"], videoUrl: "https://www.youtube.com/watch?v=eGo4IYlbE5g", description: "Vertical pulling. Full range, controlled tempo." },
   { name: "Pallof Press", category: "CORE", equipment: "Cable", muscleGroups: ["Core"], videoUrl: "https://www.youtube.com/watch?v=AH_QZLm_0-s", description: "Anti-rotation core stability." },
   { name: "Sled March", category: "CONDITIONING", equipment: "Sled", muscleGroups: ["Quads", "Glutes"], videoUrl: "https://www.youtube.com/watch?v=2nQdLViTr3o", description: "Acceleration-specific resisted marching." },
@@ -79,6 +83,9 @@ async function main() {
   console.log("Seeding Vantage...");
 
   // Clean slate (dev only).
+  await prisma.athleteGroup.deleteMany();
+  await prisma.group.deleteMany();
+  await prisma.maxProfile.deleteMany();
   await prisma.workoutAssignment.deleteMany();
   await prisma.workoutItem.deleteMany();
   await prisma.workoutBlock.deleteMany();
@@ -136,10 +143,12 @@ async function main() {
   // Athletes (with a linked login for the first one)
   const now = Date.now();
   const athleteIds: string[] = [];
+  const athleteMeta: { id: string; sex: string; sport: string; ability: number; age: number }[] = [];
   for (let i = 0; i < 12; i++) {
     const sex = i % 2 === 0 ? "M" : "F";
     const sport = SPORTS[i % SPORTS.length];
-    const age = 15 + (i % 4); // 15-18
+    // Spread ages 11-18 so age-group leaderboards (U12..U18) are populated.
+    const age = 11 + (i % 8); // 11-18
     const birthDate = new Date(now - age * 365.25 * 24 * 3600 * 1000);
     // give a spread of ability per athlete
     const ability = gaussian(0, 1);
@@ -162,6 +171,7 @@ async function main() {
       },
     });
     athleteIds.push(athlete.id);
+    athleteMeta.push({ id: athlete.id, sex, sport, ability, age });
 
     // Link a login to the first athlete so you can log in as an athlete too.
     if (i === 0) {
@@ -213,6 +223,7 @@ async function main() {
         description: e.description,
         muscleGroups: JSON.stringify(e.muscleGroups),
         tags: JSON.stringify([e.category.toLowerCase()]),
+        mvt: e.mvt ?? null,
       },
     });
     exIds.push(created.id);
@@ -259,6 +270,92 @@ async function main() {
       workoutId: workout.id,
       athleteId,
       dueDate: new Date(now + 2 * 24 * 3600 * 1000),
+    })),
+  });
+
+  // --- Max / e1RM profiles --------------------------------------------------
+  // Squat via VBT (load-velocity points), bench direct, deadlift from a rep-max.
+  const squatEx = exIds[0];
+  const deadliftEx = exIds[1];
+  const benchEx = exIds[6];
+  for (const a of athleteMeta) {
+    // Age- and ability-scaled squat e1RM, then synthesize a load-velocity line
+    // whose MVT-intercept reproduces it (so the VBT preview is truthful).
+    const ageScale = Math.min(1, 0.55 + (a.age - 11) * 0.064); // ~0.55 at 11 → 1.0 at 18
+    const squat = Math.max(40, Math.round(((a.sex === "M" ? 120 : 80) + a.ability * 22) * ageScale));
+    const b = -0.0045; // velocity-per-kg slope
+    const mvt = 0.3;
+    const intercept = mvt - b * squat; // a in v = a + b*L so that v(squat)=mvt
+    const lv = [0.5, 0.7, 0.85].map((frac) => {
+      const loadKg = Math.round(squat * frac);
+      return { loadKg, velocity: Math.round((intercept + b * loadKg) * 1000) / 1000 };
+    });
+    const squatE1rm = Math.round(e1rmFromLoadVelocity(lv, mvt) ?? squat);
+
+    const bench = Math.max(30, Math.round(squat * (a.sex === "M" ? 0.72 : 0.66)));
+    const dlRepWeight = Math.max(40, Math.round(squat * 1.1));
+
+    await prisma.maxProfile.createMany({
+      data: [
+        { athleteId: a.id, exerciseId: squatEx, e1rmKg: squatE1rm, method: "VBT_LV", source: "VBT", lvJson: JSON.stringify(lv) },
+        { athleteId: a.id, exerciseId: benchEx, e1rmKg: bench, method: "DIRECT", source: "MANUAL" },
+        { athleteId: a.id, exerciseId: deadliftEx, e1rmKg: Math.round(dlRepWeight * (1 + 5 / 30)), method: "EPLEY", source: "MANUAL", notes: `${dlRepWeight}kg x 5` },
+      ],
+    });
+  }
+
+  // --- Groups / teams -------------------------------------------------------
+  const bball = await prisma.group.create({ data: { orgId: org.id, name: "Varsity Basketball", type: "TEAM" } });
+  const soccer = await prisma.group.create({ data: { orgId: org.id, name: "Varsity Soccer", type: "TEAM" } });
+  const privateAm = await prisma.group.create({ data: { orgId: org.id, name: "Private — AM", type: "PRIVATE" } });
+  for (const a of athleteMeta) {
+    const groupId = a.sport === "Basketball" ? bball.id : soccer.id;
+    await prisma.athleteGroup.create({ data: { groupId, athleteId: a.id } });
+  }
+  // A few athletes also train as private clients.
+  for (const a of athleteMeta.slice(0, 3)) {
+    await prisma.athleteGroup.create({ data: { groupId: privateAm.id, athleteId: a.id } });
+  }
+
+  // --- VBT-prescribed workout (today) --------------------------------------
+  const vbt = await prisma.workout.create({
+    data: {
+      orgId: org.id,
+      name: "Speed-Strength — VBT Day",
+      description: "Velocity-targeted session. Loads auto-scale to each athlete's e1RM.",
+      createdById: coach!.id,
+      blocks: {
+        create: [
+          {
+            name: "A. Power (velocity targets)",
+            order: 0,
+            items: {
+              create: [
+                { exerciseId: exIds[2], order: 0, sets: 5, reps: "2", prescribeBy: "VELOCITY", targetVelocity: 1.0, load: "≈ 1.0 m/s", restSec: 150, notes: "Stop set if velocity drops >10%." },
+                { exerciseId: exIds[3], order: 1, sets: 4, reps: "3", prescribeBy: "ZONE", velocityZone: "SPEED", load: "max intent", restSec: 90 },
+              ],
+            },
+          },
+          {
+            name: "B. Strength (%e1RM)",
+            order: 1,
+            items: {
+              create: [
+                { exerciseId: exIds[0], order: 0, sets: 5, reps: "3", prescribeBy: "PCT", targetPctE1rm: 0.75, targetVelocity: 0.6, load: "75% e1RM", restSec: 150 },
+                { exerciseId: exIds[6], order: 1, sets: 4, reps: "5", prescribeBy: "PCT", targetPctE1rm: 0.7, load: "70% e1RM", restSec: 120 },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  });
+  await prisma.workoutAssignment.createMany({
+    data: athleteIds.map((athleteId) => ({
+      workoutId: vbt.id,
+      athleteId,
+      assignedDate: new Date(now),
+      dueDate: new Date(now + 24 * 3600 * 1000),
     })),
   });
 
