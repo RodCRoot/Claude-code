@@ -204,3 +204,6 @@ button.secondary { background: var(--panel-2); border: 1px solid var(--border); 
 .plan-item .target-text { margin-left: auto; }
 .pb-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid var(--border); }
 .pb-row:last-child { border-bottom: none; }
+
+.me-row { background: rgba(79,209,197,0.10); }
+.me-row td { font-weight: 600; }
