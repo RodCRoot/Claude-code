@@ -213,3 +213,16 @@ button.secondary { background: var(--panel-2); border: 1px solid var(--border); 
 .lv-grid { display: flex; flex-direction: column; gap: 4px; }
 .lv-row { display: flex; gap: 4px; }
 .active-card { outline: 2px solid var(--accent-2); }
+
+/* assign control + weekly schedule */
+.assign-control { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+.day-col { padding: 10px; min-height: 120px; }
+.day-today { outline: 2px solid var(--accent-2); }
+.day-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.day-name { font-weight: 600; }
+.day-empty { text-align: center; padding: 8px 0; }
+.day-item { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 6px; border-radius: 8px; background: var(--panel-2); margin-bottom: 6px; width: 100%; }
+button.day-item { cursor: pointer; border: 1px solid var(--border); }
+button.day-item:hover { border-color: var(--accent-2); }
+@media (max-width: 900px) { .week-grid { grid-template-columns: 1fr; } }

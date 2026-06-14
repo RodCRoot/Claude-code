@@ -9,6 +9,7 @@ interface Item {
 }
 interface Block { name: string; items: Item[]; }
 interface WorkoutSummary { id: string; name: string; _count: { blocks: number; assignments: number }; }
+interface GroupOpt { id: string; name: string; _count: { memberships: number }; }
 
 export default function WorkoutBuilder() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -17,12 +18,14 @@ export default function WorkoutBuilder() {
   const [description, setDescription] = useState("");
   const [blocks, setBlocks] = useState<Block[]>([{ name: "A. Power", items: [] }]);
   const [msg, setMsg] = useState("");
+  const [groups, setGroups] = useState<GroupOpt[]>([]);
 
   function loadWorkouts() {
     api.get<{ workouts: WorkoutSummary[] }>("/workouts").then((r) => setWorkouts(r.workouts));
   }
   useEffect(() => {
     api.get<{ exercises: Exercise[] }>("/exercises").then((r) => setExercises(r.exercises));
+    api.get<{ groups: GroupOpt[] }>("/groups").then((r) => setGroups(r.groups));
     loadWorkouts();
   }, []);
 
@@ -136,9 +139,43 @@ export default function WorkoutBuilder() {
           <div key={w.id} className="card">
             <div className="athlete-name">{w.name}</div>
             <div className="muted small">{w._count.blocks} blocks · {w._count.assignments} assigned</div>
+            <AssignControl workoutId={w.id} groups={groups} onAssigned={loadWorkouts} />
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// Assign a saved workout to a group (or everyone) on a date.
+function AssignControl({ workoutId, groups, onAssigned }: { workoutId: string; groups: GroupOpt[]; onAssigned: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [groupId, setGroupId] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function assign() {
+    if (!groupId) return;
+    setBusy(true); setMsg("");
+    try {
+      const r = await api.post<{ assigned: number }>(`/workouts/${workoutId}/assign`, { groupId, assignedDate: date });
+      setMsg(`Assigned to ${r.assigned} athlete${r.assigned === 1 ? "" : "s"}.`);
+      onAssigned();
+    } catch (e) { setMsg(e instanceof Error ? e.message : "Failed"); }
+    finally { setBusy(false); }
+  }
+
+  if (!open) return <button className="link-btn" onClick={() => setOpen(true)}>Assign →</button>;
+  return (
+    <div className="assign-control">
+      <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+        <option value="">Pick a group…</option>
+        {groups.map((g) => <option key={g.id} value={g.id}>{g.name} ({g._count.memberships})</option>)}
+      </select>
+      <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      <button disabled={busy || !groupId} onClick={assign}>Assign</button>
+      {msg && <div className="muted small">{msg}</div>}
     </div>
   );
 }

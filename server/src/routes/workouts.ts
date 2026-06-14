@@ -99,11 +99,15 @@ workoutsRouter.get("/:id", async (req: AuthedRequest, res) => {
 });
 
 const assignSchema = z.object({
-  athleteIds: z.array(z.string()).min(1),
+  athleteIds: z.array(z.string()).optional(),
+  groupId: z.string().optional(),
+  assignedDate: z.string().optional(),
   dueDate: z.string().optional(),
+}).refine((d) => (d.athleteIds && d.athleteIds.length > 0) || d.groupId, {
+  message: "Provide athleteIds or a groupId",
 });
 
-// Assign a workout to one or more athletes.
+// Assign a workout to athletes and/or an entire group, on an optional date.
 workoutsRouter.post("/:id/assign", requireRole("ADMIN", "COACH"), async (req: AuthedRequest, res) => {
   const parsed = assignSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
@@ -111,12 +115,29 @@ workoutsRouter.post("/:id/assign", requireRole("ADMIN", "COACH"), async (req: Au
   if (!workout || workout.orgId !== req.auth!.orgId) {
     return res.status(404).json({ error: "Workout not found" });
   }
-  await prisma.workoutAssignment.createMany({
-    data: parsed.data.athleteIds.map((athleteId) => ({
-      workoutId: workout.id,
-      athleteId,
-      dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : null,
-    })),
+
+  // Resolve the target athlete set (explicit ids ∪ group members), org-scoped.
+  const ids = new Set(parsed.data.athleteIds ?? []);
+  if (parsed.data.groupId) {
+    const group = await prisma.group.findUnique({
+      where: { id: parsed.data.groupId },
+      include: { memberships: { select: { athleteId: true } } },
+    });
+    if (!group || group.orgId !== req.auth!.orgId) return res.status(404).json({ error: "Group not found" });
+    for (const m of group.memberships) ids.add(m.athleteId);
+  }
+  if (ids.size === 0) return res.status(400).json({ error: "No athletes to assign" });
+
+  // Keep only athletes in this org.
+  const valid = await prisma.athlete.findMany({
+    where: { id: { in: [...ids] }, orgId: req.auth!.orgId },
+    select: { id: true },
   });
-  res.status(201).json({ assigned: parsed.data.athleteIds.length });
+
+  const assignedDate = parsed.data.assignedDate ? new Date(parsed.data.assignedDate) : new Date();
+  const dueDate = parsed.data.dueDate ? new Date(parsed.data.dueDate) : null;
+  await prisma.workoutAssignment.createMany({
+    data: valid.map((a) => ({ workoutId: workout.id, athleteId: a.id, assignedDate, dueDate })),
+  });
+  res.status(201).json({ assigned: valid.length });
 });

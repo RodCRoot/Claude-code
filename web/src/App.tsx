@@ -11,6 +11,7 @@ import ReportPage from "./pages/Report";
 import Today from "./pages/Today";
 import Leaderboards from "./pages/Leaderboards";
 import Groups from "./pages/Groups";
+import Schedule from "./pages/Schedule";
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="/athletes/:id" element={<AthleteDetail />} />
           <Route path="/athletes/:id/report" element={<ReportPage />} />
           <Route path="/leaderboards" element={<Leaderboards />} />
+          <Route path="/schedule" element={<Schedule />} />
           <Route path="/training" element={<Training />} />
           <Route path="/exercises" element={<Exercises />} />
           {isCoach && <Route path="/workouts" element={<WorkoutBuilder />} />}
@@ -55,6 +57,7 @@ function Sidebar() {
         {link("/", isCoach ? "Roster" : "My Dashboard")}
         {isCoach && link("/analytics", "Analytics")}
         {link("/leaderboards", "Leaderboards")}
+        {link("/schedule", "Schedule")}
         {link("/training", "Training")}
         {link("/exercises", "Exercises")}
         {isCoach && link("/workouts", "Workout Builder")}

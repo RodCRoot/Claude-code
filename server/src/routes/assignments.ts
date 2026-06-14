@@ -42,6 +42,37 @@ assignmentsRouter.get("/", async (req: AuthedRequest, res) => {
   res.json({ assignments });
 });
 
+// Calendar view: assignments within a date range (by assignedDate). Athletes
+// see their own; staff see the whole org (optionally one athlete via ?athleteId).
+assignmentsRouter.get("/calendar", async (req: AuthedRequest, res) => {
+  const { role, orgId, athleteId } = req.auth!;
+  const from = req.query.from ? new Date(String(req.query.from)) : new Date(Date.now() - 7 * 864e5);
+  const to = req.query.to ? new Date(String(req.query.to)) : new Date(Date.now() + 21 * 864e5);
+  const targetAthleteId = role === "ATHLETE" ? athleteId : (req.query.athleteId ? String(req.query.athleteId) : "");
+
+  const where: Record<string, unknown> = {
+    assignedDate: { gte: from, lte: to },
+    ...(targetAthleteId ? { athleteId: targetAthleteId } : { athlete: { orgId } }),
+  };
+  const assignments = await prisma.workoutAssignment.findMany({
+    where,
+    include: {
+      workout: { select: { id: true, name: true } },
+      athlete: { select: { id: true, firstName: true, lastName: true } },
+    },
+    orderBy: { assignedDate: "asc" },
+  });
+  res.json({
+    assignments: assignments.map((a) => ({
+      id: a.id,
+      date: a.assignedDate.toISOString().slice(0, 10),
+      status: a.status,
+      workout: a.workout,
+      athlete: { id: a.athlete.id, name: `${a.athlete.firstName} ${a.athlete.lastName}` },
+    })),
+  });
+});
+
 // Full assignment: the workout structure plus any logs the athlete has entered.
 assignmentsRouter.get("/:id", async (req: AuthedRequest, res) => {
   const ok = await authorizeAssignment(req, req.params.id);
