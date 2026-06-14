@@ -247,3 +247,16 @@ button.day-item:hover { border-color: var(--accent-2); }
 .feed-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
 .fist { background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); padding: 4px 10px; border-radius: 999px; cursor: pointer; }
 .fist.on { background: var(--accent-2); color: #fff; border-color: var(--accent-2); }
+
+/* messaging */
+.thread-row { display: flex; justify-content: space-between; align-items: center; text-align: left; }
+.thread-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.thread-preview { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60vw; }
+.chat { display: flex; flex-direction: column; height: 60vh; }
+.chat-log { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px; }
+.bubble { max-width: 75%; padding: 8px 12px; border-radius: 12px; }
+.bubble.mine { align-self: flex-end; background: var(--accent-2); color: #fff; }
+.bubble.theirs { align-self: flex-start; background: var(--panel-2); border: 1px solid var(--border); }
+.bubble-time { margin-top: 2px; opacity: 0.8; }
+.chat-input { display: flex; gap: 8px; margin-top: 10px; }
+.chat-input input { flex: 1; }

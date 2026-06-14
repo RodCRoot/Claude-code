@@ -13,6 +13,7 @@ import Leaderboards from "./pages/Leaderboards";
 import Groups from "./pages/Groups";
 import Schedule from "./pages/Schedule";
 import Feed from "./pages/Feed";
+import Messages from "./pages/Messages";
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/leaderboards" element={<Leaderboards />} />
           <Route path="/schedule" element={<Schedule />} />
           <Route path="/feed" element={<Feed />} />
+          <Route path="/messages" element={<Messages />} />
           <Route path="/training" element={<Training />} />
           <Route path="/exercises" element={<Exercises />} />
           {isCoach && <Route path="/workouts" element={<WorkoutBuilder />} />}
@@ -58,6 +60,7 @@ function Sidebar() {
       <nav>
         {link("/", isCoach ? "Roster" : "My Dashboard")}
         {link("/feed", "Team Feed")}
+        {link("/messages", "Messages")}
         {isCoach && link("/analytics", "Analytics")}
         {link("/leaderboards", "Leaderboards")}
         {link("/schedule", "Schedule")}
