@@ -83,6 +83,11 @@ async function main() {
   console.log("Seeding Vantage...");
 
   // Clean slate (dev only).
+  await prisma.feedReaction.deleteMany();
+  await prisma.feedPost.deleteMany();
+  await prisma.message.deleteMany();
+  await prisma.threadParticipant.deleteMany();
+  await prisma.messageThread.deleteMany();
   await prisma.athleteGroup.deleteMany();
   await prisma.group.deleteMany();
   await prisma.maxProfile.deleteMany();
@@ -130,7 +135,7 @@ async function main() {
   }
 
   // Coach login
-  await prisma.user.create({
+  const coachUser = await prisma.user.create({
     data: {
       email: "coach@vantage.dev",
       passwordHash: await bcrypt.hash("password123", 10),
@@ -139,6 +144,7 @@ async function main() {
       orgId: org.id,
     },
   });
+  let athleteUserId = "";
 
   // Athletes (with a linked login for the first one)
   const now = Date.now();
@@ -175,7 +181,7 @@ async function main() {
 
     // Link a login to the first athlete so you can log in as an athlete too.
     if (i === 0) {
-      await prisma.user.create({
+      const au = await prisma.user.create({
         data: {
           email: "athlete@vantage.dev",
           passwordHash: await bcrypt.hash("password123", 10),
@@ -185,6 +191,7 @@ async function main() {
           athlete: { connect: { id: athlete.id } },
         },
       });
+      athleteUserId = au.id;
     }
 
     // Generate 6 monthly testing dates with a gentle improvement trend.
@@ -358,6 +365,41 @@ async function main() {
       dueDate: new Date(now + 24 * 3600 * 1000),
     })),
   });
+
+  // --- Team feed (PR posts + an announcement) -------------------------------
+  // Surface a few standout CMJ results as PRs so the feed isn't empty on a
+  // fresh seed (live PRs are generated when athletes beat a prior best).
+  const cmjType = await prisma.metricType.findUnique({ where: { key: "cmj_height" } });
+  if (cmjType) {
+    const topCmj = await prisma.metricRecord.findMany({
+      where: { metricTypeId: cmjType.id },
+      orderBy: { value: "desc" },
+      take: 3,
+      include: { athlete: { select: { id: true, firstName: true, lastName: true } } },
+    });
+    for (const r of topCmj) {
+      await prisma.feedPost.create({
+        data: {
+          orgId: org.id, kind: "PR", athleteId: r.athlete.id,
+          title: `${r.athlete.firstName} ${r.athlete.lastName} set a new PR`,
+          metricLabel: cmjType.name, value: r.value, unit: cmjType.unit,
+        },
+      });
+    }
+  }
+  await prisma.feedPost.create({
+    data: { orgId: org.id, kind: "ANNOUNCEMENT", authorUserId: coachUser.id, title: "Testing day this Friday", body: "Sprints + force plates. Show up fueled and ready to PR." },
+  });
+
+  // --- A sample conversation ------------------------------------------------
+  if (athleteUserId) {
+    const thread = await prisma.messageThread.create({
+      data: { orgId: org.id, participants: { create: [{ userId: coachUser.id }, { userId: athleteUserId }] } },
+    });
+    await prisma.message.create({ data: { threadId: thread.id, authorUserId: coachUser.id, body: "Welcome to Vantage! Check your Today tab for this week's plan." } });
+    await prisma.message.create({ data: { threadId: thread.id, authorUserId: athleteUserId, body: "Got it, thanks coach!" } });
+    await prisma.messageThread.update({ where: { id: thread.id }, data: { lastMessageAt: new Date() } });
+  }
 
   console.log("Seed complete.");
   console.log("  Coach login:   coach@vantage.dev / password123");
