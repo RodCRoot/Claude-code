@@ -147,20 +147,54 @@ export default function WorkoutBuilder() {
   );
 }
 
-// Assign a saved workout to a group (or everyone) on a date.
+const WEEKDAYS = [
+  { js: 1, label: "M" }, { js: 2, label: "T" }, { js: 3, label: "W" }, { js: 4, label: "Th" },
+  { js: 5, label: "F" }, { js: 6, label: "Sa" }, { js: 0, label: "Su" },
+];
+
+// Build the list of session dates from a start date, selected weekdays, and a
+// number of weeks (recurring schedule). Falls back to [start] if no weekday set.
+function buildDates(start: string, weekdays: Set<number>, weeks: number): string[] {
+  if (weekdays.size === 0) return [start];
+  const s = new Date(start + "T00:00:00");
+  const monday = new Date(s);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const out: string[] = [];
+  for (let w = 0; w < weeks; w++) {
+    for (const js of weekdays) {
+      const offset = (js + 6) % 7; // Mon=0..Sun=6
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + w * 7 + offset);
+      if (d >= s) out.push(d.toISOString().slice(0, 10));
+    }
+  }
+  return out.length ? out.sort() : [start];
+}
+
+// Assign a saved workout to a group (or everyone), once or on a recurring schedule.
 function AssignControl({ workoutId, groups, onAssigned }: { workoutId: string; groups: GroupOpt[]; onAssigned: () => void }) {
   const [open, setOpen] = useState(false);
   const [groupId, setGroupId] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [repeat, setRepeat] = useState(false);
+  const [weekdays, setWeekdays] = useState<Set<number>>(new Set());
+  const [weeks, setWeeks] = useState(4);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+
+  function toggleDay(js: number) {
+    setWeekdays((prev) => { const n = new Set(prev); n.has(js) ? n.delete(js) : n.add(js); return n; });
+  }
 
   async function assign() {
     if (!groupId) return;
     setBusy(true); setMsg("");
     try {
-      const r = await api.post<{ assigned: number }>(`/workouts/${workoutId}/assign`, { groupId, assignedDate: date });
-      setMsg(`Assigned to ${r.assigned} athlete${r.assigned === 1 ? "" : "s"}.`);
+      const body: Record<string, unknown> = { groupId };
+      if (repeat) body.dates = buildDates(date, weekdays, weeks);
+      else body.assignedDate = date;
+      const r = await api.post<{ assigned: number; athletes: number; sessions: number }>(`/workouts/${workoutId}/assign`, body);
+      setMsg(`Assigned ${r.sessions} session${r.sessions === 1 ? "" : "s"} to ${r.athletes} athlete${r.athletes === 1 ? "" : "s"}.`);
       onAssigned();
     } catch (e) { setMsg(e instanceof Error ? e.message : "Failed"); }
     finally { setBusy(false); }
@@ -174,6 +208,17 @@ function AssignControl({ workoutId, groups, onAssigned }: { workoutId: string; g
         {groups.map((g) => <option key={g.id} value={g.id}>{g.name} ({g._count.memberships})</option>)}
       </select>
       <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      <label className="repeat-toggle"><input type="checkbox" checked={repeat} onChange={(e) => setRepeat(e.target.checked)} /> repeat</label>
+      {repeat && (
+        <div className="repeat-opts">
+          <div className="weekday-row">
+            {WEEKDAYS.map((d) => (
+              <button key={d.js} type="button" className={`weekday ${weekdays.has(d.js) ? "on" : ""}`} onClick={() => toggleDay(d.js)}>{d.label}</button>
+            ))}
+          </div>
+          <label className="muted small">for <input className="tiny" type="number" min={1} max={26} value={weeks} onChange={(e) => setWeeks(Number(e.target.value))} /> weeks</label>
+        </div>
+      )}
       <button disabled={busy || !groupId} onClick={assign}>Assign</button>
       {msg && <div className="muted small">{msg}</div>}
     </div>

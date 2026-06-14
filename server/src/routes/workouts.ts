@@ -102,6 +102,7 @@ const assignSchema = z.object({
   athleteIds: z.array(z.string()).optional(),
   groupId: z.string().optional(),
   assignedDate: z.string().optional(),
+  dates: z.array(z.string()).optional(), // multiple dates → recurring schedule
   dueDate: z.string().optional(),
 }).refine((d) => (d.athleteIds && d.athleteIds.length > 0) || d.groupId, {
   message: "Provide athleteIds or a groupId",
@@ -134,10 +135,13 @@ workoutsRouter.post("/:id/assign", requireRole("ADMIN", "COACH"), async (req: Au
     select: { id: true },
   });
 
-  const assignedDate = parsed.data.assignedDate ? new Date(parsed.data.assignedDate) : new Date();
+  // One or many session dates (recurring schedule).
+  const dates = parsed.data.dates?.length
+    ? parsed.data.dates.map((d) => new Date(d))
+    : [parsed.data.assignedDate ? new Date(parsed.data.assignedDate) : new Date()];
   const dueDate = parsed.data.dueDate ? new Date(parsed.data.dueDate) : null;
-  await prisma.workoutAssignment.createMany({
-    data: valid.map((a) => ({ workoutId: workout.id, athleteId: a.id, assignedDate, dueDate })),
-  });
-  res.status(201).json({ assigned: valid.length });
+
+  const rows = valid.flatMap((a) => dates.map((assignedDate) => ({ workoutId: workout.id, athleteId: a.id, assignedDate, dueDate })));
+  await prisma.workoutAssignment.createMany({ data: rows });
+  res.status(201).json({ assigned: rows.length, athletes: valid.length, sessions: dates.length });
 });
