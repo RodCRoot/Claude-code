@@ -12,6 +12,7 @@ import Today from "./pages/Today";
 import Leaderboards from "./pages/Leaderboards";
 import Groups from "./pages/Groups";
 import Schedule from "./pages/Schedule";
+import Feed from "./pages/Feed";
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/athletes/:id/report" element={<ReportPage />} />
           <Route path="/leaderboards" element={<Leaderboards />} />
           <Route path="/schedule" element={<Schedule />} />
+          <Route path="/feed" element={<Feed />} />
           <Route path="/training" element={<Training />} />
           <Route path="/exercises" element={<Exercises />} />
           {isCoach && <Route path="/workouts" element={<WorkoutBuilder />} />}
@@ -55,6 +57,7 @@ function Sidebar() {
       <div className="brand">▲ Vantage</div>
       <nav>
         {link("/", isCoach ? "Roster" : "My Dashboard")}
+        {link("/feed", "Team Feed")}
         {isCoach && link("/analytics", "Analytics")}
         {link("/leaderboards", "Leaderboards")}
         {link("/schedule", "Schedule")}

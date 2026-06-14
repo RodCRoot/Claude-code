@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db";
 import { requireAuth, requireRole, AuthedRequest } from "../auth";
 import { METRIC_SOURCES } from "../constants";
+import { maybeMetricPR } from "../feed";
 
 export const metricsRouter = Router();
 metricsRouter.use(requireAuth);
@@ -47,6 +48,8 @@ metricsRouter.post("/", requireRole("ADMIN", "COACH"), async (req: AuthedRequest
       recordedAt: recordedAt ? new Date(recordedAt) : new Date(),
     },
   });
+  // Celebrate a new PR in the team feed (best-effort; never blocks the write).
+  await maybeMetricPR(athleteId, metricType, value, record.id).catch(() => {});
   res.status(201).json({ record });
 });
 

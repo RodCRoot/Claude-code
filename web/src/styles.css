@@ -233,3 +233,17 @@ button.day-item:hover { border-color: var(--accent-2); }
 .weekday-row { display: flex; gap: 4px; }
 .weekday { padding: 4px 8px; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); cursor: pointer; }
 .weekday.on { background: var(--accent-2); color: #fff; border-color: var(--accent-2); }
+
+/* team feed */
+.feed { display: flex; flex-direction: column; gap: 10px; }
+.feed-post { display: flex; gap: 12px; align-items: flex-start; }
+.feed-pr-accent { }
+.feed-post.feed-pr { border-left: 3px solid var(--accent); }
+.feed-post.feed-announcement { border-left: 3px solid var(--accent-2); }
+.feed-icon { font-size: 1.5rem; line-height: 1; }
+.feed-body { flex: 1; }
+.feed-title { font-weight: 600; }
+.feed-pr { color: var(--accent); margin-top: 2px; }
+.feed-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+.fist { background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); padding: 4px 10px; border-radius: 999px; cursor: pointer; }
+.fist.on { background: var(--accent-2); color: #fff; border-color: var(--accent-2); }

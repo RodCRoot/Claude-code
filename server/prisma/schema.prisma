@@ -31,6 +31,8 @@ model Organization {
   exercises Exercise[]
   workouts  Workout[]
   groups    Group[]
+  feedPosts FeedPost[]
+  threads   MessageThread[]
 }
 
 model User {
@@ -70,6 +72,7 @@ model Athlete {
   assignments WorkoutAssignment[]
   maxProfiles MaxProfile[]
   groups      AthleteGroup[]
+  feedPosts   FeedPost[]
 
   @@index([orgId, sport])
 }
@@ -284,4 +287,75 @@ model AthleteGroup {
   athlete   Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
 
   @@unique([groupId, athleteId])
+}
+
+// ---------------------------------------------------------------------------
+// Team feed (PRs + announcements) and messaging
+// ---------------------------------------------------------------------------
+
+model FeedPost {
+  id           String   @id @default(cuid())
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id])
+  kind         String   // PR | ANNOUNCEMENT
+  athleteId    String?  // subject athlete (PRs)
+  athlete      Athlete? @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  authorUserId String?  // null for system-generated
+  title        String
+  body         String?
+  metricLabel  String?  // for PRs
+  value        Float?
+  unit         String?
+  createdAt    DateTime @default(now())
+
+  reactions    FeedReaction[]
+
+  @@index([orgId, createdAt])
+}
+
+// Lightweight "fist bump" style reactions on feed posts.
+model FeedReaction {
+  id        String   @id @default(cuid())
+  postId    String
+  post      FeedPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  emoji     String   @default("👊")
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId, emoji])
+}
+
+model MessageThread {
+  id           String   @id @default(cuid())
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id])
+  subject      String?
+  createdAt    DateTime @default(now())
+  lastMessageAt DateTime @default(now())
+
+  participants ThreadParticipant[]
+  messages     Message[]
+
+  @@index([orgId, lastMessageAt])
+}
+
+model ThreadParticipant {
+  id        String   @id @default(cuid())
+  threadId  String
+  thread    MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  userId    String
+  lastReadAt DateTime?
+
+  @@unique([threadId, userId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  threadId  String
+  thread    MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  authorUserId String
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([threadId, createdAt])
 }

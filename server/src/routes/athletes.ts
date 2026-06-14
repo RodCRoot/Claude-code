@@ -5,6 +5,7 @@ import { requireAuth, requireRole, AuthedRequest } from "../auth";
 import { getAthleteRating } from "../rating";
 import { repMaxTo1rm, e1rmFromLoadVelocity, mvtForExercise } from "../prescription";
 import { buildToday } from "../today";
+import { maybeE1rmPR } from "../feed";
 
 export const athletesRouter = Router();
 athletesRouter.use(requireAuth);
@@ -233,6 +234,7 @@ athletesRouter.post("/:id/maxes", requireRole("ADMIN", "COACH"), async (req: Aut
       recordedAt: recordedAt ? new Date(recordedAt) : new Date(),
     },
   });
+  await maybeE1rmPR(req.params.id, { id: exercise.id, name: exercise.name }, max.e1rmKg, max.id).catch(() => {});
   res.status(201).json({ max });
 });
 
