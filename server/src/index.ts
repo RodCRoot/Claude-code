@@ -18,6 +18,7 @@ import { leaderboardsRouter } from "./routes/leaderboards";
 import { groupsRouter } from "./routes/groups";
 import { feedRouter } from "./routes/feed";
 import { messagesRouter } from "./routes/messages";
+import { wellnessRouter } from "./routes/wellness";
 
 const app = express();
 
@@ -43,6 +44,7 @@ app.use("/api/leaderboards", leaderboardsRouter);
 app.use("/api/groups", groupsRouter);
 app.use("/api/feed", feedRouter);
 app.use("/api/messages", messagesRouter);
+app.use("/api/wellness", wellnessRouter);
 
 // In production, serve the built web client and let the SPA handle routing.
 // WEB_DIST can override the location; default points at the monorepo web build.

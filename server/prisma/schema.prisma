@@ -73,6 +73,7 @@ model Athlete {
   maxProfiles MaxProfile[]
   groups      AthleteGroup[]
   feedPosts   FeedPost[]
+  checkins    WellnessCheckin[]
 
   @@index([orgId, sport])
 }
@@ -358,4 +359,24 @@ model Message {
   createdAt DateTime @default(now())
 
   @@index([threadId, createdAt])
+}
+
+// Daily wellness / readiness self-report (AMS layer).
+model WellnessCheckin {
+  id           String   @id @default(cuid())
+  athleteId    String
+  athlete      Athlete  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  date         DateTime // the day this check-in is for (midnight)
+  sleepHours   Float?
+  sleepQuality Int?     // 1-5
+  soreness     Int?     // 1-5 (5 = very sore)
+  mood         Int?     // 1-5
+  energy       Int?     // 1-5
+  stress       Int?     // 1-5 (5 = very stressed)
+  notes        String?
+  readiness    Int?     // computed 0-100
+  createdAt    DateTime @default(now())
+
+  @@unique([athleteId, date])
+  @@index([athleteId, date])
 }

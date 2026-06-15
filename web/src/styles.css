@@ -280,3 +280,7 @@ button.day-item:hover { border-color: var(--accent-2); }
 .kiosk-setnum { min-width: 64px; color: var(--muted); font-weight: 600; }
 .kiosk-input { font-size: 1.3rem; padding: 12px; width: 110px; text-align: center; }
 .kiosk-finish { display: block; width: 100%; font-size: 1.3rem; padding: 18px; margin-top: 8px; }
+
+/* wellness check-in */
+.wellness-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.wellness-form .label { display: flex; flex-direction: column; gap: 4px; }

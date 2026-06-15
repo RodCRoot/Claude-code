@@ -83,6 +83,7 @@ async function main() {
   console.log("Seeding Vantage...");
 
   // Clean slate (dev only).
+  await prisma.wellnessCheckin.deleteMany();
   await prisma.feedReaction.deleteMany();
   await prisma.feedPost.deleteMany();
   await prisma.message.deleteMany();
@@ -399,6 +400,27 @@ async function main() {
     await prisma.message.create({ data: { threadId: thread.id, authorUserId: coachUser.id, body: "Welcome to Vantage! Check your Today tab for this week's plan." } });
     await prisma.message.create({ data: { threadId: thread.id, authorUserId: athleteUserId, body: "Got it, thanks coach!" } });
     await prisma.messageThread.update({ where: { id: thread.id }, data: { lastMessageAt: new Date() } });
+  }
+
+  // --- Wellness check-ins (last 5 days for each athlete) --------------------
+  for (const a of athleteMeta) {
+    for (let dgo = 4; dgo >= 0; dgo--) {
+      const date = new Date(now - dgo * 864e5);
+      date.setHours(0, 0, 0, 0);
+      const base = 3 + Math.round(a.ability); // ability-tinted self-report
+      const clamp = (n: number) => Math.max(1, Math.min(5, n));
+      const sleepQuality = clamp(base + Math.round(gaussian(0, 0.8)));
+      const soreness = clamp(3 - Math.round(a.ability) + Math.round(gaussian(0, 0.8)));
+      const mood = clamp(base + Math.round(gaussian(0, 0.8)));
+      const energy = clamp(base + Math.round(gaussian(0, 0.8)));
+      const stress = clamp(3 - Math.round(a.ability * 0.5) + Math.round(gaussian(0, 0.8)));
+      const sleepHours = Math.round((7 + gaussian(0, 1)) * 10) / 10;
+      const parts = [(sleepQuality - 1) / 4, (mood - 1) / 4, (energy - 1) / 4, (5 - soreness) / 4, (5 - stress) / 4, Math.max(0, Math.min(1, (sleepHours - 4) / 4))];
+      const readiness = Math.round((parts.reduce((x, y) => x + y, 0) / parts.length) * 100);
+      await prisma.wellnessCheckin.create({
+        data: { athleteId: a.id, date, sleepHours, sleepQuality, soreness, mood, energy, stress, readiness },
+      });
+    }
   }
 
   console.log("Seed complete.");
