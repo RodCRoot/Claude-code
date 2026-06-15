@@ -260,3 +260,23 @@ button.day-item:hover { border-color: var(--accent-2); }
 .bubble-time { margin-top: 2px; opacity: 0.8; }
 .chat-input { display: flex; gap: 8px; margin-top: 10px; }
 .chat-input input { flex: 1; }
+
+/* weight-room kiosk (Gym Mode) — big touch targets */
+.kiosk { max-width: 1100px; margin: 0 auto; }
+.kiosk-head { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+.kiosk-head h1 { font-size: 1.8rem; }
+.kiosk-back, .kiosk-finish { font-size: 1.1rem; padding: 12px 20px; }
+.kiosk-search { font-size: 1.3rem; padding: 14px 16px; flex: 1; min-width: 220px; }
+.kiosk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+.kiosk-tile { display: flex; flex-direction: column; gap: 6px; align-items: center; justify-content: center; padding: 28px 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; cursor: pointer; color: var(--text); }
+.kiosk-tile:hover { border-color: var(--accent-2); background: var(--panel-2); }
+.kiosk-name { font-size: 1.25rem; font-weight: 600; }
+.kiosk-block { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+.kiosk-item { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
+.kiosk-item:first-of-type { border-top: none; }
+.kiosk-ex { font-size: 1.25rem; font-weight: 600; margin-bottom: 8px; }
+.kiosk-sets { display: flex; flex-direction: column; gap: 8px; }
+.kiosk-set { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.kiosk-setnum { min-width: 64px; color: var(--muted); font-weight: 600; }
+.kiosk-input { font-size: 1.3rem; padding: 12px; width: 110px; text-align: center; }
+.kiosk-finish { display: block; width: 100%; font-size: 1.3rem; padding: 18px; margin-top: 8px; }

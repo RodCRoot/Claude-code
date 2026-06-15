@@ -14,6 +14,7 @@ import Groups from "./pages/Groups";
 import Schedule from "./pages/Schedule";
 import Feed from "./pages/Feed";
 import Messages from "./pages/Messages";
+import GymMode from "./pages/GymMode";
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -37,6 +38,7 @@ export default function App() {
           <Route path="/exercises" element={<Exercises />} />
           {isCoach && <Route path="/workouts" element={<WorkoutBuilder />} />}
           {isCoach && <Route path="/groups" element={<Groups />} />}
+          {isCoach && <Route path="/gym" element={<GymMode />} />}
           {isCoach && <Route path="/analytics" element={<Analytics />} />}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
@@ -68,6 +70,7 @@ function Sidebar() {
         {link("/exercises", "Exercises")}
         {isCoach && link("/workouts", "Workout Builder")}
         {isCoach && link("/groups", "Teams & Groups")}
+        {isCoach && link("/gym", "Gym Mode")}
       </nav>
       <div className="sidebar-foot">
         <div className="user-name">{user?.name}</div>
