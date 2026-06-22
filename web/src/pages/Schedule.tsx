@@ -24,14 +24,27 @@ export default function Schedule() {
   const isCoach = user?.role === "COACH" || user?.role === "ADMIN";
   const [weekStart, setWeekStart] = useState(mondayOf(new Date()));
   const [items, setItems] = useState<CalAssignment[]>([]);
+  const [copyFrom, setCopyFrom] = useState<string | null>(null); // iso date being copied
+  const [busy, setBusy] = useState(false);
 
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => { const d = new Date(weekStart); d.setDate(d.getDate() + i); return d; }), [weekStart]);
 
-  useEffect(() => {
+  function load() {
     const from = iso(weekStart);
     const to = iso(days[6]);
     api.get<{ assignments: CalAssignment[] }>(`/assignments/calendar?from=${from}&to=${to}`).then((r) => setItems(r.assignments));
-  }, [weekStart]);
+  }
+  useEffect(() => { load(); }, [weekStart]);
+
+  async function pasteTo(toIso: string) {
+    if (!copyFrom || busy) return;
+    setBusy(true);
+    try {
+      await api.post("/assignments/copy-day", { fromDate: copyFrom, toDates: [toIso] });
+      setCopyFrom(null);
+      load();
+    } finally { setBusy(false); }
+  }
 
   const byDate = useMemo(() => {
     const m: Record<string, CalAssignment[]> = {};
@@ -57,11 +70,24 @@ export default function Schedule() {
           const key = iso(d);
           const list = byDate[key] ?? [];
           return (
-            <div key={key} className={`card day-col ${key === todayIso ? "day-today" : ""}`}>
+            <div key={key} className={`card day-col ${key === todayIso ? "day-today" : ""} ${copyFrom === key ? "day-copysrc" : ""}`}>
               <div className="day-head">
                 <span className="day-name">{d.toLocaleDateString(undefined, { weekday: "short" })}</span>
                 <span className="muted small">{d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
               </div>
+              {isCoach && (
+                <div className="day-actions">
+                  {copyFrom === null && list.length > 0 && (
+                    <button className="link-btn" title="Copy this day's sessions" onClick={() => setCopyFrom(key)}>⧉ Copy day</button>
+                  )}
+                  {copyFrom === key && (
+                    <button className="link-btn copying" onClick={() => setCopyFrom(null)}>Copying — pick a day ✕</button>
+                  )}
+                  {copyFrom !== null && copyFrom !== key && (
+                    <button className="link-btn paste" disabled={busy} onClick={() => pasteTo(key)}>↳ Paste here</button>
+                  )}
+                </div>
+              )}
               {list.length === 0 && <div className="muted small day-empty">—</div>}
               {isCoach ? <CoachDay list={list} /> : (
                 list.map((a) => (

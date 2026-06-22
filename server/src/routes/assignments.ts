@@ -1,12 +1,61 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db";
-import { requireAuth, AuthedRequest } from "../auth";
+import { requireAuth, requireRole, AuthedRequest } from "../auth";
 import { computeTargets } from "../prescription";
 import { latestMaxesByExercise } from "../maxprofiles";
 
 export const assignmentsRouter = Router();
 assignmentsRouter.use(requireAuth);
+
+// Bounds [00:00, next-00:00) for a yyyy-mm-dd day string.
+function dayRange(dateStr: string): [Date, Date] {
+  const start = new Date(dateStr);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return [start, end];
+}
+
+// Copy every session scheduled on one day to one or more other days — the
+// "duplicate a day's workout" time-saver coaches expect. Re-creates the same
+// workout×athlete assignments (status reset to ASSIGNED), skipping any that
+// already exist on a target day so re-pasting is idempotent.
+const copyDaySchema = z.object({
+  fromDate: z.string(),
+  toDates: z.array(z.string()).min(1),
+});
+assignmentsRouter.post("/copy-day", requireRole("ADMIN", "COACH"), async (req: AuthedRequest, res) => {
+  const parsed = copyDaySchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const orgId = req.auth!.orgId;
+
+  const [from, fromEnd] = dayRange(parsed.data.fromDate);
+  const source = await prisma.workoutAssignment.findMany({
+    where: { assignedDate: { gte: from, lt: fromEnd }, athlete: { orgId } },
+    select: { workoutId: true, athleteId: true, dueDate: true },
+  });
+  if (source.length === 0) return res.status(400).json({ error: "Nothing scheduled on that day to copy" });
+
+  let created = 0;
+  for (const dateStr of parsed.data.toDates) {
+    const [to, toEnd] = dayRange(dateStr);
+    // Existing (workout,athlete) pairs already on the target day → skip them.
+    const existing = await prisma.workoutAssignment.findMany({
+      where: { assignedDate: { gte: to, lt: toEnd }, athlete: { orgId } },
+      select: { workoutId: true, athleteId: true },
+    });
+    const seen = new Set(existing.map((e) => `${e.workoutId}:${e.athleteId}`));
+    const rows = source
+      .filter((s) => !seen.has(`${s.workoutId}:${s.athleteId}`))
+      .map((s) => ({ workoutId: s.workoutId, athleteId: s.athleteId, assignedDate: to, dueDate: s.dueDate }));
+    if (rows.length) {
+      await prisma.workoutAssignment.createMany({ data: rows });
+      created += rows.length;
+    }
+  }
+  res.status(201).json({ created, sourceSessions: source.length, targetDays: parsed.data.toDates.length });
+});
 
 // Ensure the caller may touch this assignment (the assigned athlete, or a
 // coach/admin in the same org). Returns the assignment or null.

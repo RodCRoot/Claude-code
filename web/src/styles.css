@@ -293,3 +293,11 @@ button.day-item:hover { border-color: var(--accent-2); }
 .adherence-table .txt-risk { color: #e06a6a; font-weight: 600; }
 .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; }
 .pill-risk { background: rgba(220, 80, 80, 0.15); color: #e06a6a; }
+
+/* schedule copy-day */
+.day-actions { margin-bottom: 6px; min-height: 22px; }
+.link-btn { background: none; border: none; color: var(--accent-2); cursor: pointer; font-size: 0.8rem; padding: 2px 0; }
+.link-btn:hover { text-decoration: underline; }
+.link-btn.copying { color: #e0a85a; }
+.link-btn.paste { color: #4fd1c5; font-weight: 600; }
+.day-copysrc { outline: 2px dashed #e0a85a; outline-offset: -2px; }
