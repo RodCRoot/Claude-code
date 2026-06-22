@@ -204,6 +204,85 @@ analyticsRouter.get("/movers", async (req: AuthedRequest, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Adherence: the coach landing board — "who's training and who's fallen off?".
+// Per athlete: workouts completed in each of the last N weeks (Mon–Sun), days
+// since their last completed session, and a rolling completion rate.
+// ---------------------------------------------------------------------------
+analyticsRouter.get("/adherence", async (req: AuthedRequest, res) => {
+  const orgId = req.auth!.orgId;
+  const sport = req.query.sport ? String(req.query.sport) : undefined;
+  const weeks = Math.min(Math.max(Number(req.query.weeks) || 4, 1), 8);
+
+  const athletes = await orgAthletes(orgId, sport);
+  const byId = new Map(athletes.map((a) => [a.id, a]));
+
+  // Monday (00:00) of the current week, then the N-1 weeks before it.
+  const monday = new Date();
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const weekStarts: Date[] = [];
+  for (let i = weeks - 1; i >= 0; i--) {
+    const d = new Date(monday);
+    d.setDate(d.getDate() - i * 7);
+    weekStarts.push(d);
+  }
+  const windowStart = weekStarts[0];
+  const fmt = (d: Date) => d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+  const assignments = await prisma.workoutAssignment.findMany({
+    where: { athleteId: { in: [...byId.keys()] } },
+    select: { athleteId: true, status: true, completedAt: true, assignedDate: true },
+  });
+
+  const now = Date.now();
+  const rows = athletes.map((a) => {
+    const mine = assignments.filter((x) => x.athleteId === a.id);
+    const buckets = new Array(weeks).fill(0);
+    let lastCompletedAt: Date | null = null;
+    let assignedInWindow = 0;
+    let completedInWindow = 0;
+
+    for (const x of mine) {
+      if (x.assignedDate >= windowStart) assignedInWindow += 1;
+      if (x.status === "COMPLETED" && x.completedAt) {
+        if (!lastCompletedAt || x.completedAt > lastCompletedAt) lastCompletedAt = x.completedAt;
+        if (x.completedAt >= windowStart) {
+          completedInWindow += 1;
+          for (let w = weeks - 1; w >= 0; w--) {
+            if (x.completedAt >= weekStarts[w]) { buckets[w] += 1; break; }
+          }
+        }
+      }
+    }
+
+    const daysSinceLast = lastCompletedAt ? Math.floor((now - +lastCompletedAt) / 864e5) : null;
+    return {
+      athleteId: a.id,
+      name: `${a.firstName} ${a.lastName}`,
+      sport: a.sport,
+      weeks: buckets,
+      completedInWindow,
+      assignedInWindow,
+      completionRate: assignedInWindow ? Math.round((completedInWindow / assignedInWindow) * 100) : null,
+      lastCompletedAt,
+      daysSinceLast,
+      // Flag athletes who've gone quiet: no completion in 7+ days (or never).
+      atRisk: daysSinceLast === null || daysSinceLast >= 7,
+    };
+  });
+
+  // Most concerning first: never-trained, then longest since last session.
+  rows.sort((x, y) => (y.daysSinceLast ?? 1e9) - (x.daysSinceLast ?? 1e9));
+
+  res.json({
+    weekLabels: weekStarts.map(fmt),
+    weekCount: weeks,
+    atRiskCount: rows.filter((r) => r.atRisk).length,
+    rows,
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Compliance: per-athlete workout completion (covers the coach side of logging).
 // ---------------------------------------------------------------------------
 analyticsRouter.get("/compliance", async (req: AuthedRequest, res) => {

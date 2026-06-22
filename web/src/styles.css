@@ -284,3 +284,12 @@ button.day-item:hover { border-color: var(--accent-2); }
 /* wellness check-in */
 .wellness-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
 .wellness-form .label { display: flex; flex-direction: column; gap: 4px; }
+
+/* coach adherence board */
+.table-scroll { overflow-x: auto; }
+.adherence-table th, .adherence-table td { white-space: nowrap; }
+.adherence-table .cell-heat { text-align: center; font-variant-numeric: tabular-nums; border-radius: 4px; }
+.adherence-table .row-risk { background: rgba(220, 80, 80, 0.06); }
+.adherence-table .txt-risk { color: #e06a6a; font-weight: 600; }
+.pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; }
+.pill-risk { background: rgba(220, 80, 80, 0.15); color: #e06a6a; }

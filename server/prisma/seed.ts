@@ -367,6 +367,36 @@ async function main() {
     })),
   });
 
+  // --- Historical adherence (completed sessions over the last 4 weeks) -------
+  // Powers the coach "who's training / who's fallen off" board with realistic
+  // variety: most athletes train consistently, a couple tapered off two weeks
+  // ago (→ flagged), and one never started.
+  {
+    const dayMs = 864e5;
+    const monday = new Date(now);
+    monday.setHours(0, 0, 0, 0);
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    const adherence: { workoutId: string; athleteId: string; assignedDate: Date; status: string; completedAt: Date }[] = [];
+    athleteMeta.forEach((a, i) => {
+      const profile = i % 8 === 0 ? "never" : i % 8 === 1 ? "fell-off" : "regular";
+      if (profile === "never") return;
+      for (let w = 0; w < 4; w++) {
+        if (profile === "fell-off" && w >= 2) continue; // stopped ~2 weeks ago
+        const weekStart = new Date(monday.getTime() - (3 - w) * 7 * dayMs);
+        const base = 2 + Math.round(Math.max(0, Math.min(2, a.ability + 1)));
+        const count = Math.max(1, Math.min(5, base + Math.round(gaussian(0, 0.6))));
+        for (let s = 0; s < count; s++) {
+          const dayOffset = Math.min(6, s + Math.round(Math.abs(gaussian(0, 1))));
+          const d = new Date(weekStart.getTime() + dayOffset * dayMs);
+          d.setHours(17, 0, 0, 0);
+          if (d.getTime() > now) continue; // never complete in the future
+          adherence.push({ workoutId: workout.id, athleteId: a.id, assignedDate: d, status: "COMPLETED", completedAt: d });
+        }
+      }
+    });
+    await prisma.workoutAssignment.createMany({ data: adherence });
+  }
+
   // --- Team feed (PR posts + an announcement) -------------------------------
   // Surface a few standout CMJ results as PRs so the feed isn't empty on a
   // fresh seed (live PRs are generated when athletes beat a prior best).
