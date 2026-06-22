@@ -13,6 +13,7 @@
     "prepare-db": "node scripts/prepare-db.js",
     "db:push": "prisma db push",
     "seed": "ts-node --transpile-only prisma/seed.ts",
+    "preview": "ts-node --transpile-only scripts/preview.ts",
     "test": "ts-node --transpile-only src/prescription.test.ts",
     "setup": "prisma generate && prisma db push && npm run seed",
     "deploy:db": "node scripts/prepare-db.js && prisma generate && prisma db push --skip-generate && npm run seed"
