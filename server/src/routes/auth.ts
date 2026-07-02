@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { rateLimit } from "../hardening";
 import { prisma } from "../db";
 import {
   hashPassword,
@@ -12,6 +13,10 @@ import { ROLES, Role } from "../constants";
 
 export const authRouter = Router();
 
+// Credential endpoints get a much stricter ceiling than the general API:
+// 10 attempts per 5 minutes per IP blunts password guessing.
+const credentialLimiter = rateLimit({ windowMs: 5 * 60_000, max: 10, name: "auth" });
+
 const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
@@ -23,7 +28,7 @@ const registerSchema = z.object({
 
 // Register a user. If no orgId is given, a new organization is created
 // (first user becomes its admin-capable coach).
-authRouter.post("/register", async (req, res) => {
+authRouter.post("/register", credentialLimiter, async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   const { email, password, name, role } = parsed.data;
@@ -52,7 +57,7 @@ const loginSchema = z.object({
   password: z.string(),
 });
 
-authRouter.post("/login", async (req, res) => {
+authRouter.post("/login", credentialLimiter, async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 

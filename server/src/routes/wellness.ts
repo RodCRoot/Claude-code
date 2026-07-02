@@ -83,14 +83,22 @@ wellnessRouter.get("/flags", requireRole("ADMIN", "COACH"), async (req: AuthedRe
     where: { orgId: req.auth!.orgId },
     select: { id: true, firstName: true, lastName: true, sport: true },
   });
-  const rows = await Promise.all(athletes.map(async (a) => {
-    const latest = await prisma.wellnessCheckin.findFirst({ where: { athleteId: a.id }, orderBy: { date: "desc" } });
+  // Latest check-in per athlete in a single query (distinct keeps the first
+  // row per athleteId under the date-desc ordering).
+  const latests = await prisma.wellnessCheckin.findMany({
+    where: { athleteId: { in: athletes.map((a) => a.id) } },
+    orderBy: [{ athleteId: "asc" }, { date: "desc" }],
+    distinct: ["athleteId"],
+  });
+  const latestBy = new Map(latests.map((c) => [c.athleteId, c]));
+  const rows = athletes.map((a) => {
+    const latest = latestBy.get(a.id);
     return {
       athleteId: a.id, name: `${a.firstName} ${a.lastName}`, sport: a.sport,
       readiness: latest?.readiness ?? null, soreness: latest?.soreness ?? null,
       date: latest?.date ?? null, notes: latest?.notes ?? null,
     };
-  }));
+  });
   rows.sort((x, y) => (x.readiness ?? 999) - (y.readiness ?? 999));
   res.json({ rows });
 });

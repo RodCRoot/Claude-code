@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../db";
 import { requireAuth, requireRole, AuthedRequest } from "../auth";
 import { today, mondayOf, addDays, dayOf, dayLabel, tzOffsetFromReq } from "../daytime";
+import { getAthleteRating } from "../rating";
 
 export const analyticsRouter = Router();
 analyticsRouter.use(requireAuth);
@@ -205,6 +206,22 @@ analyticsRouter.get("/movers", async (req: AuthedRequest, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Ratings: every athlete's rating card in one round trip (the coach dashboard
+// previously issued one request per athlete).
+// ---------------------------------------------------------------------------
+analyticsRouter.get("/ratings", async (req: AuthedRequest, res) => {
+  const athletes = await orgAthletes(req.auth!.orgId);
+  const ratings = await Promise.all(
+    athletes.map((a) =>
+      getAthleteRating(a.id)
+        .then((r) => ({ athleteId: a.id, compositeScore: r.compositeScore, tier: r.tier }))
+        .catch(() => ({ athleteId: a.id, compositeScore: null, tier: "Unrated" }))
+    )
+  );
+  res.json({ ratings });
+});
+
+// ---------------------------------------------------------------------------
 // Adherence: the coach landing board — "who's training and who's fallen off?".
 // Per athlete: workouts completed in each of the last N weeks (Mon–Sun), days
 // since their last completed session, and a rolling completion rate.
@@ -231,8 +248,14 @@ analyticsRouter.get("/adherence", async (req: AuthedRequest, res) => {
     select: { athleteId: true, status: true, completedAt: true, assignedDate: true },
   });
 
+  const byAthlete = new Map<string, typeof assignments>();
+  for (const x of assignments) {
+    const arr = byAthlete.get(x.athleteId) ?? [];
+    arr.push(x);
+    byAthlete.set(x.athleteId, arr);
+  }
   const rows = athletes.map((a) => {
-    const mine = assignments.filter((x) => x.athleteId === a.id);
+    const mine = byAthlete.get(a.id) ?? [];
     const buckets = new Array(weeks).fill(0);
     let lastCompletedDay: string | null = null;
     let assignedInWindow = 0;

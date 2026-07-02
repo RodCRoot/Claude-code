@@ -33,15 +33,11 @@ export default function Dashboard() {
   useEffect(() => {
     if (user?.role === "ATHLETE") return;
     api.get<Adherence>("/analytics/adherence?weeks=4").then(setAdherence).catch(() => {});
-    api.get<{ athletes: Athlete[] }>("/athletes").then(async (r) => {
-      setAthletes(r.athletes);
-      const entries = await Promise.all(
-        r.athletes.map((a) =>
-          api.get<Rating>(`/athletes/${a.id}/rating`).then((rt) => [a.id, rt] as const).catch(() => null)
-        )
-      );
+    api.get<{ athletes: Athlete[] }>("/athletes").then((r) => setAthletes(r.athletes));
+    // All rating cards in one round trip.
+    api.get<{ ratings: Rating[] }>("/analytics/ratings").then((r) => {
       const map: Record<string, Rating> = {};
-      for (const e of entries) if (e) map[e[0]] = e[1];
+      for (const rt of r.ratings) map[rt.athleteId] = rt;
       setRatings(map);
       setLoading(false);
     });

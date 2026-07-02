@@ -74,10 +74,12 @@ messagesRouter.get("/:id", async (req: AuthedRequest, res) => {
     where: { threadId_userId: { threadId: req.params.id, userId: req.auth!.userId } },
   });
   if (!part) return res.status(404).json({ error: "Thread not found" });
-  const messages = await prisma.message.findMany({
+  // Latest 200, returned oldest-first (a DM thread, not an archive browser).
+  const messages = (await prisma.message.findMany({
     where: { threadId: req.params.id },
-    orderBy: { createdAt: "asc" },
-  });
+    orderBy: { createdAt: "desc" },
+    take: 200,
+  })).reverse();
   await prisma.threadParticipant.update({ where: { id: part.id }, data: { lastReadAt: new Date() } });
   res.json({ messages: messages.map((m) => ({ id: m.id, body: m.body, createdAt: m.createdAt, mine: m.authorUserId === req.auth!.userId })) });
 });

@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import express from "express";
 import cors from "cors";
+import { securityHeaders, rateLimit } from "./hardening";
 import { authRouter } from "./routes/auth";
 import { athletesRouter } from "./routes/athletes";
 import { metricsRouter } from "./routes/metrics";
@@ -22,7 +23,18 @@ import { wellnessRouter } from "./routes/wellness";
 
 const app = express();
 
-app.use(cors());
+// Render terminates TLS at a proxy; trust it so req.ip is the real client
+// (rate-limit keys and logs would otherwise all see the proxy's address).
+app.set("trust proxy", 1);
+
+app.use(securityHeaders);
+// Generous global ceiling; the point is stopping abuse, not throttling use.
+app.use("/api", rateLimit({ windowMs: 60_000, max: 600, name: "api" }));
+
+// The SPA is served same-origin (prod: this server, dev: Vite proxy), so CORS
+// stays off unless another origin is explicitly configured.
+if (process.env.CORS_ORIGIN) app.use(cors({ origin: process.env.CORS_ORIGIN.split(",") }));
+
 app.use(express.json({ limit: "2mb" }));
 // CSV import endpoint accepts raw text bodies.
 app.use(express.text({ type: ["text/csv", "text/plain"], limit: "5mb" }));
