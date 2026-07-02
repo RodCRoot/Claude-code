@@ -74,6 +74,7 @@ model Athlete {
   groups      AthleteGroup[]
   feedPosts   FeedPost[]
   checkins    WellnessCheckin[]
+  goals       Goal[]
 
   @@index([orgId, sport])
 }
@@ -100,6 +101,7 @@ model MetricType {
 
   records    MetricRecord[]
   benchmarks Benchmark[]
+  goals      Goal[]
 }
 
 model MetricRecord {
@@ -161,6 +163,7 @@ model Exercise {
 
   items       WorkoutItem[]
   maxProfiles MaxProfile[]
+  goals       Goal[]
 
   @@index([orgId, category])
 }
@@ -359,6 +362,29 @@ model Message {
   createdAt DateTime @default(now())
 
   @@index([threadId, createdAt])
+}
+
+// A measurable target for an athlete: reach targetValue on a metric or an
+// exercise e1RM. Baseline is captured at creation so progress is meaningful.
+model Goal {
+  id            String   @id @default(cuid())
+  athleteId     String
+  athlete       Athlete  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  createdById   String   // user who set it (coach or the athlete)
+  kind          String   // METRIC | E1RM
+  metricTypeId  String?
+  metricType    MetricType? @relation(fields: [metricTypeId], references: [id])
+  exerciseId    String?
+  exercise      Exercise?   @relation(fields: [exerciseId], references: [id])
+  targetValue   Float
+  baselineValue Float?
+  deadline      DateTime? // pure date
+  status        String   @default("ACTIVE") // ACTIVE | ACHIEVED | ARCHIVED
+  achievedAt    DateTime?
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  @@index([athleteId, status])
 }
 
 // Daily wellness / readiness self-report (AMS layer).

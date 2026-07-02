@@ -46,7 +46,7 @@ export default function Feed() {
       <div className="feed">
         {posts.map((p) => (
           <div key={p.id} className={`card feed-post feed-${p.kind.toLowerCase()}`}>
-            <div className="feed-icon">{p.kind === "PR" ? "🎉" : "📣"}</div>
+            <div className="feed-icon">{p.kind === "PR" ? "🎉" : p.kind === "GOAL" ? "🎯" : "📣"}</div>
             <div className="feed-body">
               <div className="feed-title">{p.title}</div>
               {p.kind === "PR" && p.metricLabel && (

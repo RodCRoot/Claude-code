@@ -16,6 +16,7 @@ import Feed from "./pages/Feed";
 import Messages from "./pages/Messages";
 import GymMode from "./pages/GymMode";
 import Wellness from "./pages/Wellness";
+import Goals from "./pages/Goals";
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -35,6 +36,7 @@ export default function App() {
           <Route path="/schedule" element={<Schedule />} />
           <Route path="/feed" element={<Feed />} />
           <Route path="/wellness" element={<Wellness />} />
+          <Route path="/goals" element={<Goals />} />
           <Route path="/messages" element={<Messages />} />
           <Route path="/training" element={<Training />} />
           <Route path="/exercises" element={<Exercises />} />
@@ -70,6 +72,7 @@ function Sidebar() {
         {link("/schedule", "Schedule")}
         {link("/training", "Training")}
         {link("/wellness", isCoach ? "Readiness" : "Check-in")}
+        {link("/goals", "Goals")}
         {link("/exercises", "Exercises")}
         {isCoach && link("/workouts", "Workout Builder")}
         {isCoach && link("/groups", "Teams & Groups")}

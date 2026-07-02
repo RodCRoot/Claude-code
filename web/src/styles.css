@@ -301,3 +301,15 @@ button.day-item:hover { border-color: var(--accent-2); }
 .link-btn.copying { color: #e0a85a; }
 .link-btn.paste { color: #4fd1c5; font-weight: 600; }
 .day-copysrc { outline: 2px dashed #e0a85a; outline-offset: -2px; }
+
+/* goals */
+.goals-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+.goal-card { display: flex; flex-direction: column; gap: 8px; }
+.goal-head { display: flex; justify-content: space-between; align-items: baseline; }
+.goal-label { font-weight: 700; font-size: 1.05rem; }
+.goal-bar { height: 10px; border-radius: 999px; background: var(--panel-2, #1c2230); overflow: hidden; }
+.goal-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #2f8f85, #4fd1c5); transition: width .3s; }
+.goal-done .goal-fill { background: linear-gradient(90deg, #4f8f4f, #6fcf6f); }
+.goal-nums { display: flex; justify-content: space-between; align-items: baseline; }
+.goal-current { font-weight: 700; font-size: 1.1rem; }
+.goal-meta { min-height: 1em; }

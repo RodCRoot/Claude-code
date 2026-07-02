@@ -90,6 +90,7 @@ async function main() {
   console.log("Seeding Vantage...");
 
   // Clean slate (dev only).
+  await prisma.goal.deleteMany();
   await prisma.wellnessCheckin.deleteMany();
   await prisma.feedReaction.deleteMany();
   await prisma.feedPost.deleteMany();
@@ -456,6 +457,43 @@ async function main() {
       await prisma.wellnessCheckin.create({
         data: { athleteId: a.id, date, sleepHours, sleepQuality, soreness, mood, energy, stress, readiness },
       });
+    }
+  }
+
+  // --- Goals ------------------------------------------------------------------
+  // One mid-progress metric goal, one nearly-done e1RM goal, and one already
+  // past its target (auto-achieves + posts to the feed on first view).
+  {
+    const cmj = await prisma.metricType.findUnique({ where: { key: "cmj_height" } });
+    if (cmj) {
+      for (const [i, profile] of (["mid", "near", "crossed"] as const).entries()) {
+        const a = athleteMeta[i + 1];
+        if (profile === "near" || profile === "mid") {
+          const best = await prisma.metricRecord.aggregate({
+            where: { athleteId: a.id, metricTypeId: cmj.id }, _max: { value: true },
+          });
+          const cur = best._max.value ?? 40;
+          const target = profile === "mid" ? Math.round(cur + 4) : Math.round(cur + 1);
+          await prisma.goal.create({
+            data: {
+              athleteId: a.id, createdById: coach!.id, kind: "METRIC", metricTypeId: cmj.id,
+              targetValue: target, baselineValue: Math.round((cur - 3) * 10) / 10,
+              deadline: utcDay(now + 45 * 864e5), notes: profile === "mid" ? "Combine prep" : "So close — finish it",
+            },
+          });
+        } else {
+          const max = await prisma.maxProfile.findFirst({ where: { athleteId: a.id }, orderBy: { recordedAt: "desc" } });
+          if (max) {
+            await prisma.goal.create({
+              data: {
+                athleteId: a.id, createdById: coach!.id, kind: "E1RM", exerciseId: max.exerciseId,
+                targetValue: Math.max(40, max.e1rmKg - 5), baselineValue: max.e1rmKg - 20,
+                notes: "Winter strength block",
+              },
+            });
+          }
+        }
+      }
     }
   }
 

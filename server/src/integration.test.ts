@@ -172,6 +172,35 @@ async function main() {
     assert.equal(yesterdayDay <= dayOf(new Date(), chicago), true);
   });
 
+  // --- goals: baseline capture, auto-achieve, feed celebration ---------------
+  const cmj = await prisma.metricType.create({
+    data: { key: "test_cmj", name: "CMJ", unit: "cm", category: "JUMP", source: "MANUAL", higherIsBetter: true },
+  });
+  await test("creating a goal captures the athlete's current best as baseline", async () => {
+    await prisma.metricRecord.create({ data: { athleteId: a1.id, metricTypeId: cmj.id, value: 40 } });
+    const r = await call("POST", "/goals", { token: athleteToken, body: { kind: "METRIC", metricTypeId: cmj.id, targetValue: 50 } });
+    assert.equal(r.status, 201);
+    assert.equal(r.body.goal.baselineValue, 40);
+    assert.equal(r.body.goal.status, "ACTIVE");
+  });
+  await test("an athlete cannot set a goal for another athlete", async () => {
+    const r = await call("POST", "/goals", { token: athleteToken, body: { athleteId: a2.id, kind: "METRIC", metricTypeId: cmj.id, targetValue: 60 } });
+    assert.equal(r.status, 201);
+    assert.equal(r.body.goal.athleteId, a1.id); // silently scoped to self
+  });
+  await test("crossing the target auto-achieves and celebrates on the feed", async () => {
+    await prisma.metricRecord.create({ data: { athleteId: a1.id, metricTypeId: cmj.id, value: 52 } });
+    const r = await call("GET", "/goals", { token: athleteToken });
+    const g = r.body.goals.find((x: Json) => x.target === 50);
+    assert.ok(g, "goal listed");
+    assert.equal(g.status, "ACHIEVED");
+    assert.equal(g.progressPct, 100);
+    assert.equal(g.current, 52);
+    const posts = await prisma.feedPost.findMany({ where: { kind: "GOAL", athleteId: a1.id } });
+    assert.equal(posts.length, 1);
+    assert.ok(posts[0].body!.includes("52"));
+  });
+
   // --- set logs: idempotent upsert + athlete isolation -----------------------
   await test("re-posting a set log upserts instead of duplicating", async () => {
     const assignment = await prisma.workoutAssignment.findFirst({ where: { athleteId: a1.id } });
