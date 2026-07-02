@@ -33,6 +33,7 @@ model Organization {
   groups    Group[]
   feedPosts FeedPost[]
   threads   MessageThread[]
+  evalProtocols EvalProtocol[]
 }
 
 model User {
@@ -75,6 +76,7 @@ model Athlete {
   feedPosts   FeedPost[]
   checkins    WellnessCheckin[]
   goals       Goal[]
+  evalResults EvalResult[]
 
   @@index([orgId, sport])
 }
@@ -102,6 +104,8 @@ model MetricType {
   records    MetricRecord[]
   benchmarks Benchmark[]
   goals      Goal[]
+  evalItems  EvalProtocolItem[]
+  evalResults EvalResult[]
 }
 
 model MetricRecord {
@@ -362,6 +366,60 @@ model Message {
   createdAt DateTime @default(now())
 
   @@index([threadId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Evaluations: reusable testing protocols (combine-style batteries) run as
+// dated sessions. Each entered value also lands in MetricRecord, so ratings,
+// leaderboards, trends and PRs pick eval results up automatically.
+// ---------------------------------------------------------------------------
+
+model EvalProtocol {
+  id          String   @id @default(cuid())
+  orgId       String
+  org         Organization @relation(fields: [orgId], references: [id])
+  name        String // e.g. "Spring Combine"
+  description String?
+  createdById String
+  createdAt   DateTime @default(now())
+
+  items    EvalProtocolItem[]
+  sessions EvalSession[]
+}
+
+model EvalProtocolItem {
+  id           String       @id @default(cuid())
+  protocolId   String
+  protocol     EvalProtocol @relation(fields: [protocolId], references: [id], onDelete: Cascade)
+  metricTypeId String
+  metricType   MetricType   @relation(fields: [metricTypeId], references: [id])
+  order        Int
+}
+
+model EvalSession {
+  id          String       @id @default(cuid())
+  protocolId  String
+  protocol    EvalProtocol @relation(fields: [protocolId], references: [id], onDelete: Cascade)
+  date        DateTime // pure date (the testing day)
+  notes       String?
+  createdById String
+  createdAt   DateTime     @default(now())
+
+  results EvalResult[]
+}
+
+model EvalResult {
+  id             String      @id @default(cuid())
+  sessionId      String
+  session        EvalSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  athleteId      String
+  athlete        Athlete     @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  metricTypeId   String
+  metricType     MetricType  @relation(fields: [metricTypeId], references: [id])
+  value          Float
+  metricRecordId String?     @unique // the longitudinal record this created
+
+  @@unique([sessionId, athleteId, metricTypeId])
 }
 
 // A measurable target for an athlete: reach targetValue on a metric or an

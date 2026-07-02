@@ -90,6 +90,10 @@ async function main() {
   console.log("Seeding Vantage...");
 
   // Clean slate (dev only).
+  await prisma.evalResult.deleteMany();
+  await prisma.evalSession.deleteMany();
+  await prisma.evalProtocolItem.deleteMany();
+  await prisma.evalProtocol.deleteMany();
   await prisma.goal.deleteMany();
   await prisma.wellnessCheckin.deleteMany();
   await prisma.feedReaction.deleteMany();
@@ -492,6 +496,40 @@ async function main() {
               },
             });
           }
+        }
+      }
+    }
+  }
+
+  // --- Evaluations: a testing protocol + one completed session ---------------
+  {
+    const battery = ["sprint_10m", "cmj_height", "vertical_jump"].map((k) => typeByKey[k]).filter(Boolean);
+    if (battery.length === 3) {
+      const protocol = await prisma.evalProtocol.create({
+        data: {
+          orgId: org.id, name: "Spring Testing", description: "Pre-season combine battery",
+          createdById: coach!.id,
+          items: { create: battery.map((metricTypeId, i) => ({ metricTypeId, order: i })) },
+        },
+      });
+      const sessionDay = utcDay(now - 10 * 864e5);
+      const session = await prisma.evalSession.create({
+        data: { protocolId: protocol.id, date: sessionDay, createdById: coach!.id, notes: "Full squad tested" },
+      });
+      for (const a of athleteMeta.slice(0, 8)) {
+        for (const metricTypeId of battery) {
+          // Re-test near the athlete's existing level with a little noise.
+          const best = await prisma.metricRecord.aggregate({
+            where: { athleteId: a.id, metricTypeId }, _avg: { value: true },
+          });
+          const base = best._avg.value ?? 40;
+          const value = Math.round(base * (1 + gaussian(0, 0.02)) * 100) / 100;
+          const record = await prisma.metricRecord.create({
+            data: { athleteId: a.id, metricTypeId, value, source: "EVAL", recordedAt: sessionDay, notes: "Testing: Spring Testing" },
+          });
+          await prisma.evalResult.create({
+            data: { sessionId: session.id, athleteId: a.id, metricTypeId, value, metricRecordId: record.id },
+          });
         }
       }
     }

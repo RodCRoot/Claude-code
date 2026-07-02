@@ -313,3 +313,11 @@ button.day-item:hover { border-color: var(--accent-2); }
 .goal-nums { display: flex; justify-content: space-between; align-items: baseline; }
 .goal-current { font-weight: 700; font-size: 1.1rem; }
 .goal-meta { min-height: 1em; }
+
+/* evaluations */
+.eval-picks { display: flex; flex-wrap: wrap; gap: 8px; }
+.pick { background: var(--panel-2, #1c2230); border: 1px solid var(--border, #2a2f3a); color: var(--text, #e6e9ef); border-radius: 999px; padding: 6px 14px; cursor: pointer; font-size: 0.9rem; }
+.pick.picked { border-color: #4fd1c5; color: #4fd1c5; }
+.pick-order { display: inline-block; background: #4fd1c5; color: #0f1218; border-radius: 999px; width: 18px; height: 18px; font-size: 0.75rem; font-weight: 700; line-height: 18px; text-align: center; margin-right: 6px; }
+.eval-grid .eval-cell { width: 90px; text-align: center; padding: 6px; }
+.eval-grid td, .eval-grid th { white-space: nowrap; }

@@ -201,6 +201,32 @@ async function main() {
     assert.ok(posts[0].body!.includes("52"));
   });
 
+  // --- evaluations: results write through to metric history ------------------
+  let sessionId = "", protoMetricId = "";
+  await test("protocol + session + results create EVAL metric records", async () => {
+    protoMetricId = cmj.id;
+    const p = await call("POST", "/evals/protocols", { token: coachToken, body: { name: "Combine", metricTypeIds: [cmj.id] } });
+    assert.equal(p.status, 201);
+    const se = await call("POST", "/evals/sessions", { token: coachToken, body: { protocolId: p.body.protocol.id, date: "2026-06-10" } });
+    sessionId = se.body.session.id;
+    const r = await call("POST", `/evals/sessions/${sessionId}/results`, { token: coachToken, body: { results: [{ athleteId: a2.id, metricTypeId: cmj.id, value: 44 }] } });
+    assert.equal(r.body.saved, 1);
+    const recs = await prisma.metricRecord.findMany({ where: { athleteId: a2.id, metricTypeId: cmj.id, source: "EVAL" } });
+    assert.equal(recs.length, 1);
+    assert.equal(recs[0].value, 44);
+    assert.equal(recs[0].recordedAt.toISOString(), "2026-06-10T00:00:00.000Z");
+  });
+  await test("re-entering an eval value updates the linked record, not duplicates", async () => {
+    await call("POST", `/evals/sessions/${sessionId}/results`, { token: coachToken, body: { results: [{ athleteId: a2.id, metricTypeId: protoMetricId, value: 45.5 }] } });
+    const recs = await prisma.metricRecord.findMany({ where: { athleteId: a2.id, metricTypeId: protoMetricId, source: "EVAL" } });
+    assert.equal(recs.length, 1);
+    assert.equal(recs[0].value, 45.5);
+  });
+  await test("athletes cannot touch eval endpoints", async () => {
+    const r = await call("GET", "/evals/protocols", { token: athleteToken });
+    assert.equal(r.status, 403);
+  });
+
   // --- set logs: idempotent upsert + athlete isolation -----------------------
   await test("re-posting a set log upserts instead of duplicating", async () => {
     const assignment = await prisma.workoutAssignment.findFirst({ where: { athleteId: a1.id } });

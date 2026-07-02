@@ -17,6 +17,7 @@ import Messages from "./pages/Messages";
 import GymMode from "./pages/GymMode";
 import Wellness from "./pages/Wellness";
 import Goals from "./pages/Goals";
+import Evaluations from "./pages/Evaluations";
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -43,6 +44,7 @@ export default function App() {
           {isCoach && <Route path="/workouts" element={<WorkoutBuilder />} />}
           {isCoach && <Route path="/groups" element={<Groups />} />}
           {isCoach && <Route path="/gym" element={<GymMode />} />}
+          {isCoach && <Route path="/evals" element={<Evaluations />} />}
           {isCoach && <Route path="/analytics" element={<Analytics />} />}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
@@ -77,6 +79,7 @@ function Sidebar() {
         {isCoach && link("/workouts", "Workout Builder")}
         {isCoach && link("/groups", "Teams & Groups")}
         {isCoach && link("/gym", "Gym Mode")}
+        {isCoach && link("/evals", "Evaluations")}
       </nav>
       <div className="sidebar-foot">
         <div className="user-name">{user?.name}</div>

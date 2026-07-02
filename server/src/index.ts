@@ -21,6 +21,7 @@ import { feedRouter } from "./routes/feed";
 import { messagesRouter } from "./routes/messages";
 import { wellnessRouter } from "./routes/wellness";
 import { goalsRouter } from "./routes/goals";
+import { evalsRouter } from "./routes/evals";
 
 const app = express();
 
@@ -59,6 +60,7 @@ app.use("/api/feed", feedRouter);
 app.use("/api/messages", messagesRouter);
 app.use("/api/wellness", wellnessRouter);
 app.use("/api/goals", goalsRouter);
+app.use("/api/evals", evalsRouter);
 
 // In production, serve the built web client and let the SPA handle routing.
 // WEB_DIST can override the location; default points at the monorepo web build.
