@@ -12,6 +12,8 @@ export function setToken(token: string | null) {
 
 async function request<T>(method: string, path: string, body?: unknown, raw?: boolean): Promise<T> {
   const headers: Record<string, string> = {};
+  // The server does all calendar-day math in the client's timezone.
+  headers["x-tz-offset"] = String(new Date().getTimezoneOffset());
   const token = getToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
   if (body !== undefined && !raw) headers["Content-Type"] = "application/json";

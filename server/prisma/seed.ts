@@ -16,6 +16,13 @@ function gaussian(mean: number, sd: number) {
   const v = rand();
   return mean + sd * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
+// Pure date (UTC midnight) of the calendar day containing a timestamp — the
+// storage convention for session days and check-in days (see src/daytime.ts).
+function utcDay(ms: number): Date {
+  const d = new Date(ms);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
 
 // --- Metric catalog ---------------------------------------------------------
 // `relativeToBw` flags metrics the rating engine judges relative to bodyweight.
@@ -277,7 +284,8 @@ async function main() {
     data: athleteIds.map((athleteId) => ({
       workoutId: workout.id,
       athleteId,
-      dueDate: new Date(now + 2 * 24 * 3600 * 1000),
+      assignedDate: utcDay(now),
+      dueDate: utcDay(now + 2 * 24 * 3600 * 1000),
     })),
   });
 
@@ -362,8 +370,8 @@ async function main() {
     data: athleteIds.map((athleteId) => ({
       workoutId: vbt.id,
       athleteId,
-      assignedDate: new Date(now),
-      dueDate: new Date(now + 24 * 3600 * 1000),
+      assignedDate: utcDay(now),
+      dueDate: utcDay(now + 24 * 3600 * 1000),
     })),
   });
 
@@ -373,9 +381,8 @@ async function main() {
   // ago (→ flagged), and one never started.
   {
     const dayMs = 864e5;
-    const monday = new Date(now);
-    monday.setHours(0, 0, 0, 0);
-    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    const monday = utcDay(now);
+    monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
     const adherence: { workoutId: string; athleteId: string; assignedDate: Date; status: string; completedAt: Date }[] = [];
     athleteMeta.forEach((a, i) => {
       const profile = i % 8 === 0 ? "never" : i % 8 === 1 ? "fell-off" : "regular";
@@ -387,10 +394,10 @@ async function main() {
         const count = Math.max(1, Math.min(5, base + Math.round(gaussian(0, 0.6))));
         for (let s = 0; s < count; s++) {
           const dayOffset = Math.min(6, s + Math.round(Math.abs(gaussian(0, 1))));
-          const d = new Date(weekStart.getTime() + dayOffset * dayMs);
-          d.setHours(17, 0, 0, 0);
-          if (d.getTime() > now) continue; // never complete in the future
-          adherence.push({ workoutId: workout.id, athleteId: a.id, assignedDate: d, status: "COMPLETED", completedAt: d });
+          const day = new Date(weekStart.getTime() + dayOffset * dayMs); // pure date (UTC midnight)
+          const done = new Date(day.getTime() + 17 * 3600 * 1000); // 17:00Z that day
+          if (done.getTime() > now) continue; // never complete in the future
+          adherence.push({ workoutId: workout.id, athleteId: a.id, assignedDate: day, status: "COMPLETED", completedAt: done });
         }
       }
     });
@@ -435,8 +442,7 @@ async function main() {
   // --- Wellness check-ins (last 5 days for each athlete) --------------------
   for (const a of athleteMeta) {
     for (let dgo = 4; dgo >= 0; dgo--) {
-      const date = new Date(now - dgo * 864e5);
-      date.setHours(0, 0, 0, 0);
+      const date = utcDay(now - dgo * 864e5);
       const base = 3 + Math.round(a.ability); // ability-tinted self-report
       const clamp = (n: number) => Math.max(1, Math.min(5, n));
       const sleepQuality = clamp(base + Math.round(gaussian(0, 0.8)));

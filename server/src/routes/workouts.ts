@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db";
 import { requireAuth, requireRole, AuthedRequest } from "../auth";
+import { pureDate, isDayString, today, tzOffsetFromReq } from "../daytime";
 
 export const workoutsRouter = Router();
 workoutsRouter.use(requireAuth);
@@ -98,12 +99,13 @@ workoutsRouter.get("/:id", async (req: AuthedRequest, res) => {
   res.json({ workout });
 });
 
+const dayStrSchema = z.string().refine(isDayString, "yyyy-mm-dd expected");
 const assignSchema = z.object({
   athleteIds: z.array(z.string()).optional(),
   groupId: z.string().optional(),
-  assignedDate: z.string().optional(),
-  dates: z.array(z.string()).optional(), // multiple dates → recurring schedule
-  dueDate: z.string().optional(),
+  assignedDate: dayStrSchema.optional(),
+  dates: z.array(dayStrSchema).optional(), // multiple dates → recurring schedule
+  dueDate: dayStrSchema.optional(),
 }).refine((d) => (d.athleteIds && d.athleteIds.length > 0) || d.groupId, {
   message: "Provide athleteIds or a groupId",
 });
@@ -135,11 +137,12 @@ workoutsRouter.post("/:id/assign", requireRole("ADMIN", "COACH"), async (req: Au
     select: { id: true },
   });
 
-  // One or many session dates (recurring schedule).
+  // One or many session days (recurring schedule). Session days are pure dates
+  // (UTC midnight); "today" defaults to the client's calendar day.
   const dates = parsed.data.dates?.length
-    ? parsed.data.dates.map((d) => new Date(d))
-    : [parsed.data.assignedDate ? new Date(parsed.data.assignedDate) : new Date()];
-  const dueDate = parsed.data.dueDate ? new Date(parsed.data.dueDate) : null;
+    ? parsed.data.dates.map(pureDate)
+    : [pureDate(parsed.data.assignedDate ?? today(tzOffsetFromReq(req)))];
+  const dueDate = parsed.data.dueDate ? pureDate(parsed.data.dueDate) : null;
 
   const rows = valid.flatMap((a) => dates.map((assignedDate) => ({ workoutId: workout.id, athleteId: a.id, assignedDate, dueDate })));
   await prisma.workoutAssignment.createMany({ data: rows });

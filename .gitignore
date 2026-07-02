@@ -20,3 +20,4 @@ server/prisma/dev.db*
 
 # Generated preview renders (regenerate with: npm run preview)
 preview-*.svg
+server/prisma/integration.db*

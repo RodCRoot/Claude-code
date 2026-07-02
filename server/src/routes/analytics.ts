@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../db";
 import { requireAuth, requireRole, AuthedRequest } from "../auth";
+import { today, mondayOf, addDays, dayOf, dayLabel, tzOffsetFromReq } from "../daytime";
 
 export const analyticsRouter = Router();
 analyticsRouter.use(requireAuth);
@@ -212,59 +213,64 @@ analyticsRouter.get("/adherence", async (req: AuthedRequest, res) => {
   const orgId = req.auth!.orgId;
   const sport = req.query.sport ? String(req.query.sport) : undefined;
   const weeks = Math.min(Math.max(Number(req.query.weeks) || 4, 1), 8);
+  const offset = tzOffsetFromReq(req);
 
   const athletes = await orgAthletes(orgId, sport);
   const byId = new Map(athletes.map((a) => [a.id, a]));
 
-  // Monday (00:00) of the current week, then the N-1 weeks before it.
-  const monday = new Date();
-  monday.setHours(0, 0, 0, 0);
-  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-  const weekStarts: Date[] = [];
-  for (let i = weeks - 1; i >= 0; i--) {
-    const d = new Date(monday);
-    d.setDate(d.getDate() - i * 7);
-    weekStarts.push(d);
-  }
-  const windowStart = weekStarts[0];
-  const fmt = (d: Date) => d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  // Week starts as day strings in the CLIENT's calendar (Mon–Sun). All
+  // bucketing below compares ISO day strings, which order lexically.
+  const todayStr = today(offset);
+  const mondayStr = mondayOf(todayStr);
+  const weekStartStrs: string[] = [];
+  for (let i = weeks - 1; i >= 0; i--) weekStartStrs.push(addDays(mondayStr, -i * 7));
+  const windowStartStr = weekStartStrs[0];
 
   const assignments = await prisma.workoutAssignment.findMany({
     where: { athleteId: { in: [...byId.keys()] } },
     select: { athleteId: true, status: true, completedAt: true, assignedDate: true },
   });
 
-  const now = Date.now();
   const rows = athletes.map((a) => {
     const mine = assignments.filter((x) => x.athleteId === a.id);
     const buckets = new Array(weeks).fill(0);
-    let lastCompletedAt: Date | null = null;
+    let lastCompletedDay: string | null = null;
     let assignedInWindow = 0;
-    let completedInWindow = 0;
+    let completedOfAssigned = 0;
 
     for (const x of mine) {
-      if (x.assignedDate >= windowStart) assignedInWindow += 1;
+      // assignedDate is a pure date → its day label is offset-independent.
+      const assignedDay = x.assignedDate.toISOString().slice(0, 10);
+      // Completion rate is coherent: of sessions scheduled in the window (up to
+      // today), how many are done? Can never exceed 100%.
+      if (assignedDay >= windowStartStr && assignedDay <= todayStr) {
+        assignedInWindow += 1;
+        if (x.status === "COMPLETED") completedOfAssigned += 1;
+      }
       if (x.status === "COMPLETED" && x.completedAt) {
-        if (!lastCompletedAt || x.completedAt > lastCompletedAt) lastCompletedAt = x.completedAt;
-        if (x.completedAt >= windowStart) {
-          completedInWindow += 1;
+        // completedAt is an instant → convert to the client's calendar day.
+        const day = dayOf(x.completedAt, offset);
+        if (!lastCompletedDay || day > lastCompletedDay) lastCompletedDay = day;
+        if (day >= windowStartStr) {
           for (let w = weeks - 1; w >= 0; w--) {
-            if (x.completedAt >= weekStarts[w]) { buckets[w] += 1; break; }
+            if (day >= weekStartStrs[w]) { buckets[w] += 1; break; }
           }
         }
       }
     }
 
-    const daysSinceLast = lastCompletedAt ? Math.floor((now - +lastCompletedAt) / 864e5) : null;
+    // Whole-day difference ("trained yesterday evening" = 1d ago).
+    const daysSinceLast = lastCompletedDay
+      ? Math.round((Date.parse(todayStr) - Date.parse(lastCompletedDay)) / 864e5)
+      : null;
     return {
       athleteId: a.id,
       name: `${a.firstName} ${a.lastName}`,
       sport: a.sport,
       weeks: buckets,
-      completedInWindow,
+      completedInWindow: buckets.reduce((s: number, n: number) => s + n, 0),
       assignedInWindow,
-      completionRate: assignedInWindow ? Math.round((completedInWindow / assignedInWindow) * 100) : null,
-      lastCompletedAt,
+      completionRate: assignedInWindow ? Math.round((completedOfAssigned / assignedInWindow) * 100) : null,
       daysSinceLast,
       // Flag athletes who've gone quiet: no completion in 7+ days (or never).
       atRisk: daysSinceLast === null || daysSinceLast >= 7,
@@ -275,7 +281,7 @@ analyticsRouter.get("/adherence", async (req: AuthedRequest, res) => {
   rows.sort((x, y) => (y.daysSinceLast ?? 1e9) - (x.daysSinceLast ?? 1e9));
 
   res.json({
-    weekLabels: weekStarts.map(fmt),
+    weekLabels: weekStartStrs.map(dayLabel),
     weekCount: weeks,
     atRiskCount: rows.filter((r) => r.atRisk).length,
     rows,

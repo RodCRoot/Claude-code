@@ -14,7 +14,7 @@
     "db:push": "prisma db push",
     "seed": "ts-node --transpile-only prisma/seed.ts",
     "preview": "ts-node --transpile-only scripts/preview.ts",
-    "test": "ts-node --transpile-only src/prescription.test.ts",
+    "test": "ts-node --transpile-only src/prescription.test.ts && ts-node --transpile-only src/daytime.test.ts && ts-node --transpile-only src/integration.test.ts",
     "setup": "prisma generate && prisma db push && npm run seed",
     "deploy:db": "node scripts/prepare-db.js && prisma generate && prisma db push --skip-generate && npm run seed"
   },

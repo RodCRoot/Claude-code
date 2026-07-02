@@ -109,7 +109,7 @@ export default function ReportPage() {
               <tr key={i}>
                 <td>{w.name}</td>
                 <td><span className={`tier tier-${w.status === "COMPLETED" ? "elite" : w.status === "IN_PROGRESS" ? "proficient" : "developing"}`}>{w.status.replace("_", " ")}</span></td>
-                <td className="muted small">{new Date(w.completedAt || w.assignedDate).toLocaleDateString()}</td>
+                <td className="muted small">{new Date(w.completedAt || w.assignedDate).toLocaleDateString(undefined, w.completedAt ? {} : { timeZone: "UTC" })}</td>
               </tr>
             ))}
           </tbody>

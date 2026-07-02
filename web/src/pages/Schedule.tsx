@@ -16,7 +16,9 @@ function mondayOf(d: Date): Date {
   x.setHours(0, 0, 0, 0);
   return x;
 }
-const iso = (d: Date) => d.toISOString().slice(0, 10);
+// Local calendar day — toISOString would jump to tomorrow in evening sessions.
+const iso = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 export default function Schedule() {
   const { user } = useAuth();

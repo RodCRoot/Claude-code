@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db";
 import { requireAuth, requireRole, AuthedRequest } from "../auth";
+import { pureDate, isDayString, today, addDays, tzOffsetFromReq } from "../daytime";
 
 export const wellnessRouter = Router();
 wellnessRouter.use(requireAuth);
@@ -21,15 +22,9 @@ export function computeReadiness(i: {
   return Math.round(parts.reduce((a, b) => a + b, 0) / parts.length);
 }
 
-function startOfToday(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
 const checkinSchema = z.object({
   athleteId: z.string().optional(), // coaches may submit for an athlete
-  date: z.string().optional(),
+  date: z.string().refine(isDayString, "yyyy-mm-dd expected").optional(),
   sleepHours: z.number().min(0).max(24).optional(),
   sleepQuality: z.number().int().min(1).max(5).optional(),
   soreness: z.number().int().min(1).max(5).optional(),
@@ -53,8 +48,9 @@ wellnessRouter.post("/", async (req: AuthedRequest, res) => {
   const athlete = await prisma.athlete.findUnique({ where: { id: athleteId } });
   if (!athlete || athlete.orgId !== req.auth!.orgId) return res.status(404).json({ error: "Athlete not found" });
 
-  const date = d.date ? new Date(d.date) : startOfToday();
-  date.setHours(0, 0, 0, 0);
+  // The check-in day is the client's calendar day, stored as a pure date
+  // (UTC midnight) so per-day uniqueness is viewer-independent.
+  const date = pureDate(d.date ?? today(tzOffsetFromReq(req)));
   const readiness = computeReadiness(d);
   const fields = { sleepHours: d.sleepHours, sleepQuality: d.sleepQuality, soreness: d.soreness, mood: d.mood, energy: d.energy, stress: d.stress, notes: d.notes, readiness };
 
@@ -70,13 +66,15 @@ wellnessRouter.post("/", async (req: AuthedRequest, res) => {
 wellnessRouter.get("/me", async (req: AuthedRequest, res) => {
   if (!req.auth!.athleteId) return res.status(400).json({ error: "Not an athlete account" });
   const days = Math.min(Number(req.query.days) || 30, 120);
-  const since = new Date(Date.now() - days * 864e5);
+  const todayStr = today(tzOffsetFromReq(req));
   const checkins = await prisma.wellnessCheckin.findMany({
-    where: { athleteId: req.auth!.athleteId, date: { gte: since } },
+    where: { athleteId: req.auth!.athleteId, date: { gte: pureDate(addDays(todayStr, -days)) } },
     orderBy: { date: "asc" },
   });
-  const today = startOfToday();
-  res.json({ checkins, submittedToday: checkins.some((c) => +new Date(c.date) === +today) });
+  res.json({
+    checkins,
+    submittedToday: checkins.some((c) => c.date.toISOString().slice(0, 10) === todayStr),
+  });
 });
 
 // Coach readiness board: each athlete's latest check-in, lowest readiness first.

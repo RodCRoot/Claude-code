@@ -54,7 +54,7 @@ export default function Training() {
               <div className="athlete-name">{a.workout.name}</div>
               <div className="muted small">{a.workout.description}</div>
               <span className={`tier tier-${statusTier(a.status)}`}>{a.status.replace("_", " ")}</span>
-              {a.dueDate && <span className="muted small"> · due {new Date(a.dueDate).toLocaleDateString()}</span>}
+              {a.dueDate && <span className="muted small"> · due {new Date(a.dueDate).toLocaleDateString(undefined, { timeZone: "UTC" })}</span>}
             </div>
           </button>
         ))}

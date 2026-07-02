@@ -4,17 +4,16 @@ import { prisma } from "../db";
 import { requireAuth, requireRole, AuthedRequest } from "../auth";
 import { computeTargets } from "../prescription";
 import { latestMaxesByExercise } from "../maxprofiles";
+import { pureDate, isDayString, addDays, today, tzOffsetFromReq } from "../daytime";
 
 export const assignmentsRouter = Router();
 assignmentsRouter.use(requireAuth);
 
-// Bounds [00:00, next-00:00) for a yyyy-mm-dd day string.
-function dayRange(dateStr: string): [Date, Date] {
-  const start = new Date(dateStr);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-  return [start, end];
+// assignedDate is a pure date (UTC midnight of the session's calendar day), so
+// a day's sessions are exactly [pureDate(day), pureDate(day)+24h).
+function sessionDayRange(dayStr: string): [Date, Date] {
+  const start = pureDate(dayStr);
+  return [start, new Date(start.getTime() + 864e5)];
 }
 
 // Copy every session scheduled on one day to one or more other days — the
@@ -22,15 +21,15 @@ function dayRange(dateStr: string): [Date, Date] {
 // workout×athlete assignments (status reset to ASSIGNED), skipping any that
 // already exist on a target day so re-pasting is idempotent.
 const copyDaySchema = z.object({
-  fromDate: z.string(),
-  toDates: z.array(z.string()).min(1),
+  fromDate: z.string().refine(isDayString, "yyyy-mm-dd expected"),
+  toDates: z.array(z.string().refine(isDayString, "yyyy-mm-dd expected")).min(1),
 });
 assignmentsRouter.post("/copy-day", requireRole("ADMIN", "COACH"), async (req: AuthedRequest, res) => {
   const parsed = copyDaySchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   const orgId = req.auth!.orgId;
 
-  const [from, fromEnd] = dayRange(parsed.data.fromDate);
+  const [from, fromEnd] = sessionDayRange(parsed.data.fromDate);
   const source = await prisma.workoutAssignment.findMany({
     where: { assignedDate: { gte: from, lt: fromEnd }, athlete: { orgId } },
     select: { workoutId: true, athleteId: true, dueDate: true },
@@ -39,7 +38,7 @@ assignmentsRouter.post("/copy-day", requireRole("ADMIN", "COACH"), async (req: A
 
   let created = 0;
   for (const dateStr of parsed.data.toDates) {
-    const [to, toEnd] = dayRange(dateStr);
+    const [to, toEnd] = sessionDayRange(dateStr);
     // Existing (workout,athlete) pairs already on the target day → skip them.
     const existing = await prisma.workoutAssignment.findMany({
       where: { assignedDate: { gte: to, lt: toEnd }, athlete: { orgId } },
@@ -95,12 +94,15 @@ assignmentsRouter.get("/", async (req: AuthedRequest, res) => {
 // see their own; staff see the whole org (optionally one athlete via ?athleteId).
 assignmentsRouter.get("/calendar", async (req: AuthedRequest, res) => {
   const { role, orgId, athleteId } = req.auth!;
-  const from = req.query.from ? new Date(String(req.query.from)) : new Date(Date.now() - 7 * 864e5);
-  const to = req.query.to ? new Date(String(req.query.to)) : new Date(Date.now() + 21 * 864e5);
+  // from/to are inclusive calendar days (yyyy-mm-dd) in the client's timezone;
+  // defaults bracket the client's today.
+  const todayStr = today(tzOffsetFromReq(req));
+  const fromStr = isDayString(req.query.from) ? req.query.from : addDays(todayStr, -7);
+  const toStr = isDayString(req.query.to) ? req.query.to : addDays(todayStr, 21);
   const targetAthleteId = role === "ATHLETE" ? athleteId : (req.query.athleteId ? String(req.query.athleteId) : "");
 
   const where: Record<string, unknown> = {
-    assignedDate: { gte: from, lte: to },
+    assignedDate: { gte: pureDate(fromStr), lt: pureDate(addDays(toStr, 1)) },
     ...(targetAthleteId ? { athleteId: targetAthleteId } : { athlete: { orgId } }),
   };
   const assignments = await prisma.workoutAssignment.findMany({

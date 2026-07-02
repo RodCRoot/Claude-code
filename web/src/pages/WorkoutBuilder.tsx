@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+const localIso = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
 
 interface Exercise { id: string; name: string; category: string; }
 interface Item {
@@ -165,7 +168,7 @@ function buildDates(start: string, weekdays: Set<number>, weeks: number): string
       const offset = (js + 6) % 7; // Mon=0..Sun=6
       const d = new Date(monday);
       d.setDate(monday.getDate() + w * 7 + offset);
-      if (d >= s) out.push(d.toISOString().slice(0, 10));
+      if (d >= s) out.push(localIso(d));
     }
   }
   return out.length ? out.sort() : [start];
@@ -175,7 +178,7 @@ function buildDates(start: string, weekdays: Set<number>, weeks: number): string
 function AssignControl({ workoutId, groups, onAssigned }: { workoutId: string; groups: GroupOpt[]; onAssigned: () => void }) {
   const [open, setOpen] = useState(false);
   const [groupId, setGroupId] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(localIso(new Date()));
   const [repeat, setRepeat] = useState(false);
   const [weekdays, setWeekdays] = useState<Set<number>>(new Set());
   const [weeks, setWeeks] = useState(4);

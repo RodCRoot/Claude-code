@@ -39,7 +39,7 @@ function AthleteCheckin() {
     load();
   }
 
-  const trend = checkins.filter((c) => c.readiness != null).map((c) => ({ date: new Date(c.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), readiness: c.readiness }));
+  const trend = checkins.filter((c) => c.readiness != null).map((c) => ({ date: new Date(c.date).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" }), readiness: c.readiness }));
   const latest = checkins[checkins.length - 1];
 
   return (
@@ -112,7 +112,7 @@ function CoachReadiness() {
                 </span>
               </td>
               <td className="num">{r.soreness ?? "—"}</td>
-              <td className="muted small">{r.date ? new Date(r.date).toLocaleDateString() : "—"}</td>
+              <td className="muted small">{r.date ? new Date(r.date).toLocaleDateString(undefined, { timeZone: "UTC" }) : "—"}</td>
               <td className="muted small">{r.notes ?? ""}</td>
             </tr>
           ))}
