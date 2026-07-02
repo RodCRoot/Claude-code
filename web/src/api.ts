@@ -31,6 +31,21 @@ async function request<T>(method: string, path: string, body?: unknown, raw?: bo
   return res.status === 204 ? (undefined as T) : res.json();
 }
 
+// Authenticated file download (a plain <a href> can't carry the JWT header).
+export async function download(path: string, filename: string) {
+  const headers: Record<string, string> = { "x-tz-offset": String(new Date().getTimezoneOffset()) };
+  const token = getToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(`/api${path}`, { headers });
+  if (!res.ok) throw new Error("Download failed");
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export const api = {
   get: <T>(p: string) => request<T>("GET", p),
   post: <T>(p: string, b?: unknown) => request<T>("POST", p, b),

@@ -85,6 +85,42 @@ athletesRouter.get("/:id/rating", async (req: AuthedRequest, res) => {
   res.json(await getAthleteRating(req.params.id));
 });
 
+// Longitudinal history as a spreadsheet: every metric record plus e1RM maxes.
+athletesRouter.get("/:id/export.csv", async (req: AuthedRequest, res) => {
+  const athlete = await prisma.athlete.findUnique({ where: { id: req.params.id } });
+  if (!athlete || athlete.orgId !== req.auth!.orgId) {
+    return res.status(404).json({ error: "Athlete not found" });
+  }
+  if (req.auth!.role === "ATHLETE" && req.auth!.athleteId !== athlete.id) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  const [records, maxes] = await Promise.all([
+    prisma.metricRecord.findMany({
+      where: { athleteId: athlete.id },
+      include: { metricType: { select: { name: true, unit: true } } },
+      orderBy: { recordedAt: "asc" },
+    }),
+    prisma.maxProfile.findMany({
+      where: { athleteId: athlete.id },
+      include: { exercise: { select: { name: true } } },
+      orderBy: { recordedAt: "asc" },
+    }),
+  ]);
+  const esc = (v: unknown) => {
+    const t = v == null ? "" : String(v);
+    return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  };
+  const rows: unknown[][] = [
+    ["Date", "Kind", "Measure", "Value", "Unit", "Notes"],
+    ...records.map((r) => [r.recordedAt.toISOString().slice(0, 10), "Metric", r.metricType.name, r.value, r.metricType.unit, r.notes ?? ""]),
+    ...maxes.map((m) => [m.recordedAt.toISOString().slice(0, 10), "Max (e1RM)", m.exercise.name, m.e1rmKg, "kg", m.method]),
+  ];
+  const csv = rows.map((r) => r.map(esc).join(",")).join("\r\n") + "\r\n";
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${athlete.firstName}-${athlete.lastName}-progress.csv"`);
+  res.send(csv);
+});
+
 // A self-contained, printable progress report: profile, rating card, per-metric
 // history (for sparklines), and workout compliance.
 athletesRouter.get("/:id/report", async (req: AuthedRequest, res) => {

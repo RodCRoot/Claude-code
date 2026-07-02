@@ -226,12 +226,7 @@ analyticsRouter.get("/ratings", async (req: AuthedRequest, res) => {
 // Per athlete: workouts completed in each of the last N weeks (Mon–Sun), days
 // since their last completed session, and a rolling completion rate.
 // ---------------------------------------------------------------------------
-analyticsRouter.get("/adherence", async (req: AuthedRequest, res) => {
-  const orgId = req.auth!.orgId;
-  const sport = req.query.sport ? String(req.query.sport) : undefined;
-  const weeks = Math.min(Math.max(Number(req.query.weeks) || 4, 1), 8);
-  const offset = tzOffsetFromReq(req);
-
+async function computeAdherence(orgId: string, sport: string | undefined, weeks: number, offset: number) {
   const athletes = await orgAthletes(orgId, sport);
   const byId = new Map(athletes.map((a) => [a.id, a]));
 
@@ -303,12 +298,53 @@ analyticsRouter.get("/adherence", async (req: AuthedRequest, res) => {
   // Most concerning first: never-trained, then longest since last session.
   rows.sort((x, y) => (y.daysSinceLast ?? 1e9) - (x.daysSinceLast ?? 1e9));
 
-  res.json({
+  return {
     weekLabels: weekStartStrs.map(dayLabel),
     weekCount: weeks,
     atRiskCount: rows.filter((r) => r.atRisk).length,
     rows,
-  });
+  };
+}
+
+function adherenceParams(req: AuthedRequest) {
+  return {
+    sport: req.query.sport ? String(req.query.sport) : undefined,
+    weeks: Math.min(Math.max(Number(req.query.weeks) || 4, 1), 8),
+    offset: tzOffsetFromReq(req),
+  };
+}
+
+analyticsRouter.get("/adherence", async (req: AuthedRequest, res) => {
+  const { sport, weeks, offset } = adherenceParams(req);
+  res.json(await computeAdherence(req.auth!.orgId, sport, weeks, offset));
+});
+
+// CSV escape: quote any field containing a delimiter, quote, or newline.
+function csvCell(v: unknown): string {
+  const s = v == null ? "" : String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+function csvBody(headers: string[], rows: unknown[][]): string {
+  return [headers, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
+}
+
+// Team adherence as a spreadsheet — what a coach forwards to a director/AD.
+analyticsRouter.get("/adherence.csv", async (req: AuthedRequest, res) => {
+  const { sport, weeks, offset } = adherenceParams(req);
+  const data = await computeAdherence(req.auth!.orgId, sport, weeks, offset);
+  const csv = csvBody(
+    ["Athlete", "Sport", ...data.weekLabels.map((w) => `Week of ${w}`), "Sessions (window)", "Completion %", "Days since last session", "Flagged"],
+    data.rows.map((r) => [
+      r.name, r.sport, ...r.weeks,
+      r.completedInWindow,
+      r.completionRate == null ? "" : r.completionRate,
+      r.daysSinceLast == null ? "never" : r.daysSinceLast,
+      r.atRisk ? "YES" : "",
+    ])
+  );
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="team-adherence.csv"`);
+  res.send(csv);
 });
 
 // ---------------------------------------------------------------------------

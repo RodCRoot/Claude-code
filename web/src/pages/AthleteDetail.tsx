@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
-import { api } from "../api";
+import { api, download } from "../api";
 import { useAuth } from "../auth";
 import { ScoreRing } from "./Dashboard";
 
@@ -78,6 +78,7 @@ export default function AthleteDetail() {
             <div className="muted small">Vantage Score</div>
             <div className={`tier tier-${rating.tier.toLowerCase()}`}>{rating.tier}</div>
             <Link className="link-btn" to={`/athletes/${athlete.id}/report`}>Printable report →</Link>
+            <button className="link-btn" onClick={() => download(`/athletes/${athlete.id}/export.csv`, `${athlete.firstName}-${athlete.lastName}-progress.csv`)}>⇩ Export CSV</button>
           </div>
         </div>
       </header>

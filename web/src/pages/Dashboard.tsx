@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
-import { api } from "../api";
+import { api, download } from "../api";
 import { useAuth } from "../auth";
 
 interface Athlete {
@@ -107,6 +107,7 @@ function AdherenceBoard({ data }: { data: Adherence }) {
           <button className="secondary" onClick={() => setShowAll((s) => !s)}>
             {showAll ? "Show flagged only" : "Show all athletes"}
           </button>
+          <button className="secondary" onClick={() => download("/analytics/adherence.csv?weeks=4", "team-adherence.csv")}>⇩ CSV</button>
         </div>
       </div>
       <div className="table-scroll">
