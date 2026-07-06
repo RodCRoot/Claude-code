@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Routes, Route, Navigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "./auth";
 import Login from "./pages/Login";
@@ -21,13 +22,22 @@ import Evaluations from "./pages/Evaluations";
 
 export default function App() {
   const { user, loading } = useAuth();
+  const [navOpen, setNavOpen] = useState(false);
+  const loc = useLocation();
+  // Close the mobile drawer whenever the route changes.
+  useEffect(() => { setNavOpen(false); }, [loc.pathname]);
   if (loading) return <div className="center muted">Loading…</div>;
   if (!user) return <Login />;
   const isCoach = user.role === "COACH" || user.role === "ADMIN";
 
   return (
     <div className="app">
-      <Sidebar />
+      <header className="topbar">
+        <button className="hamburger" aria-label="Menu" onClick={() => setNavOpen((o) => !o)}>☰</button>
+        <span className="brand">▲ Vantage</span>
+      </header>
+      {navOpen && <div className="nav-scrim" onClick={() => setNavOpen(false)} />}
+      <Sidebar open={navOpen} />
       <main className="content">
         <Routes>
           <Route path="/" element={isCoach ? <Dashboard /> : <Today />} />
@@ -53,7 +63,7 @@ export default function App() {
   );
 }
 
-function Sidebar() {
+function Sidebar({ open }: { open: boolean }) {
   const { user, logout } = useAuth();
   const loc = useLocation();
   const isCoach = user?.role === "COACH" || user?.role === "ADMIN";
@@ -63,7 +73,7 @@ function Sidebar() {
     </Link>
   );
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${open ? "sidebar-open" : ""}`}>
       <div className="brand">▲ Vantage</div>
       <nav>
         {link("/", isCoach ? "Roster" : "My Dashboard")}
