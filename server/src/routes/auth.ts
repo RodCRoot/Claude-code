@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { rateLimit } from "../hardening";
+import { failureRateLimit } from "../hardening";
 import { prisma } from "../db";
 import {
   hashPassword,
@@ -13,9 +13,10 @@ import { ROLES, Role } from "../constants";
 
 export const authRouter = Router();
 
-// Credential endpoints get a much stricter ceiling than the general API:
-// 10 attempts per 5 minutes per IP blunts password guessing.
-const credentialLimiter = rateLimit({ windowMs: 5 * 60_000, max: 10, name: "auth" });
+// Credential endpoints: 10 FAILED attempts per 5 minutes per IP blunts
+// password guessing without locking out a team logging in from shared
+// facility wifi (successful logins don't count).
+const credentialLimiter = failureRateLimit({ windowMs: 5 * 60_000, max: 10, name: "auth" });
 
 const registerSchema = z.object({
   email: z.string().email(),

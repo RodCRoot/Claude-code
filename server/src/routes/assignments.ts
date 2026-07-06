@@ -167,13 +167,15 @@ const logSchema = z.object({
     z.object({
       workoutItemId: z.string(),
       setNumber: z.number().int().min(1),
-      reps: z.number().int().optional(),
-      loadKg: z.number().optional(),
-      rpe: z.number().optional(),
-      velocity: z.number().optional(),
-      peakVelocity: z.number().optional(),
+      // The logger UI sends null for any field the athlete left blank —
+      // accept null everywhere optional (optional() alone rejects null).
+      reps: z.number().int().nullable().optional(),
+      loadKg: z.number().nullable().optional(),
+      rpe: z.number().nullable().optional(),
+      velocity: z.number().nullable().optional(),
+      peakVelocity: z.number().nullable().optional(),
       completed: z.boolean().default(true),
-      notes: z.string().optional(),
+      notes: z.string().nullable().optional(),
     })
   ),
 });

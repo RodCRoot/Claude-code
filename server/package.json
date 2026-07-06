@@ -2,7 +2,7 @@
   "name": "vantage-server",
   "version": "0.1.0",
   "private": true,
-  "description": "Vantage athlete performance platform — API server",
+  "description": "Vantage athlete performance platform \u2014 API server",
   "type": "commonjs",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
@@ -16,7 +16,8 @@
     "preview": "ts-node --transpile-only scripts/preview.ts",
     "test": "ts-node --transpile-only src/prescription.test.ts && ts-node --transpile-only src/daytime.test.ts && ts-node --transpile-only src/integration.test.ts",
     "setup": "prisma generate && prisma db push && npm run seed",
-    "deploy:db": "node scripts/prepare-db.js && prisma generate && prisma db push --skip-generate && npm run seed"
+    "deploy:db": "node scripts/prepare-db.js && prisma generate && prisma db push --skip-generate && npm run seed",
+    "e2e": "node ../e2e/interaction.e2e.mjs"
   },
   "prisma": {
     "seed": "ts-node --transpile-only prisma/seed.ts"

@@ -239,6 +239,14 @@ async function main() {
     assert.equal(rows.length, 1);
     assert.equal(rows[0].reps, 6);
   });
+  await test("set logs accept nulls for blank fields (what the UI sends)", async () => {
+    const assignment = await prisma.workoutAssignment.findFirst({ where: { athleteId: a1.id } });
+    const r = await call("POST", `/assignments/${assignment!.id}/logs`, {
+      token: athleteToken,
+      body: { logs: [{ workoutItemId: itemId, setNumber: 2, reps: 3, loadKg: 60, rpe: null, velocity: 0.95, peakVelocity: null, completed: true }] },
+    });
+    assert.equal(r.status, 200);
+  });
   await test("an athlete cannot touch another athlete's assignment", async () => {
     const other = await prisma.workoutAssignment.findFirst({ where: { athleteId: a2.id } });
     const r = await call("GET", `/assignments/${other!.id}`, { token: athleteToken });

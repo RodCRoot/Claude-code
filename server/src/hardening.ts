@@ -49,3 +49,35 @@ export function rateLimit(opts: { windowMs: number; max: number; name: string })
     next();
   };
 }
+
+// Credential variant: only FAILED attempts (4xx) count toward the ceiling, so
+// legitimate shared-IP logins (a team on facility wifi) are never locked out
+// while password guessing still trips the limit.
+export function failureRateLimit(opts: { windowMs: number; max: number; name: string }) {
+  const buckets = new Map<string, Bucket>();
+  const sweep = setInterval(() => {
+    const now = Date.now();
+    for (const [k, b] of buckets) if (b.resetAt <= now) buckets.delete(k);
+  }, opts.windowMs);
+  sweep.unref?.();
+
+  return (req: Request, res: Response, next: NextFunction) => {
+    const key = req.ip || "unknown";
+    const now = Date.now();
+    const b = buckets.get(key);
+    if (b && b.resetAt > now && b.count >= opts.max) {
+      res.setHeader("Retry-After", Math.ceil((b.resetAt - now) / 1000));
+      return res.status(429).json({ error: `Too many failed attempts (${opts.name}). Try again shortly.` });
+    }
+    res.on("finish", () => {
+      if (res.statusCode < 400 || res.statusCode >= 500) return;
+      let cur = buckets.get(key);
+      if (!cur || cur.resetAt <= Date.now()) {
+        cur = { count: 0, resetAt: Date.now() + opts.windowMs };
+        buckets.set(key, cur);
+      }
+      cur.count += 1;
+    });
+    next();
+  };
+}
