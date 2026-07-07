@@ -253,6 +253,67 @@ async function main() {
     assert.equal(r.status, 404);
   });
 
+  // --- VBT CSV import (GymAware-style, no cloud) ------------------------------
+  async function postCsv(p: string, csv: string) {
+    const res = await fetch(`${BASE}${p}`, {
+      method: "POST",
+      headers: { "content-type": "text/csv", authorization: `Bearer ${coachToken}`, "x-tz-offset": "0" },
+      body: csv,
+    });
+    return { status: res.status, body: (await res.json()) as Json };
+  }
+  const perSetCsv = [
+    "Athlete,Exercise,Date,Set,Reps,Weight (kg),Mean Velocity (m/s),Peak Velocity (m/s)",
+    "Ath A1,Front Squat,2026-07-01,1,3,60,0.82,1.10",
+    "Ath A1,Front Squat,2026-07-01,2,3,80,0.62,0.95",
+    "Ath A1,Front Squat,2026-07-01,3,2,95,0.45,0.72",
+    "Nobody Known,Front Squat,2026-07-01,1,3,60,0.80,1.00",
+  ].join("\n");
+
+  await test("vbt import dry-run previews without writing", async () => {
+    const r = await postCsv("/import/vbt-csv?dryRun=1", perSetCsv);
+    assert.equal(r.status, 200);
+    assert.equal(r.body.wouldImportSets, 3);
+    assert.equal(r.body.skipped.length, 1); // unknown athlete row
+    const w = await prisma.workout.findFirst({ where: { name: { contains: "GymAware" } } });
+    assert.equal(w, null);
+  });
+  await test("vbt import writes a completed session with velocities + e1RM profile", async () => {
+    const r = await postCsv("/import/vbt-csv", perSetCsv);
+    assert.equal(r.status, 201);
+    assert.equal(r.body.imported.sets, 3);
+    assert.equal(r.body.maxUpdates.length, 1); // 3 distinct loads → LV fit
+    const asg = await prisma.workoutAssignment.findFirst({
+      where: { athleteId: a1.id, workout: { name: { contains: "GymAware" } } },
+      include: { setLogs: true },
+    });
+    assert.ok(asg && asg.status === "COMPLETED");
+    assert.equal(asg!.setLogs.length, 3);
+    assert.ok(asg!.setLogs.some((l) => l.velocity === 0.62 && l.loadKg === 80));
+    const max = await prisma.maxProfile.findFirst({ where: { athleteId: a1.id, method: "VBT_LV", source: "IMPORT" } });
+    assert.ok(max && max.e1rmKg > 95, `e1RM ${max?.e1rmKg} should exceed heaviest set`);
+  });
+  await test("vbt import aggregates per-rep rows and converts lbs", async () => {
+    const perRep = [
+      "Name,Lift,Date,Set,Rep,Weight (lbs),Mean Velocity",
+      "Ath A2,Hip Thrust,7/2/2026,1,1,225,0.75",
+      "Ath A2,Hip Thrust,7/2/2026,1,2,225,0.71",
+      "Ath A2,Hip Thrust,7/2/2026,1,3,225,0.67",
+      "Ath A2,Hip Thrust,7/2/2026,2,1,275,0.52",
+    ].join("\n");
+    const r = await postCsv("/import/vbt-csv", perRep);
+    assert.equal(r.status, 201);
+    assert.equal(r.body.imported.sets, 2); // 5 rows → 2 sets
+    const asg = await prisma.workoutAssignment.findFirst({
+      where: { athleteId: a2.id, workout: { name: { contains: "GymAware" } } },
+      include: { setLogs: { orderBy: { setNumber: "asc" } } },
+    });
+    assert.equal(asg!.setLogs[0].reps, 3); // rep rows counted
+    assert.ok(Math.abs(asg!.setLogs[0].loadKg! - 102.06) < 0.1, `lbs→kg (${asg!.setLogs[0].loadKg})`);
+    assert.ok(Math.abs(asg!.setLogs[0].velocity! - 0.71) < 0.01); // mean of 0.75/0.71/0.67
+    assert.equal(asg!.assignedDate.toISOString().slice(0, 10), "2026-07-02"); // m/d/yyyy parsed
+  });
+
   console.log(`${passed} tests passed.\n`);
   await prisma.$disconnect();
   rmSync(DB_FILE, { force: true });
