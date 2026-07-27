@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+
+# builds
+dist/
+server/dist/
+
+# env / secrets
+.env
+*.local
+
+# local databases
+*.db
+*.db-journal
+server/prisma/dev.db*
+
+# logs / os
+*.log
+.DS_Store
+
+# Generated preview renders (regenerate with: npm run preview)
+preview-*.svg
+server/prisma/integration.db*

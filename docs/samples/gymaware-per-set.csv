@@ -1,0 +1,7 @@
+Athlete,Exercise,Date,Set,Reps,Weight (kg),Mean Velocity (m/s),Peak Velocity (m/s)
+Jordan Smith,Back Squat,2026-07-05,1,3,60,0.82,1.10
+Jordan Smith,Back Squat,2026-07-05,2,3,80,0.62,0.95
+Jordan Smith,Back Squat,2026-07-05,3,2,95,0.45,0.72
+Alex Lee,Back Squat,2026-07-05,1,3,70,0.78,1.02
+Alex Lee,Back Squat,2026-07-05,2,3,90,0.55,0.86
+Alex Lee,Bench Press,2026-07-05,1,5,50,0.48,0.70

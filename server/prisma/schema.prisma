@@ -1,0 +1,466 @@
+// Vantage data model.
+//
+// Dev uses SQLite for zero-setup local runs. To move to Postgres for prod,
+// change `provider` to "postgresql" and point DATABASE_URL at your instance —
+// the models below are written to port cleanly (no SQLite-only constructs).
+//
+// NOTE: SQLite doesn't support native enums or scalar lists, so role/source/
+// direction fields are Strings validated in the app layer (see src/constants.ts),
+// and "list" fields (tags, muscle groups) are stored as JSON strings.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Identity & tenancy
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  users     User[]
+  athletes  Athlete[]
+  exercises Exercise[]
+  workouts  Workout[]
+  groups    Group[]
+  feedPosts FeedPost[]
+  threads   MessageThread[]
+  evalProtocols EvalProtocol[]
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  passwordHash String
+  name         String
+  role         String       @default("ATHLETE") // ADMIN | COACH | ATHLETE
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id])
+  athlete      Athlete? // populated when role == ATHLETE
+  createdAt    DateTime     @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Athletes
+// ---------------------------------------------------------------------------
+
+model Athlete {
+  id        String       @id @default(cuid())
+  firstName String
+  lastName  String
+  sex       String // M | F
+  birthDate DateTime
+  sport     String
+  position  String?
+  gradYear  Int?
+  heightCm  Float?
+  weightKg  Float?
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id])
+  userId    String?      @unique
+  user      User?        @relation(fields: [userId], references: [id])
+  createdAt DateTime     @default(now())
+
+  metrics     MetricRecord[]
+  assignments WorkoutAssignment[]
+  maxProfiles MaxProfile[]
+  groups      AthleteGroup[]
+  feedPosts   FeedPost[]
+  checkins    WellnessCheckin[]
+  goals       Goal[]
+  evalResults EvalResult[]
+
+  @@index([orgId, sport])
+}
+
+// ---------------------------------------------------------------------------
+// Metrics catalog + records
+// ---------------------------------------------------------------------------
+
+// A measurable test/metric. Seeded with the standard battery but extensible.
+model MetricType {
+  id             String   @id @default(cuid())
+  key            String   @unique // e.g. "cmj_jump_height", "sprint_10m"
+  name           String // human label
+  unit           String // cm, s, W/kg, etc.
+  category       String // JUMP | SPEED | STRENGTH | POWER | OTHER
+  source         String // HAWKIN | OVR | TIMING | MANUAL
+  // For ranking: does a higher value mean better performance?
+  higherIsBetter Boolean  @default(true)
+  // When true, the rating engine divides the value by bodyweight (kg) before
+  // comparing — so strength is judged relative to size. Benchmarks for these
+  // metrics are stored in xBodyweight units.
+  relativeToBw   Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  records    MetricRecord[]
+  benchmarks Benchmark[]
+  goals      Goal[]
+  evalItems  EvalProtocolItem[]
+  evalResults EvalResult[]
+}
+
+model MetricRecord {
+  id           String     @id @default(cuid())
+  athleteId    String
+  athlete      Athlete    @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  metricTypeId String
+  metricType   MetricType @relation(fields: [metricTypeId], references: [id])
+  value        Float
+  recordedAt   DateTime   @default(now())
+  source       String     @default("MANUAL") // HAWKIN | OVR | TIMING | MANUAL | CSV
+  rawJson      String? // original device payload when synced from an API
+  notes        String?
+  createdAt    DateTime   @default(now())
+
+  @@index([athleteId, metricTypeId, recordedAt])
+}
+
+// Reference data for the rating engine: research "elite" norms and any other
+// external population. Gym-wide and cohort norms are computed live from records.
+model Benchmark {
+  id           String     @id @default(cuid())
+  metricTypeId String
+  metricType   MetricType @relation(fields: [metricTypeId], references: [id])
+  sport        String? // null = applies across sports
+  position     String? // null = any position (e.g. "Guard", "Lineman", "Skill")
+  sex          String? // M | F | null = both
+  ageMin       Int?
+  ageMax       Int?
+  level        String // ELITE | GOOD | AVERAGE
+  mean         Float
+  sd           Float? // standard deviation if known (enables z-scores)
+  sourceName   String? // citation / where the norm came from
+  confidence   String? // HIGH | MEDIUM | LOW (data quality flag)
+  notes        String?
+  createdAt    DateTime   @default(now())
+
+  @@index([metricTypeId, sport, position, sex])
+}
+
+// ---------------------------------------------------------------------------
+// Exercise library + workout builder
+// ---------------------------------------------------------------------------
+
+model Exercise {
+  id           String       @id @default(cuid())
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id])
+  name         String
+  description  String?
+  videoUrl     String?
+  category     String // e.g. LOWER | UPPER | OLYMPIC | PLYO | CORE | CONDITIONING
+  equipment    String?
+  muscleGroups String? // JSON string array
+  tags         String? // JSON string array
+  // Minimum velocity threshold (m/s) for VBT 1RM estimation; null = use category default.
+  mvt          Float?
+  createdAt    DateTime     @default(now())
+
+  items       WorkoutItem[]
+  maxProfiles MaxProfile[]
+  goals       Goal[]
+
+  @@index([orgId, category])
+}
+
+model Workout {
+  id          String       @id @default(cuid())
+  orgId       String
+  org         Organization @relation(fields: [orgId], references: [id])
+  name        String
+  description String?
+  createdById String
+  createdAt   DateTime     @default(now())
+
+  blocks      WorkoutBlock[]
+  assignments WorkoutAssignment[]
+}
+
+model WorkoutBlock {
+  id        String        @id @default(cuid())
+  workoutId String
+  workout   Workout       @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  name      String // e.g. "A. Power", "B. Strength"
+  order     Int
+  items     WorkoutItem[]
+}
+
+model WorkoutItem {
+  id             String       @id @default(cuid())
+  blockId        String
+  block          WorkoutBlock @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  exerciseId     String
+  exercise       Exercise     @relation(fields: [exerciseId], references: [id])
+  order          Int
+  sets           Int?
+  reps           String? // free-form: "5", "3-5", "AMRAP", "30s"
+  load           String? // "70% 1RM", "RPE 8", "bodyweight" (display / fallback)
+  tempo          String?
+  restSec        Int?
+  notes          String?
+  // Structured VBT prescription (free-text `load`/`reps` kept for back-compat).
+  prescribeBy    String? // PCT | VELOCITY | ZONE | RPE | TEXT
+  targetPctE1rm  Float? // e.g. 0.75 = 75% of estimated 1RM
+  targetVelocity Float? // m/s target (mean concentric)
+  velocityZone   String? // STRENGTH | STRENGTH_SPEED | SPEED_STRENGTH | SPEED
+  setLogs        SetLog[]
+}
+
+model WorkoutAssignment {
+  id           String    @id @default(cuid())
+  workoutId    String
+  workout      Workout   @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  athleteId    String
+  athlete      Athlete   @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  assignedDate DateTime  @default(now())
+  dueDate      DateTime?
+  status       String    @default("ASSIGNED") // ASSIGNED | IN_PROGRESS | COMPLETED
+  completedAt  DateTime?
+
+  setLogs SetLog[]
+
+  @@index([athleteId, status])
+}
+
+// What the athlete actually performed for a given workout item, set by set.
+model SetLog {
+  id            String            @id @default(cuid())
+  assignmentId  String
+  assignment    WorkoutAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  workoutItemId String
+  workoutItem   WorkoutItem       @relation(fields: [workoutItemId], references: [id], onDelete: Cascade)
+  setNumber     Int
+  reps          Int?
+  loadKg        Float?
+  rpe           Float?
+  velocity      Float? // mean concentric velocity (m/s) — VBT capture
+  peakVelocity  Float? // peak velocity (m/s)
+  completed     Boolean           @default(true)
+  notes         String?
+  createdAt     DateTime          @default(now())
+
+  @@unique([assignmentId, workoutItemId, setNumber])
+}
+
+// ---------------------------------------------------------------------------
+// VBT max profiles + groups/teams
+// ---------------------------------------------------------------------------
+
+// Per-athlete, per-exercise estimated 1RM. May be entered directly, derived from
+// a rep-max (Epley/Brzycki), or predicted from a load-velocity profile (VBT_LV).
+model MaxProfile {
+  id         String   @id @default(cuid())
+  athleteId  String
+  athlete    Athlete  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  exerciseId String
+  exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  e1rmKg     Float
+  method     String   @default("DIRECT") // DIRECT | EPLEY | BRZYCKI | VBT_LV
+  source     String   @default("MANUAL")
+  lvJson     String? // JSON: [{ loadKg, velocity }] points used for VBT_LV
+  notes      String?
+  recordedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@index([athleteId, exerciseId, recordedAt])
+}
+
+model Group {
+  id        String       @id @default(cuid())
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id])
+  name      String
+  type      String       @default("TEAM") // TEAM | PRIVATE | SQUAD
+  createdAt DateTime     @default(now())
+
+  memberships AthleteGroup[]
+
+  @@index([orgId])
+}
+
+model AthleteGroup {
+  id        String  @id @default(cuid())
+  groupId   String
+  group     Group   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  athleteId String
+  athlete   Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, athleteId])
+}
+
+// ---------------------------------------------------------------------------
+// Team feed (PRs + announcements) and messaging
+// ---------------------------------------------------------------------------
+
+model FeedPost {
+  id           String   @id @default(cuid())
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id])
+  kind         String   // PR | ANNOUNCEMENT
+  athleteId    String?  // subject athlete (PRs)
+  athlete      Athlete? @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  authorUserId String?  // null for system-generated
+  title        String
+  body         String?
+  metricLabel  String?  // for PRs
+  value        Float?
+  unit         String?
+  createdAt    DateTime @default(now())
+
+  reactions    FeedReaction[]
+
+  @@index([orgId, createdAt])
+}
+
+// Lightweight "fist bump" style reactions on feed posts.
+model FeedReaction {
+  id        String   @id @default(cuid())
+  postId    String
+  post      FeedPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  emoji     String   @default("👊")
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId, emoji])
+}
+
+model MessageThread {
+  id           String   @id @default(cuid())
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id])
+  subject      String?
+  createdAt    DateTime @default(now())
+  lastMessageAt DateTime @default(now())
+
+  participants ThreadParticipant[]
+  messages     Message[]
+
+  @@index([orgId, lastMessageAt])
+}
+
+model ThreadParticipant {
+  id        String   @id @default(cuid())
+  threadId  String
+  thread    MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  userId    String
+  lastReadAt DateTime?
+
+  @@unique([threadId, userId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  threadId  String
+  thread    MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  authorUserId String
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([threadId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Evaluations: reusable testing protocols (combine-style batteries) run as
+// dated sessions. Each entered value also lands in MetricRecord, so ratings,
+// leaderboards, trends and PRs pick eval results up automatically.
+// ---------------------------------------------------------------------------
+
+model EvalProtocol {
+  id          String   @id @default(cuid())
+  orgId       String
+  org         Organization @relation(fields: [orgId], references: [id])
+  name        String // e.g. "Spring Combine"
+  description String?
+  createdById String
+  createdAt   DateTime @default(now())
+
+  items    EvalProtocolItem[]
+  sessions EvalSession[]
+}
+
+model EvalProtocolItem {
+  id           String       @id @default(cuid())
+  protocolId   String
+  protocol     EvalProtocol @relation(fields: [protocolId], references: [id], onDelete: Cascade)
+  metricTypeId String
+  metricType   MetricType   @relation(fields: [metricTypeId], references: [id])
+  order        Int
+}
+
+model EvalSession {
+  id          String       @id @default(cuid())
+  protocolId  String
+  protocol    EvalProtocol @relation(fields: [protocolId], references: [id], onDelete: Cascade)
+  date        DateTime // pure date (the testing day)
+  notes       String?
+  createdById String
+  createdAt   DateTime     @default(now())
+
+  results EvalResult[]
+}
+
+model EvalResult {
+  id             String      @id @default(cuid())
+  sessionId      String
+  session        EvalSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  athleteId      String
+  athlete        Athlete     @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  metricTypeId   String
+  metricType     MetricType  @relation(fields: [metricTypeId], references: [id])
+  value          Float
+  metricRecordId String?     @unique // the longitudinal record this created
+
+  @@unique([sessionId, athleteId, metricTypeId])
+}
+
+// A measurable target for an athlete: reach targetValue on a metric or an
+// exercise e1RM. Baseline is captured at creation so progress is meaningful.
+model Goal {
+  id            String   @id @default(cuid())
+  athleteId     String
+  athlete       Athlete  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  createdById   String   // user who set it (coach or the athlete)
+  kind          String   // METRIC | E1RM
+  metricTypeId  String?
+  metricType    MetricType? @relation(fields: [metricTypeId], references: [id])
+  exerciseId    String?
+  exercise      Exercise?   @relation(fields: [exerciseId], references: [id])
+  targetValue   Float
+  baselineValue Float?
+  deadline      DateTime? // pure date
+  status        String   @default("ACTIVE") // ACTIVE | ACHIEVED | ARCHIVED
+  achievedAt    DateTime?
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  @@index([athleteId, status])
+}
+
+// Daily wellness / readiness self-report (AMS layer).
+model WellnessCheckin {
+  id           String   @id @default(cuid())
+  athleteId    String
+  athlete      Athlete  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  date         DateTime // the day this check-in is for (midnight)
+  sleepHours   Float?
+  sleepQuality Int?     // 1-5
+  soreness     Int?     // 1-5 (5 = very sore)
+  mood         Int?     // 1-5
+  energy       Int?     // 1-5
+  stress       Int?     // 1-5 (5 = very stressed)
+  notes        String?
+  readiness    Int?     // computed 0-100
+  createdAt    DateTime @default(now())
+
+  @@unique([athleteId, date])
+  @@index([athleteId, date])
+}
