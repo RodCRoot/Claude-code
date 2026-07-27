@@ -1,0 +1,3 @@
+ghl_export/
+__pycache__/
+*.env
