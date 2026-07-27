@@ -31,13 +31,13 @@ export GHL_TOKEN="pit-xxxxxxxxxxxx"
 export GHL_LOCATION_ID="xxxxxxxxxxxx"
 
 # Start with a small sample to confirm it works
-python3 ghl_export.py --limit 25 --redact
+python3 ghl_export.py --limit 25
 ```
 
 If that looks right, pull everything:
 
 ```bash
-python3 ghl_export.py --redact
+python3 ghl_export.py
 ```
 
 Output lands in `ghl_export/`:
@@ -55,11 +55,10 @@ Output lands in `ghl_export/`:
 
 ### On `--redact`
 
-Recommended. Your threads involve youth athletes and their parents, so the
-transcripts contain minors' contact details. Redaction removes names, phones,
-and emails while leaving the useful content — the questions, the answers, the
-policies, the pricing — completely intact. Nothing about the analysis needs
-real identities.
+Optional, off by default. It strips names, phones, and emails from
+`transcripts.txt` while leaving the content that matters — questions, answers,
+policies, pricing — untouched. Use it if you ever need to share transcripts
+outside the org; skip it otherwise.
 
 ## Troubleshooting
 

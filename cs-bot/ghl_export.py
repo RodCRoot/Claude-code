@@ -230,7 +230,9 @@ def write_transcripts(convos, messages_by_id, path, do_redact):
 
             f.write("=" * 70 + "\n")
             f.write(f"CONVERSATION {cid}\n")
-            f.write(f"Contact: {name}\n")
+            # Contact records are stored under the athlete's name, but the
+            # person in the thread is usually the parent.
+            f.write(f"Contact (athlete name on record): {name}\n")
             f.write(f"Last message: {c.get('lastMessageDate')}\n")
             f.write(f"Type: {c.get('type')}\n")
             f.write("=" * 70 + "\n")
