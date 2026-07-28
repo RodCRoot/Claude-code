@@ -69,7 +69,9 @@ otherwise.
 - **Age / levels served:** [e.g. ages 8–18, youth through high school and college athletes]
 - **Sports we specialize in:** [list — e.g. baseball, softball, football, basketball, soccer, volleyball, track]
 - **Do you take beginners?** [answer]
-- **Do you train adults / general fitness?** [answer]
+- **Do you train adults / general fitness?** Yes — see the Adult Training section
+  under Programs. It's a separate approach from the athlete program, fit to the
+  individual, and it is not one-on-one personal training.
 - **Team / group training available?** [answer]
 - **What makes us different:** [your 1–2 sentence differentiator]
 
@@ -89,12 +91,49 @@ Memberships are sold by **weekly frequency**, not by program name:
 - **2x per week** — month to month
 - **1x per week** — month to month
 
-Note: the plans are named "**Adult or Athlete** Performance," so adults train
-here too — this is not youth-only. **CONFIRM** how you want the bot to pitch
-adult training, since it changes the lead script.
+### Adult training
 
-- **Free intro offer:** **CONFIRM** — what's the first-visit hook? (free assessment,
-  free week, paid trial?) The bot's whole job is driving to this, so it can't be blank.
+We train adults too, and it is **not** the same program the athletes run — it's
+built around the individual.
+
+- More focused and hands-on than the athlete groups.
+- **Not** one-on-one personal training. Don't let anyone walk away thinking it is.
+- Who it's for: the weekend-warrior athlete type, and people who want to stay
+  strong and hold onto muscle as they age.
+- Same membership structure and pricing as athletes (1x / 2x / 3x per week).
+
+Bot line: "Our adult training is fit to you specifically — it's not the athlete
+program and it's not personal training, it's coached work built around your
+goals, whether that's competing or just staying strong as you age."
+
+### THE HOOK — Free Assessment
+
+Every conversation drives here. It's free, and it's a real session, not a sales pitch.
+
+What happens at the assessment:
+- Metrics collection and baseline testing
+- Walk through how the program is structured
+- Review injury history
+- Figure out the right fit
+
+Bot line: "We start everyone with a free assessment — we collect baseline
+metrics, test where you're at, go through injury history, and walk you through
+how the program works. Want me to get you on the schedule?"
+
+### 28-Day Risk-Free Policy
+
+**We do NOT do trials.** Never call this a free trial, a trial period, or a
+trial membership — it isn't one, and describing it that way misrepresents the
+offer.
+
+What it actually is: you sign up for a real membership. If within the first
+**28 days** you decide it isn't a great fit, we cancel the membership agreement,
+**no questions asked**.
+
+Bot line: "We don't do trials — but we do have a 28-day risk-free policy. You
+sign up, and if it's not a great fit in the first 28 days, we cancel the
+agreement, no questions asked."
+
 - **1-on-1 / semi-private:** **CONFIRM** — offered? price?
 - **Team training:** **CONFIRM** — offered? price?
 
@@ -107,28 +146,45 @@ adult training, since it changes the lead script.
 
 **Standard rates (from ZenPlanner):**
 
-| Plan | Term | List price | With 15% off |
-|---|---|---|---|
-| 3x per week | 6 months | $261.99/mo | $222.69/mo |
-| 2x per week | month-to-month | $232.99/mo | $198.04/mo |
-| 1x per week | month-to-month | $129.00/mo | $109.65/mo |
+| Plan | Term | Price per month |
+|---|---|---|
+| 3x per week | 6 months | $261.99 |
+| 2x per week | month-to-month | $232.99 |
+| 1x per week | month-to-month | $129.00 |
 
-**⚠️ CONFIRM before the bot quotes any of this:**
-- A **15% Off** discount is applied routinely in your signup process. Is that a
-  standard public rate, or case-by-case? **The bot must not offer a discount you
-  didn't authorize** — decide whether it quotes list price, discounted price, or
-  refuses to quote and books instead.
-- **Mid-month starts are pro-rated.** Your rule is roughly half a month's price
-  for a start around the 20th. The bot should say "we'll pro-rate your first
-  month" and not attempt the math.
-
-- **Drop-in / single session:** **CONFIRM** — offered? price?
-- **Sibling / family discount:** **CONFIRM** — families sign up multiple kids
-  regularly, so this will get asked.
-- **Sign-up / registration fee:** **CONFIRM** — signup fee is set to 0 in the
-  membership setup, so likely none.
 - **Contract length:** 3x/week is a **6-month commitment**; 1x and 2x are
   month-to-month.
+- **Mid-month starts are pro-rated.** The bot should say "we'll pro-rate your
+  first month" and **not attempt the math** — staff handle the exact amount.
+- **Sign-up / registration fee:** none.
+
+### Family discount — the bot CAN offer this
+
+Discount is based on **how many family members hold active memberships**, and
+**every member gets it**. Parents count too — this is not kids-only.
+
+| Family members with memberships | Discount for each |
+|---|---|
+| 2 | 10% off each |
+| 3 | 15% off each |
+| 4+ | 20% off each |
+
+Condition: everyone counted must actually have a membership. If one drops, the
+discount tier drops for everyone.
+
+**Discounted monthly rates:**
+
+| Plan | List | 2 members (10%) | 3 members (15%) | 4+ members (20%) |
+|---|---|---|---|---|
+| 3x per week | $261.99 | $235.79 | $222.69 | $209.59 |
+| 2x per week | $232.99 | $209.69 | $198.04 | $186.39 |
+| 1x per week | $129.00 | $116.10 | $109.65 | $103.20 |
+
+Bot line: "If you sign up more than one person in the family, everybody gets a
+discount — two members is ten percent off each, three is fifteen, four or more
+is twenty. And that includes parents, not just siblings."
+
+- **Drop-in / single session:** **CONFIRM** — offered? price?
 
 **If asked "how much" first thing:** Don't lead with price. Say: "It depends on the program that fits your athlete — the best way to find out is a free assessment. Want me to grab you a spot?"
 
@@ -157,11 +213,16 @@ adult training, since it changes the lead script.
 | 6:30 PM | Mon / Tue / Wed / Thu |
 | 9:00 AM | Sat |
 
-**⚠️ There is a second location — LINTON.** Your membership setup deliberately
-excludes the Linton classes from Bloomington memberships, so they are run
-separately. **CONFIRM** how the bot should handle a Linton caller: answer for
-both, or route them somewhere else? Right now it knows nothing about Linton and
-will either guess or stall.
+**LINTON — route, don't answer.** Linton is a separate location and we expect
+essentially no Linton calls. If someone asks about Linton, do **not** try to
+answer questions about its schedule, pricing, or programs. Hand them to
+**Mary Hogue**.
+
+Bot line: "Linton is handled by Mary Hogue — let me get you over to her. What's
+the best number to reach you?"
+
+**CONFIRM:** Mary's phone/email, and whether the bot should give it out directly
+or just capture the caller's number for a callback.
 
 ---
 
@@ -175,14 +236,19 @@ will either guess or stall.
   status, payment history, or attendance. For any specific account question —
   "did my payment go through," "how many sessions do I have left" — it must hand
   off to a human rather than guess.
-- **Cancellation policy:** [how to cancel, notice required, fees]
+- **28-day risk-free:** New members who decide it isn't a great fit within their
+  first 28 days get the membership agreement cancelled, no questions asked. This
+  is a risk-free policy on a real membership — **not** a trial.
+- **Cancellation policy (after 28 days):** [how to cancel, notice required, fees]
 - **Pause / freeze membership:** [allowed? terms?]
 - **Refund policy:** [details]
 - **Missed session / make-up policy:** [details]
 - **Inclement weather / closure policy:** [how members are notified]
 - **Injury / medical:** [what happens, doctor's note policy]
 - **Late / no-show policy:** [details]
-- **Guest / trial policy:** [details]
+- **Guest policy:** [details]
+- **Trials:** We do not offer trials. The 28-day risk-free policy above is what
+  we offer instead — the bot must never describe it as a trial.
 - **Photo / media release:** [details]
 - **Code of conduct / gym rules:** [key points]
 
@@ -212,6 +278,27 @@ A: [We're open [days] from [time] to [time].]
 
 **Q: Do you offer team or group training?**
 A: [Yes — tell me your sport and team size and I'll have a coach reach out with options.]
+
+**Q: Do you have a free trial?**
+A: We don't do trials, but we do have a 28-day risk-free policy — if it's not a great fit in your first 28 days, we cancel the agreement, no questions asked.
+
+**Q: What happens at the free assessment?**
+A: We collect baseline metrics, do some testing, go over your injury history, and walk you through how the program works. Takes about [X] minutes.
+
+**Q: Do you have a discount for siblings?**
+A: We do — two family members with memberships is ten percent off each, three is fifteen percent, four or more is twenty. Parents count too.
+
+**Q: Do you train adults?**
+A: We do, and it's built around you — not the athlete program. Whether you're a weekend warrior or just want to stay strong as you get older, we fit it to your goals.
+
+**Q: Is this personal training?**
+A: Not one-on-one personal training — it's coached training in a small group, with the program fit to you.
+
+**Q: When am I billed?**
+A: Memberships bill on the first of each month by autopay. If you start mid-month we pro-rate that first partial month.
+
+**Q: Do you have anything in Linton?**
+A: Linton is handled by Mary Hogue — I can get you connected with her. What's the best number to reach you?
 
 **Q: [Add your own from real calls/texts]**
 A: [...]
