@@ -1,0 +1,45 @@
+{
+  "name": "teamwork-scoreboard",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:scraper": "tsx scripts/test-scraper-mock.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:seed": "tsx scripts/seed.ts",
+    "db:clear-demo": "tsx scripts/clear-demo.ts"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^13.0.2",
+    "date-fns": "^4.4.0",
+    "drizzle-orm": "^0.45.2",
+    "geist": "^1.7.2",
+    "jose": "^6.2.5",
+    "next": "16.2.12",
+    "papaparse": "^5.5.4",
+    "playwright": "^1.62.1",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "recharts": "^3.10.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20",
+    "@types/papaparse": "^5.5.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.12",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.1",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
+  }
+}

@@ -1,0 +1,119 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* Brand: athletic crimson + deep steel navy */
+  --color-brand-50: #fef2f3;
+  --color-brand-100: #fde3e5;
+  --color-brand-200: #fbccd0;
+  --color-brand-300: #f7a3aa;
+  --color-brand-400: #f06a77;
+  --color-brand-500: #e63e4f;
+  --color-brand-600: #d21f36;
+  --color-brand-700: #b0172c;
+  --color-brand-800: #921729;
+  --color-brand-900: #7c1827;
+  --color-brand-950: #440810;
+
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-edge: var(--edge);
+
+  --color-ok: #16a34a;
+  --color-warn: #d97706;
+  --color-bad: #dc2626;
+}
+
+:root {
+  --surface: #f6f7f9;
+  --surface-2: #ffffff;
+  --surface-3: #eef0f3;
+  --ink: #101418;
+  --ink-2: #4b5563;
+  --ink-3: #8a93a0;
+  --edge: #e2e6eb;
+}
+
+.dark {
+  --surface: #0b1017;
+  --surface-2: #131a24;
+  --surface-3: #1a2330;
+  --ink: #eef2f6;
+  --ink-2: #a4afbd;
+  --ink-3: #66707e;
+  --edge: #232d3b;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Big scoreboard numerals */
+.stat-figure {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Section label styling: competitive, scannable */
+.kicker {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* Simple accessible tooltip */
+.tt {
+  position: relative;
+}
+.tt > .tt-body {
+  position: absolute;
+  z-index: 40;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 18rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.5rem;
+  background: var(--ink);
+  color: var(--surface-2);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.tt:hover > .tt-body,
+.tt:focus-within > .tt-body {
+  opacity: 1;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+  .print-block {
+    break-inside: avoid;
+  }
+}
