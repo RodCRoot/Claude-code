@@ -46,14 +46,43 @@ Goal: a permanent address like `https://scoreboard.teamworkbloomington.com`
 that your staff can use from any phone, and that can run the nightly Zen
 Planner pull. Sample data is fine to leave on during this phase.
 
-You need any small host that gives you **Docker + a persistent disk**. Good
-choices: a $6–12/month VPS (DigitalOcean, Hetzner, Linode), or
-Railway/Render/Fly.io (each supports Docker deploys with a volume). If a
-friend or contractor manages servers for you, this phase is a one-coffee
-favor — send them this file.
+You need any small host that gives you **Docker + a persistent disk**.
 
-**The Docker route (recommended — Chromium for the Zen Planner sync is
-pre-installed in the image):**
+### Option A — Render.com, no terminal needed (recommended for non-technical owners)
+
+Render connects straight to your GitHub account and builds the included
+Dockerfile itself — you never type a command on a server. Roughly $7–10/month.
+(Menus change over time; the ingredients below stay the same.)
+
+1. Go to **render.com** → sign up → **Sign up with GitHub** and authorize it
+   to see your `Claude-code` repository.
+2. In the dashboard: **New → Web Service** → pick **RodCRoot/Claude-code**.
+3. On the setup form:
+   - **Root Directory:** `teamwork-scoreboard`  ← important; Render then
+     auto-detects the Dockerfile.
+   - **Instance type:** the small paid tier (needed for an always-on server
+     and a disk — the free tier sleeps and forgets).
+4. **Environment variables:** add `AUTH_SECRET` and `CRON_SECRET` — Render
+   has a "Generate" button for random values. (Zen Planner ones come in
+   Phase 4.)
+5. **Add a Disk:** mount path **`/app/data`**, 1 GB. This is where the
+   database lives — without it, data vanishes on every restart.
+6. Click **Create Web Service** and wait for the first build (5–10 min).
+7. When it says **Live**, open your app's address
+   (`https://something.onrender.com` — HTTPS is automatic).
+8. One-time: open the service's **Shell** tab and run `npm run db:seed`.
+9. Log in from your phone. Done — skip to Phase 3.
+
+Backups on Render: the disk has snapshot options in its settings; also
+export CSVs periodically. To update the app later, push changes to GitHub
+and Render redeploys automatically.
+
+### Option B — Docker on any server (VPS: DigitalOcean, Hetzner, Linode…)
+
+If a friend or contractor manages servers for you, this phase is a
+one-coffee favor — send them this file.
+
+**Chromium for the Zen Planner sync is pre-installed in the Docker image:**
 
 1. On the server, install Docker (<https://docs.docker.com/engine/install/>).
 2. Copy the `teamwork-scoreboard` folder to the server (git clone or upload).
