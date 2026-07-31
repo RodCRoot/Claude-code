@@ -18,6 +18,7 @@
     "better-sqlite3": "^13.0.2",
     "date-fns": "^4.4.0",
     "drizzle-orm": "^0.45.2",
+    "geist": "^1.7.2",
     "jose": "^6.2.5",
     "next": "16.2.12",
     "papaparse": "^5.5.4",

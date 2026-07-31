@@ -226,5 +226,11 @@ teamwork-scoreboard/
                              # leads, athletes, data, admin, summary, api/*
 ```
 
+**Start here if you're the owner:** `docs/SETUP-GUIDE.md` is the complete
+step-by-step checklist from zero to live (local trial → server → real data →
+Zen Planner sync → schedule → weekly rhythm). A `Dockerfile` and
+`docker-compose.yml` are included — the image is based on the official
+Playwright image, so Chromium for the browser sync ships pre-installed.
+
 See `docs/DATA-MAPPING.md` for import field references and CRM/Zen Planner
 export tips.

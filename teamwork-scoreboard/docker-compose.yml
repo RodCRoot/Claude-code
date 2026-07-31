@@ -1,0 +1,14 @@
+# One-command deployment on any machine with Docker:
+#   1. cp .env.example .env   (fill in AUTH_SECRET, CRON_SECRET, ZEN_PLANNER_*)
+#   2. docker compose up -d --build
+#   3. First run only: docker compose exec scoreboard npm run db:seed
+# The database persists in ./data on the host — back that folder up.
+services:
+  scoreboard:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
