@@ -1,5 +1,5 @@
 import { ensureTaskInstances } from "@/lib/tasks";
-import { ensureConnectorRows, runSync, ADAPTERS } from "@/lib/connectors";
+import { ensureConnectorRows, runSync, ADAPTERS, SYNCABLE_MODES } from "@/lib/connectors";
 import { db } from "@/db";
 import { connectors } from "@/db/schema";
 
@@ -29,7 +29,9 @@ export async function GET(req: Request) {
   ensureConnectorRows();
 
   const results: Record<string, string> = {};
-  const apiConnectors = ADAPTERS.filter((a) => a.mode === "api").map((a) => a.key);
+  const apiConnectors = ADAPTERS.filter((a) => SYNCABLE_MODES.includes(a.mode)).map(
+    (a) => a.key
+  );
   for (const key of apiConnectors) {
     const row = db.select().from(connectors).all().find((c) => c.key === key);
     if (row?.status === "ready") {

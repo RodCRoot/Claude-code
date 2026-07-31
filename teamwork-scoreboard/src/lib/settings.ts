@@ -44,6 +44,51 @@ export const SETTING_DEFAULTS = {
     "Adult Training",
     "Private Training",
   ],
+  /**
+   * Zen Planner browser-sync login flow. The selectors default to the common
+   * Zen Planner studio login form; adjust here if their markup differs.
+   * Credentials are NEVER stored here — only in env vars.
+   */
+  zen_login_config: {
+    loginUrl: "https://studio.zenplanner.com/zenplanner/studio/login.cfm",
+    userSelector: 'input[name="username"], input[type="email"]',
+    passSelector: 'input[name="password"], input[type="password"]',
+    submitSelector: 'button[type="submit"], input[type="submit"]',
+    successSelector: "",
+  },
+  /**
+   * Reports the scheduled browser sync pulls. Ships DISABLED with placeholder
+   * URLs: open the report in Zen Planner, copy its URL (and, if it has an
+   * export/CSV link, that link's selector or direct URL), run the export once
+   * through Data → Import to save a mapping under `mappingName`, then set
+   * enabled: true. Each job needs either `csvUrl` OR `url` + `exportSelector`.
+   */
+  zen_scrape_jobs: [
+    {
+      name: "ZP Attendance",
+      entity: "attendance",
+      url: "https://studio.zenplanner.com/zenplanner/studio/report/REPLACE-WITH-ATTENDANCE-REPORT-URL",
+      exportSelector: 'a:has-text("CSV"), a:has-text("Export")',
+      mappingName: "ZP Attendance Export",
+      enabled: false,
+    },
+    {
+      name: "ZP Members",
+      entity: "athletes",
+      url: "https://studio.zenplanner.com/zenplanner/studio/report/REPLACE-WITH-MEMBER-REPORT-URL",
+      exportSelector: 'a:has-text("CSV"), a:has-text("Export")',
+      mappingName: "ZP Member Export",
+      enabled: false,
+    },
+    {
+      name: "ZP Payments",
+      entity: "payments",
+      url: "https://studio.zenplanner.com/zenplanner/studio/report/REPLACE-WITH-PAYMENT-REPORT-URL",
+      exportSelector: 'a:has-text("CSV"), a:has-text("Export")',
+      mappingName: "ZP Payment Export",
+      enabled: false,
+    },
+  ],
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;

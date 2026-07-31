@@ -16,6 +16,7 @@ export async function POST(req: Request) {
     mappingName?: string;
     connectorKey?: string;
     sourceLabel?: string;
+    dedupe?: boolean;
   };
   try {
     body = await req.json();
@@ -41,7 +42,9 @@ export async function POST(req: Request) {
   }
 
   const parsed = parseCsv(csvText);
-  const outcome = commitImport(target, parsed, mapping, auth.user.id);
+  const outcome = commitImport(target, parsed, mapping, auth.user.id, {
+    dedupe: body.dedupe === true,
+  });
 
   // Save mapping for reuse
   if (body.mappingName) {
@@ -60,7 +63,7 @@ export async function POST(req: Request) {
     body.connectorKey === "google_sheets" ? "google_sheets" : "csv",
     outcome.processed,
     outcome.rejected,
-    `${IMPORT_TARGETS[target].label} import (${body.sourceLabel ?? "CSV"}): ${outcome.processed} in, ${outcome.rejected} rejected` +
+    `${IMPORT_TARGETS[target].label} import (${body.sourceLabel ?? "CSV"}): ${outcome.processed} in, ${outcome.skipped} already known, ${outcome.rejected} rejected` +
       (outcome.errors.length ? ` — ${outcome.errors[0]}` : "")
   );
 

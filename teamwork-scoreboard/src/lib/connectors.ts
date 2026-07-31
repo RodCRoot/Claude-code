@@ -17,6 +17,7 @@ import { connectors, syncRuns } from "@/db/schema";
 export interface SyncResult {
   processed: number;
   rejected: number;
+  skipped?: number;
   message?: string;
 }
 
@@ -24,12 +25,15 @@ export interface ConnectorAdapter {
   key: string;
   name: string;
   description: string;
-  mode: "api" | "webhook" | "sheets" | "csv" | "manual";
+  mode: "api" | "browser" | "webhook" | "sheets" | "csv" | "manual";
   envVars: string[];
   docs?: string;
   /** Throws with a clear message when not usable; returns counts on success. */
   sync(): Promise<SyncResult>;
 }
+
+/** Connector modes that can be driven by Sync Now and the cron scheduler. */
+export const SYNCABLE_MODES = ["api", "browser"];
 
 function missingEnv(vars: string[]): string[] {
   return vars.filter((v) => !process.env[v]);
@@ -40,27 +44,33 @@ class NotConfiguredError extends Error {}
 export const ADAPTERS: ConnectorAdapter[] = [
   {
     key: "zen_planner",
-    name: "Zen Planner",
+    name: "Zen Planner (scheduled browser sync)",
     description:
-      "Authoritative source for memberships, billing, attendance, scheduling, and client records.",
-    mode: "api",
-    envVars: ["ZEN_PLANNER_API_KEY", "ZEN_PLANNER_SUBDOMAIN"],
-    docs: "Zen Planner API access requires a partner key from Zen Planner support. Until then, use the daily CSV/email report export with the CSV import wizard.",
+      "Authoritative source for memberships, billing, attendance, scheduling, and client records. " +
+      "No public API is available, so a headless Chrome session signs in on a schedule and pulls " +
+      "the report exports configured in Admin → Settings.",
+    mode: "browser",
+    envVars: ["ZEN_PLANNER_EMAIL", "ZEN_PLANNER_PASSWORD"],
+    docs:
+      "Set staff-login credentials in .env, then configure report jobs in Admin → Settings → " +
+      "“Zen Planner scrape jobs” (report URL + export link + saved mapping). Failures record the " +
+      "reason here and save a screenshot under data/debug/. Repeated pulls dedupe automatically.",
     async sync() {
       const missing = missingEnv(this.envVars);
       if (missing.length > 0) {
         throw new NotConfiguredError(
-          `Zen Planner is not connected: missing ${missing.join(", ")}. ` +
-            "Add credentials to .env, or use the CSV import fallback (Data → Import)."
+          `Zen Planner browser sync is not connected: missing ${missing.join(", ")}. ` +
+            "Add the staff-login credentials to .env, or use the CSV import fallback (Data → Import)."
         );
       }
-      // Credentials are present but no live adapter has been verified against
-      // a real account yet — refuse to fake a successful sync.
-      throw new Error(
-        "Zen Planner credentials detected, but the API adapter has not been " +
-          "verified against a live account. Implement sync() in src/lib/connectors.ts " +
-          "(see README → Integrations) before enabling."
-      );
+      const { runZenPlannerScrape } = await import("./zenplanner-scraper");
+      try {
+        return await runZenPlannerScrape();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.startsWith("Not configured:")) throw new NotConfiguredError(msg);
+        throw e;
+      }
     },
   },
   {
@@ -166,9 +176,25 @@ export function ensureConnectorRows(): void {
             ? "error"
             : "ready"
           : "not_configured";
-      if (existing.status !== shouldBe && existing.status !== "disabled") {
+      const metaChanged =
+        existing.name !== a.name ||
+        existing.mode !== a.mode ||
+        existing.description !== a.description ||
+        existing.configNote !== (a.docs ?? null) ||
+        existing.envVars !== JSON.stringify(a.envVars);
+      if (
+        (existing.status !== shouldBe && existing.status !== "disabled") ||
+        metaChanged
+      ) {
         db.update(connectors)
-          .set({ status: shouldBe })
+          .set({
+            name: a.name,
+            description: a.description,
+            mode: a.mode,
+            envVars: JSON.stringify(a.envVars),
+            configNote: a.docs ?? null,
+            ...(existing.status !== "disabled" ? { status: shouldBe } : {}),
+          })
           .where(eq(connectors.id, existing.id))
           .run();
       }

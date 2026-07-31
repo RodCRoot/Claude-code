@@ -116,16 +116,45 @@ Working today, no credentials needed:
   Members/ZP Engage workflow at it with the `CRM_WEBHOOK_SECRET` header and
   new contacts arrive as leads in real time. Disabled until the secret is set.
 
-Ready for credentials (adapter stubs with clear TODOs in
-`src/lib/connectors.ts`): **Zen Planner** (partner API key from ZP support),
-**CRM API pull**, **TeamBuildr** (no public API today — tracked via the
-onboarding checklist). When you get credentials, implement `sync()` in the
-adapter; everything else (status, history, retry, scheduling) already works.
+### Zen Planner — scheduled browser sync (no API needed)
+
+Zen Planner offers no public API without a partner key, so the connector
+drives **headless Chrome on a schedule** instead: it signs in to the Zen
+Planner web app with staff credentials, opens each report you configure,
+captures the CSV export, and runs it through the same mapping + import
+pipeline as manual uploads — **with dedupe**, so repeated pulls never
+double-count. The machinery is verified end-to-end against a mock site:
+`npm run test:scraper`.
+
+Setup:
+
+1. `npx playwright install --with-deps chromium` on the server (or set
+   `ZEN_CHROMIUM_PATH` to an existing Chromium binary).
+2. Set `ZEN_PLANNER_EMAIL` / `ZEN_PLANNER_PASSWORD` in `.env` — ideally a
+   dedicated staff login with report-only access. Credentials never touch the
+   database or the browser UI.
+3. In Zen Planner, open each report you want (attendance, members, payments),
+   copy its URL, and run its CSV export once through **Data → Import**, saving
+   the mapping under the job's `mappingName`.
+4. In **Admin → Settings → "Zen Planner scrape jobs"**, paste the report URLs
+   (and tweak the export-link selector if needed), then set `enabled: true`.
+   Login-form selectors are editable too ("Zen Planner login flow") in case
+   Zen Planner's markup changes.
+5. Press **Sync now** on the Data page to test. Failures record the exact
+   reason in sync history and save a screenshot + page snapshot under
+   `data/debug/` so selector problems are easy to diagnose. Jobs ship
+   disabled with placeholder URLs — nothing pretends to sync until you point
+   it at a real report.
+
+Still stubbed pending credentials: **CRM API pull** (webhook + CSV work
+today), **TeamBuildr** (no public API — tracked via the onboarding
+checklist).
 
 **Scheduling:** hit `GET /api/cron` (Bearer `CRON_SECRET`) hourly or daily
-from any scheduler — it generates recurring task instances and runs
-configured connector syncs. Task generation also self-heals lazily on page
-loads, so the app works without a scheduler too.
+from any scheduler — it generates recurring task instances and runs every
+configured connector sync, including the Zen Planner browser pull. Task
+generation also self-heals lazily on page loads, so the app works without a
+scheduler too.
 
 ## Roles & permissions
 
@@ -155,6 +184,9 @@ AUTH_SECRET=$(openssl rand -hex 32) CRON_SECRET=$(openssl rand -hex 24) npm star
 
 1. Copy `.env.example` to `.env` and fill in `AUTH_SECRET` (required in
    production — the app refuses sessions without it) and `CRON_SECRET`.
+   For the Zen Planner browser sync, also install Chromium
+   (`npx playwright install --with-deps chromium`) and set the
+   `ZEN_PLANNER_*` credentials.
 2. Persist the `data/` directory (that's the whole database — back it up by
    copying the file; `sqlite3 data/teamwork.db ".backup backup.db"` for hot
    backups).

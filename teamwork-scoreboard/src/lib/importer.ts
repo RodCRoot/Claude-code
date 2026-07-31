@@ -114,23 +114,31 @@ function findAthleteId(name: string): number | null {
 export interface ImportOutcome {
   processed: number;
   rejected: number;
+  /** Rows skipped because an identical record already exists (dedupe mode). */
+  skipped: number;
   errors: string[];
 }
 
 /**
  * Commit mapped CSV rows into the target entity.
  * mapping: { csvColumn: canonicalField }
+ * opts.dedupe: skip rows that already exist — required for scheduled pulls
+ * (browser sync / re-imported reports) so nothing is ever double-counted.
  */
 export function commitImport(
   target: string,
   parsed: ParsedCsv,
   mapping: Record<string, string>,
-  enteredByUserId: number
+  enteredByUserId: number | null,
+  opts: { dedupe?: boolean } = {}
 ): ImportOutcome {
+  const dedupe = opts.dedupe === true;
   const errors: string[] = [];
   let processed = 0;
   let rejected = 0;
+  let skipped = 0;
   const nowIso = new Date().toISOString();
+  const exists = (q: ReturnType<typeof sql>) => db.get<{ one: number }>(q) !== undefined;
 
   const get = (row: Record<string, string>, field: string): string => {
     for (const [col, f] of Object.entries(mapping)) {
@@ -152,6 +160,19 @@ export function commitImport(
           fail("missing lead name");
           continue;
         }
+        const createdDate = normalizeDate(get(row, "created_at"));
+        if (
+          dedupe &&
+          exists(
+            createdDate
+              ? sql`SELECT 1 AS one FROM leads WHERE LOWER(name) = LOWER(${name})
+                    AND substr(created_at, 1, 10) = ${createdDate} LIMIT 1`
+              : sql`SELECT 1 AS one FROM leads WHERE LOWER(name) = LOWER(${name}) LIMIT 1`
+          )
+        ) {
+          skipped++;
+          continue;
+        }
         db.insert(leads)
           .values({
             name,
@@ -171,6 +192,13 @@ export function commitImport(
         const startDate = normalizeDate(get(row, "start_date"));
         if (!name || !startDate) {
           fail("missing athlete name or start date");
+          continue;
+        }
+        if (
+          dedupe &&
+          exists(sql`SELECT 1 AS one FROM athletes WHERE LOWER(name) = LOWER(${name}) LIMIT 1`)
+        ) {
+          skipped++;
           continue;
         }
         const by = parseInt(get(row, "birth_year"), 10);
@@ -201,6 +229,14 @@ export function commitImport(
           continue;
         }
         const status = get(row, "status").toLowerCase() === "no_show" ? "no_show" : "attended";
+        if (
+          dedupe &&
+          exists(sql`SELECT 1 AS one FROM attendance
+                     WHERE athlete_id = ${athleteId} AND date = ${date} AND status = ${status} LIMIT 1`)
+        ) {
+          skipped++;
+          continue;
+        }
         db.insert(attendance).values({ athleteId, date, status }).run();
         processed++;
       } else if (target === "payments") {
@@ -212,13 +248,24 @@ export function commitImport(
         }
         const athleteName = get(row, "athlete_name");
         const athleteId = athleteName ? findAthleteId(athleteName) : null;
+        const payStatus = get(row, "status").toLowerCase() || "paid";
+        if (
+          dedupe &&
+          exists(sql`SELECT 1 AS one FROM payments
+                     WHERE date = ${date} AND amount = ${amount} AND status = ${payStatus}
+                       AND (athlete_id = ${athleteId} OR (athlete_id IS NULL AND ${athleteId} IS NULL))
+                     LIMIT 1`)
+        ) {
+          skipped++;
+          continue;
+        }
         db.insert(payments)
           .values({
             athleteId,
             date,
             amount,
             category: get(row, "category").toLowerCase() || "membership",
-            status: get(row, "status").toLowerCase() || "paid",
+            status: payStatus,
             note: get(row, "note") || null,
           })
           .run();
@@ -235,6 +282,27 @@ export function commitImport(
         if (!metric) {
           fail(`unknown metric key "${key}"`);
           continue;
+        }
+        if (dedupe) {
+          // Upsert per (metric, period, source=import): repeated pulls refresh
+          // the value instead of stacking rows that would double-count in sums.
+          const existing = db.get<{ id: number; value: number }>(
+            sql`SELECT id, value FROM kpi_values
+                WHERE metric_id = ${metric.id} AND period_start = ${periodStart}
+                  AND source = 'import' LIMIT 1`
+          );
+          if (existing) {
+            if (existing.value === value) {
+              skipped++;
+            } else {
+              db.update(kpiValues)
+                .set({ value, createdAt: nowIso })
+                .where(eq(kpiValues.id, existing.id))
+                .run();
+              processed++;
+            }
+            continue;
+          }
         }
         db.insert(kpiValues)
           .values({
@@ -256,5 +324,5 @@ export function commitImport(
       fail(e instanceof Error ? e.message : "unknown error");
     }
   }
-  return { processed, rejected, errors };
+  return { processed, rejected, skipped, errors };
 }

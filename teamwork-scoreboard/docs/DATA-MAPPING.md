@@ -47,9 +47,15 @@ normalize to `YYYY-MM-DD`. Unparseable dates reject the row with a reason.
 ## Getting exports from your systems
 
 - **Zen Planner:** most reports (attendance, payments, members) export to
-  CSV, and many can be scheduled as recurring emailed reports — save the
-  attachment and upload it here. Map once, name the mapping (e.g. "ZP
-  attendance export"), reuse forever.
+  CSV. Two ways in:
+  1. **Scheduled browser sync (recommended):** the app signs in with headless
+     Chrome and pulls report exports automatically. Save each report's mapping
+     here first (the sync reuses it by `mappingName`), then configure the jobs
+     in Admin → Settings → "Zen Planner scrape jobs". See README → Zen
+     Planner browser sync.
+  2. **Manual:** export/email the CSV and upload it here. Map once, name the
+     mapping (e.g. "ZP Attendance Export"), reuse forever.
+  Either way, dedupe means re-importing the same rows never double-counts.
 - **GoHighLevel / Automatic Members / ZP Engage:** export contacts/
   opportunities as CSV for backfill. For live data, use the webhook —
   `POST /api/webhooks/crm` with the `x-webhook-secret` header — from a

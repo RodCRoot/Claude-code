@@ -33,12 +33,14 @@ export function ImportWizard() {
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [mappingName, setMappingName] = useState("");
+  const [dedupe, setDedupe] = useState(true);
   const [fromSheets, setFromSheets] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{
     processed: number;
     rejected: number;
+    skipped: number;
     errors: string[];
   } | null>(null);
 
@@ -91,6 +93,7 @@ export function ImportWizard() {
           mappingName: mappingName || undefined,
           connectorKey: fromSheets ? "google_sheets" : "csv",
           sourceLabel: preview.sourceLabel,
+          dedupe,
         }),
       });
       const data = await res.json();
@@ -232,6 +235,16 @@ export function ImportWizard() {
                 className="w-64"
               />
             </Field>
+            <label className="flex items-center gap-2 pb-2 text-sm">
+              <input
+                type="checkbox"
+                checked={dedupe}
+                onChange={(e) => setDedupe(e.target.checked)}
+                className="size-4"
+              />
+              Skip rows that already exist
+              <span className="text-xs text-ink-3">(safe to re-import the same report)</span>
+            </label>
             <Button onClick={commit} disabled={busy || requiredUnmapped.length > 0}>
               {busy ? "Importing…" : `Import ${preview.rowCount} rows`}
             </Button>
@@ -245,6 +258,9 @@ export function ImportWizard() {
           <div className="kicker mb-2">Step 3 — Result</div>
           <div className="flex flex-wrap items-center gap-3">
             <Badge variant="green">{result.processed} imported</Badge>
+            {result.skipped > 0 ? (
+              <Badge variant="neutral">{result.skipped} already existed</Badge>
+            ) : null}
             {result.rejected > 0 ? (
               <Badge variant="red">{result.rejected} rejected</Badge>
             ) : (

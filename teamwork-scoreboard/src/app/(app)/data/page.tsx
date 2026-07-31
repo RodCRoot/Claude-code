@@ -106,7 +106,7 @@ export default async function DataPage() {
                       : "never"}
                     {" · "}every {c.sync_interval_minutes >= 1440 ? `${c.sync_interval_minutes / 1440}d` : `${c.sync_interval_minutes}m`} when configured
                   </span>
-                  {c.mode === "api" ? (
+                  {c.mode === "api" || c.mode === "browser" ? (
                     <form action={runSyncNow}>
                       <input type="hidden" name="connectorKey" value={c.key} />
                       <Button size="sm" variant="secondary" type="submit">

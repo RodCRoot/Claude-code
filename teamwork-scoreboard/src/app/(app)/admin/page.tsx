@@ -38,6 +38,16 @@ export default async function AdminPage() {
     { key: "appointment_types", label: "Appointment types", hint: 'JSON list of {"key","label"} — e.g. Success Session, Strong Start, Assessment.' },
     { key: "lead_sources", label: "Lead sources", hint: 'JSON list of {"key","label"}.' },
     { key: "programs", label: "Programs", hint: "JSON list of program names." },
+    {
+      key: "zen_login_config",
+      label: "Zen Planner login flow (browser sync)",
+      hint: "Login URL + form selectors for the scheduled headless-Chrome sync. Credentials stay in .env, never here.",
+    },
+    {
+      key: "zen_scrape_jobs",
+      label: "Zen Planner scrape jobs (browser sync)",
+      hint: "One job per report: url + exportSelector (or a direct csvUrl), entity, saved mappingName, enabled. Jobs stay disabled until you point them at real report URLs.",
+    },
   ];
 
   const demo = getSetting("demo_mode");
