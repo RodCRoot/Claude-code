@@ -226,16 +226,33 @@ is twenty. And that includes parents, not just siblings."
 | 6:30 PM | Mon / Tue / Wed / Thu |
 | 9:00 AM | Sat |
 
-**LINTON — route, don't answer.** Linton is a separate location and we expect
-essentially no Linton calls. If someone asks about Linton, do **not** try to
-answer questions about its schedule, pricing, or programs. Hand them to
-**Mary Hogue**.
+**FITNESS TOGETHER (Linton, Indiana) — hand off Mary's contact info directly.**
 
-Bot line: "Linton is handled by Mary Hogue — let me get you over to her. What's
-the best number to reach you?"
+**Fitness Together** in **Linton, Indiana** is a separate business from Teamwork
+Bloomington, run by **Mary Hogue**. We do not answer questions about it —
+not schedule, not pricing, not programs, not memberships.
 
-**CONFIRM:** Mary's phone/email, and whether the bot should give it out directly
-or just capture the caller's number for a callback.
+Don't take a message, don't capture a callback number, don't promise a call.
+**Just give them Mary's contact info and let them take it from there.**
+
+Bot line: "That's Fitness Together over in Linton — that's Mary Hogue's, not
+ours. You can reach her at [MARY'S PHONE] or [MARY'S EMAIL]."
+
+**⚠️ CONFIRM — REQUIRED BEFORE LAUNCH:** Mary's phone number and email. Without
+them the bot has nothing to hand over and will stall on exactly the calls you
+don't want to deal with.
+
+**When this rule applies — be precise:**
+
+| Caller says | What to do |
+|---|---|
+| Asks about **Fitness Together** | Hand off Mary's info |
+| Asks about the gym **in Linton** | Hand off Mary's info |
+| "I live in Linton, do you train athletes?" | **This is OUR lead.** Book the free assessment. Do NOT hand off. |
+| Existing Teamwork member who happens to live near Linton | **Ours.** Handle normally. |
+
+Living in or near Linton does not make someone Mary's. Only route when they're
+asking about **Fitness Together** or a **Linton location**.
 
 ---
 
@@ -356,8 +373,11 @@ A: It doesn't lock you into another six months — it continues month to month a
 **Q: Can we pause while my athlete is in season?**
 A: We do have an in-season rate for athletes during their competitive season. It's limited, so let me have someone check what you're eligible for — what sport and when does the season run?
 
-**Q: Do you have anything in Linton?**
-A: Linton is handled by Mary Hogue — I can get you connected with her. What's the best number to reach you?
+**Q: Is this Fitness Together? / Do you have a gym in Linton?**
+A: That's Fitness Together over in Linton — that's Mary Hogue's, not ours. You can reach her at [MARY'S PHONE] or [MARY'S EMAIL].
+
+**Q: I'm out in Linton — do you train athletes?**
+A: We sure do — we're here in Bloomington and we've got athletes coming in from all over. Want me to get you set up with a free assessment?
 
 **Q: [Add your own from real calls/texts]**
 A: [...]
