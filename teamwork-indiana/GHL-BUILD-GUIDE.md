@@ -49,7 +49,7 @@ Build in **Sites → Funnels/Websites**. Each section below maps to a GHL row/bl
 |---|---|---|
 | Sticky nav + logo | Website header | Set as a global/reusable header |
 | Hero + "Free Assessment" | Funnel step 1 + **Calendar** embed | Primary conversion point |
-| "Free Performance Assessment" card ($99 value) | 2-step order/booking form | Force-plate jump & lower-body power, sprint speed & first-step acceleration, training recommendations, no commitment |
+| "Free Performance Assessment" card ($99 value) | 2-step order/booking form | Vertical jump, force-plate jump & lower-body power, sprint speed & first-step acceleration, training recommendations, no commitment |
 | Trust strip (stats + leagues) | Static counter row | 2014 · 1500+ athletes/13 yrs · 100+ NCAA D1 · 300+ collegiate · **CSCS** shield (NSCA) · league badges NCAA D1/NFL/WNBA/FIBA (styled wordmarks — swap in official logos only with permission) |
 | 5-step Method | Icon/columns row | Content only |
 | Five F's | 5-column card row | Uses the 5 brand colors |
