@@ -6,6 +6,7 @@ Tooling and source content for the GoHighLevel Voice AI + SMS assistant.
 |---|---|
 | `knowledge-base.md` | The master knowledge file. Fill in the `[BRACKETS]`. |
 | `ghl_export.py` | Pulls real conversation history out of GHL for analysis. |
+| `payment-failure-recovery.md` | Failed-payment outreach sequence + ZenPlanner cleanup checklist. |
 
 ---
 

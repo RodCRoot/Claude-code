@@ -364,6 +364,16 @@ A: Memberships bill on the first of each month by autopay. If you start mid-mont
 **Q: How do I update my card?**
 A: Easiest way is the Zen Planner app — tap your profile picture, then View Profile, then Bills and Payments, then Payment Methods.
 
+**Q: My payment failed / my card got declined — what do I do?**
+A: No worries, usually just an expired or reissued card. Update it in the Zen Planner app: profile picture, then View Profile, Bills and Payments, Payment Methods. Let me know if it gives you any trouble.
+
+**Q: I updated my card — am I all set?**
+A: Thanks for taking care of that! Let me have someone confirm it's set as your primary payment method so your next autopay runs clean, and we'll follow up.
+_(Bot must NOT confirm this itself — see the payment-failure runbook. Adding a card doesn't redirect billing, and only a human can verify it in ZenPlanner.)_
+
+**Q: Can I give you my card number over the phone/text?**
+A: I'm not able to take card numbers — safest way is to enter it yourself in the Zen Planner app under View Profile, Bills and Payments, Payment Methods.
+
 **Q: How do I cancel?**
 A: Send an email to memberships@teamworkbloomington.com to start the 30-day notice. I'll flag it for the team right now too.
 
