@@ -49,8 +49,8 @@ Build in **Sites → Funnels/Websites**. Each section below maps to a GHL row/bl
 |---|---|---|
 | Sticky nav + logo | Website header | Set as a global/reusable header |
 | Hero + "Free Assessment" | Funnel step 1 + **Calendar** embed | Primary conversion point |
-| "Your first session FREE" card | 2-step order/booking form | New-athlete offer |
-| Trust strip (stats) | Static counter row | 2014 · 800+ · 30 days · **CSCS** (same cert required by NCAA & pro sports) |
+| "Free Performance Assessment" card ($99 value) | 2-step order/booking form | Force-plate jump & lower-body power, sprint speed & first-step acceleration, training recommendations, no commitment |
+| Trust strip (stats + leagues) | Static counter row | 2014 · 1500+ athletes/13 yrs · 100+ NCAA D1 · 300+ collegiate · **CSCS** shield (NSCA) · league badges NCAA D1/NFL/WNBA/FIBA (styled wordmarks — swap in official logos only with permission) |
 | 5-step Method | Icon/columns row | Content only |
 | Five F's | 5-column card row | Uses the 5 brand colors |
 | "This is Teamwork" community | 2-col image row | Real photos: flags wall + logo wall |
@@ -141,6 +141,8 @@ The workflow behind the ask in Rod's email to Seth (Aug 2026):
   - Athlete — $189/mo (2 sessions/week) *(mark "Most Popular")*
   - All-Access — $249/mo (3 sessions/week)
 - Each pricing button → GHL **Order Form** for that product.
+- **30-Day Risk-Free Guarantee** banner sits under the pricing grid — honor it
+  in your billing/cancellation flow.
 - Optional: gate a training-plan / progress area behind **Memberships**
   (courses) so paying athletes log in for their plan.
 
@@ -241,6 +243,11 @@ Add a dated line whenever the concept or the GHL build changes.
 - **2026-08-04** — Removed all Linton-facility photos from the pool and the
   carousel (little-girls slide swapped for Xavier chin-up); contact sheet
   regenerated.
+- **2026-08-04** — Hero card is now the Free Performance Assessment ($99
+  value): goal & injury-history planning, force-plate jump/lower-body power,
+  sprint & first-step testing, training recommendations. Added 30-Day
+  Risk-Free Guarantee under pricing. Trust strip: 1500+ athletes/13 yrs,
+  100+ NCAA D1, 300+ collegiate, NSCA-CSCS shield, league wordmark badges.
 - **2026-08-04** — Emailed Seth (draft): testimonials → Drive folder, keep
   requesting Google reviews, video→transcript→review workflow (§3G).
 

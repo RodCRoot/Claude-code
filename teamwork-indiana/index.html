@@ -172,7 +172,16 @@
 
   /* ---- trust strip ---- */
   .strip{background:var(--navy);color:var(--on-navy);border-top:1px solid rgba(255,255,255,.07)}
-  .strip-in{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;padding:34px 0}
+  .strip-in{display:grid;grid-template-columns:repeat(5,1fr);gap:20px;padding:34px 0 8px}
+  .cscs-badge{display:flex;gap:12px;align-items:flex-start}
+  .cscs-badge svg{width:38px;height:38px;color:var(--blue-bright);flex:none;margin-top:4px}
+  .leagues{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding-bottom:30px;
+    border-top:1px solid rgba(255,255,255,.07);margin-top:22px;padding-top:20px}
+  .leagues-label{font-family:var(--fmono);font-size:.68rem;text-transform:uppercase;
+    letter-spacing:.16em;color:var(--on-navy-muted);margin-right:6px}
+  .lg{font-family:var(--fdisp);font-weight:800;font-size:1.05rem;letter-spacing:.04em;
+    color:#fff;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);
+    border-radius:8px;padding:8px 16px;font-style:italic}
   .stat .n{font-family:var(--fdisp);font-weight:800;font-size:2.5rem;color:#fff;line-height:1}
   .stat .n b{color:var(--blue-bright);font-weight:800}
   .stat .l{font-family:var(--fmono);font-size:.72rem;text-transform:uppercase;
@@ -235,6 +244,15 @@
   .plan li{display:flex;gap:10px;font-size:.92rem;color:var(--ink)}
   .plan li svg{width:18px;height:18px;color:var(--green);flex:none}
   .plan .btn{width:100%;justify-content:center}
+
+  /* guarantee */
+  .guarantee{margin-top:34px;display:flex;gap:16px;align-items:center;justify-content:center;
+    background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--green);
+    border-radius:12px;padding:20px 26px;box-shadow:var(--shadow);max-width:760px;
+    margin-left:auto;margin-right:auto}
+  .guarantee svg{width:34px;height:34px;color:var(--green);flex:none}
+  .guarantee div{font-size:.95rem;color:var(--ink)}
+  .guarantee b{font-family:var(--fdisp);text-transform:uppercase;letter-spacing:.02em}
 
   /* coaches */
   .coaches{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
@@ -364,6 +382,7 @@
     .steps,.fgrid{grid-template-columns:repeat(2,1fr)}
     .prices,.coaches,.qgrid{grid-template-columns:1fr 1fr}
     .strip-in{grid-template-columns:1fr 1fr}
+    .cscs-badge{grid-column:span 2}
     .foot-in{grid-template-columns:1fr 1fr}
     .nav-links{display:none}
     .burger{display:grid;place-items:center}
@@ -436,18 +455,19 @@
           <span style="background:var(--red)">SE</span>
           <span style="background:var(--green)">+</span>
         </div>
-        800+ athletes trained · D1 to youth
+        1,500+ athletes trained · D1 to youth
       </div>
     </div>
     <div class="hero-card rv">
       <span class="ghl ghl-tl">Funnel step 1</span>
       <span class="eyebrow" style="color:var(--yellow)">New Athlete Offer</span>
-      <h3 style="margin-top:10px">Your first session</h3>
-      <div class="price">FREE <s>$60</s></div>
-      <p style="color:var(--on-navy-muted);font-size:.9rem">Movement assessment + a real training session with a coach.</p>
+      <h3 style="margin-top:10px">Free Performance Assessment</h3>
+      <div class="price">FREE <s>$99</s></div>
+      <p style="color:var(--on-navy-muted);font-size:.9rem">Goal-setting &amp; injury-history planning with a coach, then real testing on the turf.</p>
       <ul class="cardlist">
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Full speed &amp; vertical baseline</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Personalized 30-day plan</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Force-plate jump &amp; lower-body power assessment</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Sprint speed testing &amp; first-step acceleration evaluation</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Personalized training recommendations</li>
         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>No commitment, no pressure</li>
       </ul>
       <a class="btn btn-primary btn-arrow" href="#contact" style="width:100%;justify-content:center;position:relative">Book My Free Session
@@ -462,9 +482,17 @@
 <div class="strip">
   <div class="wrap strip-in">
     <div class="stat rv"><div class="n" data-count="2014">2014</div><div class="l">Coaching since</div></div>
-    <div class="stat rv"><div class="n"><b data-count="800">0</b>+</div><div class="l">Athletes trained</div></div>
-    <div class="stat rv"><div class="n"><b data-count="30">0</b></div><div class="l">Day results promise</div></div>
-    <div class="stat rv"><div class="n"><b>CSCS</b></div><div class="l">Certified coaches — the same cert required by NCAA &amp; pro sports</div></div>
+    <div class="stat rv"><div class="n"><b data-count="1500">0</b>+</div><div class="l">Athletes trained over 13 years (and counting!)</div></div>
+    <div class="stat rv"><div class="n"><b data-count="100">0</b>+</div><div class="l">NCAA D1 athletes trained</div></div>
+    <div class="stat rv"><div class="n"><b data-count="300">0</b>+</div><div class="l">Collegiate athletes</div></div>
+    <div class="stat rv cscs-badge">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+      <div><div class="n"><b>CSCS</b></div><div class="l">NSCA-certified coaches — the same cert required by NCAA &amp; pro sports</div></div>
+    </div>
+  </div>
+  <div class="wrap leagues rv">
+    <span class="leagues-label">Teamwork athletes have gone on to compete in</span>
+    <span class="lg">NCAA&nbsp;D1</span><span class="lg">NFL</span><span class="lg">WNBA</span><span class="lg">FIBA</span>
   </div>
 </div>
 
@@ -600,6 +628,10 @@
         </ul>
         <a class="btn btn-dark" href="#contact" style="position:relative">Choose All-Access<span class="ghl">Order form</span></a>
       </div>
+    </div>
+    <div class="guarantee rv">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+      <div><b>30-Day Risk-Free Guarantee.</b> If an athlete decides our program isn't the perfect fit in the first 30 days, we'll make it right — no questions, no hard feelings.</div>
     </div>
   </div>
 </section>
