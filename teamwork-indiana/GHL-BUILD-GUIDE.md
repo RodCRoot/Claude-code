@@ -210,8 +210,9 @@ Use as a checklist — check items off as they're done in GHL:
 | Social content folder (`1hmALJl2I1p97HBG9ssDFxiGzN5e0jLh5`) | Named athlete photos + training videos: sprints (Anya, Rowan, Noah, Luke, Jacob, Emmitt), box jumps (Layla), hang cleans, med-ball throws, group games, **Gavin Hodgson testimonial video**, **James Butcher Athlete of the Week video** |
 
 **Content rules of thumb:**
-- Old-facility photos (sled lane / family-class room) are excluded — current
-  facility only.
+- **Linton-facility photos are excluded** (cream-top/blue-or-green-band room:
+  ribbon-cutting set, family class, sled lane, kids line-up) — current
+  Bloomington facility only.
 - Photos show recognizable athletes, many minors — confirm photo releases
   before going live.
 - Every testimonial quote must trace to a screenshot in `assets/reviews/`
@@ -237,6 +238,9 @@ Add a dated line whenever the concept or the GHL build changes.
   the same cert required by NCAA & pro sports**.
 - **2026-08-04** — Hero: full-bleed action photo background (three athletes
   pressing, current facility) behind a navy gradient; `assets/hero-bg.jpg`.
+- **2026-08-04** — Removed all Linton-facility photos from the pool and the
+  carousel (little-girls slide swapped for Xavier chin-up); contact sheet
+  regenerated.
 - **2026-08-04** — Emailed Seth (draft): testimonials → Drive folder, keep
   requesting Google reviews, video→transcript→review workflow (§3G).
 
