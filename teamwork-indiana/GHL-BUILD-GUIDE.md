@@ -235,6 +235,8 @@ Add a dated line whenever the concept or the GHL build changes.
   story, 14-review wall, video testimonial links); homepage links to it.
 - **2026-08-04** — Trust strip: replaced "5 certified coaches" with **CSCS —
   the same cert required by NCAA & pro sports**.
+- **2026-08-04** — Hero: full-bleed action photo background (three athletes
+  pressing, current facility) behind a navy gradient; `assets/hero-bg.jpg`.
 - **2026-08-04** — Emailed Seth (draft): testimonials → Drive folder, keep
   requesting Google reviews, video→transcript→review workflow (§3G).
 

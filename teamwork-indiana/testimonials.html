@@ -127,15 +127,23 @@
   #buildmode:checked ~ .buildbar b{font-weight:700}
 
   /* ---- hero ---- */
-  .hero{background:
-      radial-gradient(1100px 520px at 78% -8%,rgba(46,123,255,.28),transparent 60%),
-      radial-gradient(760px 460px at 6% 110%,rgba(102,45,145,.22),transparent 55%),
-      var(--navy-deep);
-    color:var(--on-navy);position:relative;overflow:hidden;padding:78px 0 92px}
-  .hero::after{content:"";position:absolute;inset:0;pointer-events:none;
+  .hero{background:var(--navy-deep);color:var(--on-navy);position:relative;
+    overflow:hidden;padding:78px 0 92px}
+  .hero-bg{position:absolute;inset:0;background:none;
+    z-index:0}
+  .hero-bg::after{content:"";position:absolute;inset:0;background:
+      linear-gradient(97deg,rgba(8,16,31,.985) 0%,rgba(8,16,31,.95) 34%,
+        rgba(8,16,31,.78) 55%,rgba(10,20,40,.55) 78%,rgba(10,20,40,.62) 100%),
+      radial-gradient(1100px 520px at 78% -8%,rgba(46,123,255,.22),transparent 60%),
+      radial-gradient(760px 460px at 6% 110%,rgba(102,45,145,.2),transparent 55%)}
+  .hero::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;
     background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),
       linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
     background-size:52px 52px;mask-image:radial-gradient(circle at 60% 30%,#000,transparent 72%)}
+  @media (max-width:940px){
+    .hero-bg::after{background:linear-gradient(rgba(8,16,31,.93),rgba(8,16,31,.9)),
+      radial-gradient(1100px 520px at 78% -8%,rgba(46,123,255,.22),transparent 60%)}
+  }
   .hero-in{position:relative;z-index:2;display:grid;grid-template-columns:1.15fr .85fr;
     gap:54px;align-items:center}
   .hero h1{font-size:clamp(2.7rem,6.2vw,5rem);color:#fff;margin:20px 0 0}
