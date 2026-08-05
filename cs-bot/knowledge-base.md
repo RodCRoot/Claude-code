@@ -241,6 +241,49 @@ is twenty. And that includes parents, not just siblings."
 - **Waiver:** [link or "sent by text after booking"]
 - **Reschedule / cancel policy:** [e.g. "24 hours' notice to reschedule"]
 
+### The 2-hour reservation cutoff — say YES
+
+ZenPlanner **hard-blocks** self-service signup within 2 hours of a session. A
+parent trying to grab the 3:30 at 3:00 will find they can't, and they'll text us.
+
+**When that happens, the answer is yes.** Be warm and easy about it:
+
+> "Yeah, no problem at all — I'll get [Athlete] added to the 4:30. Thanks for
+> giving us the heads up!"
+
+**Why the cutoff exists** (useful if a parent is apologetic or pushes back — it's
+a safety thing, not bureaucracy):
+High school athletes were showing up unreserved, then signing up from the parking
+lot, and sessions got overpacked with too few coaches. The cutoff keeps the
+coach-to-athlete ratio right so sessions stay safe and run well. It's about
+having enough coaches and equipment for everyone who's there.
+
+Bot line if asked: "It's just so we know how many coaches to have on the floor —
+keeps sessions from getting overpacked. But text us anytime and we'll take care
+of it."
+
+**The heads-up genuinely helps us.** On slow nights we send coaches home, so
+knowing someone's coming changes staffing. Never make a parent feel like they're
+imposing — they're doing us a favor.
+
+**The only real limit: a full session.** It's almost always fine unless the
+session is already full. The bot **cannot see capacity**, so never say "there's
+plenty of room" — just confirm warmly and let staff check.
+
+**⚠️ MECHANICS — the bot cannot reserve anyone itself.** There's no ZenPlanner
+API access, so the bot has no way to add someone to a session. Only **Matty or
+Rod** can override the cutoff, and they do it through the app on their end.
+
+So the flow is:
+1. Bot confirms warmly — "yep, got it, I'll get them added"
+2. Bot **immediately** pings Matty/Rod with athlete name + session time
+3. Staff reserves them in ZenPlanner
+4. Staff comes back only if the session turns out to be full
+
+**This makes the escalation ping load-bearing.** The bot has just told a parent
+their kid is in. If that ping is missed, a kid shows up to a session nobody
+reserved them for — which is the exact problem the cutoff was created to prevent.
+
 **Class schedule — Bloomington** (from ZenPlanner; **CONFIRM** still current):
 
 | Session | Days |
@@ -430,6 +473,12 @@ A: Send an email to memberships@teamworkbloomington.com to start the 30-day noti
 
 **Q: What happens when my 6 months is up?**
 A: It doesn't lock you into another six months — it continues month to month at your committed rate until you cancel in writing.
+
+**Q: It won't let me sign up, the session is in an hour — can we still come?**
+A: Yeah, no problem at all — I'll get them added. Thanks for the heads up!
+
+**Q: Why won't the app let me reserve last minute?**
+A: It closes two hours out so we know how many coaches to have on the floor — keeps sessions from getting overpacked. But just text us and we'll take care of it.
 
 **Q: We were gone/sick last month — do we lose those sessions?**
 A: You don't. As long as your membership is active we can put the sessions you paid for but missed onto a punch card, going back up to three months. Let me have someone pull your exact count.
