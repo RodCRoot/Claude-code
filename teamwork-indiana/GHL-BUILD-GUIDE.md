@@ -74,6 +74,19 @@ Build in **Sites → Funnels/Websites**. Each section below maps to a GHL row/bl
 > All review screenshots (the sources for every quote) are archived in
 > `assets/reviews/` for verification.
 
+### FAQ page (`faq.html`)
+
+| Section on the page | GHL element | Notes |
+|---|---|---|
+| Hero | Page header | Badge: FAQ ↔ AI chat-bot knowledge base — keep the two in sync |
+| 5 categories, accordion Q&A | FAQ block / accordion rows | Getting Started · Training · Membership & Billing · Location & Logistics · Results |
+| "Still have a question?" CTA | Chat widget → lead workflow | Same workflow A as the contact form |
+
+> The FAQ answers double as the knowledge base for the customer-service
+> chat bot (Rod's separate Claude Code project) — when one changes, update
+> the other. Items to confirm with Rod: hold/in-season policy wording,
+> session length, group sizes.
+
 ---
 
 ## 3. Core automations (Workflows)
@@ -253,6 +266,8 @@ Add a dated line whenever the concept or the GHL build changes.
 - **2026-08-05** — Payments decision: skip Stripe/on-site checkout; membership
   purchase links to ZenPlanner or is handled internally. SMS/A2P already
   registered (existing GHL texting) — no new verification needed.
+- **2026-08-05** — Added FAQ page (5 categories, accordion) doubling as
+  chat-bot knowledge base; home footer links to it.
 - **2026-08-04** — Emailed Seth (draft): testimonials → Drive folder, keep
   requesting Google reviews, video→transcript→review workflow (§3G).
 
