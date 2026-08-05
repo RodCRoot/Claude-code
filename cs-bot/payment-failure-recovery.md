@@ -130,37 +130,83 @@ hasn't updated. Want me to have someone give you a call to sort it out?
 **Do this every time a member says they've updated their card.** Adding a card
 does not redirect billing.
 
-Two separate things must be true, and they are not the same setting:
+### ⚠️ The one thing to understand
 
-1. The new card is the **primary** payment method on the account.
-2. The new card is the account **each active membership's autopay draws from**.
+The Add a Payment Method screen has a **Primary Account** checkbox, and
+ZenPlanner's own help text next to it says:
 
-Your own audit notes the failure mode: *"A dead card can hold the primary flag
-while billing lands elsewhere."* Memberships pick an autopay account **at
-creation time** — so an existing membership can keep pointing at the old card
-even after a new one is added and made primary.
+> *"Use as default payment account. **Does not affect existing autopay.**"*
 
-### Checklist
+That is the whole problem in one sentence. Ticking Primary sets the default for
+*new* charges. **Every existing membership keeps drawing from whatever account
+it was pointed at when it was created** — including a dead card.
 
-Prefix: `https://studio.zenplanner.com/zenplanner/studio/index.html#/main/iframe/zenplanner/studio/`
+So there are **two separate settings**, and doing the first does not do the second:
 
-- [ ] Find the member, grab `personId` from the profile URL
-- [ ] Open payment methods: `payment/index.cfm?personId=<ID>`
-- [ ] Confirm the **new card is present**
-- [ ] Set the **new card as primary**
-- [ ] **Remove or demote the dead card** so it can't reclaim the primary flag
-- [ ] Open memberships: `membership/index.cfm?personId=<ID>`
-- [ ] For **every active membership**, confirm autopay points at the **new card**
-      — check each one, not just the newest
-- [ ] Open bills: `bill/index.cfm?personId=<ID>&_c=firstName,description,status,dueDate,unpaidBalance,billAmount,autopayStatus&BillType=Bill`
-- [ ] Confirm queued bills show `autopayStatus` against the new card
-- [ ] Retry / collect the failed bill if it's still outstanding
+1. New card is **Primary** on the account
+2. New card is selected as the **autopay account on each active membership**
+
+Skip step 2 and the next bill fails exactly like the last one.
+
+---
+
+### PART A — Add the card and make it primary
+
+1. Member profile → **Financial** in the left nav
+2. **Add ▾** (top right) → the payment-account option
+   — *Make a Payment also reaches the add-card screen*
+3. Fill in the **Add a Payment Method** modal:
+   - Payment Account Name (e.g. `Account #2`)
+   - First / Last name, card number, expiration
+   - Street address, city, state, billing zip
+4. **✅ Tick "Primary Account"** at the bottom
+5. **Save**
+
+**Verify:** back on **Financial**, the **ACCOUNTS** table lists the new card with
+**PRIMARY = YES**. Columns are Account Label · Type · Subtype · Ends With ·
+Expiration · Primary · Last Payment · Remove.
+
+### PART B — Point each membership's autopay at the new card ← DON'T SKIP
+
+Do this for **every active membership**, not just the newest.
+
+1. Member profile → **Memberships**
+2. Open the membership → get to the **REVIEW MEMBERSHIP** screen
+3. Find **SELECT ACCOUNT FOR AUTOMATIC PAYMENT** near the bottom. Options look like:
+
+   ```
+   ○ OFF. Do not pay bills automatically
+   ○ Account #2 (ending in 5685)
+   ○ Chase Freedom Unl. (ending in 5685)
+   + Add a Payment Account
+   ```
+
+4. **Select the new account.** Make sure it is **not** left on `OFF` — that is the
+   setting that silently stops all automatic payment on that membership.
+5. **Save and Continue**
+
+**⚠️ Pick by ACCOUNT LABEL, not by last-4.** Two different accounts can end in
+the same four digits (a reissued card re-added under a new label does exactly
+this). Matching on "ending in 5685" alone can point autopay straight back at the
+dead card.
+
+### PART C — Verify
+
+- [ ] **Financial → ACCOUNTS**: new card shows **PRIMARY = YES**
+- [ ] Dead card **removed** (there's a red ✗ Remove on its row) or clearly demoted
+- [ ] **Every** active membership shows autopay on the new account, none on `OFF`
+- [ ] **Financial → LAST 10 BILLS**: upcoming bills are not sitting at status `OFF`
+- [ ] Failed / past-due bill collected or scheduled
 - [ ] **Re-read the record after saving.** ZenPlanner submits silently no-op.
 
-**CONFIRM:** the exact click path to set a card primary and to change a
-membership's autopay account. I documented the URLs and the *what*, but not the
-precise UI steps — those need to come from someone doing it once and writing
-down what they clicked.
+### What `OFF` costs you — a real example
+
+On the account in these screenshots, the **Past Due Payments** banner reads
+**$448.20**. The bills list shows two `8 week Summer program` bills of **$224.10**
+each, both at status **OFF**, both unpaid. 2 × $224.10 = $448.20.
+
+The entire past-due balance is one membership left on `OFF`. Nothing declined —
+autopay simply never ran. That is what Part B prevents.
 
 ### Then close the loop with the member
 
@@ -177,6 +223,12 @@ all set when billing still points at a dead card is worse than saying nothing.
 
 ## 4. Known gotchas
 
+- **"Primary Account" does not touch existing autopay.** ZenPlanner says so on
+  the form itself. This is the single most likely reason a "fixed" card fails again.
+- **Autopay set to `OFF` looks like nothing is wrong.** No decline, no error —
+  bills just quietly go unpaid and pile into Past Due. Check it on every membership.
+- **Two accounts can share the same last 4 digits.** Always select by account
+  label, never by "ending in ####".
 - **Silent no-ops.** ZenPlanner will appear to save and not save. Always re-read.
 - **Native `<select>` popups freeze the tab.** Set via DOM, never click-then-Enter.
 - **One ZenPlanner session at a time.** A second tab silently resets the session.
