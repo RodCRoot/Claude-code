@@ -61,6 +61,31 @@ cancellation, hold, in-season change, or refund. These are time-sensitive — if
 request sits unseen past the 1st of the month, the member gets billed and we owe
 the money back.
 
+### How escalations get delivered — every channel, every time
+
+**Fire all of them. Redundancy is the point.** A single missed notification is
+how a cancellation request sits unread past a billing date.
+
+| Channel | Who | When |
+|---|---|---|
+| **Email** | staff / `memberships@` | every escalation |
+| **SMS** | staff | every escalation |
+| **Telegram** | Rod | every escalation, and every Bobby action |
+| Any other channel available | — | use it |
+
+**Bobby also pings Rod on Telegram** on every reservation it attempts —
+success *and* failure. Rod sees the whole chain, not just the breakages.
+
+**Escalation message must always contain:**
+- Athlete name **and** who actually made contact (usually the parent)
+- What they asked for, in their own words
+- Channel it came in on, and a link back to the conversation
+- Anything time-sensitive — especially proximity to the 1st
+- What the bot already told them *(so nobody contradicts it)*
+
+That last line matters most. If the bot said "I'll get them added to the 4:30,"
+whoever picks it up needs to know a promise was already made.
+
 ---
 
 ## 2. THE BASICS  (leads + members)
@@ -173,29 +198,57 @@ the next without a problem.
 | 1x per week | **4** |
 | 2x per week | **8** |
 | 3x per week | **12** |
+| 4x per week | **16** — *CONFIRM, inferred from the pattern* |
+| Unlimited | no cap |
 
 Bot line: "A 3x per week membership is really twelve sessions a month — so if
 life gets busy one week, you're not losing anything, you've still got your
 twelve."
 
-### Rates
+### Rates — monthly, all levels and terms
 
 | Level | Month-to-month | 6-month | 12-month |
 |---|---|---|---|
-| 3x per week (12/mo) | **CONFIRM** | $261.99 | **CONFIRM** |
-| 2x per week (8/mo) | $232.99 | **CONFIRM** | **CONFIRM** |
-| 1x per week (4/mo) | $129.00 | **CONFIRM** — offered? | **CONFIRM** — offered? |
+| 1x per week | **$129.00** | not offered | not offered |
+| 2x per week | **$232.99** | **$197.99** | **$178.99** |
+| 3x per week | **$348.00** | **$261.99** | **$221.99** |
+| 4x per week | **$465.00** | **$375.99** | not offered |
+| Unlimited | **$569.00** | **$419.99** | **$309.99** |
 
-**⚠️ CONFIRM — needed before the bot quotes anything:** the five blank cells
-above. Longer terms are presumably cheaper per month, and a lead comparing "how
-much to commit for a year" is exactly the conversation you want the bot handling
-well. Right now it can only quote two of the boxes.
+**The commitment discount is the sales lever.** 3x per week is $348 month-to-month
+but $221.99 on a 12-month — **$126 a month cheaper, over $1,500 a year.** Lead
+with the savings, not the commitment.
 
-Also confirm whether **1x per week** is offered on 6- and 12-month terms at all,
-or is month-to-month only.
+Bot line: "Month to month on 3x is three forty-eight, but if you commit to a
+year it drops to two twenty-two — saves you about fifteen hundred over the year."
 
-- **Contract length:** month-to-month, 6-month, and 12-month commitments are
-  available. Longer commitment = lower monthly rate.
+### Other programs
+
+| Program | Price | Notes |
+|---|---|---|
+| **In Season** | **$99.00/month** | Reduced-rate season option — see the retention ladder |
+| **6-week challenge** | **$299.00** | Single payment, runs 7 weeks, does not auto-renew |
+| **College Athlete Weekly** | **$50.00/week** | Billed weekly |
+
+**College athletes:** the $50/week option is for athletes home on break. Worth
+offering unprompted when a college kid or their parent calls — a summer at
+$50/week is an easy yes where a monthly membership isn't.
+
+### ⚠️ Two things to fix in ZenPlanner (not bot issues)
+
+**1. "1x per Week Month to Month" has Duration: 3 months.** The name says
+month-to-month, the template says a 3-month term. The bot will tell people
+month-to-month. **Which is right?** If it really is a 3-month commitment, the
+name is misleading to every parent who signs it.
+
+**2. The In Season template has Auto-Renew: YES.** This is the Xavier Farmer
+defect built into the template — every in-season created from it renews unless
+someone manually switches it off. Your own audit calls this out: *"Set In Season
+to expire — auto-renew OFF. The absence of this step caused Xavier's five-month
+drift."* Fix the template and the defect stops recurring.
+
+Same applies to **College Athlete Weekly (auto-renew: yes, weekly)** — a
+forgotten one bills every week indefinitely.
 - **Mid-month starts are pro-rated.** The bot should say "we'll pro-rate your
   first month" and **not attempt the math** — staff handle the exact amount.
 - **Sign-up / registration fee:** none.
@@ -214,14 +267,25 @@ Discount is based on **how many family members hold active memberships**, and
 Condition: everyone counted must actually have a membership. If one drops, the
 discount tier drops for everyone.
 
-The discount comes off **whatever rate they're on** — it applies to any level and
-any term. Worked examples on the two rates we have confirmed:
+The discount comes off **whatever rate they're on** — any level, any term.
 
-| Rate | 2 members (10%) | 3 members (15%) | 4+ members (20%) |
-|---|---|---|---|
-| $261.99 (3x, 6-month) | $235.79 | $222.69 | $209.59 |
-| $232.99 (2x, month-to-month) | $209.69 | $198.04 | $186.39 |
-| $129.00 (1x, month-to-month) | $116.10 | $109.65 | $103.20 |
+| Level | Term | List | 2 members (10%) | 3 members (15%) | 4+ members (20%) |
+|---|---|---|---|---|---|
+| 1x | Month-to-month | $129.00 | $116.10 | $109.65 | $103.20 |
+| 2x | Month-to-month | $232.99 | $209.69 | $198.04 | $186.39 |
+| 2x | 6-month | $197.99 | $178.19 | $168.29 | $158.39 |
+| 2x | 12-month | $178.99 | $161.09 | $152.14 | $143.19 |
+| 3x | Month-to-month | $348.00 | $313.20 | $295.80 | $278.40 |
+| 3x | 6-month | $261.99 | $235.79 | $222.69 | $209.59 |
+| 3x | 12-month | $221.99 | $199.79 | $188.69 | $177.59 |
+| 4x | Month-to-month | $465.00 | $418.50 | $395.25 | $372.00 |
+| 4x | 6-month | $375.99 | $338.39 | $319.59 | $300.79 |
+| Unlimited | Month-to-month | $569.00 | $512.10 | $483.65 | $455.20 |
+| Unlimited | 6-month | $419.99 | $377.99 | $356.99 | $335.99 |
+| Unlimited | 12-month | $309.99 | $278.99 | $263.49 | $247.99 |
+
+**CONFIRM:** does the family discount apply to In Season, the 6-week challenge,
+and College Athlete Weekly, or only to the standard memberships above?
 
 Bot line: "If you sign up more than one person in the family, everybody gets a
 discount — two members is ten percent off each, three is fifteen, four or more

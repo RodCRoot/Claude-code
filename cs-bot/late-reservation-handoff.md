@@ -163,18 +163,33 @@ Content-Type: application/json
 
 Same API version caveat as `ghl_export.py`: flip `Version` if you get 404s.
 
+### Bobby reports EVERY attempt to Rod on Telegram
+
+Not just failures. Success too:
+
+```
+✅ RESERVED — [Athlete] into [session time]. Parent texted.
+⚠️ FULL — [Athlete] not added to [session]. Needs a human.
+❌ FAILED — [reason]. Needs a human NOW, parent was already told yes.
+```
+
+A log of successes is what makes a gap visible. If Bobby goes quiet for a day,
+that should look wrong.
+
 ### Failure → tell a human, not the parent
 
-Session full, athlete not found, ZenPlanner misbehaving — Bobby messages
-Telegram, and a person decides what the parent hears. **Never let Bobby
-improvise a "sorry, you can't come" text.** That's a customer-relationship call.
+Session full, athlete not found, ZenPlanner misbehaving — Bobby reports and
+stops. A person decides what the parent hears. **Never let Bobby improvise a
+"sorry, you can't come" text.** That's a customer-relationship call.
 
-### Timeout → assume failure
+### Timeout → assume failure, and shout
 
-If no confirmation lands within **10 minutes**, alert Matty and Rod by Telegram
-*and* SMS. The parent has already been told yes; the cost of a missed reservation
-is a kid turning up to a session with no coach allocated — the exact thing the
-2-hour cutoff exists to prevent.
+If no confirmation lands within **10 minutes**, alert on **every channel at
+once** — Telegram to Rod, SMS to Rod and Matty, and email. Do not rely on one.
+
+The parent has already been told yes. The cost of a missed reservation is a kid
+turning up to a session with no coach allocated — the exact thing the 2-hour
+cutoff exists to prevent.
 
 Build the timeout **first**. A handoff without one fails silently, and silent
 failure here is worse than no automation at all.
