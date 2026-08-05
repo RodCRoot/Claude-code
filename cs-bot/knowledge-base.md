@@ -159,14 +159,41 @@ agreement, no questions asked."
 
 **Standard rates (from ZenPlanner):**
 
-| Plan | Term | Price per month |
-|---|---|---|
-| 3x per week | 6 months | $261.99 |
-| 2x per week | month-to-month | $232.99 |
-| 1x per week | month-to-month | $129.00 |
+### What a membership actually buys — sessions per month
 
-- **Contract length:** 3x/week is a **6-month commitment**; 1x and 2x are
-  month-to-month.
+Memberships are sold as "per week," but what a member actually gets is a
+**monthly allotment of sessions**. This matters: it's what make-ups are
+calculated from, and it's why someone can train twice one week and four times
+the next without a problem.
+
+| Membership level | Sessions per month |
+|---|---|
+| 1x per week | **4** |
+| 2x per week | **8** |
+| 3x per week | **12** |
+
+Bot line: "A 3x per week membership is really twelve sessions a month — so if
+life gets busy one week, you're not losing anything, you've still got your
+twelve."
+
+### Rates
+
+| Level | Month-to-month | 6-month | 12-month |
+|---|---|---|---|
+| 3x per week (12/mo) | **CONFIRM** | $261.99 | **CONFIRM** |
+| 2x per week (8/mo) | $232.99 | **CONFIRM** | **CONFIRM** |
+| 1x per week (4/mo) | $129.00 | **CONFIRM** — offered? | **CONFIRM** — offered? |
+
+**⚠️ CONFIRM — needed before the bot quotes anything:** the five blank cells
+above. Longer terms are presumably cheaper per month, and a lead comparing "how
+much to commit for a year" is exactly the conversation you want the bot handling
+well. Right now it can only quote two of the boxes.
+
+Also confirm whether **1x per week** is offered on 6- and 12-month terms at all,
+or is month-to-month only.
+
+- **Contract length:** month-to-month, 6-month, and 12-month commitments are
+  available. Longer commitment = lower monthly rate.
 - **Mid-month starts are pro-rated.** The bot should say "we'll pro-rate your
   first month" and **not attempt the math** — staff handle the exact amount.
 - **Sign-up / registration fee:** none.
@@ -185,13 +212,14 @@ Discount is based on **how many family members hold active memberships**, and
 Condition: everyone counted must actually have a membership. If one drops, the
 discount tier drops for everyone.
 
-**Discounted monthly rates:**
+The discount comes off **whatever rate they're on** — it applies to any level and
+any term. Worked examples on the two rates we have confirmed:
 
-| Plan | List | 2 members (10%) | 3 members (15%) | 4+ members (20%) |
-|---|---|---|---|---|
-| 3x per week | $261.99 | $235.79 | $222.69 | $209.59 |
-| 2x per week | $232.99 | $209.69 | $198.04 | $186.39 |
-| 1x per week | $129.00 | $116.10 | $109.65 | $103.20 |
+| Rate | 2 members (10%) | 3 members (15%) | 4+ members (20%) |
+|---|---|---|---|
+| $261.99 (3x, 6-month) | $235.79 | $222.69 | $209.59 |
+| $232.99 (2x, month-to-month) | $209.69 | $198.04 | $186.39 |
+| $129.00 (1x, month-to-month) | $116.10 | $109.65 | $103.20 |
 
 Bot line: "If you sign up more than one person in the family, everybody gets a
 discount — two members is ten percent off each, three is fifteen, four or more
@@ -306,7 +334,30 @@ asking about **Fitness Together** or a **Linton location**.
   numbers and neither do you. If they try to read one out, stop them and point
   them to the app.
 - **Refund policy:** [details]
-- **Missed session / make-up policy:** [details]
+- **Missed session / make-up policy:** Members can make up sessions they **paid
+  for but didn't use**. Missed time isn't lost — travel, illness, injury, a busy
+  month, it doesn't matter why.
+
+  **The one requirement: an active membership.** Make-ups are only available to
+  current members. They stop being available if the membership ends.
+
+  - Banked sessions are the gap between what they **paid for** and what they
+    **attended**: 4/month at 1x, 8/month at 2x, 12/month at 3x.
+  - **Capped at the last 3 months.** Nobody banks two years of sessions.
+  - **Dropping down doesn't forfeit them.** Someone who goes from 3x to 1x per
+    week keeps the sessions they already paid for and can work through them at
+    the lower rate.
+  - Banked sessions are loaded onto a **punch card** that runs alongside the
+    regular membership.
+
+  **⚠️ BOT RULE:** you may explain the policy, but **never state a number.** You
+  cannot see attendance, so you cannot know how many sessions anyone has banked.
+  Always hand off for the actual count.
+
+  Bot line: "Good news — you don't lose sessions you've paid for. As long as your
+  membership is active we can put your missed sessions on a punch card to work
+  through, going back up to three months. Let me have someone pull your exact
+  count."
 - **Inclement weather / closure policy:** [how members are notified]
 - **Injury / medical:** [what happens, doctor's note policy]
 - **Late / no-show policy:** [details]
@@ -379,6 +430,15 @@ A: Send an email to memberships@teamworkbloomington.com to start the 30-day noti
 
 **Q: What happens when my 6 months is up?**
 A: It doesn't lock you into another six months — it continues month to month at your committed rate until you cancel in writing.
+
+**Q: We were gone/sick last month — do we lose those sessions?**
+A: You don't. As long as your membership is active we can put the sessions you paid for but missed onto a punch card, going back up to three months. Let me have someone pull your exact count.
+
+**Q: How many sessions do I actually get?**
+A: Four a month on 1x per week, eight on 2x, twelve on 3x. So a slow week doesn't cost you anything — you've still got your monthly sessions.
+
+**Q: If I drop down to 1x per week, do I lose my banked sessions?**
+A: Nope — sessions you've already paid for stay yours. You'd keep working through them alongside your new membership.
 
 **Q: Can we pause while my athlete is in season?**
 A: We do have an in-season rate for athletes during their competitive season. It's limited, so let me have someone check what you're eligible for — what sport and when does the season run?
