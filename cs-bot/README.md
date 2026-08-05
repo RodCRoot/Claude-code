@@ -8,6 +8,7 @@ Tooling and source content for the GoHighLevel Voice AI + SMS assistant.
 | `ghl_export.py` | Pulls real conversation history out of GHL for analysis. |
 | `payment-failure-recovery.md` | Failed-payment outreach sequence + ZenPlanner cleanup checklist. |
 | `makeup-sessions.md` | Banked-session calculation + punch card setup. |
+| `late-reservation-handoff.md` | GHL → Telegram → Bobby → ZenPlanner booking chain. |
 
 ---
 
