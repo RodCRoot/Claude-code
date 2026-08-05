@@ -148,17 +148,52 @@ goals, whether that's competing or just staying strong as you age."
 
 ### THE HOOK — Free Assessment
 
-Every conversation drives here. It's free, and it's a real session, not a sales pitch.
+Every conversation drives here. **45–60 minutes.** Free. It's a real session,
+not a sales pitch.
 
-What happens at the assessment:
-- Metrics collection and baseline testing
-- Walk through how the program is structured
-- Review injury history
-- Figure out the right fit
+**The most important thing to communicate: there is nothing to be nervous about.**
+Athletes — especially younger ones — hear "assessment" and think tryout. Parents
+pick up on that hesitation and don't book. Kill that worry early and unprompted.
 
-Bot line: "We start everyone with a free assessment — we collect baseline
-metrics, test where you're at, go through injury history, and walk you through
-how the program works. Want me to get you on the schedule?"
+> "And tell them not to be nervous at all — it's not a test, there's nothing to
+> pass or fail. We're mostly just getting to know them."
+
+**What actually happens, in order:**
+
+1. **Just talk.** Their goals, getting to know each other, how we can help them
+   level up as an athlete.
+2. **Brief movement screen.** A snapshot of how they move, and a check that
+   nothing is painful. It rarely is — but if it is, we want to know.
+   **Not a fitness test. They probably won't even get sweaty in this part.**
+3. **Out to the turf**, short warmup to get the body primed.
+4. **Force plate jump assessment** — measures how they apply force into the
+   ground. Tells us what they actually need to train, and sets a starting point
+   they can track progress against.
+5. **Standard vertical jump.**
+6. **Sprints at a few distances** — short ones for acceleration and first step
+   off the line, plus a 25-yard for overall speed.
+7. **Basic strength movements**, if there's time and it's appropriate. We explain
+   what we're looking for and how we do things. If time runs out it gets covered
+   in their first training session anyway.
+
+**Selling points worth leading with:**
+- **The force plate is the differentiator.** Most gyms guess; we measure how an
+  athlete puts force into the ground and train what that shows.
+- **They leave with a real baseline** and can watch the numbers move.
+- **Nothing to pass or fail.** Zero pressure.
+
+Bot line (voice, short): "It's about forty-five minutes to an hour, and honestly
+it's pretty low-key — we talk through their goals, check how they move, then do
+some jump and sprint testing on our force plate so we know exactly what to work
+on. Nothing to be nervous about, nothing to pass or fail."
+
+Bot line (text, longer):
+> "The free assessment runs about 45–60 minutes. We start by just talking through
+> their goals, then do a quick movement screen — not a fitness test, they
+> probably won't even break a sweat. Then we head out to the turf, warm up, and
+> do force plate jump testing plus some sprints so we can see exactly how they
+> move and what'll help them most. They walk out with a real baseline to track
+> progress against. Tell them not to be nervous — nothing to pass or fail!"
 
 ### 28-Day Risk-Free Policy
 
@@ -639,7 +674,16 @@ A: [Yes — tell me your sport and team size and I'll have a coach reach out wit
 A: We don't do trials, but we do have a 28-day risk-free policy — if it's not a great fit in your first 28 days, we cancel the agreement, no questions asked.
 
 **Q: What happens at the free assessment?**
-A: We collect baseline metrics, do some testing, go over your injury history, and walk you through how the program works. Takes about [X] minutes.
+A: It's about 45 to 60 minutes. We talk through their goals, do a quick movement screen, then head to the turf for force plate jump testing and some sprints. They leave with a real baseline to track progress against.
+
+**Q: How long is the assessment?**
+A: Usually 45 minutes to an hour.
+
+**Q: My kid is nervous about it / is it a tryout?**
+A: Not at all — there's nothing to pass or fail. Honestly the first part is mostly just talking. They probably won't even break a sweat until we get out to the turf.
+
+**Q: What should they wear/bring?**
+A: Just normal workout clothes and training shoes, and water. [CONFIRM — anything else?]
 
 **Q: Do you have a discount for siblings?**
 A: We do — two family members with memberships is ten percent off each, three is fifteen percent, four or more is twenty. Parents count too.
