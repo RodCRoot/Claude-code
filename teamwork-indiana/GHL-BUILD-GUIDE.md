@@ -135,12 +135,14 @@ The workflow behind the ask in Rod's email to Seth (Aug 2026):
 
 ## 4. Memberships & payments
 
-- **Payments → Settings:** connect Stripe.
-- **Products:** create three recurring subscription products:
+- **Decision (2026-08-05): no Stripe / on-site checkout.** Membership purchase
+  stays in **ZenPlanner** — pricing buttons link to the ZenPlanner purchase
+  page, or prospects contact us and we set the membership up on our end
+  (see the zenplanner-add-membership process).
+- Plans shown on the site:
   - Starter — $129/mo (1 session/week)
   - Athlete — $189/mo (2 sessions/week) *(mark "Most Popular")*
   - All-Access — $249/mo (3 sessions/week)
-- Each pricing button → GHL **Order Form** for that product.
 - **30-Day Risk-Free Guarantee** banner sits under the pricing grid — honor it
   in your billing/cancellation flow.
 - Optional: gate a training-plan / progress area behind **Memberships**
@@ -182,7 +184,7 @@ real status.
 Use as a checklist — check items off as they're done in GHL:
 
 - [ ] 1. Brand kit: colors, fonts, logo (§1).
-- [ ] 2. Connect Stripe, create the 3 products (§4).
+- [x] 2. ~~Connect Stripe~~ — decided against on-site checkout; pricing buttons link to ZenPlanner (§4).
 - [ ] 3. Build the "Free Assessment" calendar (§5).
 - [ ] 4. Create the "New Athletes" pipeline (§6).
 - [ ] 5. Build Workflow **A** + **B** first — instant response + missed-call (§3).
@@ -248,6 +250,9 @@ Add a dated line whenever the concept or the GHL build changes.
   sprint & first-step testing, training recommendations. Added 30-Day
   Risk-Free Guarantee under pricing. Trust strip: 1500+ athletes/13 yrs,
   100+ NCAA D1, 300+ collegiate, NSCA-CSCS shield, league wordmark badges.
+- **2026-08-05** — Payments decision: skip Stripe/on-site checkout; membership
+  purchase links to ZenPlanner or is handled internally. SMS/A2P already
+  registered (existing GHL texting) — no new verification needed.
 - **2026-08-04** — Emailed Seth (draft): testimonials → Drive folder, keep
   requesting Google reviews, video→transcript→review workflow (§3G).
 
