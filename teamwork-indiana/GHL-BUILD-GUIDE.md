@@ -56,7 +56,7 @@ Build in **Sites → Funnels/Websites**. Each section below maps to a GHL row/bl
 | "This is Teamwork" community | 2-col image row | Real photos: flags wall + logo wall |
 | "Life at Teamwork" carousel | Image slider fed by **Media Library** | 13 curated photos incl. sprint & box-jump frames; can auto-sync from socials |
 | Membership pricing | **Order forms + Memberships** | See §4 |
-| Coaches | Team card row | Rod (USAW), Erin, Seth (CSCS), Jordan, Lauren |
+| Coaches | Team card row | Seth (Head Coach, NSCA-CSCS, IU), Rod Root (Co-Founder, CSCS/USAW/TPI in progress), Erin Parks (Co-Founder, 13 yrs, 6 AM + Sat), Maddelyn "Madde" Miller (Assistant Coach, CSCS, IU '25). Jordan & Lauren removed. |
 | Success stories (3 reviews) | Testimonial row + link | Pull from **Reputation** reviews; links to Success Stories page |
 | Contact / free assessment | **Form → Workflow → Pipeline** | See §3 |
 | Footer | Global footer | Include social + address |
@@ -84,8 +84,7 @@ Build in **Sites → Funnels/Websites**. Each section below maps to a GHL row/bl
 
 > The FAQ answers double as the knowledge base for the customer-service
 > chat bot (Rod's separate Claude Code project) — when one changes, update
-> the other. Items to confirm with Rod: hold/in-season policy wording,
-> session length, group sizes.
+> the other. Rod walked through and approved every answer on 2026-08-06.
 
 ---
 
@@ -268,6 +267,15 @@ Add a dated line whenever the concept or the GHL build changes.
   registered (existing GHL texting) — no new verification needed.
 - **2026-08-05** — Added FAQ page (5 categories, accordion) doubling as
   chat-bot knowledge base; home footer links to it.
+- **2026-08-06** — Rod's full FAQ walkthrough applied: Hawkin Dynamics
+  force-plate tests (CMJ/SJ/CMRJ parent explanations), age-8 case-by-case,
+  leadership answer, session flow, cadence + back-to-back, coach roster
+  (Seth head coach, Madde added, Jordan/Lauren removed), prorated billing +
+  6/12-month training blocks, cancellation policy
+  (memberships@teamworkbloomington.com, 30 days / 2 weeks M2M, early-cancel
+  fee, auto-rollover), vacation banking, in-season answer, real phone
+  (812) 445-5551 site-wide, landmarks, session schedule, guarantee reworded
+  to 'walk away — no questions'.
 - **2026-08-04** — Emailed Seth (draft): testimonials → Drive folder, keep
   requesting Google reviews, video→transcript→review workflow (§3G).
 
