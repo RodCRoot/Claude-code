@@ -1,0 +1,27 @@
+# Heavy media directories — everything except the .gitkeep placeholder
+courses/*/earth-video/*
+courses/*/keyframes/*
+courses/*/generated/*
+courses/*/approved/*
+courses/*/audio/*
+courses/*/renders/*
+!courses/*/*/.gitkeep
+
+# References: allow small compressed images + notes, block video and raw formats
+courses/*/references/*.mp4
+courses/*/references/*.mov
+courses/*/references/*.avi
+courses/*/references/*.mkv
+courses/*/references/*.tif
+courses/*/references/*.tiff
+courses/*/references/*.exr
+courses/*/references/*.zip
+
+# Remotion
+graphics/remotion/node_modules/
+graphics/remotion/out/
+graphics/remotion/public/*.mp4
+graphics/remotion/public/*.mov
+!graphics/remotion/public/.gitkeep
+
+.DS_Store

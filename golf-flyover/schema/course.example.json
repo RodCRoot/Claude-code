@@ -1,0 +1,81 @@
+{
+  "courseName": "Sample Valley Golf Club",
+  "location": "Bloomington, Indiana",
+  "production": {
+    "fps": 30,
+    "timeOfDay": "mid-morning, sun ~35 degrees, warm-neutral June light",
+    "colorTreatment": "broadcast-natural-v1",
+    "defaultModel": "kling-2.x-pro",
+    "fallbackModel": "seedance-pro"
+  },
+  "holes": [
+    {
+      "holeNumber": 7,
+      "par": 4,
+      "yardage": 412,
+      "teeUsed": "blue",
+      "teeLocation": { "lat": 39.1653, "lng": -86.5264, "elevationFt": 771, "description": "elevated tee, cart path left" },
+      "greenLocation": { "lat": 39.1621, "lng": -86.5241, "elevationFt": 779, "description": "green raised ~8 ft above fairway" },
+      "dogleg": "right",
+      "doglegAtYards": 260,
+      "water": [
+        { "type": "pond", "position": "right of green, wrapping front-right to back-right", "inPlay": true, "carryYards": null }
+      ],
+      "bunkers": [
+        { "position": "outside of dogleg, right of fairway", "side": "right", "distanceFromTee": 240, "guards": "landing" },
+        { "position": "outside of dogleg, right of fairway", "side": "right", "distanceFromTee": 265, "guards": "landing" },
+        { "position": "short-left of green, deep", "side": "left", "distanceFromTee": null, "guards": "green" }
+      ],
+      "trees": "mature hardwood lines both sides; single large oak inside the dogleg corner",
+      "elevation": "gentle rise from landing area to green, ~8 ft",
+      "landingZone": { "distanceFromTee": 245, "description": "230-260 yds, favor left-center away from the bunkers" },
+      "landmarks": ["cart path crosses fairway at 150 yds", "maintenance barn beyond green — keep out of final framing"],
+      "geography": "412-yard par 4, slight dogleg right pivoting at about 260 yards. Exactly two fairway bunkers guard the outside of the turn at 240 and 265 yards, and one deep bunker sits short-left of the green. A single pond hugs the right side of the green from front-right to back-right with a fixed shoreline. Mature hardwood tree lines border both sides of the fairway. The green sits about 8 feet above the fairway and the horizon is flat farmland.",
+      "strategy": "Favor the left side — everything kicks toward the pond.",
+      "voiceover": "Seven bends right around the sand, but it's the water by the green that decides your score.",
+      "camera": {
+        "pattern": "par4-standard",
+        "durationSec": 12,
+        "notes": "turn gently right with the dogleg at ~7s; climb starts at the second bunker; end elevated front-left of green so pond reads clearly"
+      },
+      "prompt": {
+        "model": "kling-2.x-pro",
+        "mode": "first-last-frame",
+        "text": "Cinematic aerial drone flyover of a real par 4 golf hole, 412 yards. The camera starts behind and slightly above the tee box and pushes forward smoothly down the fairway toward the landing area, holding altitude, then follows the fairway as it bends gently to the right, rising gently as the green comes into view, finishing on an elevated view of the entire green complex. The hole has exactly two fairway bunkers on the right side of the landing area and one deep bunker short-left of the green. A single pond borders the right side of the green from front-right to back-right; its shoreline stays fixed. Mature hardwood tree lines border both sides of the fairway. The green sits slightly above the fairway. The horizon is flat farmland. The layout, bunkers, water, tree lines and terrain remain exactly as shown in the source image — nothing added, removed, or moved. Mid-morning summer light, sun about 35 degrees above the horizon, warm-neutral color, soft natural shadows. Realistic Midwest golf course: bluegrass fairways with subtle mow lines, mixed hardwood trees, natural pond water with soft reflections, clear sky with sparse small cumulus clouds. Broadcast-natural color, restrained saturation, photorealistic — indistinguishable from real professional drone footage. Smooth professional drone cinematography: slow acceleration, gentle coordinated turns, subtle elevation changes, natural parallax, perfectly stable level horizon, smooth deceleration at the end.",
+        "negative": "cartoon, videogame, render, CGI look, oversaturated, fantasy landscape, mountains, palm trees, new buildings, extra bunkers, moving terrain, terrain morphing, warping ground, melting textures, FPV racing, fast banking turns, camera shake, whip pan, speed ramp, fisheye, lens flare, sunset, dramatic sky, people, crowds, text, watermark, logo",
+        "seed": null,
+        "settings": { "duration": 10, "motionStrength": "low", "startFrame": "keyframes/hole07_start.png", "endFrame": "keyframes/hole07_green.png" }
+      },
+      "assets": {
+        "sourceAsset": "earth-video/hole07_flyover.mp4",
+        "referenceOverhead": "references/hole07_ortho.jpg",
+        "keyframes": ["keyframes/hole07_start.png", "keyframes/hole07_landing.png", "keyframes/hole07_green.png"],
+        "testClips": ["generated/hole07_test01_kling.mp4"],
+        "generatedAsset": "generated/hole07_final01_kling.mp4",
+        "approvedAsset": "approved/hole07_approved.mp4",
+        "cleanRender": "renders/hole07_clean_4k.mp4",
+        "strategyRender": "renders/hole07_strategy_4k.mp4"
+      },
+      "overlay": {
+        "landingZone": { "x": 0.48, "y": 0.55, "atSec": 3.5, "label": "IDEAL LANDING" },
+        "greenMarker": { "x": 0.52, "y": 0.24, "atSec": 8.5, "label": "GREEN" },
+        "hazards": [
+          { "x": 0.63, "y": 0.5, "atSec": 4.5, "label": "BUNKERS 240/265" },
+          { "x": 0.6, "y": 0.28, "atSec": 9.0, "label": "WATER" }
+        ],
+        "tracer": [
+          { "x": 0.5, "y": 0.88 },
+          { "x": 0.48, "y": 0.55 },
+          { "x": 0.52, "y": 0.24 }
+        ],
+        "strategyText": "Favor the left side."
+      },
+      "qc": {
+        "drift": "pass",
+        "failures": [],
+        "notes": "test01 invented a third fairway bunker -> added 'exactly two' language; final pass clean"
+      },
+      "approved": true
+    }
+  ]
+}

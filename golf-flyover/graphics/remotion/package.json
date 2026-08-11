@@ -1,0 +1,21 @@
+{
+  "name": "golf-flyover-graphics",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio",
+    "render:clean": "remotion render HoleClean169",
+    "render:strategy": "remotion render HoleStrategy169",
+    "render:strategy-mobile": "remotion render HoleStrategy916"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "remotion": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "typescript": "^5.5.0"
+  }
+}

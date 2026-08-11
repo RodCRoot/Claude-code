@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "course.schema.json",
+  "title": "Golf Flyover Course",
+  "type": "object",
+  "required": ["courseName", "location", "holes"],
+  "properties": {
+    "courseName": { "type": "string" },
+    "location": { "type": "string" },
+    "production": {
+      "type": "object",
+      "description": "Course-wide consistency lock; mirrors production.config.json",
+      "properties": {
+        "fps": { "type": "integer", "default": 30 },
+        "timeOfDay": { "type": "string" },
+        "colorTreatment": { "type": "string" },
+        "defaultModel": { "type": "string" },
+        "fallbackModel": { "type": "string" }
+      }
+    },
+    "holes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 18,
+      "items": { "$ref": "#/$defs/hole" }
+    }
+  },
+  "$defs": {
+    "latLng": {
+      "type": "object",
+      "properties": {
+        "lat": { "type": ["number", "null"] },
+        "lng": { "type": ["number", "null"] },
+        "elevationFt": { "type": ["number", "null"] },
+        "description": { "type": "string" }
+      }
+    },
+    "point2d": {
+      "type": "object",
+      "description": "Normalized screen coordinates on the final framing (0-1, origin top-left)",
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1 },
+        "atSec": { "type": ["number", "null"], "description": "When the marker appears" },
+        "label": { "type": "string" }
+      }
+    },
+    "hole": {
+      "type": "object",
+      "required": ["holeNumber", "par", "yardage"],
+      "properties": {
+        "holeNumber": { "type": "integer", "minimum": 1, "maximum": 18 },
+        "par": { "type": "integer", "minimum": 3, "maximum": 6 },
+        "yardage": { "type": ["integer", "null"] },
+        "teeUsed": { "type": "string", "description": "Which tee box the yardage is from" },
+        "teeLocation": { "$ref": "#/$defs/latLng" },
+        "greenLocation": { "$ref": "#/$defs/latLng" },
+        "dogleg": { "type": "string", "enum": ["none", "left", "right", "double"] },
+        "doglegAtYards": { "type": ["integer", "null"] },
+        "water": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string", "enum": ["pond", "lake", "creek", "wetland", "ditch"] },
+              "position": { "type": "string", "description": "e.g. 'right of green, front-right to back-right'" },
+              "inPlay": { "type": "boolean" },
+              "carryYards": { "type": ["integer", "null"] }
+            }
+          }
+        },
+        "bunkers": {
+          "type": "array",
+          "description": "EVERY bunker on the hole — the count is a QC checksum",
+          "items": {
+            "type": "object",
+            "properties": {
+              "position": { "type": "string" },
+              "side": { "type": "string", "enum": ["left", "right", "front", "rear", "center"] },
+              "distanceFromTee": { "type": ["integer", "null"] },
+              "guards": { "type": "string", "enum": ["landing", "green", "layup", "other"] }
+            }
+          }
+        },
+        "trees": { "type": "string", "description": "Tree lines / specimen trees that define the hole" },
+        "elevation": { "type": "string", "description": "e.g. 'green sits 8 ft above fairway'" },
+        "landingZone": {
+          "type": "object",
+          "properties": {
+            "distanceFromTee": { "type": ["integer", "null"] },
+            "description": { "type": "string" }
+          }
+        },
+        "landmarks": { "type": "array", "items": { "type": "string" } },
+        "geography": { "type": "string", "description": "STEP 3: 3-5 sentence terrain description; reused as the prompt preservation clause" },
+        "strategy": { "type": "string" },
+        "voiceover": { "type": "string" },
+        "camera": {
+          "type": "object",
+          "properties": {
+            "pattern": { "type": "string", "enum": ["par4-standard", "par5-twostage", "par3-reveal", "custom"] },
+            "durationSec": { "type": "number", "minimum": 8, "maximum": 15 },
+            "notes": { "type": "string" }
+          }
+        },
+        "prompt": {
+          "type": "object",
+          "description": "Exact reproducible generation recipe (STEP 5/6)",
+          "properties": {
+            "model": { "type": "string" },
+            "mode": { "type": "string", "enum": ["v2v-restyle", "first-last-frame", "single-image", ""] },
+            "text": { "type": "string" },
+            "negative": { "type": "string" },
+            "seed": { "type": ["integer", "null"] },
+            "settings": { "type": "object" }
+          }
+        },
+        "assets": {
+          "type": "object",
+          "properties": {
+            "sourceAsset": { "type": "string", "description": "Primary Earth Studio video or frames zip" },
+            "referenceOverhead": { "type": "string" },
+            "keyframes": { "type": "array", "items": { "type": "string" } },
+            "testClips": { "type": "array", "items": { "type": "string" } },
+            "generatedAsset": { "type": "string", "description": "Current best full-length generation" },
+            "approvedAsset": { "type": "string" },
+            "cleanRender": { "type": "string" },
+            "strategyRender": { "type": "string" }
+          }
+        },
+        "overlay": {
+          "type": "object",
+          "description": "Strategy-version graphics, in normalized coords on the approved clip's final framing",
+          "properties": {
+            "landingZone": { "$ref": "#/$defs/point2d" },
+            "greenMarker": { "$ref": "#/$defs/point2d" },
+            "hazards": { "type": "array", "items": { "$ref": "#/$defs/point2d" } },
+            "tracer": { "type": "array", "items": { "$ref": "#/$defs/point2d" }, "description": "Polyline tee -> landing -> green" },
+            "strategyText": { "type": "string", "description": "One line, max ~8 words" }
+          }
+        },
+        "qc": {
+          "type": "object",
+          "properties": {
+            "drift": { "type": ["string", "null"], "enum": ["pass", "fail", null] },
+            "failures": { "type": "array", "items": { "type": "string" } },
+            "notes": { "type": "string" }
+          }
+        },
+        "approved": { "type": "boolean", "default": false }
+      }
+    }
+  }
+}

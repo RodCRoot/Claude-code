@@ -1,0 +1,28 @@
+{
+  "fps": 30,
+  "outputs": {
+    "master": { "width": 3840, "height": 2160, "label": "16:9 4K master (source quality permitting)" },
+    "hd": { "width": 1920, "height": 1080, "label": "16:9 HD fallback when source can't support 4K" },
+    "mobile": { "width": 1080, "height": 1920, "label": "9:16 vertical" }
+  },
+  "holeDurationSec": { "min": 8, "max": 15, "target": 12 },
+  "look": {
+    "timeOfDay": "mid-morning, sun ~35 degrees, warm-neutral June light",
+    "weather": "clear, sparse fair-weather cumulus",
+    "grade": "broadcast-natural: neutral whites, restrained saturation, gentle filmic curve",
+    "lut": "shared course LUT applied at conform only (never per-hole)"
+  },
+  "transitions": { "betweenHoles": "crossfade", "frames": 12 },
+  "codec": {
+    "master": { "vcodec": "libx264", "crf": 17, "preset": "slow", "pix_fmt": "yuv420p" },
+    "proxy": { "vcodec": "libx264", "crf": 20, "preset": "fast", "height": 720 }
+  },
+  "creditDiscipline": {
+    "testFirst": true,
+    "maxTestGenerationsPerAttempt": 1,
+    "testDurationSec": 5,
+    "testTier": "lowest resolution offered",
+    "finalOnlyAfterQcPass": true,
+    "switchModelAfterConsecutiveFailures": 2
+  }
+}
