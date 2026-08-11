@@ -1,0 +1,1297 @@
+{
+  "courseName": "Victoria National Golf Club",
+  "location": "Newburgh, Indiana",
+  "production": {
+    "fps": 30,
+    "timeOfDay": "mid-morning, sun ~35 degrees, warm-neutral June light",
+    "colorTreatment": "broadcast-natural-v1",
+    "defaultModel": "",
+    "fallbackModel": ""
+  },
+  "holes": [
+    {
+      "holeNumber": 1,
+      "par": 4,
+      "yardage": 388,
+      "teeUsed": "white",
+      "teeLocation": {
+        "lat": 38.002522,
+        "lng": -87.34742,
+        "elevationFt": null,
+        "description": ""
+      },
+      "greenLocation": {
+        "lat": 38.005905,
+        "lng": -87.349157,
+        "elevationFt": null,
+        "description": ""
+      },
+      "dogleg": "none",
+      "doglegAtYards": null,
+      "water": [],
+      "bunkers": [],
+      "trees": "",
+      "elevation": "",
+      "landingZone": {
+        "distanceFromTee": null,
+        "description": ""
+      },
+      "landmarks": [],
+      "geography": "",
+      "strategy": "",
+      "voiceover": "",
+      "camera": {
+        "pattern": "",
+        "durationSec": 12,
+        "notes": ""
+      },
+      "prompt": {
+        "model": "",
+        "mode": "",
+        "text": "",
+        "negative": "",
+        "seed": null,
+        "settings": {}
+      },
+      "assets": {
+        "sourceAsset": "",
+        "referenceOverhead": "",
+        "keyframes": [],
+        "testClips": [],
+        "generatedAsset": "",
+        "approvedAsset": "",
+        "cleanRender": "",
+        "strategyRender": ""
+      },
+      "overlay": {
+        "landingZone": null,
+        "greenMarker": null,
+        "hazards": [],
+        "tracer": [],
+        "strategyText": ""
+      },
+      "qc": {
+        "drift": null,
+        "failures": [],
+        "notes": ""
+      },
+      "approved": false,
+      "handicap": 13
+    },
+    {
+      "holeNumber": 2,
+      "par": 4,
+      "yardage": 323,
+      "teeUsed": "white",
+      "teeLocation": {
+        "lat": 38.006268,
+        "lng": -87.349848,
+        "elevationFt": null,
+        "description": ""
+      },
+      "greenLocation": {
+        "lat": 38.007497,
+        "lng": -87.346306,
+        "elevationFt": null,
+        "description": ""
+      },
+      "dogleg": "none",
+      "doglegAtYards": null,
+      "water": [],
+      "bunkers": [],
+      "trees": "",
+      "elevation": "",
+      "landingZone": {
+        "distanceFromTee": null,
+        "description": ""
+      },
+      "landmarks": [],
+      "geography": "",
+      "strategy": "",
+      "voiceover": "",
+      "camera": {
+        "pattern": "",
+        "durationSec": 12,
+        "notes": ""
+      },
+      "prompt": {
+        "model": "",
+        "mode": "",
+        "text": "",
+        "negative": "",
+        "seed": null,
+        "settings": {}
+      },
+      "assets": {
+        "sourceAsset": "",
+        "referenceOverhead": "",
+        "keyframes": [],
+        "testClips": [],
+        "generatedAsset": "",
+        "approvedAsset": "",
+        "cleanRender": "",
+        "strategyRender": ""
+      },
+      "overlay": {
+        "landingZone": null,
+        "greenMarker": null,
+        "hazards": [],
+        "tracer": [],
+        "strategyText": ""
+      },
+      "qc": {
+        "drift": null,
+        "failures": [],
+        "notes": ""
+      },
+      "approved": false,
+      "handicap": 7
+    },
+    {
+      "holeNumber": 3,
+      "par": 5,
+      "yardage": 508,
+      "teeUsed": "white",
+      "teeLocation": {
+        "lat": 38.007593,
+        "lng": -87.345922,
+        "elevationFt": null,
+        "description": ""
+      },
+      "greenLocation": {
+        "lat": 38.004012,
+        "lng": -87.342155,
+        "elevationFt": null,
+        "description": ""
+      },
+      "dogleg": "none",
+      "doglegAtYards": null,
+      "water": [],
+      "bunkers": [],
+      "trees": "",
+      "elevation": "",
+      "landingZone": {
+        "distanceFromTee": null,
+        "description": ""
+      },
+      "landmarks": [],
+      "geography": "",
+      "strategy": "",
+      "voiceover": "",
+      "camera": {
+        "pattern": "",
+        "durationSec": 12,
+        "notes": ""
+      },
+      "prompt": {
+        "model": "",
+        "mode": "",
+        "text": "",
+        "negative": "",
+        "seed": null,
+        "settings": {}
+      },
+      "assets": {
+        "sourceAsset": "",
+        "referenceOverhead": "",
+        "keyframes": [],
+        "testClips": [],
+        "generatedAsset": "",
+        "approvedAsset": "",
+        "cleanRender": "",
+        "strategyRender": ""
+      },
+      "overlay": {
+        "landingZone": null,
+        "greenMarker": null,
+        "hazards": [],
+        "tracer": [],
+        "strategyText": ""
+      },
+      "qc": {
+        "drift": null,
+        "failures": [],
+        "notes": ""
+      },
+      "approved": false,
+      "handicap": 3
+    },
+    {
+      "holeNumber": 4,
+      "par": 4,
+      "yardage": 311,
+      "teeUsed": "white",
+      "teeLocation": {
+        "lat": 38.003532,
+        "lng": -87.34101,
+        "elevationFt": null,
+        "description": ""
+      },
+      "greenLocation": {
+        "lat": 38.000625,
+        "lng": -87.340811,
+        "elevationFt": null,
+        "description": ""
+      },
+      "dogleg": "none",
+      "doglegAtYards": null,
+      "water": [],
+      "bunkers": [],
+      "trees": "",
+      "elevation": "",
+      "landingZone": {
+        "distanceFromTee": null,
+        "description": ""
+      },
+      "landmarks": [],
+      "geography": "",
+      "strategy": "",
+      "voiceover": "",
+      "camera": {
+        "pattern": "",
+        "durationSec": 12,
+        "notes": ""
+      },
+      "prompt": {
+        "model": "",
+        "mode": "",
+        "text": "",
+        "negative": "",
+        "seed": null,
+        "settings": {}
+      },
+      "assets": {
+        "sourceAsset": "",
+        "referenceOverhead": "",
+        "keyframes": [],
+        "testClips": [],
+        "generatedAsset": "",
+        "approvedAsset": "",
+        "cleanRender": "",
+        "strategyRender": ""
+      },
+      "overlay": {
+        "landingZone": null,
+        "greenMarker": null,
+        "hazards": [],
+        "tracer": [],
+        "strategyText": ""
+      },
+      "qc": {
+        "drift": null,
+        "failures": [],
+        "notes": ""
+      },
+      "approved": false,
+      "handicap": 9
+    },
+    {
+      "holeNumber": 5,
+      "par": 3,
+      "yardage": 170,
+      "teeUsed": "white",
+      "teeLocation": {
+        "lat": 38.000611,
+        "lng": -87.341958,
+        "elevationFt": null,
+        "description": ""
+      },
+      "greenLocation": {
+        "lat": 38.00194,
+        "lng": -87.343393,
+        "elevationFt": null,
+        "description": ""
+      },
+      "dogleg": "none",
+      "doglegAtYards": null,
+      "water": [],
+      "bunkers": [],
+      "trees": "",
+      "elevation": "",
+      "landingZone": {
+        "distanceFromTee": null,
+        "description": ""
+      },
+      "landmarks": [],
+      "geography": "",
+      "strategy": "",
+      "voiceover": "",
+      "camera": {
+        "pattern": "",
+        "durationSec": 12,
+        "notes": ""
+      },
+      "prompt": {
+        "model": "",
+        "mode": "",
+        "text": "",
+        "negative": "",
+        "seed": null,
+        "settings": {}
+      },
+      "assets": {
+        "sourceAsset": "",
+        "referenceOverhead": "",
+        "keyframes": [],
+        "testClips": [],
+        "generatedAsset": "",
+        "approvedAsset": "",
+        "cleanRender": "",
+        "strategyRender": ""
+      },
+      "overlay": {
+        "landingZone": null,
+        "greenMarker": null,
+        "hazards": [],
+        "tracer": [],
+        "strategyText": ""
+      },
+      "qc": {
+        "drift": null,
+        "failures": [],
+        "notes": ""
+      },
+      "approved": false,
+      "handicap": 15
+    },
+    {
+      "holeNumber": 6,
+      "par": 4,
+      "yardage": 427,
+      "teeUsed": "white",
+      "teeLocation": {
+        "lat": 38.002148,
+        "lng": -87.342975,
+        "elevationFt": null,
+        "description": ""
+      },
+      "greenLocation": {
+        "lat": 38.00539,
+        "lng": -87.344782,
+        "elevationFt": null,
+        "description": ""
+      },
+      "dogleg": "none",
+      "doglegAtYards": null,
+      "water": [],
+      "bunkers": [],
+      "trees": "",
+      "elevation": "",
+      "landingZone": {
+        "distanceFromTee": null,
+        "description": ""
+      },
+      "landmarks": [],
+      "geography": "",
+      "strategy": "",
+      "voiceover": "",
+      "camera": {
+        "pattern": "",
+        "durationSec": 12,
+        "notes": ""
+      },
+      "prompt": {
+        "model": "",
+        "mode": "",
+        "text": "",
+        "negative": "",
+        "seed": null,
+        "settings": {}
+      },
+      "assets": {
+        "sourceAsset": "",
+        "referenceOverhead": "",
+        "keyframes": [],
+        "testClips": [],
+        "generatedAsset": "",
+        "approvedAsset": "",
+        "cleanRender": "",
+        "strategyRender": ""
+      },
+      "overlay": {
+        "landingZone": null,
+        "greenMarker": null,
+        "hazards": [],
+        "tracer": [],
+        "strategyText": ""
+      },
+      "qc": {
+        "drift": null,
+        "failures": [],
+        "notes": ""
+      },
+      "approved": false,
+      "handicap": 1
+    },
+    {
+      "holeNumber": 7,
+      "par": 3,
+      "yardage": 152,
+      "teeUsed": "white",
+      "teeLocation": {
+        "lat": 38.005159,
+        "lng": -87.345125,
+        "elevationFt": null,
+        "description": ""
+      },
+      "greenLocation": {
+        "lat": 38.003671,
+        "lng": -87.344781,
+        "elevationFt": null,
+        "description": ""
+      },
+      "dogleg": "none",
+      "doglegAtYards": null,
+      "water": [],
+      "bunkers": [],
+      "trees": "",
+      "elevation": "",
+      "landingZone": {
+        "distanceFromTee": null,
+        "description": ""
+      },
+      "landmarks": [],
+      "geography": "",
+      "strategy": "",
+      "voiceover": "",
+      "camera": {
+        "pattern": "",
+        "durationSec": 12,
+        "notes": ""
+      },
+      "prompt": {
+        "model": "",
+        "mode": "",
+        "text": "",
+        "negative": "",
+        "seed": null,
+        "settings": {}
+      },
+      "assets": {
+        "sourceAsset": "",
+        "referenceOverhead": "",
+        "keyframes": [],
+        "testClips": [],
+        "generatedAsset": "",
+        "approvedAsset": "",
+        "cleanRender": "",
+        "strategyRender": ""
+      },
+      "overlay": {
+        "landingZone": null,
+        "greenMarker": null,
+        "hazards": [],
+        "tracer": [],
+        "strategyText": ""
+      },
+      "qc": {
+        "drift": null,
+        "failures": [],
+        "notes": ""
+      },
+      "approved": false,
+      "handicap": 17
+    },
+    {
+      "holeNumber": 8,
+      "par": 4,
+      "yardage": 391,
+      "teeUsed": "white",
+      "teeLocation": {
+        "lat": 38.003047,
+        "lng": -87.345455,
+        "elevationFt": null,
+        "description": ""
+      },
+      "greenLocation": {
+        "lat": 38.006483,
+        "lng": -87.346415,
+        "elevationFt": null,
+        "description": ""
+      },
+      "dogleg": "none",
+      "doglegAtYards": null,
+      "water": [],
+      "bunkers": [],
+      "trees": "",
+      "elevation": "",
+      "landingZone": {
+        "distanceFromTee": null,
+        "description": ""
+      },
+      "landmarks": [],
+      "geography": "",
+      "strategy": "",
+      "voiceover": "",
+      "camera": {
+        "pattern": "",
+        "durationSec": 12,
+        "notes": ""
+      },
+      "prompt": {
+        "model": "",
+        "mode": "",
+        "text": "",
+        "negative": "",
+        "seed": null,
+        "settings": {}
+      },
+      "assets": {
+        "sourceAsset": "",
+        "referenceOverhead": "",
+        "keyframes": [],
+        "testClips": [],
+        "generatedAsset": "",
+        "approvedAsset": "",
+        "cleanRender": "",
+        "strategyRender": ""
+      },
+      "overlay": {
+        "landingZone": null,
+        "greenMarker": null,
+        "hazards": [],
+        "tracer": [],
+        "strategyText": ""
+      },
+      "qc": {
+        "drift": null,
+        "failures": [],
+        "notes": ""
+      },
+      "approved": false,
+      "handicap": 11
+    },
+    {
+      "holeNumber": 9,
+      "par": 5,
+      "yardage": 508,
+      "teeUsed": "white",
+      "teeLocation": {
+        "lat": 38.005921,
+        "lng": -87.347753,
+        "elevationFt": null,
+        "description": ""
+      },
+      "greenLocation": {
+        "lat": 38.001641,
+        "lng": -87.345747,
+        "elevationFt": null,
+        "description": ""
+      },
+      "dogleg": "none",
+      "doglegAtYards": null,
+      "water": [],
+      "bunkers": [],
+      "trees": "",
+      "elevation": "",
+      "landingZone": {
+        "distanceFromTee": null,
+        "description": ""
+      },
+      "landmarks": [],
+      "geography": "",
+      "strategy": "",
+      "voiceover": "",
+      "camera": {
+        "pattern": "",
+        "durationSec": 12,
+        "notes": ""
+      },
+      "prompt": {
+        "model": "",
+        "mode": "",
+        "text": "",
+        "negative": "",
+        "seed": null,
+        "settings": {}
+      },
+      "assets": {
+        "sourceAsset": "",
+        "referenceOverhead": "",
+        "keyframes": [],
+        "testClips": [],
+        "generatedAsset": "",
+        "approvedAsset": "",
+        "cleanRender": "",
+        "strategyRender": ""
+      },
+      "overlay": {
+        "landingZone": null,
+        "greenMarker": null,
+        "hazards": [],
+        "tracer": [],
+        "strategyText": ""
+      },
+      "qc": {
+        "drift": null,
+        "failures": [],
+        "notes": ""
+      },
+      "approved": false,
+      "handicap": 5
+    },
+    {
+      "holeNumber": 10,
+      "par": 5,
+      "yardage": 506,
+      "teeUsed": "white",
+      "teeLocation": {
+        "lat": 38.00019,
+        "lng": -87.347215,
+        "elevationFt": null,
+        "description": ""
+      },
+      "greenLocation": {
+        "lat": 37.998079,
+        "lng": -87.342342,
+        "elevationFt": null,
+        "description": ""
+      },
+      "dogleg": "none",
+      "doglegAtYards": null,
+      "water": [],
+      "bunkers": [],
+      "trees": "",
+      "elevation": "",
+      "landingZone": {
+        "distanceFromTee": null,
+        "description": ""
+      },
+      "landmarks": [],
+      "geography": "",
+      "strategy": "",
+      "voiceover": "",
+      "camera": {
+        "pattern": "",
+        "durationSec": 12,
+        "notes": ""
+      },
+      "prompt": {
+        "model": "",
+        "mode": "",
+        "text": "",
+        "negative": "",
+        "seed": null,
+        "settings": {}
+      },
+      "assets": {
+        "sourceAsset": "",
+        "referenceOverhead": "",
+        "keyframes": [],
+        "testClips": [],
+        "generatedAsset": "",
+        "approvedAsset": "",
+        "cleanRender": "",
+        "strategyRender": ""
+      },
+      "overlay": {
+        "landingZone": null,
+        "greenMarker": null,
+        "hazards": [],
+        "tracer": [],
+        "strategyText": ""
+      },
+      "qc": {
+        "drift": null,
+        "failures": [],
+        "notes": ""
+      },
+      "approved": false,
+      "handicap": 12
+    },
+    {
+      "holeNumber": 11,
+      "par": 3,
+      "yardage": 176,
+      "teeUsed": "white",
+      "teeLocation": {
+        "lat": 37.998458,
+        "lng": -87.342074,
+        "elevationFt": null,
+        "description": ""
+      },
+      "greenLocation": {
+        "lat": 37.998469,
+        "lng": -87.339613,
+        "elevationFt": null,
+        "description": ""
+      },
+      "dogleg": "none",
+      "doglegAtYards": null,
+      "water": [],
+      "bunkers": [],
+      "trees": "",
+      "elevation": "",
+      "landingZone": {
+        "distanceFromTee": null,
+        "description": ""
+      },
+      "landmarks": [],
+      "geography": "",
+      "strategy": "",
+      "voiceover": "",
+      "camera": {
+        "pattern": "",
+        "durationSec": 12,
+        "notes": ""
+      },
+      "prompt": {
+        "model": "",
+        "mode": "",
+        "text": "",
+        "negative": "",
+        "seed": null,
+        "settings": {}
+      },
+      "assets": {
+        "sourceAsset": "",
+        "referenceOverhead": "",
+        "keyframes": [],
+        "testClips": [],
+        "generatedAsset": "",
+        "approvedAsset": "",
+        "cleanRender": "",
+        "strategyRender": ""
+      },
+      "overlay": {
+        "landingZone": null,
+        "greenMarker": null,
+        "hazards": [],
+        "tracer": [],
+        "strategyText": ""
+      },
+      "qc": {
+        "drift": null,
+        "failures": [],
+        "notes": ""
+      },
+      "approved": false,
+      "handicap": 14
+    },
+    {
+      "holeNumber": 12,
+      "par": 4,
+      "yardage": 317,
+      "teeUsed": "white",
+      "teeLocation": {
+        "lat": 37.997996,
+        "lng": -87.339851,
+        "elevationFt": null,
+        "description": ""
+      },
+      "greenLocation": {
+        "lat": 37.99851,
+        "lng": -87.336329,
+        "elevationFt": null,
+        "description": ""
+      },
+      "dogleg": "none",
+      "doglegAtYards": null,
+      "water": [],
+      "bunkers": [],
+      "trees": "",
+      "elevation": "",
+      "landingZone": {
+        "distanceFromTee": null,
+        "description": ""
+      },
+      "landmarks": [],
+      "geography": "",
+      "strategy": "",
+      "voiceover": "",
+      "camera": {
+        "pattern": "",
+        "durationSec": 12,
+        "notes": ""
+      },
+      "prompt": {
+        "model": "",
+        "mode": "",
+        "text": "",
+        "negative": "",
+        "seed": null,
+        "settings": {}
+      },
+      "assets": {
+        "sourceAsset": "",
+        "referenceOverhead": "",
+        "keyframes": [],
+        "testClips": [],
+        "generatedAsset": "",
+        "approvedAsset": "",
+        "cleanRender": "",
+        "strategyRender": ""
+      },
+      "overlay": {
+        "landingZone": null,
+        "greenMarker": null,
+        "hazards": [],
+        "tracer": [],
+        "strategyText": ""
+      },
+      "qc": {
+        "drift": null,
+        "failures": [],
+        "notes": ""
+      },
+      "approved": false,
+      "handicap": 16
+    },
+    {
+      "holeNumber": 13,
+      "par": 4,
+      "yardage": 345,
+      "teeUsed": "white",
+      "teeLocation": {
+        "lat": 37.999653,
+        "lng": -87.336392,
+        "elevationFt": null,
+        "description": ""
+      },
+      "greenLocation": {
+        "lat": 37.998586,
+        "lng": -87.332518,
+        "elevationFt": null,
+        "description": ""
+      },
+      "dogleg": "none",
+      "doglegAtYards": null,
+      "water": [],
+      "bunkers": [],
+      "trees": "",
+      "elevation": "",
+      "landingZone": {
+        "distanceFromTee": null,
+        "description": ""
+      },
+      "landmarks": [],
+      "geography": "",
+      "strategy": "",
+      "voiceover": "",
+      "camera": {
+        "pattern": "",
+        "durationSec": 12,
+        "notes": ""
+      },
+      "prompt": {
+        "model": "",
+        "mode": "",
+        "text": "",
+        "negative": "",
+        "seed": null,
+        "settings": {}
+      },
+      "assets": {
+        "sourceAsset": "",
+        "referenceOverhead": "",
+        "keyframes": [],
+        "testClips": [],
+        "generatedAsset": "",
+        "approvedAsset": "",
+        "cleanRender": "",
+        "strategyRender": ""
+      },
+      "overlay": {
+        "landingZone": null,
+        "greenMarker": null,
+        "hazards": [],
+        "tracer": [],
+        "strategyText": ""
+      },
+      "qc": {
+        "drift": null,
+        "failures": [],
+        "notes": ""
+      },
+      "approved": false,
+      "handicap": 18
+    },
+    {
+      "holeNumber": 14,
+      "par": 4,
+      "yardage": 406,
+      "teeUsed": "white",
+      "teeLocation": {
+        "lat": 37.998257,
+        "lng": -87.331796,
+        "elevationFt": null,
+        "description": ""
+      },
+      "greenLocation": {
+        "lat": 38.002089,
+        "lng": -87.332175,
+        "elevationFt": null,
+        "description": ""
+      },
+      "dogleg": "none",
+      "doglegAtYards": null,
+      "water": [],
+      "bunkers": [],
+      "trees": "",
+      "elevation": "",
+      "landingZone": {
+        "distanceFromTee": null,
+        "description": ""
+      },
+      "landmarks": [],
+      "geography": "",
+      "strategy": "",
+      "voiceover": "",
+      "camera": {
+        "pattern": "",
+        "durationSec": 12,
+        "notes": ""
+      },
+      "prompt": {
+        "model": "",
+        "mode": "",
+        "text": "",
+        "negative": "",
+        "seed": null,
+        "settings": {}
+      },
+      "assets": {
+        "sourceAsset": "",
+        "referenceOverhead": "",
+        "keyframes": [],
+        "testClips": [],
+        "generatedAsset": "",
+        "approvedAsset": "",
+        "cleanRender": "",
+        "strategyRender": ""
+      },
+      "overlay": {
+        "landingZone": null,
+        "greenMarker": null,
+        "hazards": [],
+        "tracer": [],
+        "strategyText": ""
+      },
+      "qc": {
+        "drift": null,
+        "failures": [],
+        "notes": ""
+      },
+      "approved": false,
+      "handicap": 2
+    },
+    {
+      "holeNumber": 15,
+      "par": 5,
+      "yardage": 530,
+      "teeUsed": "white",
+      "teeLocation": {
+        "lat": 38.002782,
+        "lng": -87.332296,
+        "elevationFt": null,
+        "description": ""
+      },
+      "greenLocation": {
+        "lat": 38.001896,
+        "lng": -87.337633,
+        "elevationFt": null,
+        "description": ""
+      },
+      "dogleg": "none",
+      "doglegAtYards": null,
+      "water": [],
+      "bunkers": [],
+      "trees": "",
+      "elevation": "",
+      "landingZone": {
+        "distanceFromTee": null,
+        "description": ""
+      },
+      "landmarks": [],
+      "geography": "",
+      "strategy": "",
+      "voiceover": "",
+      "camera": {
+        "pattern": "",
+        "durationSec": 12,
+        "notes": ""
+      },
+      "prompt": {
+        "model": "",
+        "mode": "",
+        "text": "",
+        "negative": "",
+        "seed": null,
+        "settings": {}
+      },
+      "assets": {
+        "sourceAsset": "",
+        "referenceOverhead": "",
+        "keyframes": [],
+        "testClips": [],
+        "generatedAsset": "",
+        "approvedAsset": "",
+        "cleanRender": "",
+        "strategyRender": ""
+      },
+      "overlay": {
+        "landingZone": null,
+        "greenMarker": null,
+        "hazards": [],
+        "tracer": [],
+        "strategyText": ""
+      },
+      "qc": {
+        "drift": null,
+        "failures": [],
+        "notes": ""
+      },
+      "approved": false,
+      "handicap": 8
+    },
+    {
+      "holeNumber": 16,
+      "par": 3,
+      "yardage": 161,
+      "teeUsed": "white",
+      "teeLocation": {
+        "lat": 38.001361,
+        "lng": -87.338224,
+        "elevationFt": null,
+        "description": ""
+      },
+      "greenLocation": {
+        "lat": 38.001053,
+        "lng": -87.336106,
+        "elevationFt": null,
+        "description": ""
+      },
+      "dogleg": "none",
+      "doglegAtYards": null,
+      "water": [],
+      "bunkers": [],
+      "trees": "",
+      "elevation": "",
+      "landingZone": {
+        "distanceFromTee": null,
+        "description": ""
+      },
+      "landmarks": [],
+      "geography": "",
+      "strategy": "",
+      "voiceover": "",
+      "camera": {
+        "pattern": "",
+        "durationSec": 12,
+        "notes": ""
+      },
+      "prompt": {
+        "model": "",
+        "mode": "",
+        "text": "",
+        "negative": "",
+        "seed": null,
+        "settings": {}
+      },
+      "assets": {
+        "sourceAsset": "",
+        "referenceOverhead": "",
+        "keyframes": [],
+        "testClips": [],
+        "generatedAsset": "",
+        "approvedAsset": "",
+        "cleanRender": "",
+        "strategyRender": ""
+      },
+      "overlay": {
+        "landingZone": null,
+        "greenMarker": null,
+        "hazards": [],
+        "tracer": [],
+        "strategyText": ""
+      },
+      "qc": {
+        "drift": null,
+        "failures": [],
+        "notes": ""
+      },
+      "approved": false,
+      "handicap": 10
+    },
+    {
+      "holeNumber": 17,
+      "par": 4,
+      "yardage": 395,
+      "teeUsed": "white",
+      "teeLocation": {
+        "lat": 38.000792,
+        "lng": -87.337043,
+        "elevationFt": null,
+        "description": ""
+      },
+      "greenLocation": {
+        "lat": 37.999824,
+        "lng": -87.341167,
+        "elevationFt": null,
+        "description": ""
+      },
+      "dogleg": "none",
+      "doglegAtYards": null,
+      "water": [],
+      "bunkers": [],
+      "trees": "",
+      "elevation": "",
+      "landingZone": {
+        "distanceFromTee": null,
+        "description": ""
+      },
+      "landmarks": [],
+      "geography": "",
+      "strategy": "",
+      "voiceover": "",
+      "camera": {
+        "pattern": "",
+        "durationSec": 12,
+        "notes": ""
+      },
+      "prompt": {
+        "model": "",
+        "mode": "",
+        "text": "",
+        "negative": "",
+        "seed": null,
+        "settings": {}
+      },
+      "assets": {
+        "sourceAsset": "",
+        "referenceOverhead": "",
+        "keyframes": [],
+        "testClips": [],
+        "generatedAsset": "",
+        "approvedAsset": "",
+        "cleanRender": "",
+        "strategyRender": ""
+      },
+      "overlay": {
+        "landingZone": null,
+        "greenMarker": null,
+        "hazards": [],
+        "tracer": [],
+        "strategyText": ""
+      },
+      "qc": {
+        "drift": null,
+        "failures": [],
+        "notes": ""
+      },
+      "approved": false,
+      "handicap": 4
+    },
+    {
+      "holeNumber": 18,
+      "par": 4,
+      "yardage": 390,
+      "teeUsed": "white",
+      "teeLocation": {
+        "lat": 37.999062,
+        "lng": -87.341785,
+        "elevationFt": null,
+        "description": ""
+      },
+      "greenLocation": {
+        "lat": 38.000638,
+        "lng": -87.345144,
+        "elevationFt": null,
+        "description": ""
+      },
+      "dogleg": "right",
+      "doglegAtYards": 260,
+      "water": [
+        {
+          "type": "lake",
+          "position": "Lake Victoria along the entire right side from ~120 yds through the green; green sits on its shore",
+          "inPlay": true,
+          "carryYards": null
+        },
+        {
+          "type": "wetland",
+          "position": "lateral hazard tight to the left edge of the fairway, ~100-160 yds from the tee",
+          "inPlay": true,
+          "carryYards": null
+        }
+      ],
+      "bunkers": [
+        {
+          "position": "outside of dogleg, left of fairway (cluster of 3)",
+          "side": "left",
+          "distanceFromTee": 259,
+          "guards": "landing"
+        },
+        {
+          "position": "outside of dogleg, left of fairway (cluster of 3)",
+          "side": "left",
+          "distanceFromTee": 262,
+          "guards": "landing"
+        },
+        {
+          "position": "outside of dogleg, left of fairway (cluster of 3)",
+          "side": "left",
+          "distanceFromTee": 275,
+          "guards": "landing"
+        },
+        {
+          "position": "short-left of green",
+          "side": "left",
+          "distanceFromTee": null,
+          "guards": "green"
+        }
+      ],
+      "trees": "scattered mature hardwoods left of the fairway; wooded band behind the tee",
+      "elevation": "tee ~25 ft above fairway (410 ft vs 385 ft); green near fairway level (388 ft) at the lakeshore",
+      "landingZone": {
+        "distanceFromTee": 240,
+        "description": "225-255 yds, center-left, short of the bunker cluster; anything right feeds the lake"
+      },
+      "landmarks": [
+        "clubhouse complex immediately left/behind the green - must be preserved exactly",
+        "cart path along the left side",
+        "additional sand visible right of the green toward the lake - verify against Earth Studio source at QC"
+      ],
+      "geography": "390-yard par 4 finishing hole bending gently right around a large lake. From a tee elevated about 25 feet above the fairway, the fairway curves as a crescent hugging the south shore of Lake Victoria - open water tight to the right side from roughly 120 yards all the way to the green, and a marshy hazard pinching the left edge of the fairway early. A cluster of three bunkers sits left of the fairway at 260-275 yards on the outside of the turn, with one more bunker short-left of the green. The green sits at the water's edge with the clubhouse complex just beyond it to the left. Scattered mature hardwoods line the left side; the horizon is gently rolling wooded terrain with no mountains.",
+      "strategy": "Favor the left bunker line - the lake eats everything right.",
+      "voiceover": "The Gauntlet saves its best for last. Eighteen bends around Lake Victoria - pick your line off the tee, then hold your breath over the water to a green in the clubhouse\u2019s shadow.",
+      "camera": {
+        "pattern": "par4-standard",
+        "durationSec": 13,
+        "notes": "Open behind/above elevated tee heading ~277deg WNW; push down the fairway with the lake right; ease into subtle climb over landing zone at ~4.5s; turn gently right with the dogleg at ~8.5s heading ~315-335deg; finish 45m AGL short-right of green, near stationary, green + clubhouse in frame. Keyframes (lat,lng,AGL): KF1 0s (37.99897,-87.34089,35m) | KF2 4.5s (37.99931,-87.34432,25m) | KF3 8.5s (38.00000,-87.34480,30m) | KF4 13s (38.00045,-87.34495,45m)"
+      },
+      "prompt": {
+        "model": "",
+        "mode": "first-last-frame",
+        "text": "Cinematic aerial drone flyover of a real par 4 golf hole, 390 yards, the finishing hole. The camera starts behind and slightly above the elevated tee box and pushes forward smoothly down the fairway toward the landing area, descending gently, then follows the fairway as it bends gently to the right around the lake, rising as the green comes into view, finishing on an elevated view of the entire green complex beside the water with the clubhouse beyond. 390-yard par 4 finishing hole bending gently right around a large lake. From a tee elevated about 25 feet above the fairway, the fairway curves as a crescent hugging the south shore of Lake Victoria - open water tight to the right side from roughly 120 yards all the way to the green, and a marshy hazard pinching the left edge of the fairway early. A cluster of three bunkers sits left of the fairway at 260-275 yards on the outside of the turn, with one more bunker short-left of the green. The green sits at the water's edge with the clubhouse complex just beyond it to the left. Scattered mature hardwoods line the left side; the horizon is gently rolling wooded terrain with no mountains. The layout, bunkers, water, shoreline, tree lines, clubhouse and terrain remain exactly as shown in the source image - nothing added, removed, or moved. Mid-morning summer light, sun about 35 degrees above the horizon, warm-neutral color, soft natural shadows. Realistic Midwest golf course: bluegrass fairways with subtle mow lines, mixed hardwood trees, natural lake water with soft reflections, clear sky with sparse small cumulus clouds. Broadcast-natural color, restrained saturation, photorealistic - indistinguishable from real professional drone footage. Smooth professional drone cinematography: slow acceleration, gentle coordinated turns, subtle elevation changes, natural parallax, perfectly stable level horizon, smooth deceleration at the end. Constant gentle forward glide - no sudden movements.",
+        "negative": "cartoon, videogame, render, CGI look, oversaturated, fantasy landscape, mountains, palm trees, new buildings, extra bunkers, moving terrain, terrain morphing, warping ground, melting textures, FPV racing, fast banking turns, camera shake, whip pan, speed ramp, fisheye, lens flare, sunset, dramatic sky, people, crowds, text, watermark, logo",
+        "seed": null,
+        "settings": {}
+      },
+      "assets": {
+        "sourceAsset": "",
+        "referenceOverhead": "references/hole18_ortho.jpg",
+        "keyframes": [],
+        "testClips": [],
+        "generatedAsset": "",
+        "approvedAsset": "",
+        "cleanRender": "",
+        "strategyRender": ""
+      },
+      "overlay": {
+        "landingZone": null,
+        "greenMarker": null,
+        "hazards": [],
+        "tracer": [],
+        "strategyText": ""
+      },
+      "qc": {
+        "drift": null,
+        "failures": [],
+        "notes": ""
+      },
+      "approved": false,
+      "handicap": 6
+    }
+  ]
+}
