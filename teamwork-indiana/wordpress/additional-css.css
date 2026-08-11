@@ -1,0 +1,73 @@
+/* Teamwork Indiana — paste into Appearance → Customize → Additional CSS
+   (Premium plan feature). Brand tokens from the logo. */
+
+:root {
+  --tw-blue: #004CBA;
+  --tw-blue-bright: #2E7BFF;
+  --tw-green: #009245;
+  --tw-red: #C1272D;
+  --tw-purple: #662D91;
+  --tw-yellow: #FFE000;
+  --tw-navy: #0C1A31;
+  --tw-navy-deep: #08101F;
+}
+
+/* headline treatment */
+.wp-block-heading.tw-display,
+h1.tw-display, h2.tw-display {
+  text-transform: uppercase;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.02;
+}
+
+/* buttons */
+.wp-block-button.tw-btn .wp-block-button__link {
+  background: var(--tw-blue);
+  color: #fff;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  border-radius: 6px;
+  box-shadow: 0 10px 24px -10px rgba(0, 76, 186, 0.8);
+}
+.wp-block-button.tw-btn .wp-block-button__link:hover { background: #0057d6; }
+
+/* the five brand dots divider */
+.tw-dots { letter-spacing: 6px; font-size: 14px; }
+
+/* stat numbers */
+.tw-stat-n { font-size: 2.4rem; font-weight: 800; color: var(--tw-blue-bright); line-height: 1; }
+.tw-stat-l { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.14em; opacity: 0.75; }
+
+/* league chips */
+.tw-league {
+  display: inline-block;
+  font-weight: 800;
+  font-style: italic;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 8px 16px;
+  margin: 4px;
+}
+
+/* card polish on group blocks tagged tw-card */
+.tw-card {
+  border: 1px solid rgba(12, 26, 49, 0.12);
+  border-radius: 14px;
+  box-shadow: 0 18px 40px -22px rgba(8, 16, 31, 0.35);
+}
+
+/* guarantee banner */
+.tw-guarantee { border-left: 5px solid var(--tw-green); border-radius: 12px; }
+
+/* FAQ details styling */
+.tw-faq details {
+  background: #fff;
+  border: 1px solid rgba(12, 26, 49, 0.12);
+  border-radius: 12px;
+  margin-bottom: 12px;
+  padding: 4px 16px;
+}
+.tw-faq summary { font-weight: 700; padding: 12px 0; cursor: pointer; }
