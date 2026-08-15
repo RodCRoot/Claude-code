@@ -29,6 +29,12 @@ your terminal (password `teamwork1`).
 
 ### Also in this repository
 
+- **Space Candy ops dashboard** — a stand-alone, single-file command center
+  for the Space Candy / Shakedown Sweets freeze-dried candy business: PO
+  tracking, the Ron Jon ship-compliance checklist, shipping routing, product
+  catalog, and supply-chain contacts. Open
+  [`space-candy/index.html`](space-candy/index.html) in a browser; details in
+  [`space-candy/README.md`](space-candy/README.md).
 - **Line Coach** — a small stand-alone website for actors memorising lines
   (`index.html`, `app.js`, `styles.css`, `LineCoach.html`). Its instructions
   moved to [`LINECOACH.md`](LINECOACH.md). It is unrelated to the scoreboard.

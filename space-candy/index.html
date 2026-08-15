@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Space Candy — Ops Dashboard</title>
+<!--
+  Space Candy operations dashboard (Shakedown Sweets CO LLC).
+  Seed data comes from the June–August 2026 email threads with Ron Jon Surf
+  Shop (PO 180963), Arctic Farms (fulfillment), and International Freeze Dry
+  (spec sheets). Everything is editable in the page and persists in this
+  browser's localStorage — nothing leaves the machine.
+-->
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --border: rgba(11, 11, 11, 0.10);
+    --series-1: #2a78d6;
+    --meter-track: #cde2fb;
+    --good: #0ca30c;
+    --good-text: #006300;
+    --warning: #fab219;
+    --critical: #d03b3b;
+    --tooltip-bg: #0b0b0b;
+    --tooltip-ink: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #ffffff;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --border: rgba(255, 255, 255, 0.10);
+      --series-1: #3987e5;
+      --meter-track: #104281;
+      --good-text: #0ca30c;
+      --tooltip-bg: #fcfcfb;
+      --tooltip-ink: #0b0b0b;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --series-1: #3987e5;
+    --meter-track: #104281;
+    --good-text: #0ca30c;
+    --tooltip-bg: #fcfcfb;
+    --tooltip-ink: #0b0b0b;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 64px; }
+
+  header.site { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+  header.site h1 { font-size: 22px; font-weight: 650; margin: 0 0 2px; letter-spacing: -0.01em; }
+  header.site .sub { color: var(--ink-2); font-size: 13px; margin: 0; }
+  .theme-btn {
+    flex: none; border: 1px solid var(--border); background: var(--surface); color: var(--ink-2);
+    border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 12.5px; cursor: pointer;
+  }
+  .theme-btn:hover { color: var(--ink); }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .tile {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px 12px;
+  }
+  .tile .label { color: var(--ink-2); font-size: 12.5px; margin-bottom: 4px; }
+  .tile .value { font-size: 28px; font-weight: 600; line-height: 1.1; }
+  .tile .note { color: var(--muted); font-size: 12px; margin-top: 4px; }
+
+  .grid { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; align-items: start; }
+  .grid > * { min-width: 0; }
+  .col { display: flex; flex-direction: column; gap: 16px; }
+  .col > section.card { margin-bottom: 0; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+
+  section.card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px 18px; margin-bottom: 16px;
+  }
+  section.card > h2 { font-size: 15px; font-weight: 650; margin: 0 0 2px; }
+  section.card > p.sub { color: var(--muted); font-size: 12.5px; margin: 0 0 12px; }
+
+  /* tables */
+  .tbl-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  td { padding: 7px 10px 7px 0; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  td.num { font-variant-numeric: tabular-nums; }
+
+  input[type="text"], input[type="number"], select {
+    font: inherit; font-size: 13px; color: var(--ink);
+    background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 4px 6px;
+    max-width: 100%;
+  }
+  input[type="text"]:hover, input[type="number"]:hover, select:hover { border-color: var(--border); }
+  input[type="text"]:focus, input[type="number"]:focus, select:focus { border-color: var(--series-1); outline: none; background: var(--page); }
+  input[type="number"] { width: 76px; }
+  input.wide { width: 100%; min-width: 160px; }
+  input.code { width: 130px; font-variant-numeric: tabular-nums; }
+  select { cursor: pointer; }
+
+  button.ghost {
+    font: inherit; font-size: 12.5px; color: var(--ink-2); background: transparent;
+    border: 1px solid var(--border); border-radius: 8px; padding: 5px 12px; cursor: pointer;
+  }
+  button.ghost:hover { color: var(--ink); background: var(--page); }
+  button.del {
+    font: inherit; color: var(--muted); background: none; border: none; cursor: pointer;
+    font-size: 15px; line-height: 1; padding: 4px 6px; border-radius: 6px;
+  }
+  button.del:hover { color: var(--critical); background: var(--page); }
+
+  /* chart */
+  .chart-box { position: relative; }
+  .chart-box svg { display: block; width: 100%; height: auto; }
+  .bar { fill: var(--series-1); }
+  .bar-hit { fill: transparent; cursor: default; outline: none; }
+  .bar-hit:hover + .bar, .bar-hit:focus-visible + .bar { opacity: 0.82; }
+  .bar-hit:focus-visible { stroke: var(--series-1); stroke-width: 1.5; }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  .axisline { stroke: var(--axis); stroke-width: 1; }
+  .cat-label { fill: var(--ink-2); font-size: 12px; }
+  .val-label { fill: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .tick-label { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .tooltip {
+    position: absolute; pointer-events: none; z-index: 10; display: none;
+    background: var(--tooltip-bg); color: var(--tooltip-ink);
+    border-radius: 8px; padding: 7px 10px; font-size: 12px; line-height: 1.4;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.25); max-width: 220px;
+  }
+  .tooltip .tt-value { font-weight: 650; font-size: 13px; }
+  .tooltip .tt-label { opacity: 0.75; }
+  .empty-note { color: var(--muted); font-size: 13px; padding: 18px 0 6px; }
+
+  /* checklist + meter */
+  .meter { height: 8px; border-radius: 4px; background: var(--meter-track); overflow: hidden; margin: 10px 0 14px; }
+  .meter > div { height: 100%; background: var(--series-1); border-radius: 4px; transition: width 0.2s; }
+  ul.checks { list-style: none; margin: 0; padding: 0; }
+  ul.checks li { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid var(--grid); }
+  ul.checks li:last-child { border-bottom: none; }
+  ul.checks input[type="checkbox"] { margin-top: 3px; accent-color: var(--series-1); width: 15px; height: 15px; flex: none; cursor: pointer; }
+  ul.checks label { cursor: pointer; }
+  ul.checks li.done label { color: var(--muted); text-decoration: line-through; }
+
+  .callout {
+    display: flex; gap: 10px; align-items: flex-start;
+    border: 1px solid var(--border); border-left: 3px solid var(--warning);
+    border-radius: 8px; padding: 10px 12px; margin: 12px 0 0; font-size: 13px; color: var(--ink-2);
+  }
+  .callout .ico { flex: none; }
+  .callout strong { color: var(--ink); }
+
+  /* shipping helper */
+  .ship-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 10px; }
+  .ship-form .field label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 3px; }
+  .ship-form input { border-color: var(--border); background: var(--page); }
+  .verdict {
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px; color: var(--ink-2);
+  }
+  .verdict strong { color: var(--ink); }
+  .verdict.on { border-left: 3px solid var(--series-1); }
+
+  /* contacts */
+  .contact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+  .org { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .org h3 { margin: 0 0 2px; font-size: 13.5px; font-weight: 650; }
+  .org .role-note { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
+  .org ul { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
+  .org li { padding: 3px 0; color: var(--ink-2); }
+  .org li .nm { color: var(--ink); font-weight: 550; }
+  .org a { color: var(--series-1); text-decoration: none; }
+  .org a:hover { text-decoration: underline; }
+  .addr { margin-top: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; font-size: 12.5px; color: var(--ink-2); }
+  .addr .a h4 { margin: 0 0 2px; font-size: 12px; color: var(--muted); font-weight: 500; }
+
+  /* actions */
+  .add-row { display: flex; gap: 8px; margin-top: 12px; }
+  .add-row input { flex: 1; border-color: var(--border); background: var(--page); }
+  ul.checks li .src { display: block; color: var(--muted); font-size: 11.5px; }
+  ul.checks li .txt { flex: 1; }
+
+  footer.site { margin-top: 8px; color: var(--muted); font-size: 12px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  footer.site button { padding: 4px 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="site">
+    <div>
+      <h1>Space Candy — Ops Dashboard</h1>
+      <p class="sub">Shakedown Sweets CO LLC · freeze-dried candy · Bloomington, IN</p>
+    </div>
+    <button class="theme-btn" id="themeBtn" type="button">Theme: Auto</button>
+  </header>
+
+  <div class="kpis" id="kpis"></div>
+
+  <section class="card">
+    <h2>Purchase orders</h2>
+    <p class="sub">Wholesale order lines. Edit anything — it saves automatically in this browser.</p>
+    <div class="tbl-wrap">
+      <table id="orderTable">
+        <thead>
+          <tr><th>PO #</th><th>Retailer</th><th>Product</th><th>Units</th><th>Status</th><th>Notes</th><th></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px"><button class="ghost" id="addOrder" type="button">+ Add order line</button></div>
+  </section>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Ron Jon ship-ready checklist</h2>
+      <p class="sub">Run this before every shipment. Progress: <span id="checkCount"></span></p>
+      <div class="meter" role="img" id="checkMeter" aria-label="Checklist progress"><div></div></div>
+      <ul class="checks" id="checkList"></ul>
+      <div class="callout">
+        <span class="ico" aria-hidden="true">⚠️</span>
+        <div><strong>Warning — $250 chargeback per shipment</strong> if the PO number is missing
+        from the carton labels or the packing list. Ron Jon enforces this.</div>
+      </div>
+      <div style="margin-top:12px"><button class="ghost" id="resetChecks" type="button">Reset for next shipment</button></div>
+    </section>
+
+    <div class="col">
+    <section class="card">
+      <h2>Units in flight by product</h2>
+      <p class="sub">Open order lines (ordered, in production, packed, or shipped).</p>
+      <div class="chart-box" id="chartBox">
+        <div class="tooltip" id="chartTip"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Shipping routing helper</h2>
+      <p class="sub">Ron Jon routing rules from the PO terms.</p>
+      <div class="ship-form">
+        <div class="field">
+          <label for="shipWeight">Total weight (lb)</label>
+          <input type="number" id="shipWeight" min="0" step="0.1" placeholder="e.g. 11.9">
+        </div>
+        <div class="field">
+          <label for="shipCartons">Carton count</label>
+          <input type="number" id="shipCartons" min="0" step="1" placeholder="e.g. 6">
+        </div>
+      </div>
+      <div class="verdict" id="shipVerdict">Enter the shipment weight and carton count to get the routing.</div>
+      <div class="callout" style="border-left-color: var(--axis);">
+        <span class="ico" aria-hidden="true">📦</span>
+        <div>Known case pack (per Arctic Farms, 6/24): <strong>12 units per case</strong>, 8.5×8.5×10.5″,
+        1.6 lb per case. Master shipping box 20×20×19″ at 11.9 lb.</div>
+      </div>
+    </section>
+    </div>
+  </div>
+
+  <section class="card">
+    <h2>Action items</h2>
+    <p class="sub">Open loops from the email threads, plus anything you add.</p>
+    <ul class="checks" id="actionList"></ul>
+    <div class="add-row">
+      <input type="text" id="newAction" class="wide" placeholder="Add an action item…" aria-label="New action item">
+      <button class="ghost" id="addAction" type="button">Add</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Product catalog</h2>
+    <p class="sub">The six styles from IFD's spec sheets (8/10). Fill in UPCs and Ron Jon SKUs as they come in — both are required on carton labels.</p>
+    <div class="tbl-wrap">
+      <table id="productTable">
+        <thead>
+          <tr><th>Product</th><th>IFD spec sheet</th><th>Case pack</th><th>UPC</th><th>Ron Jon SKU</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Contacts</h2>
+    <p class="sub">Everyone in the Space Candy supply chain.</p>
+    <div class="contact-grid" id="contactGrid"></div>
+    <div class="addr">
+      <div class="a">
+        <h4>Company / invoicing</h4>
+        Shakedown Sweets CO LLC<br>2013 S Yost Ave, Ste 1<br>Bloomington, IN 47403
+      </div>
+      <div class="a">
+        <h4>Ron Jon ship-to</h4>
+        Ron Jon Canaveral Warehouse (Store 001)<br>8550 Astronaut Blvd., Suite 103<br>Cape Canaveral, FL 32920
+      </div>
+      <div class="a">
+        <h4>Vendor record at Ron Jon</h4>
+        Code VSPACAN ("Space Candy")<br>renamed to Shakedown Sweets CO LLC<br>Buyer: Dave Buteau
+      </div>
+    </div>
+  </section>
+
+  <footer class="site">
+    <span>Seed data from the Ron Jon / Arctic Farms / IFD email threads, Jun–Aug 2026. Edits live only in this browser (localStorage).</span>
+    <button class="ghost" id="resetAll" type="button">Reset everything to seed data</button>
+  </footer>
+
+</div>
+
+<script>
+"use strict";
+
+/* ---------- seed data (from the email threads) ---------- */
+
+const STORAGE_KEY = "spacecandy.dash.v1";
+const THEME_KEY = "spacecandy.theme";
+
+const STATUSES = ["Ordered", "In production", "Packed", "Shipped", "Delivered", "Invoiced", "Paid"];
+const IN_FLIGHT = new Set(["Ordered", "In production", "Packed", "Shipped"]);
+
+const PRODUCTS = [
+  { id: "worms",   name: "Sour Alien Worms", spec: "FD Sour Worms v2" },
+  { id: "peach",   name: "Peach Rings",      spec: "FD Peach Rings" },
+  { id: "nerd",    name: "Nerd Clusters",    spec: "FD Nerd Clusters" },
+  { id: "lemon",   name: "Lemonheads",       spec: "FD Lemonheads" },
+  { id: "rbsour",  name: "Rainbow Sour",     spec: "FD Rainbow I Sour" },
+  { id: "rainbow", name: "Rainbow",          spec: "FD Rainbow IFD" },
+];
+const CASE_PACK = "12 / case · 1.6 lb";
+
+const CHECK_ITEMS = [
+  { id: "c1", label: "PO number on every carton label" },
+  { id: "c2", label: "PO number on the packing list" },
+  { id: "c3", label: "Packing list attached to the front of the lead carton" },
+  { id: "c4", label: "Packing list shows shipper info (Shakedown Sweets CO LLC, 2013 S Yost Ave, Bloomington, IN 47403)" },
+  { id: "c5", label: "Packing list shows ship-to, item descriptions, quantities, carton count, invoice number, and actual ship date" },
+  { id: "c6", label: "Carton labels show supplier name & address, merchandise description, case-pack qty, gross weight, UPC, and qty per box" },
+  { id: "c7", label: "Cartons numbered (1 of X, 2 of X, …)" },
+  { id: "c8", label: "Routing confirmed with the helper (UPS Ground Collect vs LTL)" },
+];
+
+const CONTACTS = [
+  {
+    org: "International Freeze Dry", note: "Production / co-packer · intfd.net · SLC warehouse",
+    people: [
+      { nm: "Shannan Rhoades", role: "Sales Director", email: "srhoades@intfd.net", phone: "1-719-639-1010" },
+      { nm: "Tim Lawlor", role: "Business Dev & Marketing", email: "tlawlor@intfd.net", phone: "(541) 868-6541" },
+      { nm: "Robert Bao", role: "Operations · sent pricing sheet", email: "robert@intfd.net", phone: "(801) 673-9798" },
+      { nm: "Will Hsu", role: "", email: "whsu@intfd.net", phone: "" },
+      { nm: "Chris Lin", role: "", email: "clin@intfd.net", phone: "" },
+    ],
+  },
+  {
+    org: "Arctic Farms", note: "Fulfillment & shipping · arcticfarms.com",
+    people: [
+      { nm: "Gadi Briskman", role: "", email: "gadi@arcticfarms.com", phone: "" },
+      { nm: "Tima", role: "Handles pack lists & carton labels", email: "info@arcticfarms.com", phone: "" },
+    ],
+  },
+  {
+    org: "Ron Jon Surf Shop", note: "Retail customer · rjss.com · Cocoa Beach, FL",
+    people: [
+      { nm: "Dave Buteau", role: "Merchandise Buyer", email: "DaveB@rjss.com", phone: "" },
+      { nm: "Cheryl Howe", role: "Accounts Payable", email: "CHowe@rjss.com", phone: "(321) 799-8888 ×1079" },
+      { nm: "Grace Cisowski", role: "Accounts Payable", email: "GraceC@rjss.com", phone: "" },
+    ],
+  },
+  {
+    org: "The Candy Space (legacy)", note: "Chad ran Space Candy before the handover",
+    people: [
+      { nm: "Chad Rabinovitz", role: "Previous owner", email: "chad@thecandyspace.com", phone: "" },
+    ],
+  },
+];
+
+function seedState() {
+  return {
+    orders: [
+      { id: uid(), po: "180963", retailer: "Ron Jon Surf Shop", product: "Sour Alien Worms", units: null,
+        status: "Packed", notes: "Packed & ready — waiting on pack-list/label docs" },
+      { id: uid(), po: "180963", retailer: "Ron Jon Surf Shop", product: "Peach Rings", units: null,
+        status: "Shipped", notes: "Left SLC warehouse ~6/26 — confirm with Dave" },
+    ],
+    productMeta: {},          // productId -> { upc, sku }
+    checks: {},               // checkId -> bool
+    actions: [
+      { id: uid(), text: "Get Ron Jon SKU numbers for Sour Alien Worms & Peach Rings (required on carton labels)", src: "Asked Dave Buteau 6/24 — no answer yet", done: false },
+      { id: uid(), text: "Return Ron Jon new-vendor form + ACH payment authorization to Cheryl Howe", src: "Her email of 6/25 with both PDFs attached", done: false },
+      { id: uid(), text: "Send Arctic Farms the packing-list & carton-label templates", src: "Tima will reuse them for future Ron Jon orders (6/24)", done: false },
+      { id: uid(), text: "Give Arctic Farms the invoice number for the PO 180963 packing list", src: "Tima asked 6/25", done: false },
+      { id: uid(), text: "Confirm the Peach Rings actually shipped from the SLC warehouse", src: "Promised Dave a confirmation once they left", done: false },
+      { id: uid(), text: "Work through IFD spec sheets and file UPCs into the catalog below", src: "Shannan Rhoades sent six spec sheets 8/10", done: false },
+    ],
+  };
+}
+
+function uid() { return "id" + Math.random().toString(36).slice(2, 9); }
+
+/* ---------- state ---------- */
+
+let state = loadState();
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.orders)) return parsed;
+    }
+  } catch (e) { /* corrupted storage falls through to seed */ }
+  return seedState();
+}
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+/* ---------- theme ---------- */
+
+const themeBtn = document.getElementById("themeBtn");
+const THEME_ORDER = ["auto", "light", "dark"];
+function applyTheme(mode) {
+  if (mode === "auto") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", mode);
+  themeBtn.textContent = "Theme: " + mode.charAt(0).toUpperCase() + mode.slice(1);
+}
+let themeMode = localStorage.getItem(THEME_KEY) || "auto";
+applyTheme(themeMode);
+themeBtn.addEventListener("click", () => {
+  themeMode = THEME_ORDER[(THEME_ORDER.indexOf(themeMode) + 1) % THEME_ORDER.length];
+  localStorage.setItem(THEME_KEY, themeMode);
+  applyTheme(themeMode);
+  renderChart(); // re-measure text colors is free; chart uses CSS vars, but redraw keeps labels crisp
+});
+
+/* ---------- KPIs ---------- */
+
+function renderKPIs() {
+  const box = document.getElementById("kpis");
+  box.textContent = "";
+
+  const openPOs = new Set(state.orders.filter(o => o.status !== "Paid").map(o => o.po || "—")).size;
+
+  const flight = state.orders.filter(o => IN_FLIGHT.has(o.status));
+  const knownUnits = flight.filter(o => Number(o.units) > 0);
+  const unitSum = knownUnits.reduce((s, o) => s + Number(o.units), 0);
+
+  const checksDone = CHECK_ITEMS.filter(c => state.checks[c.id]).length;
+  const openActions = state.actions.filter(a => !a.done).length;
+
+  const tiles = [
+    { label: "Open POs", value: String(openPOs), note: openPOs ? "not yet paid out" : "all settled" },
+    {
+      label: "Units in flight",
+      value: knownUnits.length ? unitSum.toLocaleString("en-US") : "—",
+      note: knownUnits.length
+        ? Math.ceil(unitSum / 12).toLocaleString("en-US") + " cartons at 12/case"
+        : "add unit counts on the PO lines",
+    },
+    { label: "Ship-ready checklist", value: checksDone + " / " + CHECK_ITEMS.length, note: "for the next Ron Jon shipment" },
+    { label: "Open action items", value: String(openActions), note: openActions ? "waiting on you or a partner" : "all clear" },
+  ];
+
+  for (const t of tiles) {
+    const el = document.createElement("div");
+    el.className = "tile";
+    const l = document.createElement("div"); l.className = "label"; l.textContent = t.label;
+    const v = document.createElement("div"); v.className = "value"; v.textContent = t.value;
+    const n = document.createElement("div"); n.className = "note"; n.textContent = t.note;
+    el.append(l, v, n);
+    box.append(el);
+  }
+}
+
+/* ---------- orders table ---------- */
+
+function renderOrders() {
+  const tbody = document.querySelector("#orderTable tbody");
+  tbody.textContent = "";
+
+  for (const o of state.orders) {
+    const tr = document.createElement("tr");
+
+    const tdPo = document.createElement("td");
+    const po = document.createElement("input");
+    po.type = "text"; po.value = o.po; po.size = 7; po.setAttribute("aria-label", "PO number");
+    po.addEventListener("input", () => { o.po = po.value; save(); renderKPIs(); });
+    tdPo.append(po);
+
+    const tdRet = document.createElement("td");
+    const ret = document.createElement("input");
+    ret.type = "text"; ret.value = o.retailer; ret.size = 14; ret.setAttribute("aria-label", "Retailer");
+    ret.addEventListener("input", () => { o.retailer = ret.value; save(); });
+    tdRet.append(ret);
+
+    const tdProd = document.createElement("td");
+    const sel = document.createElement("select");
+    sel.setAttribute("aria-label", "Product");
+    for (const p of PRODUCTS) {
+      const opt = document.createElement("option");
+      opt.value = p.name; opt.textContent = p.name;
+      sel.append(opt);
+    }
+    if (!PRODUCTS.some(p => p.name === o.product)) {
+      const opt = document.createElement("option");
+      opt.value = o.product; opt.textContent = o.product;
+      sel.append(opt);
+    }
+    sel.value = o.product;
+    sel.addEventListener("change", () => { o.product = sel.value; save(); renderKPIs(); renderChart(); });
+    tdProd.append(sel);
+
+    const tdUnits = document.createElement("td"); tdUnits.className = "num";
+    const un = document.createElement("input");
+    un.type = "number"; un.min = "0"; un.step = "1"; un.placeholder = "—";
+    un.value = o.units == null ? "" : o.units;
+    un.setAttribute("aria-label", "Units");
+    un.addEventListener("input", () => {
+      o.units = un.value === "" ? null : Math.max(0, Math.floor(Number(un.value)));
+      save(); renderKPIs(); renderChart();
+    });
+    tdUnits.append(un);
+
+    const tdStatus = document.createElement("td");
+    const st = document.createElement("select");
+    st.setAttribute("aria-label", "Status");
+    for (const s of STATUSES) {
+      const opt = document.createElement("option");
+      opt.value = s; opt.textContent = s;
+      st.append(opt);
+    }
+    st.value = o.status;
+    st.addEventListener("change", () => { o.status = st.value; save(); renderKPIs(); renderChart(); });
+    tdStatus.append(st);
+
+    const tdNotes = document.createElement("td");
+    const nt = document.createElement("input");
+    nt.type = "text"; nt.className = "wide"; nt.value = o.notes || ""; nt.setAttribute("aria-label", "Notes");
+    nt.addEventListener("input", () => { o.notes = nt.value; save(); });
+    tdNotes.append(nt);
+
+    const tdDel = document.createElement("td");
+    const del = document.createElement("button");
+    del.className = "del"; del.type = "button"; del.textContent = "×";
+    del.setAttribute("aria-label", "Delete this order line");
+    del.addEventListener("click", () => {
+      state.orders = state.orders.filter(x => x.id !== o.id);
+      save(); renderOrders(); renderKPIs(); renderChart();
+    });
+    tdDel.append(del);
+
+    tr.append(tdPo, tdRet, tdProd, tdUnits, tdStatus, tdNotes, tdDel);
+    tbody.append(tr);
+  }
+}
+
+document.getElementById("addOrder").addEventListener("click", () => {
+  state.orders.push({ id: uid(), po: "", retailer: "Ron Jon Surf Shop", product: PRODUCTS[0].name, units: null, status: "Ordered", notes: "" });
+  save(); renderOrders(); renderKPIs(); renderChart();
+});
+
+/* ---------- chart: units in flight by product (single series, horizontal bars) ---------- */
+
+const chartBox = document.getElementById("chartBox");
+const chartTip = document.getElementById("chartTip");
+
+function renderChart() {
+  // clear previous render (keep the tooltip node)
+  for (const child of [...chartBox.children]) if (child !== chartTip) child.remove();
+  chartTip.style.display = "none";
+
+  const totals = new Map();
+  for (const o of state.orders) {
+    if (!IN_FLIGHT.has(o.status)) continue;
+    if (!(Number(o.units) > 0)) continue;
+    const key = o.product || "—";
+    totals.set(key, (totals.get(key) || 0) + Number(o.units));
+  }
+  const rows = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+
+  if (!rows.length) {
+    const note = document.createElement("div");
+    note.className = "empty-note";
+    const anyFlight = state.orders.some(o => IN_FLIGHT.has(o.status));
+    note.textContent = anyFlight
+      ? "Add unit counts to the open PO lines and the breakdown will appear here."
+      : "No open order lines right now.";
+    chartBox.append(note);
+    return;
+  }
+
+  const W = 460, labelW = 132, rowH = 34, barH = 20, padTop = 6, axisH = 26;
+  const H = padTop + rows.length * rowH + axisH;
+  const x0 = labelW, x1 = W - 46;
+  const maxVal = Math.max(...rows.map(r => r[1]));
+  const ticks = niceTicks(maxVal, 4);
+  const scale = v => x0 + (v / ticks[ticks.length - 1]) * (x1 - x0);
+
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "Bar chart of units in flight by product");
+
+  // gridlines + tick labels
+  for (const t of ticks) {
+    const gx = scale(t);
+    const line = document.createElementNS(NS, "line");
+    line.setAttribute("x1", gx); line.setAttribute("x2", gx);
+    line.setAttribute("y1", padTop); line.setAttribute("y2", H - axisH + 4);
+    line.setAttribute("class", t === 0 ? "axisline" : "gridline");
+    svg.append(line);
+    const tl = document.createElementNS(NS, "text");
+    tl.setAttribute("x", gx); tl.setAttribute("y", H - axisH + 18);
+    tl.setAttribute("text-anchor", "middle");
+    tl.setAttribute("class", "tick-label");
+    tl.textContent = t.toLocaleString("en-US");
+    svg.append(tl);
+  }
+
+  rows.forEach(([name, val], i) => {
+    const y = padTop + i * rowH;
+    const barY = y + (rowH - barH) / 2;
+    const w = Math.max(scale(val) - x0, 2);
+
+    const cat = document.createElementNS(NS, "text");
+    cat.setAttribute("x", labelW - 10); cat.setAttribute("y", y + rowH / 2 + 4);
+    cat.setAttribute("text-anchor", "end");
+    cat.setAttribute("class", "cat-label");
+    cat.textContent = name;
+    svg.append(cat);
+
+    // hit target first (behind in DOM so the sibling selector can style the bar)
+    const hit = document.createElementNS(NS, "rect");
+    hit.setAttribute("x", 0); hit.setAttribute("y", y);
+    hit.setAttribute("width", W); hit.setAttribute("height", rowH);
+    hit.setAttribute("class", "bar-hit");
+    hit.setAttribute("tabindex", "0");
+    hit.setAttribute("role", "img");
+    const cartons = Math.ceil(val / 12);
+    hit.setAttribute("aria-label", name + ": " + val.toLocaleString("en-US") + " units, about " + cartons + " cartons");
+    svg.append(hit);
+
+    const bar = document.createElementNS(NS, "path");
+    bar.setAttribute("d", roundedRightBar(x0, barY, w, barH, 4));
+    bar.setAttribute("class", "bar");
+    bar.setAttribute("pointer-events", "none");
+    svg.append(bar);
+
+    const vl = document.createElementNS(NS, "text");
+    vl.setAttribute("x", x0 + w + 8); vl.setAttribute("y", barY + barH / 2 + 4);
+    vl.setAttribute("class", "val-label");
+    vl.textContent = val.toLocaleString("en-US");
+    svg.append(vl);
+
+    const showTip = (clientX, clientY) => {
+      chartTip.textContent = "";
+      const v = document.createElement("div"); v.className = "tt-value";
+      v.textContent = val.toLocaleString("en-US") + " units · ~" + cartons + " cartons";
+      const l = document.createElement("div"); l.className = "tt-label"; l.textContent = name;
+      chartTip.append(v, l);
+      chartTip.style.display = "block";
+      const boxRect = chartBox.getBoundingClientRect();
+      let tx = clientX - boxRect.left + 12;
+      let ty = clientY - boxRect.top - 10;
+      const maxX = boxRect.width - chartTip.offsetWidth - 4;
+      if (tx > maxX) tx = Math.max(4, maxX);
+      chartTip.style.left = tx + "px";
+      chartTip.style.top = ty + "px";
+    };
+    hit.addEventListener("pointermove", e => showTip(e.clientX, e.clientY));
+    hit.addEventListener("pointerleave", () => { chartTip.style.display = "none"; });
+    hit.addEventListener("focus", () => {
+      const r = hit.getBoundingClientRect();
+      showTip(r.left + r.width / 2, r.top + r.height / 2);
+    });
+    hit.addEventListener("blur", () => { chartTip.style.display = "none"; });
+  });
+
+  chartBox.append(svg);
+}
+
+function roundedRightBar(x, y, w, h, r) {
+  const rr = Math.min(r, w, h / 2);
+  return "M" + x + "," + y +
+    " h" + (w - rr) +
+    " a" + rr + "," + rr + " 0 0 1 " + rr + "," + rr +
+    " v" + (h - 2 * rr) +
+    " a" + rr + "," + rr + " 0 0 1 " + (-rr) + "," + rr +
+    " h" + (-(w - rr)) + " z";
+}
+
+function niceTicks(maxVal, count) {
+  const rawStep = maxVal / count;
+  const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const norm = rawStep / mag;
+  const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10) * mag;
+  const top = Math.ceil(maxVal / step) * step;
+  const out = [];
+  for (let v = 0; v <= top + step / 2; v += step) out.push(v);
+  return out;
+}
+
+/* ---------- checklist ---------- */
+
+function renderChecks() {
+  const ul = document.getElementById("checkList");
+  ul.textContent = "";
+  let done = 0;
+  for (const c of CHECK_ITEMS) {
+    const checked = !!state.checks[c.id];
+    if (checked) done++;
+    const li = document.createElement("li");
+    if (checked) li.className = "done";
+    const cb = document.createElement("input");
+    cb.type = "checkbox"; cb.checked = checked; cb.id = "chk-" + c.id;
+    cb.addEventListener("change", () => {
+      state.checks[c.id] = cb.checked;
+      save(); renderChecks(); renderKPIs();
+    });
+    const lb = document.createElement("label");
+    lb.htmlFor = cb.id; lb.textContent = c.label; lb.className = "txt";
+    li.append(cb, lb);
+    ul.append(li);
+  }
+  document.getElementById("checkCount").textContent = done + " of " + CHECK_ITEMS.length;
+  const meter = document.getElementById("checkMeter");
+  meter.setAttribute("aria-label", "Checklist progress: " + done + " of " + CHECK_ITEMS.length + " complete");
+  meter.firstElementChild.style.width = (done / CHECK_ITEMS.length * 100) + "%";
+}
+
+document.getElementById("resetChecks").addEventListener("click", () => {
+  state.checks = {};
+  save(); renderChecks(); renderKPIs();
+});
+
+/* ---------- shipping helper ---------- */
+
+const shipWeight = document.getElementById("shipWeight");
+const shipCartons = document.getElementById("shipCartons");
+const shipVerdict = document.getElementById("shipVerdict");
+
+function renderShip() {
+  const w = Number(shipWeight.value);
+  const c = Number(shipCartons.value);
+  shipVerdict.classList.remove("on");
+  shipVerdict.textContent = "";
+  if (!(w > 0) || !(c > 0)) {
+    shipVerdict.textContent = "Enter the shipment weight and carton count to get the routing.";
+    return;
+  }
+  shipVerdict.classList.add("on");
+  const strong = document.createElement("strong");
+  const rest = document.createElement("span");
+  if (w < 200 && c <= 15) {
+    strong.textContent = "UPS Ground Collect. ";
+    rest.textContent = "Under 200 lb and 15 cartons or fewer — use the UPS account number printed on the PO.";
+  } else {
+    strong.textContent = "LTL freight. ";
+    rest.textContent = "Over the small-parcel limit (200 lb / 15 cartons) — give Ron Jon logistics the weight and they will arrange the LTL pickup.";
+  }
+  shipVerdict.append(strong, rest);
+}
+shipWeight.addEventListener("input", renderShip);
+shipCartons.addEventListener("input", renderShip);
+
+/* ---------- actions ---------- */
+
+function renderActions() {
+  const ul = document.getElementById("actionList");
+  ul.textContent = "";
+  for (const a of state.actions) {
+    const li = document.createElement("li");
+    if (a.done) li.className = "done";
+    const cb = document.createElement("input");
+    cb.type = "checkbox"; cb.checked = a.done; cb.id = "act-" + a.id;
+    cb.addEventListener("change", () => { a.done = cb.checked; save(); renderActions(); renderKPIs(); });
+    const lb = document.createElement("label");
+    lb.htmlFor = cb.id; lb.className = "txt";
+    lb.textContent = a.text;
+    if (a.src) {
+      const src = document.createElement("span");
+      src.className = "src"; src.textContent = a.src;
+      lb.append(src);
+    }
+    const del = document.createElement("button");
+    del.className = "del"; del.type = "button"; del.textContent = "×";
+    del.setAttribute("aria-label", "Delete this action item");
+    del.addEventListener("click", () => {
+      state.actions = state.actions.filter(x => x.id !== a.id);
+      save(); renderActions(); renderKPIs();
+    });
+    li.append(cb, lb, del);
+    ul.append(li);
+  }
+}
+
+document.getElementById("addAction").addEventListener("click", addAction);
+document.getElementById("newAction").addEventListener("keydown", e => { if (e.key === "Enter") addAction(); });
+function addAction() {
+  const inp = document.getElementById("newAction");
+  const text = inp.value.trim();
+  if (!text) return;
+  state.actions.push({ id: uid(), text, src: "", done: false });
+  inp.value = "";
+  save(); renderActions(); renderKPIs();
+}
+
+/* ---------- products ---------- */
+
+function renderProducts() {
+  const tbody = document.querySelector("#productTable tbody");
+  tbody.textContent = "";
+  for (const p of PRODUCTS) {
+    const meta = state.productMeta[p.id] || (state.productMeta[p.id] = { upc: "", sku: "" });
+    const tr = document.createElement("tr");
+
+    const tdName = document.createElement("td");
+    tdName.textContent = p.name;
+    tdName.style.fontWeight = "550";
+
+    const tdSpec = document.createElement("td");
+    tdSpec.textContent = p.spec;
+    tdSpec.style.color = "var(--muted)";
+
+    const tdCase = document.createElement("td");
+    tdCase.textContent = CASE_PACK;
+    tdCase.style.color = "var(--ink-2)";
+    tdCase.style.whiteSpace = "nowrap";
+
+    const tdUpc = document.createElement("td");
+    const upc = document.createElement("input");
+    upc.type = "text"; upc.className = "code"; upc.placeholder = "add UPC";
+    upc.value = meta.upc; upc.setAttribute("aria-label", "UPC for " + p.name);
+    upc.addEventListener("input", () => { meta.upc = upc.value; save(); });
+    tdUpc.append(upc);
+
+    const tdSku = document.createElement("td");
+    const sku = document.createElement("input");
+    sku.type = "text"; sku.className = "code"; sku.placeholder = "waiting on Dave";
+    sku.value = meta.sku; sku.setAttribute("aria-label", "Ron Jon SKU for " + p.name);
+    sku.addEventListener("input", () => { meta.sku = sku.value; save(); });
+    tdSku.append(sku);
+
+    tr.append(tdName, tdSpec, tdCase, tdUpc, tdSku);
+    tbody.append(tr);
+  }
+}
+
+/* ---------- contacts ---------- */
+
+function renderContacts() {
+  const grid = document.getElementById("contactGrid");
+  grid.textContent = "";
+  for (const org of CONTACTS) {
+    const card = document.createElement("div");
+    card.className = "org";
+    const h = document.createElement("h3"); h.textContent = org.org;
+    const note = document.createElement("p"); note.className = "role-note"; note.textContent = org.note;
+    const ul = document.createElement("ul");
+    for (const person of org.people) {
+      const li = document.createElement("li");
+      const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = person.nm;
+      li.append(nm);
+      if (person.role) li.append(document.createTextNode(" — " + person.role));
+      li.append(document.createElement("br"));
+      const a = document.createElement("a");
+      a.href = "mailto:" + person.email; a.textContent = person.email;
+      li.append(a);
+      if (person.phone) li.append(document.createTextNode(" · " + person.phone));
+      ul.append(li);
+    }
+    card.append(h, note, ul);
+    grid.append(card);
+  }
+}
+
+/* ---------- reset ---------- */
+
+document.getElementById("resetAll").addEventListener("click", () => {
+  if (!confirm("Throw away every edit in this browser and go back to the seed data?")) return;
+  state = seedState();
+  save();
+  renderAll();
+});
+
+/* ---------- boot ---------- */
+
+function renderAll() {
+  renderKPIs();
+  renderOrders();
+  renderChart();
+  renderChecks();
+  renderShip();
+  renderActions();
+  renderProducts();
+  renderContacts();
+}
+renderAll();
+</script>
+</body>
+</html>
