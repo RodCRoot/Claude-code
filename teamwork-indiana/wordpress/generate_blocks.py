@@ -343,6 +343,91 @@ def build_success():
 
 
 # ----------------------------------------------------------------- FAQ
+def esc(t):
+    """Escape bare ampersands without breaking existing entities."""
+    return re.sub(r'&(?!#?\w+;)', '&amp;', t)
+
+
+def inline_md(t):
+    """Convert inline markdown to HTML. Bold before italic; escape & first."""
+    t = esc(t)
+    t = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', t)
+    t = re.sub(r'(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)', r'<em>\1</em>', t)
+    t = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2">\1</a>', t)
+    return t
+
+
+def md_table(rows):
+    """Markdown table rows -> WP table block."""
+    body = ''.join(
+        '<tr>' + ''.join(f'<td>{inline_md(c)}</td>' for c in r) + '</tr>'
+        for r in rows)
+    return ('<!-- wp:table -->\n<figure class="wp-block-table"><table><tbody>'
+            f'{body}</tbody></table></figure>\n<!-- /wp:table -->')
+
+
+def md_to_blocks(md):
+    """Convert a markdown answer body into Gutenberg blocks, preserving order.
+
+    Handles: paragraphs (hard-wrapped), bullet lists with continuation lines,
+    markdown tables, and strips horizontal rules / trailing italic footers.
+    """
+    lines = md.split('\n')
+    out, para_buf, list_buf, table_buf = [], [], [], []
+
+    def flush_para():
+        if para_buf:
+            out.append(para(inline_md(' '.join(para_buf).strip())))
+            para_buf.clear()
+
+    def flush_list():
+        if list_buf:
+            items = ''.join(f'<li>{inline_md(x)}</li>' for x in list_buf)
+            out.append('<!-- wp:list -->\n<ul class="wp-block-list">'
+                       f'{items}</ul>\n<!-- /wp:list -->')
+            list_buf.clear()
+
+    def flush_table():
+        if table_buf:
+            rows = []
+            for raw in table_buf:
+                cells = [c.strip() for c in raw.strip().strip('|').split('|')]
+                if all(re.fullmatch(r':?-{2,}:?', c) for c in cells):
+                    continue          # separator row
+                rows.append(cells)
+            if rows:
+                out.append(md_table(rows))
+            table_buf.clear()
+
+    for raw in lines:
+        line = raw.rstrip()
+        stripped = line.strip()
+        if re.fullmatch(r'-{3,}', stripped):          # horizontal rule
+            flush_para(); flush_list(); flush_table()
+            continue
+        if stripped.startswith('|'):                  # table row
+            flush_para(); flush_list()
+            table_buf.append(stripped)
+            continue
+        flush_table()
+        if not stripped:                              # blank line
+            flush_para(); flush_list()
+            continue
+        m = re.match(r'-\s+(.*)', stripped)
+        if m:                                         # new bullet
+            flush_para()
+            list_buf.append(m.group(1))
+            continue
+        if list_buf and raw.startswith('  '):         # bullet continuation
+            list_buf[-1] += ' ' + stripped
+            continue
+        flush_list()
+        para_buf.append(stripped)
+
+    flush_para(); flush_list(); flush_table()
+    return ''.join(out)
+
+
 def build_faq():
     src = open(f'{REPO}/FAQ-PARENTS-ATHLETES.md').read()
     b = [group(dots() + heading('Everything parents &amp; athletes ask us.', 1,
@@ -352,17 +437,10 @@ def build_faq():
                     color='#93A2BE', size='medium'),
                bg=NAVY_DEEP, text='#EAF0FA')]
 
-    # parse the markdown: ## sections, ### questions
     section_colors = {'Getting Started': BLUE, 'Training': RED,
                       'Membership & Billing': GREEN, 'Location & Logistics': PURPLE,
                       'Results': YELLOW}
-    cur, body = None, []
     out = []
-
-    def flush():
-        if cur and body:
-            out.append(group(heading(f'<span style="color:{section_colors.get(cur, BLUE)}">●</span> '
-                                     + cur, 2) + ''.join(body), extra_class='tw-faq'))
 
     for block in re.split(r'\n(?=## )', src):
         m = re.match(r'## (.+)', block)
@@ -371,29 +449,22 @@ def build_faq():
         name = m.group(1).strip()
         if name not in section_colors:
             continue
-        qs = re.split(r'\n(?=### )', block)[1:]
         items = []
-        for q in qs:
+        for q in re.split(r'\n(?=### )', block)[1:]:
             qm = re.match(r'### (.+?)\n(.*)', q, re.S)
             if not qm:
                 continue
-            question = qm.group(1).strip()
-            answer = qm.group(2).strip()
-            # convert md bold/italic/links and bullets
-            answer = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', answer)
-            answer = re.sub(r'\*(.+?)\*', r'<em>\1</em>', answer)
-            bullets = re.findall(r'^- (.+)$', answer, re.M)
-            answer_txt = re.sub(r'^- .+$', '', answer, flags=re.M).strip()
-            content = ''.join(para(p.replace('\n', ' '))
-                              for p in re.split(r'\n\s*\n', answer_txt) if p.strip())
-            if bullets:
-                content += ('<!-- wp:list -->\n<ul class="wp-block-list">' +
-                            ''.join(f'<li>{x}</li>' for x in bullets) +
-                            '</ul>\n<!-- /wp:list -->')
-            items.append(details(question, content))
+            question = esc(qm.group(1).strip())
+            answer = qm.group(2)
+            # drop the trailing italic sign-off line if present
+            answer = re.sub(r'^\*[^*].*\*\s*$', '', answer, flags=re.M)
+            content = md_to_blocks(answer.strip())
+            if content:
+                items.append(details(question, content))
         if items:
-            out.append(group(heading(f'<span style="color:{section_colors[name]}">●</span> {name}', 2) +
-                             ''.join(items), extra_class='tw-faq'))
+            out.append(group(
+                heading(f'<span style="color:{section_colors[name]}">●</span> {esc(name)}', 2) +
+                ''.join(items), extra_class='tw-faq'))
     b += out
     b.append(group(heading('Still have a question?', 3, align='center') +
                    para('Text (812) 445-5551 or message us — a real coach will get back to '
