@@ -25,3 +25,5 @@ graphics/remotion/public/*.mov
 !graphics/remotion/public/.gitkeep
 
 .DS_Store
+__pycache__/
+*.pyc
