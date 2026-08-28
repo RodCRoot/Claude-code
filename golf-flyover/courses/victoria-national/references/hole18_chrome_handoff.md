@@ -1,84 +1,74 @@
-# HANDOFF — Drive Chrome to capture a Google Earth Studio flyover (Victoria National, Hole 18)
+# COWORK TASK — Capture the Hole 18 Earth Studio flyover (Victoria National)
 
-You are Claude with browser control of the user's Chrome. The user (Rod) is already
-logged into Google Earth Studio. Your ONLY job in this session: build and render one
-13-second Earth Studio camera move of hole 18 at Victoria National Golf Club
-(Newburgh, Indiana), export the results, and tell Rod exactly which files to send back
-to his Claude Code session. Everything is pre-decided — no creative choices needed.
+You are Claude with control of Rod's Chrome. Google Earth Studio is approved and
+logged in. Your ONLY job: build and render one 13-second camera move of hole 18 at
+Victoria National Golf Club (Newburgh, Indiana), then get two files onto Rod's disk.
+Everything is pre-decided — no creative choices. This footage is geometry
+ground-truth for an AI restyle: ignore how imagery looks (season, flat light,
+pop-in are fine); only the camera path and terrain matter.
 
-This footage is the geometry ground-truth for an AI restyle pass. Ignore how the
-imagery looks (season, flat lighting, texture pop-in are all fine). Only the camera
-path and the terrain matter.
+## Step 1 — Project
 
-## 1. Create the project
-
-Open https://earth.google.com/studio → New project → Blank.
-
+Open https://earth.google.com/studio → New Project → Blank.
 - Name: `VN-hole18-flyover`
-- Dimensions: 3840×2160 (drop to 1920×1080 only if the machine clearly struggles)
-- Frame rate: 30 fps
-- Duration: 13 seconds (390 frames)
+- Dimensions: **1920×1080** · Frame rate: **30 fps** · Duration: **13 s** (390 frames)
+  (settings are in the new-project dialog; later via the project settings menu)
 
-In the Map Style panel: turn OFF all labels, borders, roads, and points of interest;
-clouds off; leave 3D terrain on. The frame must be clean imagery only.
+## Step 2 — Map Style
 
-## 2. The camera move
+Open the Map Style panel and choose the **Clean** preset (no labels/borders/roads).
+Leave 3D imagery on if a toggle exists. Nothing else in this panel.
 
-Hole 18 runs WNW from an elevated tee, the fairway curving gently RIGHT as a crescent
-along the south shore of a large lake (water on the right the whole way), to a green
-on the shore with the clubhouse just beyond it. The move: start behind/above the tee →
-smooth push down the fairway → gentle right turn following the fairway's curve →
-rise into an elevated, nearly stationary reveal of green + lake + clubhouse.
+## Step 3 — Fly to the hole
 
-Set 4 keyframes on Camera Position and Camera Rotation (default auto-easing is fine):
+Search `37.999062, -87.341785` — the 18th tee. Verify you're on the right hole:
+a crescent fairway wrapping the south shore of a big lake, bending right to a green
+at the water's edge with the clubhouse complex just beyond it (northwest). The tee
+is elevated. If the view doesn't match, navigate by these coordinates:
+tee (37.999062, -87.341785), green (38.000638, -87.345144).
 
-| KF | Time | Latitude | Longitude | Camera altitude | Heading | Framing check |
-|---|---|---|---|---|---|---|
-| 1 | 0.0s | 37.99897 | -87.34089 | ~160 m ASL (35 m above tee ground) | 277° | Tee bottom of frame, fairway centerline up the middle, lake right, horizon in top ~15% |
-| 2 | 4.5s | 37.99931 | -87.34432 | ~142 m ASL (25 m above fairway) | 285° | Over the landing area; 3-bunker cluster visible left, water right |
-| 3 | 8.5s | 38.00000 | -87.34480 | ~148 m ASL | 330° | Mid right-turn with the dogleg; green entering frame |
-| 4 | 13.0s | 38.00045 | -87.34495 | ~163 m ASL (45 m up) | 315° | Settled + nearly stationary: green at water's edge, clubhouse beyond, whole green complex readable |
+## Step 4 — Keyframes (frame by eye; coordinates are guides, the fairway is truth)
 
-Ground reference: tee ~125 m ASL, fairway ~117 m, green ~118 m. Earth Studio altitude
-fields are typically absolute (ASL) — use the ASL numbers, then trust your eyes.
+With the playhead at 0, position the opening shot, then click the keyframe diamonds
+for **Camera Position** and **Camera Rotation**. After that, moving the playhead and
+then moving the camera auto-drops new keyframes.
 
-**The imagery outranks the numbers.** If a keyframe sits slightly off the visible
-fairway centerline, nudge position/heading/tilt until the framing-check column is
-true. Coordinates are for getting close; the on-screen fairway is the truth. Tilt on
-every keyframe: comfortably above the terrain looking ahead and down (~12–20° below
-horizontal), horizon always level, never pointing steeply down.
+| Time | Position (guide) | Alt (guide) | What the frame must show |
+|---|---|---|---|
+| 0.0s | 37.99897, -87.34089 | ~160 m ASL | Behind/above the tee: tee at bottom, fairway running away WNW up the middle, lake right, clubhouse in the distance, horizon in top ~15% |
+| 4.5s | 37.99931, -87.34432 | ~142 m | Pushed forward over the landing zone, slightly lower; 3-bunker cluster visible left, water right |
+| 8.5s | 38.00000, -87.34480 | ~148 m | Turning right with the fairway's bend; green entering frame |
+| 13.0s | 38.00045, -87.34495 | ~163 m | Climbed, nearly stationary, short-right of green: green + lake + clubhouse composed together |
 
-Preview the full move once. It should feel like a calm professional drone: no whip,
-no sudden banking, eases in and out. Fix any keyframe that pops.
+Play it back (spacebar) twice — first pass caches imagery. It must feel like a calm
+professional drone: no pops, no whip. If start/stop is abrupt: drag-select all
+keyframes → right-click → Auto-Ease (or ease the first and last).
 
-## 3. Render and export
+## Step 5 — Save the project
 
-1. Full render: Render button → full work area → 3840×2160, JPEG image sequence
-   (default), attribution ON (required by Google — leave it). Download the result.
-2. Save the project so it can be re-rendered later: File → Save. If a local
-   download/export of the project file (.esp) is offered, grab it too.
-3. Three stills: move the playhead to KF1, KF2, and KF4 and render a single frame
-   at each (set the work area to one frame), or download those frames from the
-   image sequence after the render.
+File → Save Project. If it downloads a `.esp` file, that's deliverable #1.
+If it saves to the account instead, note the project name for Rod.
 
-## 4. Tell Rod to send back
+## Step 6 — Render
 
-To his Claude Code session (upload to the chat, or a Google Drive folder named
-`VN-hole18`):
+Click **Render** (top right): full work area, 1920×1080, JPEG image sequence (the
+default), attribution ON (required — leave it). Choose/note the destination folder
+and start. Keep the tab open and in the foreground — backgrounding can stall the
+render. Expect 5–15 minutes; wait for it to finish and confirm the frames exist
+(~390 numbered .jpg files).
 
-- `hole18_flyover` render — the mp4 if Earth Studio produced one, otherwise the
-  frame-sequence folder zipped as `hole18_frames.zip`
-- `hole18.esp` project file (if a local export was possible; otherwise just confirm
-  the cloud project name `VN-hole18-flyover`)
-- The three stills, named `hole18_still_tee.jpg`, `hole18_still_landing.jpg`,
-  `hole18_still_green.jpg`
+## Step 7 — Package and finish
+
+Zip the frames folder as `hole18_frames.zip`. Then tell Rod exactly:
+1. Where `hole18_frames.zip` and the `.esp` are on disk
+2. To upload both files to his Claude Code session (the golf-flyover chat) —
+   that session takes over from there.
 
 ## Guardrails
 
-- Right course, right hole: Victoria National GC, Newburgh IN. Hole 18's tee is at
-  (37.999062, -87.341785), green at (38.000638, -87.345144), clubhouse NW of the green.
-  If the search lands anywhere else, navigate by these coordinates.
-- Do not change project dimensions/fps/duration after keyframing.
-- Do not add labels, markers, or overlays to the render.
-- If Earth Studio access is missing or something blocks rendering, stop and tell Rod
-  what you see — don't improvise a different capture method in this session.
+- Wrong course/hole = wasted render. Re-verify with the coordinates above.
+- Don't change dimensions/fps/duration after keyframing.
+- No labels, markers, or overlays in the render.
+- If anything blocks you (access, rendering errors, missing UI), stop and tell Rod
+  exactly what's on screen — do not improvise a different capture method
+  (no screen recording).
