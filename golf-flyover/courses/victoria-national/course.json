@@ -76,7 +76,8 @@
         "notes": ""
       },
       "approved": false,
-      "handicap": 13
+      "handicap": 13,
+      "myPlay": "Driver \u2014 fade holds off the left sand. ~150 left, downhill: smooth 9-iron."
     },
     {
       "holeNumber": 2,
@@ -145,7 +146,8 @@
         "notes": ""
       },
       "approved": false,
-      "handicap": 7
+      "handicap": 7,
+      "myPlay": "6-iron off the tee, short of all the water. 8-iron in. Take your par and go."
     },
     {
       "holeNumber": 3,
@@ -214,7 +216,8 @@
         "notes": ""
       },
       "approved": false,
-      "handicap": 3
+      "handicap": 3,
+      "myPlay": "7-wood through the pinch, then send 3-wood. Wedge from ~100 for the third."
     },
     {
       "holeNumber": 4,
@@ -283,7 +286,8 @@
         "notes": ""
       },
       "approved": false,
-      "handicap": 9
+      "handicap": 9,
+      "myPlay": "Driver at it \u2014 commit. Both sides are wet at the green; center line, short is the only safe miss."
     },
     {
       "holeNumber": 5,
@@ -352,7 +356,8 @@
         "notes": ""
       },
       "approved": false,
-      "handicap": 15
+      "handicap": 15,
+      "myPlay": "7-iron \u2014 the 11-ft drop pays for the missing club. Middle of the green, always."
     },
     {
       "holeNumber": 6,
@@ -421,7 +426,8 @@
         "notes": ""
       },
       "approved": false,
-      "handicap": 1
+      "handicap": 1,
+      "myPlay": "Driver, then 7-wood toward the green. Bogey on the No. 1 handicap is a half-shot win."
     },
     {
       "holeNumber": 7,
@@ -490,7 +496,8 @@
         "notes": ""
       },
       "approved": false,
-      "handicap": 17
+      "handicap": 17,
+      "myPlay": "Full 9-iron at 145. Never over-club \u2014 long-right is the only wet miss."
     },
     {
       "holeNumber": 8,
@@ -559,7 +566,8 @@
         "notes": ""
       },
       "approved": false,
-      "handicap": 11
+      "handicap": 11,
+      "myPlay": "Driver carries the right water easily. 8-iron in \u2014 respect the sand at the green."
     },
     {
       "holeNumber": 9,
@@ -628,7 +636,8 @@
         "notes": ""
       },
       "approved": false,
-      "handicap": 5
+      "handicap": 5,
+      "myPlay": "Driver center \u2014 the fade clears the left sand ladder. Then send 3-wood; wedge cleanup."
     },
     {
       "holeNumber": 10,
@@ -697,7 +706,8 @@
         "notes": ""
       },
       "approved": false,
-      "handicap": 12
+      "handicap": 12,
+      "myPlay": "Driver right-center, away from the left cluster. Send 3-wood up the right."
     },
     {
       "holeNumber": 11,
@@ -766,7 +776,8 @@
         "notes": ""
       },
       "approved": false,
-      "handicap": 14
+      "handicap": 14,
+      "myPlay": "7-wood / 5-iron and swing free. Aim left-center \u2014 short-right drowns."
     },
     {
       "holeNumber": 12,
@@ -835,7 +846,8 @@
         "notes": ""
       },
       "approved": false,
-      "handicap": 16
+      "handicap": 16,
+      "myPlay": "Driver up the open right side \u2014 water left can't touch your fade. Sand wedge from ~75."
     },
     {
       "holeNumber": 13,
@@ -904,7 +916,8 @@
         "notes": ""
       },
       "approved": false,
-      "handicap": 18
+      "handicap": 18,
+      "myPlay": "7-wood stays short of the 250 right sand. 9-iron in. Scoring hole \u2014 keep it boring."
     },
     {
       "holeNumber": 14,
@@ -973,7 +986,8 @@
         "notes": ""
       },
       "approved": false,
-      "handicap": 2
+      "handicap": 2,
+      "myPlay": "Driver, everything you've got. Uphill approach plays one extra club."
     },
     {
       "holeNumber": 15,
@@ -1042,7 +1056,8 @@
         "notes": ""
       },
       "approved": false,
-      "handicap": 8
+      "handicap": 8,
+      "myPlay": "Driver at the left edge, let the fade ride the dogleg. Send 3-wood at the -32 ft drop."
     },
     {
       "holeNumber": 16,
@@ -1111,7 +1126,8 @@
         "notes": ""
       },
       "approved": false,
-      "handicap": 10
+      "handicap": 10,
+      "myPlay": "9-iron at the peninsula \u2014 the drop makes 161 play ~148. Middle, three, walk."
     },
     {
       "holeNumber": 17,
@@ -1180,7 +1196,8 @@
         "notes": ""
       },
       "approved": false,
-      "handicap": 4
+      "handicap": 4,
+      "myPlay": "3-wood to the fat of the island. 6-iron over the water. Fairway first, always."
     },
     {
       "holeNumber": 18,
@@ -1291,7 +1308,19 @@
         "notes": ""
       },
       "approved": false,
-      "handicap": 6
+      "handicap": 6,
+      "myPlay": "7-wood short of the lake pinch. Then 5-iron at the green, or lay to 100. Nothing right. Ever."
     }
-  ]
+  ],
+  "player": {
+    "name": "Rod",
+    "driverTotal": 240,
+    "shape": "fade, miss right",
+    "club150": "8-iron",
+    "longSafety": "7-wood (~200)",
+    "trust": "driver",
+    "par5Second": "send it",
+    "wedgeNumber": 100,
+    "interviewed": "2026-08-28"
+  }
 }

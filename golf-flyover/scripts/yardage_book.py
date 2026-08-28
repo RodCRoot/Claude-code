@@ -418,6 +418,18 @@ def build(course_dir, dpi):
             c.drawString(M, y, tee)
             c.setFont("DVSB", 9.5)
             c.drawRightString(PW - M, y, f"{yds:,}")
+        p = course.get("player")
+        if p:
+            y -= 24
+            c.setFillColorRGB(*[v / 255 for v in GOLD])
+            c.setFont("DVSB", 8)
+            c.drawString(M, y, "MY PLAY NOTES CALIBRATED FOR")
+            c.setFillColorRGB(*[v / 255 for v in INK])
+            c.setFont("DVS", 8.5)
+            shape = p["shape"].split(",")[0]
+            c.drawString(M, y - 13,
+                         f"{p['driverTotal']} driver ({shape}) · 150 = {p['club150']} · "
+                         f"safety 7-wood · layup {p['wedgeNumber']}")
         footer(2)
         c.showPage()
 
@@ -439,7 +451,7 @@ def build(course_dir, dpi):
     def footer(pageno, note=""):
         c.setFillColorRGB(0.45, 0.45, 0.45)
         c.setFont("DVS", 6.5)
-        c.drawString(M, 18, note or course["courseName"])
+        c.drawString(M, 18, note or f"{course['courseName']} · White tees")
         c.drawRightString(PW - M, 18, str(pageno))
 
     def hole_page(h, pageno):
@@ -450,7 +462,7 @@ def build(course_dir, dpi):
         c.rect(0, 0, PW, PH, fill=1, stroke=0)
         header(f"HOLE {n}", f"PAR {h['par']}  ·  HCP {h.get('handicap', '—')}", f"{h['yardage']} YDS")
 
-        map_w_pt, map_h_pt = PW - 2 * M, PH - 64 - 96
+        map_w_pt, map_h_pt = PW - 2 * M, PH - 64 - 112
         box_px = (int(map_w_pt / 72 * dpi), int(map_h_pt / 72 * dpi))
         img, uv2px, _ = render_hole_map(frame, cache, box_px, dpi)
         img = draw_overlays(img, frame, uv2px, h, dpi)
@@ -459,7 +471,7 @@ def build(course_dir, dpi):
         s = min(map_w_pt / w_pt, map_h_pt / h_pt)
         w_pt, h_pt = w_pt * s, h_pt * s
         x = (PW - w_pt) / 2
-        y = 96 + (map_h_pt - h_pt) / 2
+        y = 112 + (map_h_pt - h_pt) / 2
         buf = BytesIO()  # embed as JPEG (DCT) — lossless embedding balloons the file
         img.save(buf, "JPEG", quality=82)
         buf.seek(0)
@@ -481,17 +493,37 @@ def build(course_dir, dpi):
             else:
                 cur = trial
         lines.append(cur)
-        y = 80
+        y = 96
         for ln in lines[:2]:
             c.drawString(M, y, ln)
-            y -= 12
+            y -= 11
+        play = h.get("myPlay", "")
+        if play:
+            c.setFillColorRGB(*[v / 255 for v in GOLD])
+            c.setFont("DVSB", 8)
+            c.drawString(M, 68, "MY PLAY")
+            label_w = stringWidth("MY PLAY", "DVSB", 8) + 8
+            c.setFillColorRGB(*[v / 255 for v in INK])
+            c.setFont("DVS", 8.5)
+            words, wlines, cur = play.split(), [], ""
+            first_w = PW - 2 * M - label_w
+            for w in words:
+                trial = (cur + " " + w) if cur else w
+                width = first_w if not wlines else PW - 2 * M
+                if stringWidth(trial, "DVS", 8.5) > width and cur:
+                    wlines.append(cur)
+                    cur = w
+                else:
+                    cur = trial
+            wlines.append(cur)
+            c.drawString(M + label_w, 68, wlines[0])
+            if len(wlines) > 1:
+                c.drawString(M, 57, " ".join(wlines[1:]))
         strat = h.get("strategy", "")
-        c.setFont("DVS", 8.5)
         if strat:
-            c.drawString(M, 54, strat)
-        c.setFillColorRGB(0.35, 0.35, 0.35)
-        c.setFont("DVS", 7.5)
-        c.drawString(M, 40, f"White {h['yardage']} yds from the markers played in this guide")
+            c.setFillColorRGB(0.35, 0.35, 0.35)
+            c.setFont("DVS", 8)
+            c.drawString(M, 42, strat)
         footer(pageno)
         c.showPage()
 
