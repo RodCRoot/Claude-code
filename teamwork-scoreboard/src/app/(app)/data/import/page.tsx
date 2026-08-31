@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
+import { IMPORT_TARGETS } from "@/lib/importer";
 import { PageHeader } from "@/components/ui";
 import { ImportWizard } from "./import-wizard";
 
@@ -19,7 +20,12 @@ export default async function ImportPage() {
           </Link>
         }
       />
-      <ImportWizard />
+      <ImportWizard
+        targets={Object.entries(IMPORT_TARGETS).map(([key, t]) => ({
+          key,
+          label: t.label,
+        }))}
+      />
     </>
   );
 }
