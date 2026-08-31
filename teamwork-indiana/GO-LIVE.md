@@ -44,11 +44,11 @@ The logo is already uploaded (media ID 10).
 Several photos include minors. Confirm you have releases on file for
 every athlete pictured, or tell me which ones to pull.
 
-### 5. Me: brand CSS
-Paste `wordpress/additional-css.css` into
-**Appearance → Customize → Additional CSS** (Premium feature).
-This is what turns the plain block colors into the brand look — league
-chips, guarantee banner, FAQ accordions, stat numbers.
+### 5. Rod: decide what to do with the placeholder "About" page
+WordPress created a sample page (id 1, slug `about`) that is already
+**published**. At launch it would be publicly reachable at
+`/about/` with default filler text. Say the word and I'll trash it, or
+tell me what you want on it.
 
 ### 6. Me: place images + set Home as the static homepage
 **Settings → Reading → A static page → Homepage: Home.**
@@ -95,7 +95,19 @@ afterward.
 - Three pages built as Gutenberg blocks and pushed to WordPress as drafts
   (27 FAQ questions, 14 verbatim Google reviews, full home page).
 - Site title and tagline set.
-- Logo uploaded to the Media Library.
+- Logo uploaded to the Media Library (media ID 10) and placed in the header,
+  linked back to the homepage.
+- Brand CSS applied site-wide via global styles — the same layer as
+  Appearance → Customize → Additional CSS.
+- **Footer rewritten with real information.** The theme shipped with
+  "123 Example Street, San Francisco, CA 12345 / hi@example.com /
+  (123) 456-7890" — all of it placeholder. It now carries the Yost Ave
+  address, the real session-time grid, (812) 445-5551,
+  memberships@teamworkbloomington.com, and the T2 Indiana INC billing note.
+- Header CTA button now reads "Free Assessment" and links to `/#contact`
+  (was an inert "Learn more").
+- Navigation set to Home · Success Stories · FAQ (was a stub pointing at
+  the placeholder About page).
 - Success Stories CTA verified pointing at `/#contact`.
 - FAQ page is generated directly from `FAQ-PARENTS-ATHLETES.md`, so the
   page and the parent handout can never drift apart.

@@ -1,16 +1,10 @@
-/* Teamwork Indiana — paste into Appearance → Customize → Additional CSS
-   (Premium plan feature). Brand tokens from the logo. */
+/* Teamwork Indiana — brand CSS.
+   APPLIED 2026-08-31 to blog_id 256688996 via global styles (styles.css),
+   which is the same layer as Appearance → Customize → Additional CSS.
 
-:root {
-  --tw-blue: #004CBA;
-  --tw-blue-bright: #2E7BFF;
-  --tw-green: #009245;
-  --tw-red: #C1272D;
-  --tw-purple: #662D91;
-  --tw-yellow: #FFE000;
-  --tw-navy: #0C1A31;
-  --tw-navy-deep: #08101F;
-}
+   NOTE: WordPress strips custom-property declarations from this layer —
+   a `:root { --tw-blue: … }` block is saved as an empty `:root {}`. Use
+   literal hex values here, not var(). */
 
 /* headline treatment */
 .wp-block-heading.tw-display,
@@ -23,7 +17,7 @@ h1.tw-display, h2.tw-display {
 
 /* buttons */
 .wp-block-button.tw-btn .wp-block-button__link {
-  background: var(--tw-blue);
+  background: #004CBA;
   color: #fff;
   font-weight: 800;
   text-transform: uppercase;
@@ -37,7 +31,7 @@ h1.tw-display, h2.tw-display {
 .tw-dots { letter-spacing: 6px; font-size: 14px; }
 
 /* stat numbers */
-.tw-stat-n { font-size: 2.4rem; font-weight: 800; color: var(--tw-blue-bright); line-height: 1; }
+.tw-stat-n { font-size: 2.4rem; font-weight: 800; color: #2E7BFF; line-height: 1; }
 .tw-stat-l { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.14em; opacity: 0.75; }
 
 /* league chips */
@@ -60,7 +54,7 @@ h1.tw-display, h2.tw-display {
 }
 
 /* guarantee banner */
-.tw-guarantee { border-left: 5px solid var(--tw-green); border-radius: 12px; }
+.tw-guarantee { border-left: 5px solid #009245; border-radius: 12px; }
 
 /* FAQ details styling */
 .tw-faq details {
@@ -71,3 +65,13 @@ h1.tw-display, h2.tw-display {
   padding: 4px 16px;
 }
 .tw-faq summary { font-weight: 700; padding: 12px 0; cursor: pointer; }
+
+/* Brand reference (not emitted — WordPress drops custom properties here)
+   blue        #004CBA
+   blue bright #2E7BFF
+   green       #009245
+   red         #C1272D
+   purple      #662D91
+   yellow      #FFE000
+   navy        #0C1A31
+   navy deep   #08101F  */
