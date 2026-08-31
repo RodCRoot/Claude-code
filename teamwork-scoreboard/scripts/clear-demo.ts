@@ -28,6 +28,7 @@ const DEMO_TABLES = [
   "athletes",
   "campaigns",
   "marketing_items",
+  "cancellations",
 ];
 
 let total = 0;

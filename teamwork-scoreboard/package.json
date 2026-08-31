@@ -9,8 +9,10 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:scraper": "tsx scripts/test-scraper-mock.ts",
+    "test:cancellations": "tsx scripts/test-cancellations.ts",
     "db:generate": "drizzle-kit generate",
     "db:seed": "tsx scripts/seed.ts",
+    "db:sync-metrics": "tsx scripts/sync-metrics.ts",
     "db:clear-demo": "tsx scripts/clear-demo.ts"
   },
   "dependencies": {

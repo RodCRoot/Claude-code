@@ -137,7 +137,18 @@ function newMemberships(p: Period): number {
         WHERE is_trial = 0 AND ${between("start_date", p)}`
   );
 }
-function cancellationsIn(p: Period): number {
+/**
+ * Cancellations in a period. Prefers the imported drop report (already
+ * deduplicated to one row per person per month); falls back to membership
+ * records when no drop data has been imported yet.
+ */
+function cancellationsIn(p: Period, category?: string): number {
+  const fromDrops = num(
+    sql`SELECT COUNT(*) AS v FROM cancellations
+        WHERE ${between("effective_date", p)}
+        ${category ? sql`AND category = ${category}` : sql``}`
+  );
+  if (fromDrops > 0 || category) return fromDrops;
   return num(
     sql`SELECT COUNT(*) AS v FROM memberships
         WHERE status = 'canceled' AND end_date IS NOT NULL AND ${between("end_date", p)}`
@@ -232,6 +243,8 @@ const REGISTRY: Record<string, (p: Period, now: Date) => number | null> = {
   new_athletes: (p) =>
     num(sql`SELECT COUNT(*) AS v FROM athletes WHERE ${between("start_date", p)}`),
   cancellations: (p) => cancellationsIn(p),
+  cancellations_controllable: (p) => cancellationsIn(p, "controllable"),
+  cancellations_expected: (p) => cancellationsIn(p, "expected"),
   holds: (p) =>
     num(sql`SELECT COUNT(*) AS v FROM memberships
         WHERE hold_start IS NOT NULL AND ${between("hold_start", p)}`),
@@ -527,7 +540,48 @@ export function drillRecords(key: string, p: Period, now: Date = new Date()): Dr
       .map((r) => [r.who, r.type_key, r.s, r.status, r.conf ? "yes" : "no"]);
     return { columns: ["Contact", "Type", "Scheduled", "Status", "Confirmed"], rows };
   }
-  if (["new_memberships", "trials_started", "cancellations", "holds", "net_growth", "trial_to_member", "retention", "churn", "mrr", "avg_lifespan"].includes(key)) {
+  if (["cancellations", "cancellations_controllable", "cancellations_expected"].includes(key)) {
+    const cat =
+      key === "cancellations_controllable"
+        ? "controllable"
+        : key === "cancellations_expected"
+        ? "expected"
+        : null;
+    const rows = db
+      .all<{
+        name: string;
+        d: string;
+        reason: string | null;
+        sub: string | null;
+        by: string | null;
+        cat: string;
+        dups: number;
+      }>(
+        sql`SELECT athlete_name AS name, effective_date AS d, drop_reason AS reason,
+              sub_drop_reason AS sub, cancelled_by AS by, category AS cat,
+              duplicate_rows AS dups
+            FROM cancellations
+            WHERE ${between("effective_date", p)}
+            ${cat ? sql`AND category = ${cat}` : sql``}
+            ORDER BY effective_date DESC LIMIT 200`
+      )
+      .map((r) => [
+        r.name,
+        r.d,
+        r.reason ?? "—",
+        r.sub ?? "—",
+        r.cat,
+        r.by ?? "—",
+        r.dups > 1 ? `${r.dups} raw rows merged` : "",
+      ]);
+    return {
+      columns: ["Athlete", "Effective", "Reason", "Sub-reason", "Category", "Cancelled by", "Duplicates"],
+      rows,
+      note:
+        "One row per person per month — duplicate membership rows from the Zen Planner drop report are merged automatically. Reason categories are editable in Admin → Settings.",
+    };
+  }
+  if (["new_memberships", "trials_started", "holds", "net_growth", "trial_to_member", "retention", "churn", "mrr", "avg_lifespan"].includes(key)) {
     const rows = db
       .all<{ name: string; plan: string; rate: number; status: string; sd: string; ed: string | null }>(
         sql`SELECT a.name, m.plan, m.monthly_rate AS rate, m.status, m.start_date AS sd, m.end_date AS ed

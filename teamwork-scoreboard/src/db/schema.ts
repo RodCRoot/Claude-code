@@ -547,6 +547,41 @@ export const syncRuns = sqliteTable(
   (t) => [index("sync_runs_connector_idx").on(t.connectorId, t.startedAt)]
 );
 
+/**
+ * Cancellations / drops, imported from the Zen Planner drop report.
+ *
+ * That report emits one row per dropped MEMBERSHIP, so a person with two
+ * memberships appears twice for the same real-world event. `dedupeKey`
+ * (lowercased name + YYYY-MM) carries a unique index, so a person can only
+ * ever count once per month no matter how many duplicate rows arrive or how
+ * often the report is re-imported.
+ */
+export const cancellations = sqliteTable(
+  "cancellations",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    athleteName: text("athlete_name").notNull(),
+    athleteId: integer("athlete_id").references(() => athletes.id),
+    effectiveDate: text("effective_date").notNull(), // YYYY-MM-DD
+    dropReason: text("drop_reason"),
+    subDropReason: text("sub_drop_reason"),
+    cancelledBy: text("cancelled_by"),
+    status: text("status"),
+    // expected | controllable | other — see drop_reason_categories setting
+    category: text("category").notNull().default("other"),
+    // lower(name)|YYYY-MM — enforces one cancellation per person per month
+    dedupeKey: text("dedupe_key").notNull(),
+    // how many raw rows collapsed into this one (visibility into duplicates)
+    duplicateRows: integer("duplicate_rows").notNull().default(1),
+    createdAt: text("created_at").notNull(),
+    demo: integer("demo").notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex("cancellation_dedupe_unique").on(t.dedupeKey),
+    index("cancellations_date_idx").on(t.effectiveDate),
+  ]
+);
+
 export const importMappings = sqliteTable("import_mappings", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),

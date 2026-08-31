@@ -8,8 +8,10 @@ import {
   payments,
   kpiValues,
   metrics,
+  cancellations,
 } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { getSetting } from "./settings";
 
 /** Canonical import targets and their fields (used by the mapping wizard). */
 export const IMPORT_TARGETS: Record<
@@ -62,6 +64,19 @@ export const IMPORT_TARGETS: Record<
       { key: "note", label: "Note" },
     ],
   },
+  cancellations: {
+    label: "Cancellations / drops",
+    fields: [
+      { key: "athlete_name", label: "Athlete name (or use First + Last)" },
+      { key: "first_name", label: "First name" },
+      { key: "last_name", label: "Last name" },
+      { key: "effective_date", label: "Effective date", required: true },
+      { key: "drop_reason", label: "Drop reason" },
+      { key: "sub_drop_reason", label: "Sub drop reason" },
+      { key: "cancelled_by", label: "Cancelled by" },
+      { key: "status", label: "Status" },
+    ],
+  },
   kpi_values: {
     label: "KPI values",
     fields: [
@@ -104,6 +119,26 @@ export function normalizeDate(raw: string | undefined | null): string | null {
   return null;
 }
 
+/**
+ * Classify a Zen Planner drop reason as expected / controllable / other,
+ * using the editable `drop_reason_categories` setting. Matching is
+ * case-insensitive substring, checked against reason + sub-reason together.
+ */
+export function classifyDropReason(
+  reason: string,
+  subReason: string,
+  categories: { expected: readonly string[]; controllable: readonly string[] }
+): "expected" | "controllable" | "other" {
+  const hay = `${reason} ${subReason}`.toLowerCase();
+  if (categories.controllable.some((k) => hay.includes(k.toLowerCase()))) {
+    return "controllable";
+  }
+  if (categories.expected.some((k) => hay.includes(k.toLowerCase()))) {
+    return "expected";
+  }
+  return "other";
+}
+
 function findAthleteId(name: string): number | null {
   const row = db.get<{ id: number }>(
     sql`SELECT id FROM athletes WHERE LOWER(name) = LOWER(${name.trim()}) LIMIT 1`
@@ -139,6 +174,12 @@ export function commitImport(
   let skipped = 0;
   const nowIso = new Date().toISOString();
   const exists = (q: ReturnType<typeof sql>) => db.get<{ one: number }>(q) !== undefined;
+  const dropCategories = getSetting("drop_reason_categories") as unknown as {
+    expected: string[];
+    controllable: string[];
+  };
+  // dedupe_key -> how many rows of this file mapped to it
+  const batchSeen = new Map<string, number>();
 
   const get = (row: Record<string, string>, field: string): string => {
     for (const [col, f] of Object.entries(mapping)) {
@@ -267,6 +308,54 @@ export function commitImport(
             category: get(row, "category").toLowerCase() || "membership",
             status: payStatus,
             note: get(row, "note") || null,
+          })
+          .run();
+        processed++;
+      } else if (target === "cancellations") {
+        // Zen Planner emits one row per dropped membership, so the same
+        // person shows up repeatedly for a single real cancellation. We
+        // collapse to one record per person per month (unique dedupe_key)
+        // and count how many raw rows folded in, so the duplicates are
+        // visible rather than silently dropped.
+        const name =
+          get(row, "athlete_name") ||
+          `${get(row, "first_name")} ${get(row, "last_name")}`.trim();
+        const date = normalizeDate(get(row, "effective_date"));
+        if (!name || !date) {
+          fail("missing athlete name or effective date");
+          continue;
+        }
+        const reason = get(row, "drop_reason");
+        const subReason = get(row, "sub_drop_reason");
+        const key = `${name.toLowerCase().replace(/\s+/g, " ")}|${date.slice(0, 7)}`;
+        // Count occurrences within THIS file, so the stored duplicate count
+        // reflects the report rather than how many times it's been imported.
+        const seenInBatch = (batchSeen.get(key) ?? 0) + 1;
+        batchSeen.set(key, seenInBatch);
+        const existing = db.get<{ id: number }>(
+          sql`SELECT id FROM cancellations WHERE dedupe_key = ${key} LIMIT 1`
+        );
+        if (existing) {
+          db.run(
+            sql`UPDATE cancellations SET duplicate_rows = ${seenInBatch}
+                WHERE id = ${existing.id} AND duplicate_rows < ${seenInBatch}`
+          );
+          skipped++;
+          continue;
+        }
+        db.insert(cancellations)
+          .values({
+            athleteName: name,
+            athleteId: findAthleteId(name),
+            effectiveDate: date,
+            dropReason: reason || null,
+            subDropReason: subReason || null,
+            cancelledBy: get(row, "cancelled_by") || null,
+            status: get(row, "status") || null,
+            category: classifyDropReason(reason, subReason, dropCategories),
+            dedupeKey: key,
+            duplicateRows: seenInBatch,
+            createdAt: nowIso,
           })
           .run();
         processed++;
