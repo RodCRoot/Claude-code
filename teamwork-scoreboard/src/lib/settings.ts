@@ -45,6 +45,40 @@ export const SETTING_DEFAULTS = {
     "Private Training",
   ],
   /**
+   * How cancellation/drop reasons are classified on the scoreboard.
+   * Matching is case-insensitive and substring-based against the Zen Planner
+   * drop reason (and sub-reason). Anything unmatched lands in "other".
+   *
+   * - expected:     churn you cannot coach your way out of (moved away,
+   *                 left for college, graduated). Worth tracking, not alarming.
+   * - controllable: churn that reflects an experience or follow-up gap —
+   *                 e.g. "administrative drop" usually means they stopped
+   *                 showing up without ever telling anyone. THIS is the
+   *                 number to manage.
+   */
+  drop_reason_categories: {
+    expected: [
+      "distance too far",
+      "moved",
+      "relocat",
+      "college",
+      "graduat",
+      "season ended",
+      "military",
+      "injur",
+    ],
+    controllable: [
+      "administrative drop",
+      "no contact",
+      "stopped attending",
+      "not attending",
+      "dissatisf",
+      "too expensive",
+      "cost",
+      "schedule",
+    ],
+  },
+  /**
    * Zen Planner browser-sync login flow. The selectors default to the common
    * Zen Planner studio login form; adjust here if their markup differs.
    * Credentials are NEVER stored here — only in env vars.
