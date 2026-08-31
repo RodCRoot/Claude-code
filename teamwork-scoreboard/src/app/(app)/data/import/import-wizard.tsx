@@ -19,15 +19,15 @@ interface PreviewData {
   savedMappings: { id: number; name: string; mapping: Record<string, string> }[];
 }
 
-const TARGETS = [
-  { key: "leads", label: "Leads" },
-  { key: "athletes", label: "Athletes" },
-  { key: "attendance", label: "Attendance" },
-  { key: "payments", label: "Payments" },
-  { key: "kpi_values", label: "KPI values" },
-];
+export interface ImportTargetOption {
+  key: string;
+  label: string;
+}
 
-export function ImportWizard() {
+// Targets come from the server's IMPORT_TARGETS so the dropdown can never
+// drift out of sync with what the importer actually supports.
+export function ImportWizard({ targets }: { targets: ImportTargetOption[] }) {
+  const TARGETS = targets;
   const router = useRouter();
   const [target, setTarget] = useState("leads");
   const [preview, setPreview] = useState<PreviewData | null>(null);
