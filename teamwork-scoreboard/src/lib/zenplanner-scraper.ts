@@ -119,6 +119,31 @@ function resolveMapping(job: ZenScrapeJob, headers: string[]): Record<string, st
   return mapping;
 }
 
+/**
+ * Find an export control anywhere on the page, including inside iframes.
+ * Zen Planner renders each report in a nested frame, so the top-level
+ * document usually does not contain the export link at all. Returns the first
+ * visible match across all frames, or null.
+ */
+async function findExportControl(
+  page: import("playwright").Page,
+  selector: string
+): Promise<import("playwright").Locator | null> {
+  // Poll briefly: the report grid mounts asynchronously after the frame loads.
+  for (let attempt = 0; attempt < 6; attempt++) {
+    for (const frame of page.frames()) {
+      try {
+        const loc = frame.locator(selector).first();
+        if ((await loc.count()) > 0 && (await loc.isVisible())) return loc;
+      } catch {
+        // frame detached mid-search (SPA navigation) — just try the next one
+      }
+    }
+    await page.waitForTimeout(2000);
+  }
+  return null;
+}
+
 function looksLikeHtml(text: string): boolean {
   const head = text.slice(0, 300).toLowerCase();
   return head.includes("<html") || head.includes("<!doctype html");
@@ -223,9 +248,26 @@ export async function runZenPlannerScrape(): Promise<ScrapeOutcome> {
           }
         } else if (job.url && job.exportSelector) {
           await page.goto(job.url, { waitUntil: "domcontentloaded", timeout: 60000 });
+          // Zen Planner is a hash-route SPA that renders each report inside an
+          // iframe, so the export link usually is NOT in the top-level page.
+          // Give the SPA time to mount, then search every frame for it.
+          await page
+            .waitForLoadState("networkidle", { timeout: 30000 })
+            .catch(() => undefined);
+          const target = await findExportControl(page, job.exportSelector);
+          if (!target) {
+            const frameCount = page.frames().length;
+            throw new Error(
+              `export control "${job.exportSelector}" not found in any of the ` +
+                `${frameCount} frame(s) on that page. Open the report yourself, ` +
+                "right-click the export link → Inspect, and put a matching selector " +
+                "in the job's exportSelector (Admin → Settings → Zen Planner scrape jobs)."
+            );
+          }
           const [download] = await Promise.all([
-            page.waitForEvent("download", { timeout: 45000 }),
-            page.locator(job.exportSelector).first().click({ timeout: 15000 }),
+            // download events surface on the page regardless of which frame fired them
+            page.waitForEvent("download", { timeout: 60000 }),
+            target.click({ timeout: 15000 }),
           ]);
           const file = await download.path();
           csvText = fs.readFileSync(file, "utf8");
