@@ -1,0 +1,1186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Space Candy Mission Control</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&display=swap">
+<!--
+  Space Candy Mission Control — system of record for the Space Candy /
+  Shakedown Sweets CO LLC freeze-dried candy business.
+
+  Architecture:
+  - All data lives in the <script type="application/json" id="state"> block.
+  - The page renders entirely from that state. Edits mutate state, then
+    (on claude.ai) republish this artifact with the new state embedded, or
+    (elsewhere) persist to localStorage.
+  - The weekday-morning Claude watcher reads the live page, merges changes
+    found in email, swaps the state block, and republishes the same page.
+  - This repo file is the canonical template. Page chrome changes happen
+    here; data changes happen in the artifact.
+-->
+<style id="css">
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --border: rgba(11, 11, 11, 0.10);
+    --accent: #6247c0;
+    --accent-ink: #ffffff;
+    --series-1: #2a78d6;
+    --meter-track: #cde2fb;
+    --good: #0ca30c;
+    --good-text: #006300;
+    --warning: #fab219;
+    --critical: #d03b3b;
+    --tooltip-bg: #0b0b0b;
+    --tooltip-ink: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #ffffff;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --border: rgba(255, 255, 255, 0.10);
+      --accent: #9a86e8;
+      --accent-ink: #14102b;
+      --series-1: #3987e5;
+      --meter-track: #104281;
+      --good-text: #0ca30c;
+      --tooltip-bg: #fcfcfb;
+      --tooltip-ink: #0b0b0b;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --accent: #9a86e8;
+    --accent-ink: #14102b;
+    --series-1: #3987e5;
+    --meter-track: #104281;
+    --good-text: #0ca30c;
+    --tooltip-bg: #fcfcfb;
+    --tooltip-ink: #0b0b0b;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 64px; }
+
+  header.site { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+  .brand h1 {
+    font-family: "Bricolage Grotesque", system-ui, sans-serif;
+    font-size: 24px; font-weight: 700; margin: 0 0 2px; letter-spacing: -0.015em;
+  }
+  .brand h1 .mark { color: var(--accent); }
+  .brand .sub { color: var(--ink-2); font-size: 13px; margin: 0; }
+  .head-tools { display: flex; gap: 8px; align-items: center; flex: none; }
+  .chip {
+    font-size: 12px; color: var(--ink-2); border: 1px solid var(--border);
+    border-radius: 999px; padding: 4px 11px; background: var(--surface); white-space: nowrap;
+  }
+  .chip.saving { color: var(--accent); border-color: var(--accent); }
+  .chip.err { color: var(--critical); border-color: var(--critical); }
+  .theme-btn {
+    flex: none; border: 1px solid var(--border); background: var(--surface); color: var(--ink-2);
+    border-radius: 8px; padding: 5px 12px; font: inherit; font-size: 12.5px; cursor: pointer;
+  }
+  .theme-btn:hover { color: var(--ink); }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px 12px; }
+  .tile .label { color: var(--ink-2); font-size: 12.5px; margin-bottom: 4px; }
+  .tile .value { font-size: 28px; font-weight: 600; line-height: 1.1; }
+  .tile .note { color: var(--muted); font-size: 12px; margin-top: 4px; }
+
+  .grid { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; align-items: start; }
+  .grid > * { min-width: 0; }
+  .col { display: flex; flex-direction: column; gap: 16px; }
+  .col > section.card { margin-bottom: 0; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+
+  section.card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px 18px; margin-bottom: 16px;
+  }
+  section.card > h2 {
+    font-family: "Bricolage Grotesque", system-ui, sans-serif;
+    font-size: 15.5px; font-weight: 700; margin: 0 0 2px;
+  }
+  section.card > p.sub { color: var(--muted); font-size: 12.5px; margin: 0 0 12px; }
+
+  .tbl-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  td { padding: 7px 10px 7px 0; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  td.num { font-variant-numeric: tabular-nums; }
+
+  input[type="text"], input[type="number"], input[type="date"], select {
+    font: inherit; font-size: 13px; color: var(--ink);
+    background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 4px 6px;
+    max-width: 100%;
+  }
+  input:hover, select:hover { border-color: var(--border); }
+  input:focus, select:focus { border-color: var(--accent); outline: none; background: var(--page); }
+  input[type="number"] { width: 76px; }
+  input[type="date"] { width: 128px; }
+  input.wide { width: 100%; min-width: 150px; }
+  input.code { width: 110px; font-variant-numeric: tabular-nums; }
+  input.money { width: 90px; font-variant-numeric: tabular-nums; }
+  select { cursor: pointer; }
+
+  button.ghost {
+    font: inherit; font-size: 12.5px; color: var(--ink-2); background: transparent;
+    border: 1px solid var(--border); border-radius: 8px; padding: 5px 12px; cursor: pointer;
+  }
+  button.ghost:hover { color: var(--ink); background: var(--page); }
+  button.primary {
+    font: inherit; font-size: 12.5px; color: var(--accent-ink); background: var(--accent);
+    border: 1px solid var(--accent); border-radius: 8px; padding: 5px 12px; cursor: pointer;
+  }
+  button.del {
+    font: inherit; color: var(--muted); background: none; border: none; cursor: pointer;
+    font-size: 15px; line-height: 1; padding: 4px 6px; border-radius: 6px;
+  }
+  button.del:hover { color: var(--critical); background: var(--page); }
+
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+  .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  .pill.active .dot { background: var(--good); }
+  .pill.waiting .dot { background: var(--warning); }
+  .pill.talks .dot { background: var(--series-1); }
+  .pill.paused .dot { background: var(--axis); }
+  .overdue-flag { color: var(--critical); font-size: 11.5px; font-weight: 600; }
+
+  .chart-box { position: relative; }
+  .chart-box svg { display: block; width: 100%; height: auto; }
+  .bar { fill: var(--series-1); }
+  .bar-hit { fill: transparent; cursor: default; outline: none; }
+  .bar-hit:hover + .bar, .bar-hit:focus-visible + .bar { opacity: 0.82; }
+  .bar-hit:focus-visible { stroke: var(--series-1); stroke-width: 1.5; }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  .axisline { stroke: var(--axis); stroke-width: 1; }
+  .cat-label { fill: var(--ink-2); font-size: 12px; }
+  .val-label { fill: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .tick-label { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .tooltip {
+    position: absolute; pointer-events: none; z-index: 10; display: none;
+    background: var(--tooltip-bg); color: var(--tooltip-ink);
+    border-radius: 8px; padding: 7px 10px; font-size: 12px; line-height: 1.4;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.25); max-width: 220px;
+  }
+  .tooltip .tt-value { font-weight: 650; font-size: 13px; }
+  .tooltip .tt-label { opacity: 0.75; }
+  .empty-note { color: var(--muted); font-size: 13px; padding: 14px 0 6px; }
+
+  .meter { height: 8px; border-radius: 4px; background: var(--meter-track); overflow: hidden; }
+  .meter > div { height: 100%; background: var(--series-1); border-radius: 4px; transition: width 0.2s; }
+  .inv-meter { display: flex; align-items: center; gap: 10px; min-width: 140px; }
+  .inv-meter .meter { flex: 1; }
+  .inv-meter .pct { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; width: 38px; text-align: right; }
+
+  ul.checks { list-style: none; margin: 0; padding: 0; }
+  ul.checks li { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid var(--grid); }
+  ul.checks li:last-child { border-bottom: none; }
+  ul.checks input[type="checkbox"] { margin-top: 3px; accent-color: var(--accent); width: 15px; height: 15px; flex: none; cursor: pointer; }
+  ul.checks label { cursor: pointer; }
+  ul.checks li.done label { color: var(--muted); text-decoration: line-through; }
+  ul.checks li .src { display: block; color: var(--muted); font-size: 11.5px; }
+  ul.checks li .txt { flex: 1; }
+
+  .callout {
+    display: flex; gap: 10px; align-items: flex-start;
+    border: 1px solid var(--border); border-left: 3px solid var(--warning);
+    border-radius: 8px; padding: 10px 12px; margin: 12px 0 0; font-size: 13px; color: var(--ink-2);
+  }
+  .callout.info { border-left-color: var(--axis); }
+  .callout .ico { flex: none; }
+  .callout strong { color: var(--ink); }
+
+  .ship-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 10px; }
+  .ship-form .field label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 3px; }
+  .ship-form input { border-color: var(--border); background: var(--page); }
+  .verdict { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px; color: var(--ink-2); }
+  .verdict strong { color: var(--ink); }
+  .verdict.on { border-left: 3px solid var(--series-1); }
+
+  .contact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+  .org { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .org h3 { margin: 0 0 2px; font-size: 13.5px; font-weight: 650; }
+  .org .role-note { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
+  .org ul { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
+  .org li { padding: 3px 0; color: var(--ink-2); }
+  .org li .nm { color: var(--ink); font-weight: 550; }
+  .org a { color: var(--accent); text-decoration: none; }
+  .org a:hover { text-decoration: underline; }
+  .addr { margin-top: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; font-size: 12.5px; color: var(--ink-2); }
+  .addr .a h4 { margin: 0 0 2px; font-size: 12px; color: var(--muted); font-weight: 500; }
+
+  .add-row { display: flex; gap: 8px; margin-top: 12px; }
+  .add-row input { flex: 1; border-color: var(--border); background: var(--page); }
+
+  footer.site { margin-top: 8px; color: var(--muted); font-size: 12px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<script type="application/json" id="state">
+{
+  "v": 2,
+  "meta": { "updatedAt": null, "updatedBy": "seed" },
+  "accounts": [
+    { "id": "acc-ronjon", "name": "Ron Jon Surf Shop", "channel": "Retail", "status": "Active",
+      "contact": "Dave Buteau (buyer)", "notes": "Vendor code VSPACAN, renamed to Shakedown Sweets. PO 180963 open." }
+  ],
+  "orders": [
+    { "id": "ord-1", "po": "180963", "account": "Ron Jon Surf Shop", "product": "Sour Alien Worms", "units": null,
+      "status": "Packed", "notes": "Packed & ready — waiting on pack-list/label docs" },
+    { "id": "ord-2", "po": "180963", "account": "Ron Jon Surf Shop", "product": "Peach Rings", "units": null,
+      "status": "Shipped", "notes": "Left SLC warehouse ~6/26 — confirm with Dave" }
+  ],
+  "inventory": {},
+  "invoices": [],
+  "nextInvoice": 1001,
+  "productMeta": {},
+  "checks": {},
+  "threePL": { "checks": {}, "notes": "" },
+  "actions": [
+    { "id": "act-1", "text": "Enter per-SKU inventory counts in the Inventory section — the burn-down and 3PL countdown light up from them", "src": "You said you'd type the counts", "done": false },
+    { "id": "act-2", "text": "Forward Robert Bao's IFD pricing sheet + the PO 180963 PDF to memberships@teamworkbloomington.com — margin math lights up", "src": "Needed for cost/unit and price/unit per SKU", "done": false },
+    { "id": "act-3", "text": "Add your current customers and the waiting-on-inventory list to Accounts", "src": "You mentioned many current customers + a waitlist", "done": false },
+    { "id": "act-4", "text": "Set Gmail auto-forward: shakedownsweetsco@gmail.com → memberships@teamworkbloomington.com so the morning watcher sees everything", "src": "Gmail → Settings → Forwarding and POP/IMAP", "done": false },
+    { "id": "act-5", "text": "Get Ron Jon SKU numbers for Sour Alien Worms & Peach Rings (required on carton labels)", "src": "Asked Dave Buteau 6/24 — no answer yet", "done": false },
+    { "id": "act-6", "text": "Return Ron Jon new-vendor form + ACH payment authorization to Cheryl Howe", "src": "Her email of 6/25 with both PDFs attached", "done": false },
+    { "id": "act-7", "text": "Confirm the Peach Rings actually shipped from the SLC warehouse", "src": "Promised Dave a confirmation once they left", "done": false },
+    { "id": "act-8", "text": "Give Arctic Farms the invoice number for the PO 180963 packing list", "src": "Tima asked 6/25", "done": false }
+  ]
+}
+</script>
+<div class="wrap" id="app"></div>
+<script id="app-script">
+"use strict";
+
+/* ---------- constants ---------- */
+
+const LS_KEY = "spacecandy.dash.v2";
+const THEME_KEY = "spacecandy.theme";
+
+const STATUSES = ["Ordered", "In production", "Packed", "Shipped", "Delivered", "Invoiced", "Paid"];
+const IN_FLIGHT = new Set(["Ordered", "In production", "Packed", "Shipped"]);
+const ACC_STATUSES = ["Active", "Waiting on inventory", "In talks", "Paused"];
+const ACC_CHANNELS = ["Retail", "D2C", "Local"];
+const INV_STATUSES = ["Draft", "Sent", "Paid"];
+
+const PRODUCTS = [
+  { id: "worms",   name: "Sour Alien Worms", spec: "FD Sour Worms v2" },
+  { id: "peach",   name: "Peach Rings",      spec: "FD Peach Rings" },
+  { id: "nerd",    name: "Nerd Clusters",    spec: "FD Nerd Clusters" },
+  { id: "lemon",   name: "Lemonheads",       spec: "FD Lemonheads" },
+  { id: "rbsour",  name: "Rainbow Sour",     spec: "FD Rainbow I Sour" },
+  { id: "rainbow", name: "Rainbow",          spec: "FD Rainbow IFD" }
+];
+const CASE_PACK = "12 / case · 1.6 lb";
+
+const CHECK_ITEMS = [
+  { id: "c1", label: "PO number on every carton label" },
+  { id: "c2", label: "PO number on the packing list" },
+  { id: "c3", label: "Packing list attached to the front of the lead carton" },
+  { id: "c4", label: "Packing list shows shipper info (Shakedown Sweets CO LLC, 2013 S Yost Ave, Bloomington, IN 47403)" },
+  { id: "c5", label: "Packing list shows ship-to, item descriptions, quantities, carton count, invoice number, and actual ship date" },
+  { id: "c6", label: "Carton labels show supplier name & address, merchandise description, case-pack qty, gross weight, UPC, and qty per box" },
+  { id: "c7", label: "Cartons numbered (1 of X, 2 of X, …)" },
+  { id: "c8", label: "Routing confirmed with the helper (UPS Ground Collect vs LTL)" }
+];
+
+const THREEPL_ITEMS = [
+  { id: "p1", label: "Get IFD's 3PL pricing: storage, pick & pack, per-order fees" },
+  { id: "p2", label: "Confirm freight terms and shipping accounts (Ron Jon UPS Ground Collect still applies)" },
+  { id: "p3", label: "Agree how packing lists & carton labels get produced at IFD — Ron Jon compliance moves with fulfillment" },
+  { id: "p4", label: "Reconcile and move (or sell through) remaining Arctic Farms inventory" },
+  { id: "p5", label: "Set the cutover date and tell Arctic Farms" },
+  { id: "p6", label: "Verify the first IFD-fulfilled shipment against the compliance checklist" }
+];
+
+const CONTACTS = [
+  {
+    org: "International Freeze Dry", note: "Production · negotiating 3PL · intfd.net · SLC warehouse",
+    people: [
+      { nm: "Shannan Rhoades", role: "Sales Director", email: "srhoades@intfd.net", phone: "1-719-639-1010" },
+      { nm: "Tim Lawlor", role: "Business Dev & Marketing", email: "tlawlor@intfd.net", phone: "(541) 868-6541" },
+      { nm: "Robert Bao", role: "Operations · sent pricing sheet", email: "robert@intfd.net", phone: "(801) 673-9798" },
+      { nm: "Will Hsu", role: "", email: "whsu@intfd.net", phone: "" },
+      { nm: "Chris Lin", role: "", email: "clin@intfd.net", phone: "" }
+    ]
+  },
+  {
+    org: "Arctic Farms", note: "Fulfillment until the IFD cutover · arcticfarms.com",
+    people: [
+      { nm: "Gadi Briskman", role: "", email: "gadi@arcticfarms.com", phone: "" },
+      { nm: "Tima", role: "Handles pack lists & carton labels", email: "info@arcticfarms.com", phone: "" }
+    ]
+  },
+  {
+    org: "Ron Jon Surf Shop", note: "Retail customer · rjss.com · Cocoa Beach, FL",
+    people: [
+      { nm: "Dave Buteau", role: "Merchandise Buyer", email: "DaveB@rjss.com", phone: "" },
+      { nm: "Cheryl Howe", role: "Accounts Payable", email: "CHowe@rjss.com", phone: "(321) 799-8888 ×1079" },
+      { nm: "Grace Cisowski", role: "Accounts Payable", email: "GraceC@rjss.com", phone: "" }
+    ]
+  },
+  {
+    org: "The Candy Space (legacy)", note: "Chad ran Space Candy before the handover",
+    people: [
+      { nm: "Chad Rabinovitz", role: "Previous owner", email: "chad@thecandyspace.com", phone: "" }
+    ]
+  }
+];
+
+/* ---------- state ---------- */
+
+function uid() { return "id" + Math.random().toString(36).slice(2, 9); }
+
+function readServedState() {
+  try {
+    const node = document.getElementById("state");
+    const parsed = JSON.parse(node.textContent);
+    if (parsed && Array.isArray(parsed.orders)) return parsed;
+  } catch (e) { /* fall through */ }
+  return null;
+}
+
+let state = readServedState() || { v: 2, meta: {}, accounts: [], orders: [], inventory: {}, invoices: [], nextInvoice: 1001, productMeta: {}, checks: {}, threePL: { checks: {}, notes: "" }, actions: [] };
+
+/* ---------- persistence: artifact publish or localStorage ---------- */
+
+let artifactNS = null;      // claude.use("artifact") namespace, when on claude.ai
+let readOnly = false;
+let saveTimer = null;
+let publishing = false;
+let dirtyWhilePublishing = false;
+
+const chipEl = () => document.getElementById("saveChip");
+
+function setChip(text, cls) {
+  const el = chipEl();
+  if (!el) return;
+  el.textContent = text;
+  el.className = "chip" + (cls ? " " + cls : "");
+}
+
+function jsonForHtml(obj) {
+  return JSON.stringify(obj, null, 1).replace(/</g, "\\u003c");
+}
+
+function buildHtml(st) {
+  const css = document.getElementById("css").textContent;
+  const app = document.getElementById("app-script").textContent;
+  return "<!doctype html>\n" +
+    '<html lang="en">\n<head>\n' +
+    '<meta charset="UTF-8">\n' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n' +
+    "<title>Space Candy Mission Control</title>\n" +
+    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&display=swap">\n' +
+    '<style id="css">' + css + "</style>\n" +
+    "</head>\n<body>\n" +
+    '<script type="application/json" id="state">\n' + jsonForHtml(st) + "\n<\/script>\n" +
+    '<div class="wrap" id="app"></div>\n' +
+    '<script id="app-script">' + app + "<\/script>\n" +
+    "</body>\n</html>\n";
+}
+
+function markDirty() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) { /* storage full/blocked */ }
+  if (readOnly || !artifactNS) {
+    setChip(artifactNS === null && window.claude ? "Saved on this device" : "Saved on this device");
+    scheduleNothing();
+    return;
+  }
+  setChip("Unsaved changes…", "saving");
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(doPublish, 2500);
+}
+function scheduleNothing() {}
+
+async function doPublish() {
+  if (!artifactNS || readOnly) return;
+  if (publishing) { dirtyWhilePublishing = true; return; }
+  publishing = true;
+  setChip("Saving…", "saving");
+  state.meta = state.meta || {};
+  state.meta.updatedAt = new Date().toISOString();
+  state.meta.updatedBy = "you";
+  try { sessionStorage.setItem("spacecandy.scroll", String(window.scrollY)); } catch (e) {}
+  try {
+    await artifactNS.publish(buildHtml(state));
+    // success: the shell reloads this view to the new version.
+    try { localStorage.removeItem(LS_KEY); } catch (e) {}
+    setChip("Saved ✓");
+  } catch (err) {
+    publishing = false;
+    const code = err && err.code;
+    if (code === "conflict") {
+      // A newer version won; the shell is reloading this view. Do nothing.
+      setChip("Reloading latest…");
+    } else if (code === "not_writer" || code === "not_granted" || code === "consent_required") {
+      readOnly = true;
+      setChip("Read-only — edits stay on this device");
+    } else if (code === "rate_limited") {
+      setChip("Saving soon…", "saving");
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(doPublish, 15000);
+    } else if (code === "upstream_error") {
+      setChip("Save failed — retrying…", "err");
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(doPublish, 2000 + Math.random() * 2000);
+    } else {
+      setChip("Save failed — copy kept on this device", "err");
+    }
+    return;
+  }
+  publishing = false;
+  if (dirtyWhilePublishing) { dirtyWhilePublishing = false; markDirty(); }
+}
+
+async function initPersistence() {
+  if (window.claude && typeof window.claude.use === "function") {
+    try { artifactNS = await window.claude.use("artifact"); } catch (e) { artifactNS = null; }
+  }
+  if (artifactNS) {
+    // Server state is truth on claude.ai; local mirror is only a crash net.
+    try { localStorage.removeItem(LS_KEY); } catch (e) {}
+    setChip("Saved ✓");
+  } else {
+    // Outside claude.ai (repo file, local open): localStorage is the store.
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.orders)) { state = parsed; renderAll(); }
+      }
+    } catch (e) {}
+    setChip("Saved on this device");
+  }
+}
+
+/* ---------- theme ---------- */
+
+const THEME_ORDER = ["auto", "light", "dark"];
+let themeMode = "auto";
+try { themeMode = localStorage.getItem(THEME_KEY) || "auto"; } catch (e) {}
+
+function applyTheme(mode) {
+  if (mode === "auto") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", mode);
+  const btn = document.getElementById("themeBtn");
+  if (btn) btn.textContent = "Theme: " + mode.charAt(0).toUpperCase() + mode.slice(1);
+}
+
+/* ---------- static scaffold ---------- */
+
+function h(tag, attrs, ...children) {
+  const el = document.createElement(tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v);
+  }
+  for (const c of children.flat(2)) {
+    if (c == null) continue;
+    el.append(c.nodeType ? c : document.createTextNode(c));
+  }
+  return el;
+}
+
+function scaffold() {
+  const app = document.getElementById("app");
+  app.textContent = "";
+
+  const header = h("header", { class: "site" },
+    h("div", { class: "brand" },
+      (() => { const t = h("h1", null); t.append(h("span", { class: "mark" }, "Space Candy"), " Mission Control"); return t; })(),
+      h("p", { class: "sub" }, "Shakedown Sweets CO LLC · freeze-dried candy · Bloomington, IN")
+    ),
+    h("div", { class: "head-tools" },
+      h("span", { class: "chip", id: "saveChip" }, "…"),
+      h("button", { class: "theme-btn", id: "themeBtn", type: "button", onclick: () => {
+        themeMode = THEME_ORDER[(THEME_ORDER.indexOf(themeMode) + 1) % THEME_ORDER.length];
+        try { localStorage.setItem(THEME_KEY, themeMode); } catch (e) {}
+        applyTheme(themeMode);
+      } }, "Theme: Auto")
+    )
+  );
+
+  const kpis = h("div", { class: "kpis", id: "kpis" });
+
+  const orders = h("section", { class: "card" },
+    h("h2", null, "Purchase orders"),
+    h("p", { class: "sub" }, "Wholesale order lines. Edit anything — it saves automatically."),
+    h("div", { class: "tbl-wrap" },
+      h("table", { id: "orderTable" },
+        h("thead", null, h("tr", null,
+          h("th", null, "PO #"), h("th", null, "Account"), h("th", null, "Product"),
+          h("th", null, "Units"), h("th", null, "Status"), h("th", null, "Notes"), h("th", null, ""))),
+        h("tbody", null))),
+    h("div", { style: "margin-top:12px" },
+      h("button", { class: "ghost", type: "button", onclick: () => {
+        state.orders.push({ id: uid(), po: "", account: state.accounts[0] ? state.accounts[0].name : "", product: PRODUCTS[0].name, units: null, status: "Ordered", notes: "" });
+        markDirty(); renderOrders(); renderKPIs(); renderChart();
+      } }, "+ Add order line"))
+  );
+
+  const inventory = h("section", { class: "card" },
+    h("h2", null, "Inventory at Arctic Farms"),
+    h("p", { class: "sub" }, "On-hand units per style. Starting count sets the burn-down; when on-hand hits zero, fulfillment moves to IFD."),
+    h("div", { class: "tbl-wrap" },
+      h("table", { id: "invTable" },
+        h("thead", null, h("tr", null,
+          h("th", null, "Product"), h("th", null, "Starting count"), h("th", null, "On hand"),
+          h("th", null, "Remaining"))),
+        h("tbody", null))),
+    h("div", { class: "callout info" },
+      h("span", { class: "ico", "aria-hidden": "true" }, "📦"),
+      h("div", null, "Counts come from you or from an Arctic Farms report the watcher reads in email. Case pack: 12 units/case, 1.6 lb, 8.5×8.5×10.5″.")
+    )
+  );
+
+  const threePL = h("section", { class: "card" },
+    h("h2", null, "IFD 3PL cutover"),
+    h("p", { class: "sub", id: "threePLSub" }, ""),
+    h("ul", { class: "checks", id: "threePLList" }),
+    h("div", { class: "callout info" },
+      h("span", { class: "ico", "aria-hidden": "true" }, "🚚"),
+      h("div", null, h("strong", null, "Status: negotiating. "), "Once remaining Arctic Farms inventory is moved through, IFD produces and fulfills. The Ron Jon compliance rules travel with whoever ships.")
+    )
+  );
+
+  const chart = h("section", { class: "card" },
+    h("h2", null, "Units in flight by product"),
+    h("p", { class: "sub" }, "Open order lines (ordered, in production, packed, or shipped)."),
+    h("div", { class: "chart-box", id: "chartBox" }, h("div", { class: "tooltip", id: "chartTip" }))
+  );
+
+  const shipping = h("section", { class: "card" },
+    h("h2", null, "Shipping routing helper"),
+    h("p", { class: "sub" }, "Ron Jon routing rules from the PO terms."),
+    h("div", { class: "ship-form" },
+      h("div", { class: "field" },
+        h("label", { for: "shipWeight" }, "Total weight (lb)"),
+        h("input", { type: "number", id: "shipWeight", min: "0", step: "0.1", placeholder: "e.g. 11.9", oninput: renderShip })),
+      h("div", { class: "field" },
+        h("label", { for: "shipCartons" }, "Carton count"),
+        h("input", { type: "number", id: "shipCartons", min: "0", step: "1", placeholder: "e.g. 6", oninput: renderShip }))),
+    h("div", { class: "verdict", id: "shipVerdict" }, "Enter the shipment weight and carton count to get the routing.")
+  );
+
+  const accounts = h("section", { class: "card" },
+    h("h2", null, "Accounts"),
+    h("p", { class: "sub" }, "Every customer and prospect: active, waiting on inventory, in talks."),
+    h("div", { class: "tbl-wrap" },
+      h("table", { id: "accountTable" },
+        h("thead", null, h("tr", null,
+          h("th", null, "Account"), h("th", null, "Channel"), h("th", null, "Status"),
+          h("th", null, "Contact"), h("th", null, "Notes"), h("th", null, ""))),
+        h("tbody", null))),
+    h("div", { style: "margin-top:12px" },
+      h("button", { class: "ghost", type: "button", onclick: () => {
+        state.accounts.push({ id: uid(), name: "", channel: "Retail", status: "In talks", contact: "", notes: "" });
+        markDirty(); renderAccounts(); renderKPIs();
+      } }, "+ Add account"))
+  );
+
+  const invoices = h("section", { class: "card" },
+    h("h2", null, "Invoices"),
+    h("p", { class: "sub" }, "Your invoice ledger — numbering starts at SC-1001. Ask Claude to draft the document for any row."),
+    h("div", { class: "tbl-wrap" },
+      h("table", { id: "invoiceTable" },
+        h("thead", null, h("tr", null,
+          h("th", null, "Invoice #"), h("th", null, "Account"), h("th", null, "PO"),
+          h("th", null, "Amount"), h("th", null, "Sent"), h("th", null, "Due"),
+          h("th", null, "Status"), h("th", null, ""))),
+        h("tbody", null))),
+    h("div", { style: "margin-top:12px" },
+      h("button", { class: "primary", type: "button", onclick: () => {
+        const num = "SC-" + state.nextInvoice;
+        state.nextInvoice += 1;
+        state.invoices.push({ id: uid(), num, account: state.accounts[0] ? state.accounts[0].name : "", po: "", amount: null, sent: "", due: "", status: "Draft" });
+        markDirty(); renderInvoices(); renderKPIs();
+      } }, "+ New invoice"))
+  );
+
+  const checklist = h("section", { class: "card" },
+    h("h2", null, "Ron Jon ship-ready checklist"),
+    h("p", { class: "sub" }, ["Run this before every shipment. Progress: ", h("span", { id: "checkCount" }, "")]),
+    h("div", { class: "meter", role: "img", id: "checkMeter", "aria-label": "Checklist progress", style: "margin:10px 0 14px" }, h("div", null)),
+    h("ul", { class: "checks", id: "checkList" }),
+    h("div", { class: "callout" },
+      h("span", { class: "ico", "aria-hidden": "true" }, "⚠️"),
+      h("div", null, h("strong", null, "Warning — $250 chargeback per shipment "), "if the PO number is missing from the carton labels or the packing list. Ron Jon enforces this.")),
+    h("div", { style: "margin-top:12px" },
+      h("button", { class: "ghost", type: "button", onclick: () => { state.checks = {}; markDirty(); renderChecks(); renderKPIs(); } }, "Reset for next shipment"))
+  );
+
+  const actions = h("section", { class: "card" },
+    h("h2", null, "Action items"),
+    h("p", { class: "sub" }, "Open loops — yours and ones the morning watcher finds in email."),
+    h("ul", { class: "checks", id: "actionList" }),
+    h("div", { class: "add-row" },
+      h("input", { type: "text", id: "newAction", class: "wide", placeholder: "Add an action item…", "aria-label": "New action item",
+        onkeydown: e => { if (e.key === "Enter") addAction(); } }),
+      h("button", { class: "ghost", type: "button", onclick: addAction }, "Add"))
+  );
+
+  const products = h("section", { class: "card" },
+    h("h2", null, "Products & margin"),
+    h("p", { class: "sub" }, "The six styles from IFD's spec sheets. Cost and price fill from the forwarded pricing sheet and PO; margin computes itself."),
+    h("div", { class: "tbl-wrap" },
+      h("table", { id: "productTable" },
+        h("thead", null, h("tr", null,
+          h("th", null, "Product"), h("th", null, "Case pack"), h("th", null, "UPC"),
+          h("th", null, "Ron Jon SKU"), h("th", null, "Cost / unit"), h("th", null, "Price / unit"),
+          h("th", null, "Margin"))),
+        h("tbody", null)))
+  );
+
+  const contacts = h("section", { class: "card" },
+    h("h2", null, "Contacts"),
+    h("p", { class: "sub" }, "Everyone in the Space Candy supply chain."),
+    h("div", { class: "contact-grid", id: "contactGrid" }),
+    h("div", { class: "addr" },
+      h("div", { class: "a" }, h("h4", null, "Company / invoicing"),
+        "Shakedown Sweets CO LLC", h("br"), "2013 S Yost Ave, Ste 1", h("br"), "Bloomington, IN 47403"),
+      h("div", { class: "a" }, h("h4", null, "Ron Jon ship-to"),
+        "Ron Jon Canaveral Warehouse (Store 001)", h("br"), "8550 Astronaut Blvd., Suite 103", h("br"), "Cape Canaveral, FL 32920"),
+      h("div", { class: "a" }, h("h4", null, "Vendor record at Ron Jon"),
+        "Code VSPACAN (“Space Candy”)", h("br"), "renamed to Shakedown Sweets CO LLC", h("br"), "Buyer: Dave Buteau"))
+  );
+
+  const footer = h("footer", { class: "site" },
+    h("span", { id: "metaLine" }, ""),
+    h("button", { class: "ghost", type: "button", onclick: () => {
+      if (!confirm("Throw away local edits on this device? (The published dashboard is not affected.)")) return;
+      try { localStorage.removeItem(LS_KEY); } catch (e) {}
+      location.reload();
+    } }, "Discard local edits")
+  );
+
+  app.append(
+    header, kpis, orders,
+    h("div", { class: "grid" },
+      h("div", { class: "col" }, inventory, threePL),
+      h("div", { class: "col" }, chart, shipping)),
+    accounts, invoices,
+    h("div", { class: "grid" }, checklist, actions),
+    products, contacts, footer
+  );
+}
+
+/* ---------- renders ---------- */
+
+function fmtMoney(n) {
+  if (!(typeof n === "number" && isFinite(n))) return "—";
+  return "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function renderKPIs() {
+  const box = document.getElementById("kpis");
+  box.textContent = "";
+
+  const openPOs = new Set(state.orders.filter(o => o.status !== "Paid").map(o => o.po || "—")).size;
+
+  const flight = state.orders.filter(o => IN_FLIGHT.has(o.status));
+  const knownUnits = flight.filter(o => Number(o.units) > 0);
+  const unitSum = knownUnits.reduce((s, o) => s + Number(o.units), 0);
+
+  const onHandVals = PRODUCTS.map(p => state.inventory[p.id] && state.inventory[p.id].onHand).filter(v => Number(v) > 0);
+  const onHand = onHandVals.reduce((s, v) => s + Number(v), 0);
+
+  const owed = state.invoices.filter(i => i.status === "Sent").reduce((s, i) => s + (Number(i.amount) || 0), 0);
+
+  const openActions = state.actions.filter(a => !a.done).length;
+
+  const tiles = [
+    { label: "Open POs", value: String(openPOs), note: openPOs ? "not yet paid out" : "all settled" },
+    { label: "Units in flight", value: knownUnits.length ? unitSum.toLocaleString("en-US") : "—",
+      note: knownUnits.length ? Math.ceil(unitSum / 12).toLocaleString("en-US") + " cartons at 12/case" : "add unit counts on PO lines" },
+    { label: "Inventory on hand", value: onHandVals.length ? onHand.toLocaleString("en-US") : "—",
+      note: onHandVals.length ? "units at Arctic Farms" : "enter counts below" },
+    { label: "Owed to you", value: state.invoices.length ? fmtMoney(owed) : "—",
+      note: state.invoices.length ? "invoices sent, not yet paid" : "no invoices yet" },
+    { label: "Open action items", value: String(openActions), note: openActions ? "waiting on you or a partner" : "all clear" }
+  ];
+
+  for (const t of tiles) {
+    box.append(h("div", { class: "tile" },
+      h("div", { class: "label" }, t.label),
+      h("div", { class: "value" }, t.value),
+      h("div", { class: "note" }, t.note)));
+  }
+}
+
+function textInput(value, aria, cls, oninput) {
+  const inp = h("input", { type: "text", "aria-label": aria });
+  if (cls) inp.className = cls;
+  inp.value = value || "";
+  inp.addEventListener("input", () => oninput(inp.value));
+  return inp;
+}
+function numInput(value, aria, oninput, cls) {
+  const inp = h("input", { type: "number", min: "0", "aria-label": aria, placeholder: "—" });
+  if (cls) inp.className = cls;
+  inp.value = value == null ? "" : value;
+  inp.addEventListener("input", () => oninput(inp.value === "" ? null : Number(inp.value)));
+  return inp;
+}
+function selInput(value, options, aria, onchange) {
+  const sel = h("select", { "aria-label": aria });
+  for (const o of options) sel.append(h("option", { value: o }, o));
+  if (value && !options.includes(value)) sel.append(h("option", { value }, value));
+  sel.value = value || options[0];
+  sel.addEventListener("change", () => onchange(sel.value));
+  return sel;
+}
+function dateInput(value, aria, oninput) {
+  const inp = h("input", { type: "date", "aria-label": aria });
+  inp.value = value || "";
+  inp.addEventListener("input", () => oninput(inp.value));
+  return inp;
+}
+function delBtn(aria, onclick) {
+  return h("button", { class: "del", type: "button", "aria-label": aria, onclick }, "×");
+}
+
+function renderOrders() {
+  const tbody = document.querySelector("#orderTable tbody");
+  tbody.textContent = "";
+  const accNames = state.accounts.map(a => a.name).filter(Boolean);
+  for (const o of state.orders) {
+    const tr = h("tr", null,
+      h("td", null, (() => { const i = textInput(o.po, "PO number", null, v => { o.po = v; markDirty(); renderKPIs(); }); i.size = 7; return i; })()),
+      h("td", null, selInput(o.account, accNames.length ? accNames : [""], "Account", v => { o.account = v; markDirty(); })),
+      h("td", null, selInput(o.product, PRODUCTS.map(p => p.name), "Product", v => { o.product = v; markDirty(); renderKPIs(); renderChart(); })),
+      (() => { const td = h("td", { class: "num" }, numInput(o.units, "Units", v => { o.units = v == null ? null : Math.max(0, Math.floor(v)); markDirty(); renderKPIs(); renderChart(); })); return td; })(),
+      h("td", null, selInput(o.status, STATUSES, "Status", v => { o.status = v; markDirty(); renderKPIs(); renderChart(); })),
+      h("td", null, textInput(o.notes, "Notes", "wide", v => { o.notes = v; markDirty(); })),
+      h("td", null, delBtn("Delete this order line", () => {
+        state.orders = state.orders.filter(x => x.id !== o.id);
+        markDirty(); renderOrders(); renderKPIs(); renderChart();
+      })));
+    tbody.append(tr);
+  }
+}
+
+function renderInventory() {
+  const tbody = document.querySelector("#invTable tbody");
+  tbody.textContent = "";
+  for (const p of PRODUCTS) {
+    const inv = state.inventory[p.id] || (state.inventory[p.id] = { start: null, onHand: null });
+    const meterCell = h("td", null);
+    const drawMeter = () => {
+      meterCell.textContent = "";
+      if (Number(inv.start) > 0 && inv.onHand != null) {
+        const pct = Math.max(0, Math.min(1, Number(inv.onHand) / Number(inv.start)));
+        const m = h("div", { class: "inv-meter" },
+          h("div", { class: "meter", role: "img", "aria-label": p.name + ": " + Math.round(pct * 100) + "% of starting inventory remains" },
+            (() => { const f = h("div", null); f.style.width = (pct * 100) + "%"; return f; })()),
+          h("span", { class: "pct" }, Math.round(pct * 100) + "%"));
+        meterCell.append(m);
+      } else {
+        meterCell.append(h("span", { class: "empty-note", style: "padding:0" }, "—"));
+      }
+    };
+    drawMeter();
+    tbody.append(h("tr", null,
+      (() => { const td = h("td", null, p.name); td.style.fontWeight = "550"; return td; })(),
+      h("td", { class: "num" }, numInput(inv.start, "Starting count for " + p.name, v => { inv.start = v; markDirty(); drawMeter(); renderKPIs(); })),
+      h("td", { class: "num" }, numInput(inv.onHand, "On hand for " + p.name, v => { inv.onHand = v; markDirty(); drawMeter(); renderKPIs(); })),
+      meterCell));
+  }
+}
+
+function renderThreePL() {
+  const ul = document.getElementById("threePLList");
+  ul.textContent = "";
+  let done = 0;
+  for (const c of THREEPL_ITEMS) {
+    const checked = !!state.threePL.checks[c.id];
+    if (checked) done++;
+    const cb = h("input", { type: "checkbox", id: "tpl-" + c.id });
+    cb.checked = checked;
+    cb.addEventListener("change", () => { state.threePL.checks[c.id] = cb.checked; markDirty(); renderThreePL(); });
+    ul.append(h("li", checked ? { class: "done" } : null, cb,
+      h("label", { for: "tpl-" + c.id, class: "txt" }, c.label)));
+  }
+  document.getElementById("threePLSub").textContent =
+    "Deal checklist: " + done + " of " + THREEPL_ITEMS.length + " settled.";
+}
+
+function renderAccounts() {
+  const tbody = document.querySelector("#accountTable tbody");
+  tbody.textContent = "";
+  if (!state.accounts.length) {
+    tbody.append(h("tr", null, h("td", { colspan: "6" }, h("span", { class: "empty-note" }, "No accounts yet — add your customers and waitlist."))));
+  }
+  for (const a of state.accounts) {
+    const pillCls = a.status === "Active" ? "active" : a.status === "Waiting on inventory" ? "waiting" : a.status === "In talks" ? "talks" : "paused";
+    const statusTd = h("td", null,
+      h("span", { class: "pill " + pillCls }, h("span", { class: "dot", "aria-hidden": "true" }),
+        selInput(a.status, ACC_STATUSES, "Status for account", v => { a.status = v; markDirty(); renderAccounts(); renderKPIs(); })));
+    tbody.append(h("tr", null,
+      h("td", null, textInput(a.name, "Account name", "wide", v => { a.name = v; markDirty(); })),
+      h("td", null, selInput(a.channel, ACC_CHANNELS, "Channel", v => { a.channel = v; markDirty(); })),
+      statusTd,
+      h("td", null, textInput(a.contact, "Contact", "wide", v => { a.contact = v; markDirty(); })),
+      h("td", null, textInput(a.notes, "Notes", "wide", v => { a.notes = v; markDirty(); })),
+      h("td", null, delBtn("Delete this account", () => {
+        state.accounts = state.accounts.filter(x => x.id !== a.id);
+        markDirty(); renderAccounts(); renderKPIs(); renderOrders();
+      }))));
+  }
+}
+
+function renderInvoices() {
+  const tbody = document.querySelector("#invoiceTable tbody");
+  tbody.textContent = "";
+  if (!state.invoices.length) {
+    tbody.append(h("tr", null, h("td", { colspan: "8" }, h("span", { class: "empty-note" }, "No invoices yet — when a PO ships, add one and Claude can draft the document."))));
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const accNames = state.accounts.map(a => a.name).filter(Boolean);
+  for (const inv of state.invoices) {
+    const overdue = inv.status === "Sent" && inv.due && inv.due < today;
+    const numTd = h("td", { class: "num" }, inv.num || "");
+    numTd.style.fontWeight = "550";
+    tbody.append(h("tr", null,
+      numTd,
+      h("td", null, selInput(inv.account, accNames.length ? accNames : [""], "Invoice account", v => { inv.account = v; markDirty(); })),
+      h("td", null, (() => { const i = textInput(inv.po, "PO for invoice", null, v => { inv.po = v; markDirty(); }); i.size = 7; return i; })()),
+      h("td", { class: "num" }, numInput(inv.amount, "Invoice amount", v => { inv.amount = v; markDirty(); renderKPIs(); }, "money")),
+      h("td", null, dateInput(inv.sent, "Date sent", v => { inv.sent = v; markDirty(); })),
+      h("td", null, dateInput(inv.due, "Date due", v => { inv.due = v; markDirty(); renderInvoices(); })),
+      h("td", null,
+        selInput(inv.status, INV_STATUSES, "Invoice status", v => { inv.status = v; markDirty(); renderInvoices(); renderKPIs(); }),
+        overdue ? h("span", { class: "overdue-flag" }, " ⚠ overdue") : null),
+      h("td", null, delBtn("Delete this invoice", () => {
+        state.invoices = state.invoices.filter(x => x.id !== inv.id);
+        markDirty(); renderInvoices(); renderKPIs();
+      }))));
+  }
+}
+
+/* ---------- chart ---------- */
+
+function renderChart() {
+  const chartBox = document.getElementById("chartBox");
+  const chartTip = document.getElementById("chartTip");
+  for (const child of [...chartBox.children]) if (child !== chartTip) child.remove();
+  chartTip.style.display = "none";
+
+  const totals = new Map();
+  for (const o of state.orders) {
+    if (!IN_FLIGHT.has(o.status)) continue;
+    if (!(Number(o.units) > 0)) continue;
+    const key = o.product || "—";
+    totals.set(key, (totals.get(key) || 0) + Number(o.units));
+  }
+  const rows = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+
+  if (!rows.length) {
+    const anyFlight = state.orders.some(o => IN_FLIGHT.has(o.status));
+    chartBox.append(h("div", { class: "empty-note" },
+      anyFlight ? "Add unit counts to the open PO lines and the breakdown will appear here."
+                : "No open order lines right now."));
+    return;
+  }
+
+  const W = 460, labelW = 132, rowH = 34, barH = 20, padTop = 6, axisH = 26;
+  const H = padTop + rows.length * rowH + axisH;
+  const x0 = labelW, x1 = W - 46;
+  const maxVal = Math.max(...rows.map(r => r[1]));
+  const ticks = niceTicks(maxVal, 4);
+  const scale = v => x0 + (v / ticks[ticks.length - 1]) * (x1 - x0);
+
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "Bar chart of units in flight by product");
+
+  for (const t of ticks) {
+    const gx = scale(t);
+    const line = document.createElementNS(NS, "line");
+    line.setAttribute("x1", gx); line.setAttribute("x2", gx);
+    line.setAttribute("y1", padTop); line.setAttribute("y2", H - axisH + 4);
+    line.setAttribute("class", t === 0 ? "axisline" : "gridline");
+    svg.append(line);
+    const tl = document.createElementNS(NS, "text");
+    tl.setAttribute("x", gx); tl.setAttribute("y", H - axisH + 18);
+    tl.setAttribute("text-anchor", "middle");
+    tl.setAttribute("class", "tick-label");
+    tl.textContent = t.toLocaleString("en-US");
+    svg.append(tl);
+  }
+
+  rows.forEach(([name, val], i) => {
+    const y = padTop + i * rowH;
+    const barY = y + (rowH - barH) / 2;
+    const w = Math.max(scale(val) - x0, 2);
+    const cartons = Math.ceil(val / 12);
+
+    const cat = document.createElementNS(NS, "text");
+    cat.setAttribute("x", labelW - 10); cat.setAttribute("y", y + rowH / 2 + 4);
+    cat.setAttribute("text-anchor", "end");
+    cat.setAttribute("class", "cat-label");
+    cat.textContent = name;
+    svg.append(cat);
+
+    const hit = document.createElementNS(NS, "rect");
+    hit.setAttribute("x", 0); hit.setAttribute("y", y);
+    hit.setAttribute("width", W); hit.setAttribute("height", rowH);
+    hit.setAttribute("class", "bar-hit");
+    hit.setAttribute("tabindex", "0");
+    hit.setAttribute("role", "img");
+    hit.setAttribute("aria-label", name + ": " + val.toLocaleString("en-US") + " units, about " + cartons + " cartons");
+    svg.append(hit);
+
+    const bar = document.createElementNS(NS, "path");
+    bar.setAttribute("d", roundedRightBar(x0, barY, w, barH, 4));
+    bar.setAttribute("class", "bar");
+    bar.setAttribute("pointer-events", "none");
+    svg.append(bar);
+
+    const vl = document.createElementNS(NS, "text");
+    vl.setAttribute("x", x0 + w + 8); vl.setAttribute("y", barY + barH / 2 + 4);
+    vl.setAttribute("class", "val-label");
+    vl.textContent = val.toLocaleString("en-US");
+    svg.append(vl);
+
+    const showTip = (clientX, clientY) => {
+      chartTip.textContent = "";
+      chartTip.append(
+        h("div", { class: "tt-value" }, val.toLocaleString("en-US") + " units · ~" + cartons + " cartons"),
+        h("div", { class: "tt-label" }, name));
+      chartTip.style.display = "block";
+      const boxRect = chartBox.getBoundingClientRect();
+      let tx = clientX - boxRect.left + 12;
+      const ty = clientY - boxRect.top - 10;
+      const maxX = boxRect.width - chartTip.offsetWidth - 4;
+      if (tx > maxX) tx = Math.max(4, maxX);
+      chartTip.style.left = tx + "px";
+      chartTip.style.top = ty + "px";
+    };
+    hit.addEventListener("pointermove", e => showTip(e.clientX, e.clientY));
+    hit.addEventListener("pointerleave", () => { chartTip.style.display = "none"; });
+    hit.addEventListener("focus", () => {
+      const r = hit.getBoundingClientRect();
+      showTip(r.left + r.width / 2, r.top + r.height / 2);
+    });
+    hit.addEventListener("blur", () => { chartTip.style.display = "none"; });
+  });
+
+  chartBox.append(svg);
+}
+
+function roundedRightBar(x, y, w, hgt, r) {
+  const rr = Math.min(r, w, hgt / 2);
+  return "M" + x + "," + y +
+    " h" + (w - rr) +
+    " a" + rr + "," + rr + " 0 0 1 " + rr + "," + rr +
+    " v" + (hgt - 2 * rr) +
+    " a" + rr + "," + rr + " 0 0 1 " + (-rr) + "," + rr +
+    " h" + (-(w - rr)) + " z";
+}
+
+function niceTicks(maxVal, count) {
+  const rawStep = maxVal / count;
+  const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const norm = rawStep / mag;
+  const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10) * mag;
+  const top = Math.ceil(maxVal / step) * step;
+  const out = [];
+  for (let v = 0; v <= top + step / 2; v += step) out.push(v);
+  return out;
+}
+
+/* ---------- checklist, shipping, actions, products, contacts ---------- */
+
+function renderChecks() {
+  const ul = document.getElementById("checkList");
+  ul.textContent = "";
+  let done = 0;
+  for (const c of CHECK_ITEMS) {
+    const checked = !!state.checks[c.id];
+    if (checked) done++;
+    const cb = h("input", { type: "checkbox", id: "chk-" + c.id });
+    cb.checked = checked;
+    cb.addEventListener("change", () => { state.checks[c.id] = cb.checked; markDirty(); renderChecks(); });
+    ul.append(h("li", checked ? { class: "done" } : null, cb,
+      h("label", { for: "chk-" + c.id, class: "txt" }, c.label)));
+  }
+  document.getElementById("checkCount").textContent = done + " of " + CHECK_ITEMS.length;
+  const meter = document.getElementById("checkMeter");
+  meter.setAttribute("aria-label", "Checklist progress: " + done + " of " + CHECK_ITEMS.length + " complete");
+  meter.firstElementChild.style.width = (done / CHECK_ITEMS.length * 100) + "%";
+}
+
+function renderShip() {
+  const w = Number(document.getElementById("shipWeight").value);
+  const c = Number(document.getElementById("shipCartons").value);
+  const v = document.getElementById("shipVerdict");
+  v.classList.remove("on");
+  v.textContent = "";
+  if (!(w > 0) || !(c > 0)) {
+    v.textContent = "Enter the shipment weight and carton count to get the routing.";
+    return;
+  }
+  v.classList.add("on");
+  if (w < 200 && c <= 15) {
+    v.append(h("strong", null, "UPS Ground Collect. "),
+      "Under 200 lb and 15 cartons or fewer — use the UPS account number printed on the PO.");
+  } else {
+    v.append(h("strong", null, "LTL freight. "),
+      "Over the small-parcel limit (200 lb / 15 cartons) — give Ron Jon logistics the weight and they will arrange the LTL pickup.");
+  }
+}
+
+function renderActions() {
+  const ul = document.getElementById("actionList");
+  ul.textContent = "";
+  for (const a of state.actions) {
+    const cb = h("input", { type: "checkbox", id: "act-" + a.id });
+    cb.checked = a.done;
+    cb.addEventListener("change", () => { a.done = cb.checked; markDirty(); renderActions(); renderKPIs(); });
+    const lb = h("label", { for: "act-" + a.id, class: "txt" }, a.text);
+    if (a.src) lb.append(h("span", { class: "src" }, a.src));
+    ul.append(h("li", a.done ? { class: "done" } : null, cb, lb,
+      delBtn("Delete this action item", () => {
+        state.actions = state.actions.filter(x => x.id !== a.id);
+        markDirty(); renderActions(); renderKPIs();
+      })));
+  }
+}
+
+function addAction() {
+  const inp = document.getElementById("newAction");
+  const text = inp.value.trim();
+  if (!text) return;
+  state.actions.push({ id: uid(), text, src: "", done: false });
+  inp.value = "";
+  markDirty(); renderActions(); renderKPIs();
+}
+
+function renderProducts() {
+  const tbody = document.querySelector("#productTable tbody");
+  tbody.textContent = "";
+  for (const p of PRODUCTS) {
+    const meta = state.productMeta[p.id] || (state.productMeta[p.id] = { upc: "", sku: "", cost: null, price: null });
+    const marginTd = h("td", { class: "num" });
+    const drawMargin = () => {
+      marginTd.textContent = "";
+      if (Number(meta.cost) > 0 && Number(meta.price) > 0) {
+        const m = (meta.price - meta.cost) / meta.price * 100;
+        marginTd.append(fmtMoney(meta.price - meta.cost) + " · " + m.toFixed(0) + "%");
+      } else {
+        marginTd.append("—");
+      }
+    };
+    drawMargin();
+    const nameTd = h("td", null, p.name);
+    nameTd.style.fontWeight = "550";
+    nameTd.title = p.spec;
+    const caseTd = h("td", null, CASE_PACK);
+    caseTd.style.color = "var(--ink-2)";
+    caseTd.style.whiteSpace = "nowrap";
+    tbody.append(h("tr", null,
+      nameTd, caseTd,
+      h("td", null, (() => { const i = textInput(meta.upc, "UPC for " + p.name, "code", v => { meta.upc = v; markDirty(); }); i.placeholder = "add UPC"; return i; })()),
+      h("td", null, (() => { const i = textInput(meta.sku, "Ron Jon SKU for " + p.name, "code", v => { meta.sku = v; markDirty(); }); i.placeholder = "waiting on Dave"; return i; })()),
+      h("td", { class: "num" }, numInput(meta.cost, "Cost per unit for " + p.name, v => { meta.cost = v; markDirty(); drawMargin(); }, "money")),
+      h("td", { class: "num" }, numInput(meta.price, "Price per unit for " + p.name, v => { meta.price = v; markDirty(); drawMargin(); }, "money")),
+      marginTd));
+  }
+}
+
+function renderContacts() {
+  const grid = document.getElementById("contactGrid");
+  grid.textContent = "";
+  for (const org of CONTACTS) {
+    const ul = h("ul", null);
+    for (const person of org.people) {
+      const li = h("li", null, h("span", { class: "nm" }, person.nm));
+      if (person.role) li.append(" — " + person.role);
+      li.append(h("br"), h("a", { href: "mailto:" + person.email }, person.email));
+      if (person.phone) li.append(" · " + person.phone);
+      ul.append(li);
+    }
+    grid.append(h("div", { class: "org" },
+      h("h3", null, org.org),
+      h("p", { class: "role-note" }, org.note),
+      ul));
+  }
+}
+
+function renderMeta() {
+  const el = document.getElementById("metaLine");
+  const m = state.meta || {};
+  let line = "Seed data from the Ron Jon / Arctic Farms / IFD email threads, Jun–Aug 2026.";
+  if (m.updatedAt) {
+    const when = new Date(m.updatedAt);
+    line = "Last updated " + when.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) +
+      (m.updatedBy === "Claude watcher" ? " by the morning watcher." : ".");
+  }
+  el.textContent = line;
+}
+
+/* ---------- boot ---------- */
+
+function renderAll() {
+  renderKPIs();
+  renderOrders();
+  renderInventory();
+  renderThreePL();
+  renderChart();
+  renderChecks();
+  renderShip();
+  renderActions();
+  renderInvoices();
+  renderAccounts();
+  renderProducts();
+  renderContacts();
+  renderMeta();
+}
+
+scaffold();
+applyTheme(themeMode);
+renderAll();
+initPersistence();
+try {
+  const sc = sessionStorage.getItem("spacecandy.scroll");
+  if (sc) { sessionStorage.removeItem("spacecandy.scroll"); window.scrollTo(0, Number(sc)); }
+} catch (e) {}
+</script>
+</body>
+</html>
