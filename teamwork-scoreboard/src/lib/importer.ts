@@ -48,15 +48,19 @@ export const IMPORT_TARGETS: Record<
   attendance: {
     label: "Attendance",
     fields: [
-      { key: "athlete_name", label: "Athlete name", required: true },
+      { key: "athlete_name", label: "Athlete name (or use First + Last)" },
+      { key: "first_name", label: "First name" },
+      { key: "last_name", label: "Last name" },
       { key: "date", label: "Date", required: true },
-      { key: "status", label: "Status (attended/no_show)" },
+      { key: "status", label: "Status (attended/no_show/cancelled)" },
     ],
   },
   payments: {
     label: "Payments",
     fields: [
-      { key: "athlete_name", label: "Athlete name" },
+      { key: "athlete_name", label: "Athlete name (or use First + Last)" },
+      { key: "first_name", label: "First name" },
+      { key: "last_name", label: "Last name" },
       { key: "date", label: "Date", required: true },
       { key: "amount", label: "Amount", required: true },
       { key: "category", label: "Category (membership/private_training/…)" },
@@ -139,6 +143,26 @@ export function classifyDropReason(
   return "other";
 }
 
+/**
+ * Zen Planner attendance exports mix real check-ins with reservations and
+ * cancellations. Only genuine attendance may reach the attendance table —
+ * counting an RSVP as a check-in would inflate session utilization and hide
+ * at-risk athletes. Returns null for rows that should be skipped entirely.
+ */
+export function normalizeAttendanceStatus(
+  raw: string
+): "attended" | "no_show" | null {
+  const s = raw.trim().toLowerCase();
+  if (!s) return "attended"; // a bare attendance row with no status column
+  if (/(no[\s_-]?show|absent|missed)/.test(s)) return "no_show";
+  if (/(attend|checked[\s_-]?in|check[\s_-]?in|present|complete)/.test(s)) {
+    return "attended";
+  }
+  // rsvp / reserved / registered / booked / cancelled / canceled / late cancel
+  if (/(rsvp|reserv|regist|book|cancel|waitlist|pending)/.test(s)) return null;
+  return null;
+}
+
 function findAthleteId(name: string): number | null {
   const row = db.get<{ id: number }>(
     sql`SELECT id FROM athletes WHERE LOWER(name) = LOWER(${name.trim()}) LIMIT 1`
@@ -178,6 +202,11 @@ export function commitImport(
     expected: string[];
     controllable: string[];
   };
+  // Zen Planner splits names into First/Last on most reports; accept either a
+  // single combined column or the two-column form.
+  const personName = (row: Record<string, string>): string =>
+    get(row, "athlete_name") ||
+    `${get(row, "first_name")} ${get(row, "last_name")}`.trim();
   // dedupe_key -> how many rows of this file mapped to it
   const batchSeen = new Map<string, number>();
 
@@ -258,10 +287,16 @@ export function commitImport(
           .run();
         processed++;
       } else if (target === "attendance") {
-        const athleteName = get(row, "athlete_name");
+        const athleteName = personName(row);
         const date = normalizeDate(get(row, "date"));
         if (!athleteName || !date) {
           fail("missing athlete name or date");
+          continue;
+        }
+        const status = normalizeAttendanceStatus(get(row, "status"));
+        if (status === null) {
+          // reservation / cancellation row — not attendance, skip silently
+          skipped++;
           continue;
         }
         const athleteId = findAthleteId(athleteName);
@@ -269,7 +304,6 @@ export function commitImport(
           fail(`athlete "${athleteName}" not found`);
           continue;
         }
-        const status = get(row, "status").toLowerCase() === "no_show" ? "no_show" : "attended";
         if (
           dedupe &&
           exists(sql`SELECT 1 AS one FROM attendance
@@ -287,7 +321,7 @@ export function commitImport(
           fail("missing/invalid date or amount");
           continue;
         }
-        const athleteName = get(row, "athlete_name");
+        const athleteName = personName(row);
         const athleteId = athleteName ? findAthleteId(athleteName) : null;
         const payStatus = get(row, "status").toLowerCase() || "paid";
         if (
@@ -317,9 +351,7 @@ export function commitImport(
         // collapse to one record per person per month (unique dedupe_key)
         // and count how many raw rows folded in, so the duplicates are
         // visible rather than silently dropped.
-        const name =
-          get(row, "athlete_name") ||
-          `${get(row, "first_name")} ${get(row, "last_name")}`.trim();
+        const name = personName(row);
         const date = normalizeDate(get(row, "effective_date"));
         if (!name || !date) {
           fail("missing athlete name or effective date");
