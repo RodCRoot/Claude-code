@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { getSetting, SETTING_DEFAULTS } from "@/lib/settings";
-import { saveSetting } from "@/app/actions/admin";
+import { countDemoRows } from "@/lib/demo-data";
+import { saveSetting, removeDemoData } from "@/app/actions/admin";
 import {
   PageHeader,
   Card,
@@ -25,8 +26,13 @@ const AREAS = [
   { href: "/data", title: "Data & Sync", desc: "Connectors, sync history, imports, and field mappings." },
 ];
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ demo?: string; n?: string }>;
+}) {
   await requireUser("manage_settings");
+  const sp = await searchParams;
 
   const numberSettings: { key: keyof typeof SETTING_DEFAULTS; label: string; hint: string }[] = [
     { key: "monthly_revenue_target", label: "Monthly revenue target ($)", hint: "Drives “Progress to monthly revenue target”. Set your own goal — no old figures are baked in." },
@@ -51,6 +57,7 @@ export default async function AdminPage() {
   ];
 
   const demo = getSetting("demo_mode");
+  const demoRows = countDemoRows();
 
   return (
     <>
@@ -108,12 +115,10 @@ export default async function AdminPage() {
             title="Demo mode"
             action={<Badge variant={demo ? "yellow" : "green"}>{demo ? "Demo data labeled" : "Live"}</Badge>}
           />
-          <CardBody className="space-y-3 text-sm text-ink-2">
+          <CardBody className="space-y-4 text-sm text-ink-2">
             <p>
               While demo mode is on, a “Demo data” label shows in the navigation.
-              Turn it off once real data is connected. To remove all seeded sample
-              records cleanly, run <code className="rounded bg-surface-3 px-1">npm run db:clear-demo</code>
-              {" "}(keeps users, templates, metrics, and settings).
+              Turn it off once real data is connected.
             </p>
             <form action={saveSetting} className="flex items-center gap-2">
               <input type="hidden" name="key" value="demo_mode" />
@@ -123,6 +128,57 @@ export default async function AdminPage() {
                 {demo ? "Turn demo label off" : "Turn demo label on"}
               </Button>
             </form>
+
+            <div className="border-t border-edge pt-4">
+              {sp.demo === "removed" ? (
+                <p className="rounded-md bg-ok/10 px-3 py-2 text-ok">
+                  Removed {sp.n ?? "0"} sample records. Everything still on the
+                  scoreboard is your real data.
+                </p>
+              ) : sp.demo === "badconfirm" ? (
+                <p className="rounded-md bg-bad/10 px-3 py-2 text-bad">
+                  Nothing was deleted — the confirmation text did not match.
+                </p>
+              ) : null}
+
+              {demoRows === 0 ? (
+                <p className="mt-2">
+                  No sample records left in the database — everything here is real
+                  data or data you imported.
+                </p>
+              ) : (
+                <>
+                  <h4 className="font-bold text-ink">Remove sample records</h4>
+                  <p className="mt-1">
+                    There {demoRows === 1 ? "is" : "are"} currently{" "}
+                    <strong className="text-ink">{demoRows.toLocaleString()}</strong>{" "}
+                    sample {demoRows === 1 ? "record" : "records"} mixed in with your
+                    real data (made-up athletes, leads, payments, and check-ins from
+                    the starter data). Deleting them leaves your imported and
+                    hand-entered data untouched, along with users, metrics,
+                    templates, and settings.
+                  </p>
+                  <p className="mt-1">
+                    This cannot be undone, so type{" "}
+                    <code className="rounded bg-surface-3 px-1">REMOVE DEMO DATA</code>{" "}
+                    to confirm.
+                  </p>
+                  <form action={removeDemoData} className="mt-3 flex items-end gap-2">
+                    <Field label="Confirmation">
+                      <Input
+                        name="confirm"
+                        placeholder="REMOVE DEMO DATA"
+                        autoComplete="off"
+                        className="w-56"
+                      />
+                    </Field>
+                    <Button size="sm" variant="danger" type="submit">
+                      Remove {demoRows.toLocaleString()} sample records
+                    </Button>
+                  </form>
+                </>
+              )}
+            </div>
           </CardBody>
         </Card>
 

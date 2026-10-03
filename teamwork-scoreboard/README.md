@@ -29,8 +29,10 @@ npm run dev            # http://localhost:3000
 | Read-Only         | viewer@teamworkbloomington.com   |
 
 The **DEMO DATA** label shows until you turn it off (Admin → Demo mode).
-Remove all sample records cleanly with `npm run db:clear-demo` — users,
-roles, metric dictionary, templates, and settings are kept.
+Remove all sample records cleanly from **Admin → Demo mode → Remove sample
+records** (type the confirmation phrase), or with `npm run db:clear-demo` if
+you prefer a terminal — both run the same code. Users, roles, metric
+dictionary, templates, and settings are kept, as is anything you imported.
 
 Run the calculation test suite: `npm test` (41 tests over the KPI math,
 period logic, recurrence engine, and CSV import parsing).

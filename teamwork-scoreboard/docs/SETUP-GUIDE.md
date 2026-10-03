@@ -137,13 +137,20 @@ one-coffee favor — send them this file.
    monthly operations and cleaning lists match the spec defaults — add,
    edit, or reassign to fit how you actually run the facility.
    Same for Admin → Onboarding Steps and Admin → Scorecard Templates.
-7. **Remove the sample data** when you're ready for real numbers:
+7. **Remove the sample data** when you're ready for real numbers. Go to
+   **Admin → Demo mode**. It tells you exactly how many sample records are
+   still in there; type `REMOVE DEMO DATA` in the confirmation box and click
+   the red button. No terminal needed, and it also turns the demo label off
+   for you.
+
+   Only made-up records are deleted. Anything you imported or typed in
+   yourself is untouched, as are users, metrics, templates, and settings.
+
+   If you'd rather use a terminal, this does the same thing:
    ```bash
    docker compose exec scoreboard npm run db:clear-demo
    ```
-   (Local install: `npm run db:clear-demo`.) Users, metrics, templates, and
-   settings survive; only demo records vanish. Then Admin → Demo mode →
-   turn the label off.
+   (Local install: `npm run db:clear-demo`.)
 
 ✅ Done when: real staff can log in, goals are yours, demo label is off.
 
@@ -266,7 +273,7 @@ The app only pays off if it's part of the routine:
 | Edit checklists | Admin → Task Templates |
 | Import any CSV / Google Sheet | Data → Import |
 | See why a sync failed | Data & Sync → sync history (+ `data/debug/` screenshots) |
-| Remove sample data | `npm run db:clear-demo` (or via docker compose exec) |
+| Remove sample data | Admin → Demo mode → Remove sample records |
 | Back up everything | copy the `data/` folder |
 
 **Never** commit or share the `.env` file — it holds your secrets.
