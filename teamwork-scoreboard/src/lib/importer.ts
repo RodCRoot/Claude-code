@@ -12,73 +12,79 @@ import {
 } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getSetting } from "./settings";
+import type { FieldDef } from "./import-mapping";
 
-/** Canonical import targets and their fields (used by the mapping wizard). */
-export const IMPORT_TARGETS: Record<
-  string,
-  { label: string; fields: { key: string; label: string; required?: boolean }[] }
-> = {
+/**
+ * Canonical import targets and their fields (used by the mapping wizard and the
+ * scheduled browser sync).
+ *
+ * The `aliases` carry the column names real exports actually use. Zen Planner
+ * is the main reason they exist: its grids head the person column "Name" and
+ * name columns in camelCase (`dueDate`, `billAmount`), none of which match our
+ * field keys, so without aliases a correct report imports as all-rejected.
+ */
+export const IMPORT_TARGETS: Record<string, { label: string; fields: FieldDef[] }> = {
   leads: {
     label: "Leads",
     fields: [
-      { key: "name", label: "Lead name", required: true },
-      { key: "contact_name", label: "Parent/guardian name" },
-      { key: "phone", label: "Phone" },
-      { key: "email", label: "Email" },
-      { key: "source", label: "Source (referral/website/paid_ads/…)" },
-      { key: "stage", label: "Pipeline stage" },
-      { key: "created_at", label: "Created date" },
-      { key: "first_contacted_at", label: "First contacted date" },
-      { key: "notes", label: "Notes" },
+      { key: "name", label: "Lead name", required: true, aliases: ["lead name", "full name", "prospect", "athlete", "person"] },
+      { key: "contact_name", label: "Parent/guardian name", aliases: ["parent", "parent name", "guardian", "guardian name", "responsible party"] },
+      { key: "phone", label: "Phone", aliases: ["phone number", "mobile", "cell", "cell phone"] },
+      { key: "email", label: "Email", aliases: ["email address", "e mail"] },
+      { key: "source", label: "Source (referral/website/paid_ads/…)", aliases: ["lead source", "referral source", "how did you hear"] },
+      { key: "stage", label: "Pipeline stage", aliases: ["pipeline stage", "stage name", "status"] },
+      { key: "created_at", label: "Created date", aliases: ["created", "created date", "date created", "inquiry date", "lead date"] },
+      { key: "first_contacted_at", label: "First contacted date", aliases: ["first contacted", "contacted date", "date contacted"] },
+      { key: "notes", label: "Notes", aliases: ["note", "comment", "comments", "description", "memo"] },
     ],
   },
   athletes: {
     label: "Athletes",
     fields: [
-      { key: "name", label: "Athlete name", required: true },
-      { key: "guardian_name", label: "Parent/guardian" },
-      { key: "birth_year", label: "Birth year" },
-      { key: "program", label: "Program" },
-      { key: "start_date", label: "Start date", required: true },
-      { key: "status", label: "Status (active/hold/canceled)" },
-      { key: "lead_source", label: "Lead source" },
-      { key: "expected_sessions_per_week", label: "Expected sessions/week" },
+      { key: "name", label: "Athlete name", required: true, aliases: ["name", "member", "member name", "member_name", "person", "person name", "client", "client name", "athlete", "full name", "display name"] },
+      { key: "guardian_name", label: "Parent/guardian", aliases: ["parent", "parent name", "guardian", "guardian name", "responsible party"] },
+      { key: "birth_year", label: "Birth year", aliases: ["birth year", "year of birth", "birthdate", "date of birth", "dob"] },
+      { key: "program", label: "Program", aliases: ["membership", "membership name", "plan", "plan name", "program name"] },
+      { key: "start_date", label: "Start date", required: true, aliases: ["start", "join date", "joined", "member since", "enrollment date", "signup date", "begin date"] },
+      { key: "status", label: "Status (active/hold/canceled)", aliases: ["membership status", "member status"] },
+      { key: "lead_source", label: "Lead source", aliases: ["source", "referral source"] },
+      { key: "expected_sessions_per_week", label: "Expected sessions/week", aliases: ["sessions per week", "visits per week", "expected visits"] },
     ],
   },
   attendance: {
     label: "Attendance",
     fields: [
-      { key: "athlete_name", label: "Athlete name (or use First + Last)" },
-      { key: "first_name", label: "First name" },
-      { key: "last_name", label: "Last name" },
-      { key: "date", label: "Date", required: true },
-      { key: "status", label: "Status (attended/no_show/cancelled)" },
+      { key: "athlete_name", label: "Athlete name (or use First + Last)", aliases: ["name", "member", "member name", "member_name", "person", "person name", "client", "client name", "athlete", "full name", "display name"] },
+      { key: "first_name", label: "First name", aliases: ["given name", "fname"] },
+      { key: "last_name", label: "Last name", aliases: ["surname", "family name", "lname"] },
+      { key: "date", label: "Date", required: true, aliases: ["check in date", "checkin date", "attendance date", "class date", "session date", "visit date"] },
+      { key: "status", label: "Status (attended/no_show/cancelled)", aliases: ["attendance status", "attended", "check in status", "reservation status"] },
     ],
   },
   payments: {
     label: "Payments",
     fields: [
-      { key: "athlete_name", label: "Athlete name (or use First + Last)" },
-      { key: "first_name", label: "First name" },
-      { key: "last_name", label: "Last name" },
-      { key: "date", label: "Date", required: true },
-      { key: "amount", label: "Amount", required: true },
-      { key: "category", label: "Category (membership/private_training/…)" },
-      { key: "status", label: "Status (paid/failed/recovered/refunded)" },
-      { key: "note", label: "Note" },
+      { key: "athlete_name", label: "Athlete name (or use First + Last)", aliases: ["name", "member", "member name", "member_name", "person", "person name", "client", "client name", "athlete", "full name", "display name"] },
+      { key: "first_name", label: "First name", aliases: ["given name", "fname"] },
+      { key: "last_name", label: "Last name", aliases: ["surname", "family name", "lname"] },
+      { key: "date", label: "Date", required: true, aliases: ["payment date", "paid date", "transaction date", "due date", "date paid"] },
+      { key: "amount", label: "Amount", required: true, aliases: ["payment amount", "bill amount", "total", "total amount", "paid", "paid amount", "charge"] },
+      { key: "category", label: "Category (membership/private_training/…)", aliases: ["income category", "income category id", "type", "bill type", "revenue category"] },
+      { key: "status", label: "Status (paid/failed/recovered/refunded)", aliases: ["payment status", "bill status", "autopay status"] },
+      { key: "note", label: "Note", aliases: ["description", "memo", "comment", "detail"] },
     ],
   },
   cancellations: {
     label: "Cancellations / drops",
     fields: [
-      { key: "athlete_name", label: "Athlete name (or use First + Last)" },
-      { key: "first_name", label: "First name" },
-      { key: "last_name", label: "Last name" },
-      { key: "effective_date", label: "Effective date", required: true },
-      { key: "drop_reason", label: "Drop reason" },
-      { key: "sub_drop_reason", label: "Sub drop reason" },
-      { key: "cancelled_by", label: "Cancelled by" },
-      { key: "status", label: "Status" },
+      { key: "athlete_name", label: "Athlete name (or use First + Last)", aliases: ["name", "member", "member name", "member_name", "person", "person name", "client", "client name", "athlete", "full name", "display name"] },
+      { key: "first_name", label: "First name", aliases: ["given name", "fname"] },
+      { key: "last_name", label: "Last name", aliases: ["surname", "family name", "lname"] },
+      { key: "effective_date", label: "Effective date", required: true, aliases: ["effective", "cancel date", "cancellation date", "cancelled date", "drop date", "end date", "expiration date", "termination date"] },
+      { key: "drop_reason", label: "Drop reason", aliases: ["reason", "cancel reason", "cancellation reason", "drop reason"] },
+      { key: "sub_drop_reason", label: "Sub drop reason", aliases: ["sub reason", "reason detail", "secondary reason"] },
+      { key: "cancelled_by", label: "Cancelled by", aliases: ["cancelled by", "canceled by", "modified by", "staff", "user"] },
+      { key: "status", label: "Status", aliases: ["membership status", "cancellation status"] },
     ],
   },
   kpi_values: {
