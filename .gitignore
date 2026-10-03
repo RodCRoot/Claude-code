@@ -1,0 +1,5 @@
+
+# Sandbox-only build artifacts (never commit: contains this environment's proxy CA)
+*.sandbox-ca.crt
+.sandbox-ca.crt
+Dockerfile.sandbox
