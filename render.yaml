@@ -14,7 +14,8 @@ services:
     plan: free
     branch: claude/athlete-training-platform-426cq0
     buildCommand: ./scripts/build.sh
-    startCommand: cd server && node dist/index.js
+    # Sync schema + seed at startup (build env can't reach the database).
+    startCommand: cd server && npm run start:deploy
     healthCheckPath: /api/health
     envVars:
       - key: DATABASE_URL

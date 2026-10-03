@@ -15,12 +15,15 @@ npm ci --include=dev
 npm run build
 cd ..
 
-echo "==> Installing server & preparing database"
+echo "==> Installing server & generating Prisma client"
 cd server
 npm ci --include=dev
-# Pick sqlite/postgres provider from DATABASE_URL, generate client, sync schema,
-# and seed (the seed no-ops if the DB already has data).
-npm run deploy:db
+# Pick sqlite/postgres provider from DATABASE_URL and generate the client the
+# TypeScript build compiles against. Schema sync + seed happen at STARTUP
+# (npm run start:deploy) — Render's build environment has no route to the
+# private-network database, so touching it here fails the build.
+node scripts/prepare-db.js
+npx prisma generate
 echo "==> Building server"
 npm run build
 cd ..
