@@ -18,7 +18,7 @@
     "setup": "prisma generate && prisma db push && npm run seed",
     "deploy:db": "node scripts/prepare-db.js && prisma generate && prisma db push --skip-generate && npm run seed",
     "e2e": "node ../e2e/interaction.e2e.mjs",
-    "start:deploy": "node scripts/prepare-db.js && prisma db push --skip-generate && npm run seed && node dist/index.js"
+    "start:deploy": "node scripts/prepare-db.js && prisma db push --skip-generate && npm run seed && ts-node --transpile-only scripts/ensure-catalog.ts && node dist/index.js"
   },
   "prisma": {
     "seed": "ts-node --transpile-only prisma/seed.ts"

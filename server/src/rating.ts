@@ -150,6 +150,7 @@ export async function getAthleteRating(athleteId: string): Promise<AthleteRating
   const metrics: MetricRating[] = [];
 
   for (const mt of metricTypes) {
+    if (!mt.inComposite) continue; // informational metrics (body mass, FMS)
     const own = repByAthlete.get(athleteId)?.get(mt.id);
     if (own === undefined) continue;
 

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db";
 import { requireAuth, requireRole, AuthedRequest } from "../auth";
 import { getAthleteRating } from "../rating";
+import { liftProfileForExercise, relativeStrength, relStrengthTier } from "../prescription";
 import { repMaxTo1rm, e1rmFromLoadVelocity, mvtForExercise } from "../prescription";
 import { buildToday } from "../today";
 import { maybeE1rmPR } from "../feed";
@@ -83,6 +84,83 @@ athletesRouter.get("/:id/rating", async (req: AuthedRequest, res) => {
     return res.status(403).json({ error: "Forbidden" });
   }
   res.json(await getAthleteRating(req.params.id));
+});
+
+// Sport readiness: relative strength (e1RM per kg of body mass, body mass
+// preferring the force plates) + the latest movement screen (FMS).
+athletesRouter.get("/:id/readiness-profile", async (req: AuthedRequest, res) => {
+  const athlete = await prisma.athlete.findUnique({ where: { id: req.params.id } });
+  if (!athlete || athlete.orgId !== req.auth!.orgId) {
+    return res.status(404).json({ error: "Athlete not found" });
+  }
+  if (req.auth!.role === "ATHLETE" && req.auth!.athleteId !== athlete.id) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  // Body mass: newest force-plate record wins; manual profile weight backs it up.
+  const bodyMassType = await prisma.metricType.findUnique({ where: { key: "body_mass" } });
+  const latestMass = bodyMassType
+    ? await prisma.metricRecord.findFirst({
+        where: { athleteId: athlete.id, metricTypeId: bodyMassType.id },
+        orderBy: { recordedAt: "desc" },
+      })
+    : null;
+  const bodyMassKg = latestMass?.value ?? athlete.weightKg ?? null;
+  const bodyMassSource = latestMass ? `force plate (${latestMass.recordedAt.toISOString().slice(0, 10)})` : athlete.weightKg ? "profile" : null;
+
+  // Latest e1RM per exercise → xBW + tier.
+  const maxes = await prisma.maxProfile.findMany({
+    where: { athleteId: athlete.id },
+    orderBy: { recordedAt: "desc" },
+    include: { exercise: { select: { id: true, name: true, category: true, mvt: true } } },
+  });
+  const seenEx = new Set<string>();
+  const strength: object[] = [];
+  for (const m of maxes) {
+    if (seenEx.has(m.exerciseId)) continue;
+    seenEx.add(m.exerciseId);
+    const profile = liftProfileForExercise(m.exercise);
+    const xbw = bodyMassKg ? relativeStrength(m.e1rmKg, bodyMassKg) : null;
+    strength.push({
+      exercise: m.exercise.name,
+      e1rmKg: m.e1rmKg,
+      method: m.method,
+      recordedAt: m.recordedAt,
+      xbw,
+      tier: xbw != null ? relStrengthTier(xbw, profile) : null,
+      profile,
+    });
+  }
+
+  // Latest FMS component scores → total /21, flag below 14.
+  const fmsTypes = await prisma.metricType.findMany({ where: { key: { startsWith: "fms_" } } });
+  const fms: { key: string; name: string; score: number | null }[] = [];
+  let fmsDate: Date | null = null;
+  for (const t of fmsTypes) {
+    const latest = await prisma.metricRecord.findFirst({
+      where: { athleteId: athlete.id, metricTypeId: t.id },
+      orderBy: { recordedAt: "desc" },
+    });
+    fms.push({ key: t.key, name: t.name.replace(/^FMS /, ""), score: latest?.value ?? null });
+    if (latest && (!fmsDate || latest.recordedAt > fmsDate)) fmsDate = latest.recordedAt;
+  }
+  const scored = fms.filter((f) => f.score != null);
+  const fmsTotal = scored.length === fmsTypes.length && fmsTypes.length > 0
+    ? scored.reduce((s2, f) => s2 + (f.score as number), 0)
+    : null;
+
+  res.json({
+    bodyMassKg,
+    bodyMassSource,
+    strength,
+    fms: {
+      components: fms,
+      total: fmsTotal,
+      max: fmsTypes.length * 3,
+      atRisk: fmsTotal != null && fmsTotal < 14,
+      screenedAt: fmsDate,
+    },
+  });
 });
 
 // Longitudinal history as a spreadsheet: every metric record plus e1RM maxes.

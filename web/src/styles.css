@@ -351,3 +351,12 @@ button.day-item:hover { border-color: var(--accent-2); }
   .kiosk-grid { grid-template-columns: 1fr 1fr; }
   .goals-list { grid-template-columns: 1fr; }
 }
+
+/* sport readiness panels */
+.readiness-panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.fms-total { display: flex; align-items: center; gap: 12px; margin: 6px 0 10px; }
+.fms-score { font-size: 2rem; font-weight: 700; }
+.fms-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
+.fms-item { display: flex; justify-content: space-between; align-items: center; }
+.fms-dot { display: inline-block; min-width: 26px; text-align: center; border-radius: 999px; font-weight: 700; padding: 2px 6px; background: var(--panel-2, #1c2230); }
+.fms-dot.s3 { color: #6fcf6f; } .fms-dot.s2 { color: #e0c75a; } .fms-dot.s1 { color: #e06a6a; } .fms-dot.s0 { color: #e06a6a; }

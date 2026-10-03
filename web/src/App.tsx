@@ -92,7 +92,7 @@ function Sidebar({ open }: { open: boolean }) {
         {isCoach && link("/groups", "Teams & Groups")}
         {isCoach && link("/gym", "Gym Mode")}
         {isCoach && link("/evals", "Evaluations")}
-        {isCoach && link("/import", "Import Data")}
+        {isCoach && link("/import", "Devices & Data")}
       </nav>
       <div className="sidebar-foot">
         <div className="user-name">{user?.name}</div>

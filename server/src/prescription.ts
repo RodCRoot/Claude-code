@@ -200,3 +200,99 @@ export function computeTargets(
   }
   return { targetLoadKg, targetVelocity, zone, display: parts.join(" · ") };
 }
+
+// ---------------------------------------------------------------------------
+// %1RM from a single set's velocity (generic published profiles).
+//
+// When an athlete has a personal load-velocity profile (2+ loads) we always
+// prefer it: pct = load / e1RM. These generic curves are the fallback for a
+// single submax set, from large validated samples:
+//  - Full squat (Martínez-Cava / Sánchez-Medina line, R²≈.96):
+//      %1RM = 121.03 − 71.684 · MPV
+//  - Bench press (González-Badillo & Sánchez-Medina 2010, R²≈.98):
+//      %1RM = 8.4326·v² − 73.501·v + 112.33
+//  - Anything else: a linear profile anchored at the exercise's MVT (→100%)
+//    with the squat curve's slope, shifted to that MVT.
+// ---------------------------------------------------------------------------
+
+export type LiftProfile = "SQUAT" | "BENCH" | "GENERIC";
+
+export function liftProfileForExercise(exercise: { name?: string | null; category?: string | null }): LiftProfile {
+  const n = (exercise.name || "").toLowerCase();
+  if (/squat/.test(n) && !/split|bulgarian|pistol/.test(n)) return "SQUAT";
+  if (/bench|press/.test(n) && !/leg|shoulder|overhead|push ?press/.test(n)) return "BENCH";
+  return "GENERIC";
+}
+
+/** Estimated %1RM (0–100, clamped) for a rep performed at `velocity` m/s. */
+export function pctFromVelocity(
+  velocity: number,
+  exercise: { name?: string | null; category?: string | null; mvt?: number | null }
+): number {
+  const profile = liftProfileForExercise(exercise);
+  let pct: number;
+  if (profile === "SQUAT") {
+    pct = 121.03 - 71.684 * velocity;
+  } else if (profile === "BENCH") {
+    pct = 8.4326 * velocity * velocity - 73.501 * velocity + 112.33;
+  } else {
+    // Same slope as the squat line, re-anchored so v = MVT ⇒ 100%.
+    const mvt = mvtForExercise(exercise);
+    pct = 100 - 71.684 * (velocity - mvt);
+  }
+  return Math.max(5, Math.min(100, Math.round(pct * 10) / 10));
+}
+
+/**
+ * e1RM from ONE submax set (load + mean velocity), via the generic profile.
+ * Lower confidence than a personal LV fit — callers should prefer
+ * e1rmFromLoadVelocity whenever 2+ distinct loads exist.
+ */
+export function e1rmFromSingleSet(
+  loadKg: number,
+  velocity: number,
+  exercise: { name?: string | null; category?: string | null; mvt?: number | null }
+): number | null {
+  if (!(loadKg > 0) || !(velocity > 0)) return null;
+  const pct = pctFromVelocity(velocity, exercise);
+  if (pct <= 0) return null;
+  return Math.round((loadKg / (pct / 100)) * 10) / 10;
+}
+
+// ---------------------------------------------------------------------------
+// Relative strength: e1RM expressed in bodyweights (xBW), judged against
+// widely used coaching standards. Guidelines, not gospel — shown as tiers.
+// ---------------------------------------------------------------------------
+
+export interface RelStrengthTier { label: string; min: number; }
+export const REL_STRENGTH_TIERS: Record<LiftProfile, RelStrengthTier[]> = {
+  // xBW thresholds (high-school → collegiate coaching standards)
+  SQUAT: [
+    { label: "Elite", min: 2.0 },
+    { label: "Strong", min: 1.5 },
+    { label: "Solid", min: 1.0 },
+    { label: "Developing", min: 0 },
+  ],
+  BENCH: [
+    { label: "Elite", min: 1.5 },
+    { label: "Strong", min: 1.2 },
+    { label: "Solid", min: 0.8 },
+    { label: "Developing", min: 0 },
+  ],
+  GENERIC: [
+    { label: "Elite", min: 2.2 },
+    { label: "Strong", min: 1.7 },
+    { label: "Solid", min: 1.2 },
+    { label: "Developing", min: 0 },
+  ],
+};
+
+export function relativeStrength(e1rmKg: number, bodyMassKg: number): number | null {
+  if (!(e1rmKg > 0) || !(bodyMassKg > 0)) return null;
+  return Math.round((e1rmKg / bodyMassKg) * 100) / 100;
+}
+
+export function relStrengthTier(xbw: number, profile: LiftProfile): string {
+  for (const t of REL_STRENGTH_TIERS[profile]) if (xbw >= t.min) return t.label;
+  return "Developing";
+}

@@ -71,6 +71,17 @@ function statusTier(s: string) {
 
 // Color a logged velocity vs. its target: hitting target = good, just under =
 // warn, well under = low (athlete is grinding / load too heavy).
+// Generic published velocity→%1RM curves (squat line / bench quadratic); the
+// server mirrors these in prescription.ts. Estimation only — shown as "est".
+function estPct(velocity: number, exerciseName: string): number {
+  const n = exerciseName.toLowerCase();
+  let pct: number;
+  if (/squat/.test(n) && !/split|bulgarian|pistol/.test(n)) pct = 121.03 - 71.684 * velocity;
+  else if (/bench/.test(n)) pct = 8.4326 * velocity * velocity - 73.501 * velocity + 112.33;
+  else pct = 100 - 71.684 * (velocity - 0.3);
+  return Math.max(5, Math.min(100, Math.round(pct)));
+}
+
 function velClass(logged: number | null, target: number | null): string {
   if (logged == null || target == null) return "";
   if (logged >= target * 0.95) return "vel-good";
@@ -145,7 +156,7 @@ function AssignmentLogger({ id, onBack }: { id: string; onBack: () => void }) {
                   </div>
                 )}
                 <table className="item-table">
-                  <thead><tr><th>Set</th><th>Reps</th><th>Load (kg)</th><th>Vel (m/s)</th><th>RPE</th></tr></thead>
+                  <thead><tr><th>Set</th><th>Reps</th><th>Load (kg)</th><th>Vel (m/s)</th><th>RPE</th><th>est %1RM</th></tr></thead>
                   <tbody>
                     {Array.from({ length: sets }, (_, i) => i + 1).map((sn) => {
                       const cur = logs[`${it.id}:${sn}`];
@@ -157,6 +168,7 @@ function AssignmentLogger({ id, onBack }: { id: string; onBack: () => void }) {
                           <td><input className="tiny" type="number" placeholder={it.targets?.targetLoadKg != null ? String(it.targets.targetLoadKg) : ""} value={cur?.loadKg ?? ""} onChange={(e) => setField(it.id, sn, { loadKg: e.target.value === "" ? null : Number(e.target.value) })} /></td>
                           <td><input className={`tiny ${velClass(cur?.velocity ?? null, tv)}`} type="number" step="0.01" placeholder={tv != null ? String(tv) : ""} value={cur?.velocity ?? ""} onChange={(e) => setField(it.id, sn, { velocity: e.target.value === "" ? null : Number(e.target.value) })} /></td>
                           <td><input className="tiny" type="number" value={cur?.rpe ?? ""} onChange={(e) => setField(it.id, sn, { rpe: e.target.value === "" ? null : Number(e.target.value) })} /></td>
+                          <td className="muted small est-pct">{cur?.velocity != null && cur.velocity > 0 ? `≈${estPct(cur.velocity, it.exercise.name)}%` : ""}</td>
                         </tr>
                       );
                     })}

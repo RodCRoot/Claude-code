@@ -7,6 +7,7 @@
 process.env.DATABASE_URL = "file:./integration.db"; // resolved against prisma/
 process.env.JWT_SECRET = "integration-test-secret";
 process.env.PORT = "4123";
+process.env.AUTOSYNC = "0"; // no background timers in tests
 
 import assert from "assert";
 import { execSync } from "child_process";
@@ -313,6 +314,83 @@ async function main() {
     assert.ok(Math.abs(asg!.setLogs[0].velocity! - 0.71) < 0.01); // mean of 0.75/0.71/0.67
     assert.equal(asg!.assignedDate.toISOString().slice(0, 10), "2026-07-02"); // m/d/yyyy parsed
   });
+
+  // --- Hawkin integration: mock cloud, token exchange, fuzzy metrics --------
+  const { createServer } = await import("http");
+  const hawkinMock = createServer((req, rs) => {
+    const url = req.url || "";
+    const auth = req.headers.authorization || "";
+    if (url.startsWith("/api/token")) {
+      if (auth !== "Bearer good-refresh-token") { rs.statusCode = 401; return rs.end("{}"); }
+      rs.setHeader("content-type", "application/json");
+      return rs.end(JSON.stringify({ access_token: "mock-access", expires_in: 3600 }));
+    }
+    if (url.startsWith("/api/v1")) {
+      if (auth !== "Bearer mock-access") { rs.statusCode = 401; return rs.end("{}"); }
+      rs.setHeader("content-type", "application/json");
+      return rs.end(JSON.stringify({ count: 2, data: [
+        { id: "t1", timestamp: 1750000000, athlete: { name: "Ath A1" }, testType: { name: "CMJ" },
+          "Jump Height(m)": 0.42, "mRSI": 0.52, "Peak Relative Propulsive Power(W/kg)": 55.2, "Weight(N)": 710 },
+        { id: "t2", timestamp: 1750000100, athlete: { name: "Ghost Athlete" }, testType: { name: "CMJ" },
+          "Jump Height(m)": 0.31, "Weight(N)": 650 },
+      ] }));
+    }
+    rs.statusCode = 404; rs.end("{}");
+  });
+  await new Promise<void>((r) => hawkinMock.listen(4124, r));
+  process.env.HAWKIN_API_URL = "http://localhost:4124";
+
+  await test("hawkin config save returns a masked token", async () => {
+    const r = await call("PUT", "/integrations/HAWKIN/config", { token: coachToken, body: { refreshToken: "good-refresh-token", region: "americas" } });
+    assert.equal(r.status, 200);
+    assert.ok(!JSON.stringify(r.body).includes("good-refresh-token"), "raw token must never echo");
+    assert.equal(r.body.tokenMasked, "good…oken");
+  });
+  // the catalog the sync maps into
+  for (const [key, name, unit] of [["cmj_height","CMJ Jump Height","cm"],["cmj_rsi_mod","CMJ RSI-Modified",""],["cmj_peak_power","CMJ Peak Power","W/kg"],["body_mass","Body Mass","kg"]] as const) {
+    await prisma.metricType.create({ data: { key, name, unit, category: "JUMP", source: "HAWKIN", inComposite: key !== "body_mass" } });
+  }
+  await test("hawkin live sync: auth exchange, unit conversion, name matching", async () => {
+    const r = await call("POST", "/integrations/HAWKIN/sync", { token: coachToken, body: {} });
+    assert.equal(r.body.mode, "live");
+    assert.equal(r.body.created, 4); // t1 → height+mrsi+power+mass; t2 unmatched
+    assert.deepEqual(r.body.unmatchedNames, ["Ghost Athlete"]);
+    const mass = await prisma.metricRecord.findFirst({
+      where: { athleteId: a1.id, source: "HAWKIN", metricType: { key: "body_mass" } },
+      orderBy: { recordedAt: "desc" },
+    });
+    assert.ok(mass && Math.abs(mass.value - 72.4) < 0.1, `N→kg (${mass?.value})`);
+    const jump = await prisma.metricRecord.findFirst({ where: { athleteId: a1.id, source: "HAWKIN", metricType: { key: "cmj_height" } } });
+    assert.ok(jump && Math.abs(jump.value - 42) < 0.01, `m→cm (${jump?.value})`);
+  });
+  await test("hawkin re-sync is idempotent (dedupe by external id)", async () => {
+    const r = await call("POST", "/integrations/HAWKIN/sync", { token: coachToken, body: { since: "2020-01-01" } });
+    assert.equal(r.body.created, 0);
+    assert.ok(r.body.skipped >= 4);
+  });
+
+  // --- readiness profile: xBW from force-plate mass + FMS -------------------
+  await test("readiness profile: xBW uses force-plate body mass and tiers", async () => {
+    await prisma.maxProfile.create({ data: { athleteId: a1.id, exerciseId: exercise.id, e1rmKg: 145, method: "DIRECT", source: "MANUAL" } });
+    const r = await call("GET", `/athletes/${a1.id}/readiness-profile`, { token: coachToken });
+    assert.equal(r.status, 200);
+    assert.ok(Math.abs(r.body.bodyMassKg - 72.4) < 0.1, "prefers force-plate mass");
+    assert.ok(String(r.body.bodyMassSource).startsWith("force plate"));
+    const row = r.body.strength.find((x: Json) => x.exercise === "Back Squat");
+    assert.ok(Math.abs(row.xbw - 2.0) < 0.01, `xbw ${row.xbw}`);
+    assert.equal(row.tier, "Elite");
+  });
+  await test("readiness profile: FMS total + injury-risk flag", async () => {
+    const keys = ["fms_deep_squat","fms_hurdle_step","fms_inline_lunge","fms_shoulder_mobility","fms_aslr","fms_trunk_stability","fms_rotary_stability"];
+    for (const [i, key] of keys.entries()) {
+      const t = await prisma.metricType.create({ data: { key, name: `FMS ${key}`, unit: "", category: "MOVEMENT", source: "MANUAL", inComposite: false } });
+      await prisma.metricRecord.create({ data: { athleteId: a1.id, metricTypeId: t.id, value: i < 5 ? 2 : 1 } }); // total 12
+    }
+    const r = await call("GET", `/athletes/${a1.id}/readiness-profile`, { token: coachToken });
+    assert.equal(r.body.fms.total, 12);
+    assert.equal(r.body.fms.atRisk, true);
+  });
+  hawkinMock.close();
 
   console.log(`${passed} tests passed.\n`);
   await prisma.$disconnect();

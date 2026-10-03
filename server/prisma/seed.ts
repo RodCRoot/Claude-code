@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import benchmarkData from "./benchmarks.json";
 import { e1rmFromLoadVelocity } from "../src/prescription";
+import { METRIC_TYPES } from "./catalog";
 
 const prisma = new PrismaClient();
 
@@ -26,16 +27,7 @@ function utcDay(ms: number): Date {
 
 // --- Metric catalog ---------------------------------------------------------
 // `relativeToBw` flags metrics the rating engine judges relative to bodyweight.
-const METRIC_TYPES = [
-  { key: "sprint_10m", name: "10m Sprint", unit: "s", category: "SPEED", source: "TIMING", higherIsBetter: false, relativeToBw: false },
-  { key: "sprint_40yd", name: "40yd Dash", unit: "s", category: "SPEED", source: "TIMING", higherIsBetter: false, relativeToBw: false },
-  { key: "cmj_height", name: "CMJ Jump Height", unit: "cm", category: "JUMP", source: "HAWKIN", higherIsBetter: true, relativeToBw: false },
-  { key: "cmj_rsi_mod", name: "CMJ RSI-Modified", unit: "", category: "POWER", source: "HAWKIN", higherIsBetter: true, relativeToBw: false },
-  { key: "cmj_peak_power", name: "CMJ Peak Power", unit: "W/kg", category: "POWER", source: "HAWKIN", higherIsBetter: true, relativeToBw: false },
-  { key: "dj_rsi", name: "Drop Jump RSI", unit: "", category: "JUMP", source: "OVR", higherIsBetter: true, relativeToBw: false },
-  { key: "vertical_jump", name: "Vertical Jump", unit: "cm", category: "JUMP", source: "OVR", higherIsBetter: true, relativeToBw: false },
-  { key: "back_squat_1rm", name: "Back Squat 1RM", unit: "kg", category: "STRENGTH", source: "MANUAL", higherIsBetter: true, relativeToBw: true },
-];
+
 
 // Elite reference norms come from the editable, cited dataset in benchmarks.json.
 const BENCHMARKS = benchmarkData.benchmarks;
@@ -162,7 +154,7 @@ async function main() {
   // Athletes (with a linked login for the first one)
   const now = Date.now();
   const athleteIds: string[] = [];
-  const athleteMeta: { id: string; sex: string; sport: string; ability: number; age: number }[] = [];
+  const athleteMeta: { id: string; sex: string; sport: string; ability: number; age: number; weightKg: number | null }[] = [];
   for (let i = 0; i < 12; i++) {
     const sex = i % 2 === 0 ? "M" : "F";
     const sport = SPORTS[i % SPORTS.length];
@@ -190,7 +182,7 @@ async function main() {
       },
     });
     athleteIds.push(athlete.id);
-    athleteMeta.push({ id: athlete.id, sex, sport, ability, age });
+    athleteMeta.push({ id: athlete.id, sex, sport, ability, age, weightKg: athlete.weightKg });
 
     // Link a login to the first athlete so you can log in as an athlete too.
     if (i === 0) {
@@ -531,6 +523,54 @@ async function main() {
             data: { sessionId: session.id, athleteId: a.id, metricTypeId, value, metricRecordId: record.id },
           });
         }
+      }
+    }
+  }
+
+  // --- FMS movement screen: protocol + one scored session --------------------
+  {
+    const fmsKeys = ["fms_deep_squat","fms_hurdle_step","fms_inline_lunge","fms_shoulder_mobility","fms_aslr","fms_trunk_stability","fms_rotary_stability"];
+    const battery = fmsKeys.map((k) => typeByKey[k]).filter(Boolean);
+    if (battery.length === 7) {
+      const protocol = await prisma.evalProtocol.create({
+        data: {
+          orgId: org.id, name: "FMS Movement Screen",
+          description: "Functional Movement Screen — 7 tests scored 0-3 (total /21; <14 flags elevated injury risk)",
+          createdById: coach!.id,
+          items: { create: battery.map((metricTypeId, i) => ({ metricTypeId, order: i })) },
+        },
+      });
+      const sessionDay = utcDay(now - 14 * 864e5);
+      const session = await prisma.evalSession.create({
+        data: { protocolId: protocol.id, date: sessionDay, createdById: coach!.id, notes: "Preseason movement screen" },
+      });
+      for (const a of athleteMeta.slice(0, 8)) {
+        for (const metricTypeId of battery) {
+          const base = 2 + (a.ability > 0.3 ? 1 : 0);
+          const value = Math.max(1, Math.min(3, base + (rand() < 0.25 ? -1 : 0)));
+          const record = await prisma.metricRecord.create({
+            data: { athleteId: a.id, metricTypeId, value, source: "MANUAL", recordedAt: sessionDay, notes: "Testing: FMS Movement Screen" },
+          });
+          await prisma.evalResult.create({
+            data: { sessionId: session.id, athleteId: a.id, metricTypeId, value, metricRecordId: record.id },
+          });
+        }
+      }
+    }
+  }
+
+  // --- Force-plate body mass (powers xBW relative strength) ------------------
+  if (typeByKey["body_mass"]) {
+    for (const a of athleteMeta) {
+      const w = a.weightKg ?? 70;
+      for (const dgo of [30, 3]) {
+        await prisma.metricRecord.create({
+          data: {
+            athleteId: a.id, metricTypeId: typeByKey["body_mass"],
+            value: Math.round((w + gaussian(0, 0.6)) * 10) / 10,
+            source: "HAWKIN", recordedAt: utcDay(now - dgo * 864e5),
+          },
+        });
       }
     }
   }

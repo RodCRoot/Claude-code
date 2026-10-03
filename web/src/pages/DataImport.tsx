@@ -10,6 +10,75 @@ interface Preview { sessions: PreviewSession[]; skipped: { row: number; reason: 
 interface Result { imported: { sessions: number; sets: number }; maxUpdates: { athlete: string; exercise: string; e1rmKg: number }[]; skipped: { row: number; reason: string }[]; }
 interface Athlete { id: string; firstName: string; lastName: string; }
 
+interface IntegrationInfo {
+  key: string; name: string; configured: boolean; region: string | null; regions: string[];
+  tokenMasked: string | null; autoSync: boolean; lastSyncAt: string | null; lastSyncNote: string | null;
+}
+
+function Integrations() {
+  const [items, setItems] = useState<IntegrationInfo[]>([]);
+  const [token, setToken] = useState("");
+  const [region, setRegion] = useState("americas");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  function load() { api.get<{ integrations: IntegrationInfo[] }>("/integrations").then((r) => setItems(r.integrations)); }
+  useEffect(() => { load(); }, []);
+
+  const hawkin = items.find((i) => i.key === "HAWKIN");
+
+  async function save() {
+    setMsg(""); setBusy(true);
+    try {
+      await api.put("/integrations/HAWKIN/config", { refreshToken: token || undefined, region });
+      setToken("");
+      setMsg("Saved ✓ — now hit Sync");
+      load();
+    } catch (e) { setMsg(e instanceof Error ? e.message : "Save failed"); }
+    finally { setBusy(false); }
+  }
+  async function sync(sample: boolean) {
+    setMsg(""); setBusy(true);
+    try {
+      const r = await api.post<{ created: number; skipped: number; unmatchedNames: string[]; mode: string }>(
+        "/integrations/HAWKIN/sync", sample ? { sample: true } : {});
+      setMsg(`${r.mode === "sample" ? "Sample sync" : "Sync"}: ${r.created} new results${r.unmatchedNames.length ? ` · unmatched: ${r.unmatchedNames.join(", ")}` : ""}`);
+      load();
+    } catch (e) { setMsg(e instanceof Error ? e.message : "Sync failed"); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="card" style={{ marginBottom: 14 }}>
+      <div className="chart-head"><h2>Hawkin Dynamics force plates</h2>
+        {hawkin?.tokenMasked && <span className="muted small">token {hawkin.tokenMasked} · {hawkin.region} {hawkin.lastSyncAt ? `· last sync ${new Date(hawkin.lastSyncAt).toLocaleString()}` : ""}</span>}
+      </div>
+      <p className="muted small">
+        Jump tests, RSI, peak power and body mass sync straight from Hawkin Cloud — body mass then powers ×BW relative
+        strength. Create a refresh token in <strong>Hawkin Cloud → Settings → Integrations</strong>, paste it here once;
+        after that Vantage syncs automatically every hour (plus the button below).
+      </p>
+      <div className="wellness-form">
+        <label className="label">Refresh token {hawkin?.tokenMasked && <span className="muted small">(saved — paste to replace)</span>}
+          <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="paste Hawkin refresh token" />
+        </label>
+        <label className="label">Region
+          <select value={region} onChange={(e) => setRegion(e.target.value)}>
+            {["americas", "europe", "apac"].map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="builder-actions">
+        <button className="secondary" onClick={save} disabled={busy || (!token && !hawkin?.tokenMasked)}>Save</button>
+        <button onClick={() => sync(false)} disabled={busy || !hawkin?.configured}>⟳ Sync now</button>
+        <button className="secondary" onClick={() => sync(true)} disabled={busy}>Try with sample data</button>
+        {msg && <span className="muted small" style={{ alignSelf: "center" }}>{msg}</span>}
+      </div>
+      {hawkin?.lastSyncNote && <div className="muted small" style={{ marginTop: 6 }}>{hawkin.lastSyncNote}</div>}
+    </div>
+  );
+}
+
 export default function DataImport() {
   const [csv, setCsv] = useState("");
   const [athletes, setAthletes] = useState<Athlete[]>([]);
@@ -48,7 +117,8 @@ export default function DataImport() {
 
   return (
     <div>
-      <header className="page-head"><h1>Import Device Data</h1></header>
+      <header className="page-head"><h1>Devices & Data</h1></header>
+      <Integrations />
       <p className="muted small">
         Export a session as CSV from the GymAware app (no cloud subscription needed) and upload it here.
         Sets land in the athlete's training history with bar speeds; sessions with multiple loads refresh

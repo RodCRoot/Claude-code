@@ -34,6 +34,7 @@ model Organization {
   feedPosts FeedPost[]
   threads   MessageThread[]
   evalProtocols EvalProtocol[]
+  integrations IntegrationConfig[]
 }
 
 model User {
@@ -99,6 +100,9 @@ model MetricType {
   // comparing — so strength is judged relative to size. Benchmarks for these
   // metrics are stored in xBodyweight units.
   relativeToBw   Boolean  @default(false)
+  // When false the metric is informational (body mass, movement screens) and
+  // stays out of the athletic composite score.
+  inComposite    Boolean  @default(true)
   createdAt      DateTime @default(now())
 
   records    MetricRecord[]
@@ -420,6 +424,23 @@ model EvalResult {
   metricRecordId String?     @unique // the longitudinal record this created
 
   @@unique([sessionId, athleteId, metricTypeId])
+}
+
+// Per-org credentials/settings for a device integration (e.g. Hawkin Dynamics).
+// The refresh token is pasted by a coach in the UI; never returned unmasked.
+model IntegrationConfig {
+  id           String   @id @default(cuid())
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id])
+  provider     String // HAWKIN | OVR | ...
+  refreshToken String
+  region       String   @default("americas") // americas | europe | apac
+  autoSync     Boolean  @default(true)
+  lastSyncAt   DateTime?
+  lastSyncNote String?
+  createdAt    DateTime @default(now())
+
+  @@unique([orgId, provider])
 }
 
 // A measurable target for an athlete: reach targetValue on a metric or an

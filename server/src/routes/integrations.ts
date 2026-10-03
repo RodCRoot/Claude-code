@@ -3,30 +3,92 @@ import { z } from "zod";
 import { prisma } from "../db";
 import { requireAuth, requireRole, AuthedRequest } from "../auth";
 import { adapters, getAdapter } from "../integrations";
+import { runProviderSync, syncFromConfig } from "../sync";
+import { HAWKIN_REGIONS } from "../integrations/hawkin";
 
 export const integrationsRouter = Router();
 integrationsRouter.use(requireAuth);
 integrationsRouter.use(requireRole("ADMIN", "COACH"));
 
-// List available device integrations and whether each is configured.
-integrationsRouter.get("/", (_req, res) => {
+const maskToken = (t: string) => (t.length <= 8 ? "••••" : `${t.slice(0, 4)}…${t.slice(-4)}`);
+
+// List available device integrations with this org's configuration status.
+integrationsRouter.get("/", async (req: AuthedRequest, res) => {
+  const configs = await prisma.integrationConfig.findMany({ where: { orgId: req.auth!.orgId } });
+  const byProvider = new Map(configs.map((c) => [c.provider, c]));
   res.json({
-    integrations: adapters.map((a) => ({
-      key: a.key,
-      name: a.name,
-      configured: a.configured(),
-      credentialEnv: a.credentialEnv,
-    })),
+    integrations: adapters.map((a) => {
+      const cfg = byProvider.get(a.key);
+      return {
+        key: a.key,
+        name: a.name,
+        configured: !!cfg || a.configured(),
+        region: cfg?.region ?? null,
+        regions: a.key === "HAWKIN" ? Object.keys(HAWKIN_REGIONS) : [],
+        tokenMasked: cfg ? maskToken(cfg.refreshToken) : null,
+        autoSync: cfg?.autoSync ?? false,
+        lastSyncAt: cfg?.lastSyncAt ?? null,
+        lastSyncNote: cfg?.lastSyncNote ?? null,
+      };
+    }),
   });
 });
 
+// Save credentials/settings for a provider (token pasted in the UI).
+const configSchema = z.object({
+  refreshToken: z.string().min(8).optional(),
+  region: z.string().optional(),
+  autoSync: z.boolean().optional(),
+});
+integrationsRouter.put("/:provider/config", async (req: AuthedRequest, res) => {
+  const adapter = getAdapter(req.params.provider);
+  if (!adapter) return res.status(404).json({ error: "Unknown integration" });
+  const parsed = configSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const d = parsed.data;
+  if (d.region && adapter.key === "HAWKIN" && !HAWKIN_REGIONS[d.region]) {
+    return res.status(400).json({ error: `Unknown region. Use one of: ${Object.keys(HAWKIN_REGIONS).join(", ")}` });
+  }
+
+  const existing = await prisma.integrationConfig.findUnique({
+    where: { orgId_provider: { orgId: req.auth!.orgId, provider: adapter.key } },
+  });
+  if (!existing && !d.refreshToken) return res.status(400).json({ error: "refreshToken required" });
+
+  const cfg = existing
+    ? await prisma.integrationConfig.update({
+        where: { id: existing.id },
+        data: {
+          ...(d.refreshToken ? { refreshToken: d.refreshToken } : {}),
+          ...(d.region ? { region: d.region } : {}),
+          ...(d.autoSync !== undefined ? { autoSync: d.autoSync } : {}),
+        },
+      })
+    : await prisma.integrationConfig.create({
+        data: {
+          orgId: req.auth!.orgId,
+          provider: adapter.key,
+          refreshToken: d.refreshToken!,
+          region: d.region ?? "americas",
+          autoSync: d.autoSync ?? true,
+        },
+      });
+  res.json({ ok: true, tokenMasked: maskToken(cfg.refreshToken), region: cfg.region, autoSync: cfg.autoSync });
+});
+
+integrationsRouter.delete("/:provider/config", async (req: AuthedRequest, res) => {
+  const adapter = getAdapter(req.params.provider);
+  if (!adapter) return res.status(404).json({ error: "Unknown integration" });
+  await prisma.integrationConfig.deleteMany({ where: { orgId: req.auth!.orgId, provider: adapter.key } });
+  res.json({ ok: true });
+});
+
+// Pull results. Uses the org's stored config when present (incremental via
+// lastSyncAt); `sample: true` demos the flow without credentials.
 const syncSchema = z.object({
   sample: z.boolean().optional(),
   since: z.string().optional(),
 });
-
-// Pull results from a provider and store them as metric records. Idempotent:
-// records already imported (matched by the provider's external id) are skipped.
 integrationsRouter.post("/:provider/sync", async (req: AuthedRequest, res) => {
   const adapter = getAdapter(req.params.provider);
   if (!adapter) return res.status(404).json({ error: "Unknown integration" });
@@ -34,79 +96,32 @@ integrationsRouter.post("/:provider/sync", async (req: AuthedRequest, res) => {
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   const { sample, since } = parsed.data;
 
-  let external;
   try {
-    external = await adapter.fetch({ sample, since: since ? new Date(since) : undefined });
-  } catch (e) {
-    return res.status(400).json({ error: (e as Error).message });
-  }
-
-  // Build lookup tables for matching to our roster + metric catalog.
-  const orgId = req.auth!.orgId;
-  const athletes = await prisma.athlete.findMany({
-    where: { orgId },
-    select: { id: true, firstName: true, lastName: true },
-  });
-  const athleteByName = new Map(athletes.map((a) => [`${a.firstName} ${a.lastName}`.toLowerCase(), a.id]));
-  const metricTypes = await prisma.metricType.findMany({ select: { id: true, key: true } });
-  const metricByKey = new Map(metricTypes.map((m) => [m.key, m.id]));
-
-  // Existing external ids for this provider (dedupe).
-  const existing = await prisma.metricRecord.findMany({
-    where: { athleteId: { in: athletes.map((a) => a.id) }, source: adapter.key },
-    select: { rawJson: true },
-  });
-  const seen = new Set<string>();
-  for (const r of existing) {
-    try {
-      const id = r.rawJson ? JSON.parse(r.rawJson).externalId : null;
-      if (id) seen.add(id);
-    } catch { /* ignore malformed */ }
-  }
-
-  let created = 0,
-    skipped = 0,
-    unmatchedAthlete = 0,
-    unknownMetric = 0,
-    errors = 0;
-  const unmatchedNames = new Set<string>();
-
-  for (const rec of external) {
-    if (seen.has(rec.externalId)) { skipped++; continue; }
-    const athleteId = athleteByName.get(rec.athleteName.toLowerCase());
-    if (!athleteId) { unmatchedAthlete++; unmatchedNames.add(rec.athleteName); continue; }
-    const metricTypeId = metricByKey.get(rec.metricKey);
-    if (!metricTypeId) { unknownMetric++; continue; }
-
-    try {
-      await prisma.metricRecord.create({
-        data: {
-          athleteId,
-          metricTypeId,
-          value: rec.value,
-          source: adapter.key,
-          recordedAt: new Date(rec.recordedAt),
-          rawJson: JSON.stringify({ externalId: rec.externalId, payload: rec.raw }),
-        },
-      });
-      seen.add(rec.externalId);
-      created++;
-    } catch (e) {
-      // One bad record shouldn't abort the whole import; report a count instead.
-      errors++;
-      console.error(`Sync ${adapter.key} record ${rec.externalId} failed:`, e);
+    const cfg = await prisma.integrationConfig.findUnique({
+      where: { orgId_provider: { orgId: req.auth!.orgId, provider: adapter.key } },
+    });
+    if (cfg && !sample) {
+      // Honor an explicit `since`, else incremental from the last sync.
+      if (since) {
+        const summary = await runProviderSync(req.auth!.orgId, adapter, {
+          since: new Date(since),
+          auth: { token: cfg.refreshToken, region: cfg.region },
+        });
+        await prisma.integrationConfig.update({
+          where: { id: cfg.id },
+          data: { lastSyncAt: new Date(), lastSyncNote: `${summary.created} new, ${summary.skipped} known` },
+        });
+        return res.json(summary);
+      }
+      const summary = await syncFromConfig(cfg.id);
+      return res.json(summary);
     }
+    const summary = await runProviderSync(req.auth!.orgId, adapter, {
+      sample,
+      since: since ? new Date(since) : undefined,
+    });
+    res.json(summary);
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
   }
-
-  res.json({
-    provider: adapter.key,
-    mode: sample ? "sample" : adapter.configured() ? "live" : "sample",
-    fetched: external.length,
-    created,
-    skipped,
-    unmatchedAthlete,
-    unknownMetric,
-    errors,
-    unmatchedNames: [...unmatchedNames],
-  });
 });

@@ -89,3 +89,35 @@ test("computeTargets TEXT falls back to free-text load", () => {
 });
 
 console.log(`\n${passed} tests passed.`);
+
+// --- %1RM from velocity + relative strength --------------------------------
+import { pctFromVelocity, e1rmFromSingleSet, liftProfileForExercise, relativeStrength, relStrengthTier } from "./prescription";
+
+console.log("velocity→%1RM & relative strength");
+test("squat profile: published anchor points", () => {
+  // 121.03 − 71.684·v ⇒ v=0.75 → 67.3%, v=0.3 (≈MVT) → 99.5%
+  close(pctFromVelocity(0.75, { name: "Back Squat" }), 67.3, 0.11);
+  assert.ok(pctFromVelocity(0.3, { name: "Back Squat" }) > 99);
+});
+test("bench profile: quadratic, slower at equal %", () => {
+  // v=0.5 → 8.4326·0.25 − 73.501·0.5 + 112.33 ≈ 77.7%
+  close(pctFromVelocity(0.5, { name: "Bench Press" }), 77.7, 0.15);
+});
+test("generic profile anchors at the exercise MVT", () => {
+  assert.equal(pctFromVelocity(0.3, { name: "Trap Bar Deadlift", category: "LOWER", mvt: 0.3 }), 100);
+});
+test("single-set e1RM: 100kg @ 0.75 m/s squat → ~148.6kg", () => {
+  close(e1rmFromSingleSet(100, 0.75, { name: "Back Squat" })!, 148.6, 0.3);
+});
+test("lift profile detection", () => {
+  assert.equal(liftProfileForExercise({ name: "Back Squat" }), "SQUAT");
+  assert.equal(liftProfileForExercise({ name: "Bulgarian Split Squat" }), "GENERIC");
+  assert.equal(liftProfileForExercise({ name: "Bench Press" }), "BENCH");
+  assert.equal(liftProfileForExercise({ name: "Push Press" }), "GENERIC");
+});
+test("relative strength + tiers", () => {
+  assert.equal(relativeStrength(150, 75), 2.0);
+  assert.equal(relStrengthTier(2.0, "SQUAT"), "Elite");
+  assert.equal(relStrengthTier(1.1, "SQUAT"), "Solid");
+  assert.equal(relativeStrength(100, 0), null);
+});

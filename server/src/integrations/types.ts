@@ -9,6 +9,12 @@ export interface ExternalRecord {
   raw: unknown; // original provider payload (stored on the record)
 }
 
+/** Per-org credentials resolved from IntegrationConfig (or env fallback). */
+export interface ProviderAuth {
+  token: string;
+  region?: string;
+}
+
 export interface DeviceAdapter {
   key: string; // matches MetricRecord.source, e.g. "HAWKIN" | "OVR"
   name: string; // human label
@@ -21,5 +27,5 @@ export interface DeviceAdapter {
    * demo data without calling the live API (so the flow is testable without
    * credentials). When false and not configured, throws.
    */
-  fetch(opts: { since?: Date; sample?: boolean }): Promise<ExternalRecord[]>;
+  fetch(opts: { since?: Date; sample?: boolean; auth?: ProviderAuth }): Promise<ExternalRecord[]>;
 }

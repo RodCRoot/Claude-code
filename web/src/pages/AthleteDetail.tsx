@@ -33,12 +33,19 @@ interface Rating {
   compositeScore: number | null; tier: string; ageYears: number; metrics: MetricRating[];
 }
 
+interface StrengthRow { exercise: string; e1rmKg: number; xbw: number | null; tier: string | null; recordedAt: string; }
+interface ReadinessProfile {
+  bodyMassKg: number | null; bodyMassSource: string | null; strength: StrengthRow[];
+  fms: { components: { key: string; name: string; score: number | null }[]; total: number | null; max: number; atRisk: boolean; screenedAt: string | null };
+}
+
 export default function AthleteDetail() {
   const { id } = useParams();
   const { user } = useAuth();
   const isCoach = user?.role !== "ATHLETE";
   const [athlete, setAthlete] = useState<Athlete | null>(null);
   const [rating, setRating] = useState<Rating | null>(null);
+  const [readiness, setReadiness] = useState<ReadinessProfile | null>(null);
   const [selected, setSelected] = useState<string>("");
 
   async function load() {
@@ -50,7 +57,10 @@ export default function AthleteDetail() {
     setRating(r);
     if (!selected && r.metrics[0]) setSelected(r.metrics[0].metricKey);
   }
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => {
+    load();
+    api.get<ReadinessProfile>(`/athletes/${id}/readiness-profile`).then(setReadiness).catch(() => {});
+  }, [id]);
 
   const series = useMemo(() => {
     if (!athlete || !selected) return [];
@@ -82,6 +92,52 @@ export default function AthleteDetail() {
           </div>
         </div>
       </header>
+
+      {readiness && (readiness.strength.length > 0 || readiness.fms.total != null) && (
+        <div className="readiness-panels">
+          {readiness.strength.length > 0 && (
+            <div className="card">
+              <div className="chart-head"><h2>Relative Strength</h2>
+                <span className="muted small">
+                  body mass {readiness.bodyMassKg != null ? `${readiness.bodyMassKg}kg` : "—"}{readiness.bodyMassSource ? ` · ${readiness.bodyMassSource}` : ""}
+                </span>
+              </div>
+              <table className="data-table">
+                <thead><tr><th>Lift</th><th className="num">e1RM</th><th className="num">×BW</th><th>Standard</th></tr></thead>
+                <tbody>
+                  {readiness.strength.map((r) => (
+                    <tr key={r.exercise}>
+                      <td>{r.exercise}</td>
+                      <td className="num">{r.e1rmKg}kg</td>
+                      <td className="num"><strong>{r.xbw != null ? `${r.xbw}×` : "—"}</strong></td>
+                      <td>{r.tier && <span className={`tier tier-${r.tier === "Elite" ? "elite" : r.tier === "Strong" ? "advanced" : r.tier === "Solid" ? "proficient" : "developing"}`}>{r.tier}</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {readiness.fms.total != null && (
+            <div className="card">
+              <div className="chart-head"><h2>Movement Quality</h2>
+                <span className="muted small">FMS · {readiness.fms.screenedAt ? new Date(readiness.fms.screenedAt).toLocaleDateString(undefined, { timeZone: "UTC" }) : ""}</span>
+              </div>
+              <div className="fms-total">
+                <span className={`fms-score ${readiness.fms.atRisk ? "txt-risk" : ""}`}>{readiness.fms.total}<span className="muted">/{readiness.fms.max}</span></span>
+                {readiness.fms.atRisk && <span className="pill pill-risk">below 14 — elevated injury risk, retest & address</span>}
+              </div>
+              <div className="fms-grid">
+                {readiness.fms.components.map((c) => (
+                  <div key={c.key} className="fms-item">
+                    <span className="muted small">{c.name}</span>
+                    <span className={`fms-dot s${c.score ?? 0}`}>{c.score ?? "—"}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {isCoach && <QuickEntry athleteId={athlete.id} metrics={rating.metrics} onSaved={load} />}
       {isCoach && <MaxesPanel athleteId={athlete.id} onSaved={load} />}

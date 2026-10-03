@@ -22,6 +22,7 @@ import { messagesRouter } from "./routes/messages";
 import { wellnessRouter } from "./routes/wellness";
 import { goalsRouter } from "./routes/goals";
 import { evalsRouter } from "./routes/evals";
+import { startAutoSync } from "./sync";
 
 const app = express();
 
@@ -79,6 +80,9 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
   console.error(err);
   res.status(500).json({ error: "Internal server error" });
 });
+
+// Hourly device auto-sync (Hawkin etc.) for orgs that saved credentials.
+if (process.env.AUTOSYNC !== "0") startAutoSync();
 
 const port = Number(process.env.PORT || 4000);
 app.listen(port, () => console.log(`Vantage API listening on http://localhost:${port}`));
