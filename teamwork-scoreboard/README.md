@@ -123,30 +123,60 @@ Working today, no credentials needed:
 Zen Planner offers no public API without a partner key, so the connector
 drives **headless Chrome on a schedule** instead: it signs in to the Zen
 Planner web app with staff credentials, opens each report you configure,
-captures the CSV export, and runs it through the same mapping + import
-pipeline as manual uploads — **with dedupe**, so repeated pulls never
-double-count. The machinery is verified end-to-end against a mock site:
+**reads the report grid off the page**, and runs it through the same mapping +
+import pipeline as manual uploads — **with dedupe**, so repeated pulls never
+double-count.
+
+Reading the grid (`mode: "table"`, the default) rather than clicking an export
+link is deliberate: stock Zen Planner report grids have no dependable CSV link.
+`mode: "export"` (click a link, capture the download) and `mode: "csv"` (fetch a
+direct CSV URL) remain available per job.
+
+Zen Planner specifics the sync handles, each of which broke a working build at
+some point:
+
+- reports render inside a **nested frame**, so the data is not in the top-level
+  document — every frame is searched
+- every report is a **fragment on one URL** (`index.html#/main/iframe/...`), so
+  moving between reports is a same-document navigation that does not reload;
+  without forcing a load, each job after the first re-scrapes the first job's
+  grid and imports it under the wrong mapping
+- the **idle interstitial** ("It looks like you've left us...") is cleared via
+  its Reset Session button — it is not a logout
+- grid furniture — `Add` rows, `Showing 1-20 of 200` pagers, headers reprinted
+  on later pages — is dropped rather than imported as records
+- an **empty report is not a failure**: it reports 0 rows, so only genuinely
+  broken jobs show red
+
+Verified end-to-end against a mock built to reproduce all of the above:
 `npm run test:scraper`.
 
-Setup:
+**Setup:** see [docs/ZENPLANNER-SYNC.md](docs/ZENPLANNER-SYNC.md) for the
+step-by-step version, including the tradeoff of storing a Zen Planner password
+on the server and how to limit it. In short:
 
 1. `npx playwright install --with-deps chromium` on the server (or set
    `ZEN_CHROMIUM_PATH` to an existing Chromium binary).
-2. Set `ZEN_PLANNER_EMAIL` / `ZEN_PLANNER_PASSWORD` in `.env` — ideally a
-   dedicated staff login with report-only access. Credentials never touch the
-   database or the browser UI.
-3. In Zen Planner, open each report you want (attendance, members, payments),
-   copy its URL, and run its CSV export once through **Data → Import**, saving
-   the mapping under the job's `mappingName`.
-4. In **Admin → Settings → "Zen Planner scrape jobs"**, paste the report URLs
-   (and tweak the export-link selector if needed), then set `enabled: true`.
-   Login-form selectors are editable too ("Zen Planner login flow") in case
-   Zen Planner's markup changes.
-5. Press **Sync now** on the Data page to test. Failures record the exact
-   reason in sync history and save a screenshot + page snapshot under
-   `data/debug/` so selector problems are easy to diagnose. Jobs ship
-   disabled with placeholder URLs — nothing pretends to sync until you point
-   it at a real report.
+2. Set `ZEN_PLANNER_EMAIL` / `ZEN_PLANNER_PASSWORD` in the environment — use a
+   dedicated, least-privilege staff login, not the owner's. Credentials never
+   touch the database, the UI, or this repository, and the sync refuses to run
+   (saying so) until both are set.
+3. In Zen Planner, open each report with the date range and columns you want and
+   copy the whole address bar — the `_c=` parameter is the column list, so the
+   columns you pick are the columns imported.
+4. Run each report once through **Data → Import** and save the mapping under the
+   job's `mappingName`. Column guessing knows Zen Planner's conventions (person
+   column headed `Name`, camelCase columns like `dueDate`/`billAmount`).
+5. In **Admin → Settings → "Zen Planner scrape jobs"**, paste each URL and set
+   `enabled: true`. Login-form selectors are editable too ("Zen Planner login
+   flow") in case the markup changes.
+6. Press **Sync now** on the Data page to test. Failures record the exact reason
+   in sync history and save a screenshot + page snapshot under `data/debug/`.
+   Jobs ship disabled with placeholder URLs — nothing pretends to sync until you
+   point it at a real report.
+
+**Known gap:** there is no membership import path, so Monthly Recurring Revenue
+cannot yet be sourced from Zen Planner.
 
 Still stubbed pending credentials: **CRM API pull** (webhook + CSV work
 today), **TeamBuildr** (no public API — tracked via the onboarding

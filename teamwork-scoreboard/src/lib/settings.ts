@@ -84,42 +84,68 @@ export const SETTING_DEFAULTS = {
    * Credentials are NEVER stored here — only in env vars.
    */
   zen_login_config: {
-    loginUrl: "https://studio.zenplanner.com/zenplanner/studio/login.cfm",
-    userSelector: 'input[name="username"], input[type="email"]',
+    // studio.zenplanner.com, NOT app.zenplanner.com. Hitting index.cfm signed
+    // out lands on the login form; signed in it goes straight to the studio.
+    loginUrl: "https://studio.zenplanner.com/zenplanner/studio/index.cfm",
+    userSelector: 'input[name="username"], input[name="email"], input[type="email"]',
     passSelector: 'input[name="password"], input[type="password"]',
-    submitSelector: 'button[type="submit"], input[type="submit"]',
+    submitSelector:
+      'button[type="submit"], input[type="submit"], input[value*="LOGIN" i], button:has-text("Login")',
     successSelector: "",
   },
   /**
-   * Reports the scheduled browser sync pulls. Ships DISABLED with placeholder
-   * URLs: open the report in Zen Planner, copy its URL (and, if it has an
-   * export/CSV link, that link's selector or direct URL), run the export once
-   * through Data → Import to save a mapping under `mappingName`, then set
-   * enabled: true. Each job needs either `csvUrl` OR `url` + `exportSelector`.
+   * Reports the scheduled browser sync pulls, one job per report.
+   *
+   * Ships DISABLED with placeholder URLs, because only you can say which
+   * reports matter and the URLs encode your facility's own report setup.
+   *
+   * To fill one in: open the report in Zen Planner, set its date range and
+   * columns, then copy the whole address bar into `url`. Zen Planner report
+   * URLs look like
+   *   https://studio.zenplanner.com/zenplanner/studio/index.html#/main/iframe/
+   *     zenplanner/studio/<area>/index.cfm?...&_c=<comma,separated,columns>
+   * where `_c` is the column list — so the columns you pick in Zen Planner are
+   * the columns this sync imports.
+   *
+   * Mode "table" (the default) reads the report grid straight out of the page.
+   * Use it unless a report genuinely offers a CSV link, in which case set
+   * mode "export" with an `exportSelector`, or mode "csv" with a `csvUrl`.
+   *
+   * Run each report once through Data → Import first and save the mapping under
+   * `mappingName`, so the sync knows which column means what. Then set
+   * enabled: true.
    */
   zen_scrape_jobs: [
     {
       name: "ZP Attendance",
       entity: "attendance",
-      url: "https://studio.zenplanner.com/zenplanner/studio/report/REPLACE-WITH-ATTENDANCE-REPORT-URL",
-      exportSelector: 'a:has-text("CSV"), a:has-text("Export")',
+      url: "REPLACE-WITH-ATTENDANCE-REPORT-URL",
+      mode: "table",
       mappingName: "ZP Attendance Export",
       enabled: false,
     },
     {
       name: "ZP Members",
       entity: "athletes",
-      url: "https://studio.zenplanner.com/zenplanner/studio/report/REPLACE-WITH-MEMBER-REPORT-URL",
-      exportSelector: 'a:has-text("CSV"), a:has-text("Export")',
+      url: "REPLACE-WITH-MEMBER-REPORT-URL",
+      mode: "table",
       mappingName: "ZP Member Export",
       enabled: false,
     },
     {
       name: "ZP Payments",
       entity: "payments",
-      url: "https://studio.zenplanner.com/zenplanner/studio/report/REPLACE-WITH-PAYMENT-REPORT-URL",
-      exportSelector: 'a:has-text("CSV"), a:has-text("Export")',
+      url: "REPLACE-WITH-PAYMENT-REPORT-URL",
+      mode: "table",
       mappingName: "ZP Payment Export",
+      enabled: false,
+    },
+    {
+      name: "ZP Cancellations",
+      entity: "cancellations",
+      url: "REPLACE-WITH-CANCELLED-MEMBERSHIPS-REPORT-URL",
+      mode: "table",
+      mappingName: "ZP Cancellations Export",
       enabled: false,
     },
   ],

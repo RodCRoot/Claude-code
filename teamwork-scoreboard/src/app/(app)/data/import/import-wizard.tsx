@@ -3,12 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Input, Select, Field, Badge } from "@/components/ui";
-
-interface FieldDef {
-  key: string;
-  label: string;
-  required?: boolean;
-}
+// Shared with the scheduled browser sync so a column means the same thing
+// whether a file is uploaded here or pulled automatically.
+import { autoMapHeaders, type FieldDef } from "@/lib/import-mapping";
 interface PreviewData {
   headers: string[];
   sample: Record<string, string>[];
@@ -58,19 +55,7 @@ export function ImportWizard({ targets }: { targets: ImportTargetOption[] }) {
       }
       setPreview(data);
       setFromSheets(data.sourceLabel === "Google Sheets");
-      // auto-map columns whose names resemble canonical fields
-      const auto: Record<string, string> = {};
-      for (const h of data.headers as string[]) {
-        const norm = h.toLowerCase().replace(/[^a-z0-9]/g, "_");
-        const hit = (data.fields as FieldDef[]).find(
-          (f) =>
-            f.key === norm ||
-            f.key.replace(/_/g, "") === norm.replace(/_/g, "") ||
-            f.label.toLowerCase().replace(/[^a-z0-9]/g, "_").startsWith(norm)
-        );
-        if (hit && !Object.values(auto).includes(hit.key)) auto[h] = hit.key;
-      }
-      setMapping(auto);
+      setMapping(autoMapHeaders(data.fields as FieldDef[], data.headers as string[]));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Preview failed");
     } finally {

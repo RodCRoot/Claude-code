@@ -25,6 +25,8 @@ import { db } from "@/db";
 import { importMappings } from "@/db/schema";
 import { getSetting } from "./settings";
 import { parseCsv, commitImport, IMPORT_TARGETS } from "./importer";
+import { EXTRACT_TABLES_JS, scoreTable, tablesToCsv } from "./zp-table";
+import { autoMapHeaders, missingRequired } from "./import-mapping";
 
 export interface ZenLoginConfig {
   loginUrl: string;
@@ -39,15 +41,32 @@ export interface ZenScrapeJob {
   name: string;
   /** Import target: leads | athletes | attendance | payments | kpi_values */
   entity: string;
-  /** Report page to open (used with exportSelector). */
+  /** Report page to open. */
   url?: string;
-  /** Selector of the CSV/export link on the report page. */
+  /**
+   * How to get the data off the page:
+   *   "table"  — read the report grid out of the page (the default, and the
+   *              only one that works on a stock Zen Planner report)
+   *   "export" — click `exportSelector` and capture the download
+   *   "csv"    — fetch `csvUrl` directly with the logged-in session
+   * Left unset, it is inferred from whichever of the fields below is present.
+   */
+  mode?: "table" | "export" | "csv";
+  /** Selector of the CSV/export link on the report page (mode "export"). */
   exportSelector?: string;
-  /** Alternative: direct CSV URL fetched with the logged-in session cookies. */
+  /** Direct CSV URL fetched with the logged-in session cookies (mode "csv"). */
   csvUrl?: string;
   /** Saved mapping (Data → Import) to apply; auto-mapping is the fallback. */
   mappingName?: string;
   enabled?: boolean;
+}
+
+/** Which strategy a job uses, filling in the default for older saved jobs. */
+export function jobMode(job: ZenScrapeJob): "table" | "export" | "csv" {
+  if (job.mode) return job.mode;
+  if (job.csvUrl) return "csv";
+  if (job.exportSelector) return "export";
+  return "table";
 }
 
 export interface ScrapeOutcome {
@@ -61,10 +80,6 @@ const DEBUG_DIR = path.join(
   path.dirname(process.env.DATABASE_PATH ?? path.join(process.cwd(), "data", "teamwork.db")),
   "debug"
 );
-
-function normalizeHeader(h: string): string {
-  return h.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
-}
 
 /** Saved mapping by name, else best-effort auto-map of CSV headers to fields. */
 function resolveMapping(job: ZenScrapeJob, headers: string[]): Record<string, string> {
@@ -93,19 +108,9 @@ function resolveMapping(job: ZenScrapeJob, headers: string[]): Record<string, st
     );
   }
   if (Object.keys(mapping).length === 0) {
-    for (const h of headers) {
-      const norm = normalizeHeader(h);
-      const hit = target.fields.find(
-        (f) =>
-          f.key === norm ||
-          f.key.replace(/_/g, "") === norm.replace(/_/g, "") ||
-          normalizeHeader(f.label).startsWith(norm)
-      );
-      if (hit && !Object.values(mapping).includes(hit.key)) mapping[h] = hit.key;
-    }
+    mapping = autoMapHeaders(target.fields, headers);
   }
-  const mapped = new Set(Object.values(mapping));
-  const missing = target.fields.filter((f) => f.required && !mapped.has(f.key));
+  const missing = missingRequired(target.fields, mapping);
   if (missing.length > 0) {
     throw new Error(
       `Job "${job.name}": could not map required field(s) ${missing
@@ -147,6 +152,104 @@ async function findExportControl(
 function looksLikeHtml(text: string): boolean {
   const head = text.slice(0, 300).toLowerCase();
   return head.includes("<html") || head.includes("<!doctype html");
+}
+
+/**
+ * Clear Zen Planner's idle-timeout interstitial if it is showing.
+ *
+ * After a quiet spell Zen Planner replaces the page with "It looks like you've
+ * left us..." and a Reset Session button. That is not a logout — clicking the
+ * button restores the session — but a sync that ignored it would scrape the
+ * interstitial instead of the report.
+ */
+async function clearSessionTimeout(page: import("playwright").Page): Promise<boolean> {
+  for (const frame of page.frames()) {
+    try {
+      const reset = frame
+        .locator('input[value*="Reset Session" i], button:has-text("Reset Session"), a:has-text("Reset Session")')
+        .first();
+      if ((await reset.count()) > 0 && (await reset.isVisible())) {
+        await reset.click({ timeout: 10000 });
+        await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => undefined);
+        return true;
+      }
+    } catch {
+      // frame detached mid-check — nothing to clear there
+    }
+  }
+  return false;
+}
+
+/**
+ * Open a report URL, forcing a real document load.
+ *
+ * Zen Planner addresses every report as a fragment on one page
+ * (`index.html#/main/iframe/...`). Navigating from one fragment to another is a
+ * same-document navigation: the browser fires no load, the SPA may not re-route,
+ * and the iframe keeps showing the previous report. A sync that ignored this
+ * would scrape the first report once per job and import it under every job's
+ * mapping. Hopping through about:blank guarantees the next goto is a fresh load
+ * with the fragment present at bootstrap.
+ */
+async function gotoReport(page: import("playwright").Page, url: string): Promise<void> {
+  const current = page.url();
+  const sameDocument =
+    current.split("#")[0] === url.split("#")[0] && current !== url;
+  if (sameDocument) {
+    await page.goto("about:blank", { timeout: 30000 }).catch(() => undefined);
+  }
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => undefined);
+}
+
+/**
+ * Read the report grid out of whichever frame is showing it.
+ *
+ * Zen Planner is a hash-route SPA that renders each report in a nested frame,
+ * and the frame mounts after the outer page settles, so this polls. Every frame
+ * is scored and the best grid across all of them wins — the outer document
+ * usually holds only navigation chrome.
+ */
+async function extractGridCsv(
+  page: import("playwright").Page,
+  job: ZenScrapeJob
+): Promise<{ csv: string; dataRows: number; headers: string[] }> {
+  let lastError = "no frame produced a report grid";
+  const frameErrors = new Set<string>();
+  for (let attempt = 0; attempt < 6; attempt++) {
+    let bestTables: string[][][] = [];
+    let bestScore = 0;
+    for (const frame of page.frames()) {
+      try {
+        const tables = (await frame.evaluate(EXTRACT_TABLES_JS)) as string[][][];
+        const score = Math.max(0, ...tables.map(scoreTable));
+        if (score > bestScore) {
+          bestScore = score;
+          bestTables = tables;
+        }
+      } catch (e) {
+        // A frame may be detached mid-read or cross-origin, which is normal and
+        // not worth failing over. But keep the reason: if NO frame yields a
+        // grid, these errors are the only explanation available.
+        frameErrors.add(e instanceof Error ? e.message.split("\n")[0] : String(e));
+      }
+    }
+    if (bestScore > 0) {
+      try {
+        return tablesToCsv(bestTables);
+      } catch (e) {
+        lastError = e instanceof Error ? e.message : String(e);
+      }
+    }
+    // Maybe we are staring at the idle interstitial rather than the report.
+    if (await clearSessionTimeout(page)) continue;
+    await page.waitForTimeout(2000);
+  }
+  throw new Error(
+    `${lastError}. Checked ${page.frames().length} frame(s) on ${job.url}. ` +
+      "Open that URL yourself and confirm the report renders as a table of rows." +
+      (frameErrors.size > 0 ? ` Frame errors: ${[...frameErrors].join("; ")}` : "")
+  );
 }
 
 export async function runZenPlannerScrape(): Promise<ScrapeOutcome> {
@@ -234,7 +337,9 @@ export async function runZenPlannerScrape(): Promise<ScrapeOutcome> {
     for (const job of jobs) {
       try {
         let csvText: string;
-        if (job.csvUrl) {
+        const mode = jobMode(job);
+        if (mode === "csv") {
+          if (!job.csvUrl) throw new Error('mode "csv" needs a csvUrl');
           const resp = await ctx.request.get(job.csvUrl, { timeout: 60000 });
           if (!resp.ok()) {
             throw new Error(`CSV URL returned HTTP ${resp.status()}`);
@@ -246,14 +351,25 @@ export async function runZenPlannerScrape(): Promise<ScrapeOutcome> {
                 "to that report, or the URL is a report page rather than an export link"
             );
           }
+        } else if (mode === "table") {
+          if (!job.url) throw new Error('mode "table" needs a url');
+          await gotoReport(page, job.url);
+          await clearSessionTimeout(page);
+          const grid = await extractGridCsv(page, job);
+          if (grid.dataRows === 0) {
+            // A real report that is simply empty for its date range. Not a
+            // failure, and nothing to import.
+            jobNotes.push(`${job.name}: report is empty for its date range (0 rows)`);
+            continue;
+          }
+          csvText = grid.csv;
+          jobNotes.push(`${job.name}: read ${grid.dataRows} row(s) from the report grid`);
         } else if (job.url && job.exportSelector) {
-          await page.goto(job.url, { waitUntil: "domcontentloaded", timeout: 60000 });
           // Zen Planner is a hash-route SPA that renders each report inside an
           // iframe, so the export link usually is NOT in the top-level page.
-          // Give the SPA time to mount, then search every frame for it.
-          await page
-            .waitForLoadState("networkidle", { timeout: 30000 })
-            .catch(() => undefined);
+          // Load the route properly, then search every frame for it.
+          await gotoReport(page, job.url);
+          await clearSessionTimeout(page);
           const target = await findExportControl(page, job.exportSelector);
           if (!target) {
             const frameCount = page.frames().length;
@@ -272,7 +388,7 @@ export async function runZenPlannerScrape(): Promise<ScrapeOutcome> {
           const file = await download.path();
           csvText = fs.readFileSync(file, "utf8");
         } else {
-          throw new Error("job needs either csvUrl, or url + exportSelector");
+          throw new Error('job needs a url (mode "table"/"export") or a csvUrl (mode "csv")');
         }
 
         const parsed = parseCsv(csvText);
