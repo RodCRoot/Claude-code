@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -140,6 +141,29 @@ export async function saveSetting(formData: FormData) {
   setSetting(key, value);
   revalidatePath("/admin");
   revalidatePath("/");
+}
+
+/* --------------------------- Demo data --------------------------- */
+
+/**
+ * Permanently delete every sample record. Destructive, so it requires the
+ * exact confirmation phrase typed by hand — a mis-click cannot trigger it.
+ * Only rows flagged demo = 1 are touched; imported and manually entered data
+ * is never affected, nor is any configuration.
+ */
+export async function removeDemoData(formData: FormData) {
+  await requireUser("manage_settings");
+  if (str(formData, "confirm").trim().toUpperCase() !== "REMOVE DEMO DATA") {
+    redirect("/admin?demo=badconfirm");
+  }
+  const { clearDemoRows } = await import("@/lib/demo-data");
+  const { total } = clearDemoRows();
+  // Sample data is gone, so the "Demo data" banner no longer applies.
+  setSetting("demo_mode", false);
+  revalidatePath("/admin");
+  revalidatePath("/");
+  revalidatePath("/scoreboard");
+  redirect(`/admin?demo=removed&n=${total}`);
 }
 
 /* ------------------------ Task templates ------------------------ */
