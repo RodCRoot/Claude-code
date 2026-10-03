@@ -5,7 +5,9 @@
 
 databases:
   - name: vantage-db
-    plan: free
+    # Paid tier on purpose: Render DELETES free-plan databases after ~30 days
+    # (which took down the original deployment). Never set this back to free.
+    plan: basic_256mb
 
 services:
   - type: web
