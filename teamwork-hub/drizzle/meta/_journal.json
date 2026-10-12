@@ -15,6 +15,13 @@
       "when": 1791774349806,
       "tag": "0001_integrity_constraints",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791775626597,
+      "tag": "0002_bill_product_version_immutable",
+      "breakpoints": true
     }
   ]
 }
