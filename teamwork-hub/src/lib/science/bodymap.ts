@@ -1,12 +1,12 @@
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Tx } from "@/db";
-import { bodyRegionReports, tasks } from "@/db/schema";
+import { athletes, bodyRegionReports, tasks } from "@/db/schema";
 import { accessibleAthleteIds, athleteScopeFilter, AuthzError, requireOnAthlete, type Viewer } from "@/lib/authz/policy";
 import { audit } from "@/lib/audit";
 import { UserError } from "@/lib/actions";
 import { actorOf, responsibleCoach, scienceSettings, scopedAthletes } from "./access";
-import { isValidSpot, needsReview, regionLabel } from "./body-regions";
+import { isValidSpot, needsReview } from "./body-regions";
 
 export const bodyReportInput = z.object({
   athleteId: z.string().uuid(),
@@ -38,8 +38,11 @@ export async function submitBodyReport(tx: Tx, v: Viewer, raw: z.input<typeof bo
       .insert(tasks)
       .values({
         orgId: v.orgId,
-        title: `Review self-reported ${input.kind}: ${regionLabel(input.region, input.side)} (${input.severity}/10)`,
-        description: "Self-reported symptom from the body map. Not a diagnosis. Review, follow up, or refer out.",
+        // Tasks are visible to all staff (incl. operations, who lack health access), so the
+        // title/description stay generic; the details live behind health.review in the queue.
+        title: "Review a body-map self-report",
+        description: "Open Sports Science → Body map review queue. Self-reported, not a diagnosis.",
+        relatedPersonId: (await tx.select({ p: athletes.personId }).from(athletes).where(eq(athletes.id, input.athleteId)))[0]?.p ?? null,
         assigneeUserId: assignee,
         relatedType: "body_region_report",
         relatedId: report.id,

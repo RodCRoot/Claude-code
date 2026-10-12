@@ -177,7 +177,7 @@ export function Field({
 
 export function Table({ children, className, caption }: { children: React.ReactNode; className?: string; caption?: string }) {
   return (
-    <div className={cn("overflow-x-auto", className)}>
+    <div className={cn("relative overflow-x-auto", className)}>
       <table className="w-full min-w-[560px] border-collapse text-sm">
         {caption ? <caption className="sr-only">{caption}</caption> : null}
         {children}
