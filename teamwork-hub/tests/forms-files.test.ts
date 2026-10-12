@@ -68,5 +68,5 @@ describe("/api/files/[id]", () => {
     const c = await loadRequestContext(testDb(), other.orgId, other.extra.formRequests.waiverMaya);
     const otherPdf = c!.req.completedPdfObjectId!;
     expect((await download("rod", otherPdf)).status).toBe(404);
-  });
+  }, 180_000); // seeds a whole second org inside the test; allow the same time as setup hooks under load
 });
