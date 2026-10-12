@@ -55,6 +55,7 @@ export type StoredObject = typeof storedObjects.$inferSelect;
  * Contract for /api/files/[id] (used by every module):
  * - access_level "staff": roles with forms.manage or people.manage.
  * - "owner_only": the owning person (owner_person_id) or the uploader only.
+ * - kind "export": never served here (use /api/exports).
  * - "subject_and_guardians": the owning person (the subject), guardians of that
  *   person's athlete record with forms.sign or profile.read, and staff with
  *   forms.manage/people.manage. Completed form PDFs additionally follow
@@ -65,6 +66,10 @@ export async function objectAccess(tx: Tx, v: Viewer, objectId: string): Promise
   if (!/^[0-9a-f-]{36}$/i.test(objectId)) return { allowed: false, object: null };
   const [obj] = await tx.select().from(storedObjects).where(eq(storedObjects.id, objectId));
   if (!obj || obj.orgId !== v.orgId) return { allowed: false, object: null };
+  // Export bundles carry billing/health/guardian data and are only served by /api/exports, which
+  // re-checks the rights the export was generated with. Their owner_person_id (the athlete) must not
+  // let the athlete or anyone else fetch the zip through the generic file route.
+  if (obj.kind === "export") return { allowed: false, object: obj };
 
   if (obj.accessLevel === "owner_only") {
     const allowed = (!!v.personId && v.personId === obj.ownerPersonId) || (!!obj.uploadedBy && obj.uploadedBy === v.userId);

@@ -15,9 +15,10 @@ import {
   personTags,
   tags,
   tasks,
+  users,
   type NoteVisibility,
 } from "@/db/schema";
-import { assertCan, AuthzError, coachAthleteIds, isStaff, requireOnAthlete, type Viewer } from "@/lib/authz/policy";
+import { assertCan, AuthzError, coachAthleteIds, isStaff, requireOnAthlete, STAFF, type Viewer } from "@/lib/authz/policy";
 import { audit } from "@/lib/audit";
 import { UserError } from "@/lib/actions";
 
@@ -252,6 +253,15 @@ export const taskSchema = z.object({
 export async function createTask(tx: Tx, v: Viewer, raw: unknown) {
   if (!isStaff(v)) throw new AuthzError();
   const input = taskSchema.parse(raw);
+  // Ids come from the client: both must belong to this org (tasks are shown on the person page and in task lists).
+  if (input.assigneeUserId) {
+    const [u] = await tx.select({ role: users.role }).from(users).where(and(eq(users.id, input.assigneeUserId), eq(users.orgId, v.orgId)));
+    if (!u || !STAFF.includes(u.role)) throw new UserError("Choose a staff member.", { assigneeUserId: "Not found" });
+  }
+  if (input.relatedPersonId) {
+    const [p] = await tx.select({ id: people.id }).from(people).where(and(eq(people.id, input.relatedPersonId), eq(people.orgId, v.orgId)));
+    if (!p) throw new UserError("Person not found.");
+  }
   const [t] = await tx
     .insert(tasks)
     .values({
@@ -300,6 +310,8 @@ export async function setTag(tx: Tx, v: Viewer, personId: string, tagName: strin
   assertCan(v, "people.manage");
   const name = tagName.trim();
   if (!name) throw new UserError("Tag name required.");
+  const [p] = await tx.select({ id: people.id }).from(people).where(and(eq(people.id, personId), eq(people.orgId, v.orgId)));
+  if (!p) throw new UserError("Person not found.");
   let [t] = await tx.select().from(tags).where(and(eq(tags.orgId, v.orgId), eq(tags.name, name)));
   if (!t && on) [t] = await tx.insert(tags).values({ orgId: v.orgId, name }).returning();
   if (!t) return;

@@ -201,7 +201,7 @@ export async function getPersonDetail(tx: Tx, v: Viewer, personId: string) {
         )
     : [];
 
-  const tagRows = await tx.select({ id: tags.id, name: tags.name, color: tags.color }).from(personTags).innerJoin(tags, eq(tags.id, personTags.tagId)).where(eq(personTags.personId, personId));
+  const tagRows = await tx.select({ id: tags.id, name: tags.name, color: tags.color }).from(personTags).innerJoin(tags, eq(tags.id, personTags.tagId)).where(and(eq(personTags.personId, personId), eq(tags.orgId, v.orgId)));
 
   // Notes: staff only, by visibility.
   let noteRows: (typeof notes.$inferSelect & { authorName: string | null })[] = [];
@@ -222,7 +222,7 @@ export async function getPersonDetail(tx: Tx, v: Viewer, personId: string) {
         .select({ t: tasks, assignee: users.displayName })
         .from(tasks)
         .leftJoin(users, eq(users.id, tasks.assigneeUserId))
-        .where(and(eq(tasks.relatedPersonId, personId), inArray(tasks.status, ["open", "in_progress"])))
+        .where(and(eq(tasks.orgId, v.orgId), eq(tasks.relatedPersonId, personId), inArray(tasks.status, ["open", "in_progress"])))
         .orderBy(asc(tasks.dueAt))
     : [];
 

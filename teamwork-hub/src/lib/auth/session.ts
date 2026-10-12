@@ -47,7 +47,9 @@ export async function verifyCredentials(email: string, password: string): Promis
     return generic;
   }
   if (user.lockedUntil && user.lockedUntil > new Date()) {
-    return { ok: false, error: "Too many attempts. Try again in a few minutes." };
+    // Same message and bcrypt cost as an unknown email: a lock-specific reply would confirm the account exists.
+    await bcrypt.compare(password, "$2b$11$invalidinvalidinvalidinvalidinvalidinvalidinvalidinv");
+    return generic;
   }
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) {
@@ -64,6 +66,20 @@ export async function verifyCredentials(email: string, password: string): Promis
   }
   await db.update(users).set({ failedLoginCount: 0, lockedUntil: null }).where(eq(users.id, user.id));
   return { ok: true, userId: user.id, needsMfa: user.mfaEnabled };
+}
+
+/**
+ * Second-factor attempts share the password lockout budget: without it a stolen password allows
+ * unlimited guessing of 6-digit codes. Returns true when this failure locked the account.
+ */
+export async function recordMfaFailure(user: { id: string; failedLoginCount: number }): Promise<boolean> {
+  const failed = user.failedLoginCount + 1;
+  const lock = failed >= MAX_FAILED;
+  await db
+    .update(users)
+    .set({ failedLoginCount: lock ? 0 : failed, lockedUntil: lock ? new Date(Date.now() + LOCK_MINUTES * 60_000) : null })
+    .where(eq(users.id, user.id));
+  return lock;
 }
 
 export async function createSession(userId: string, opts: { mfaVerified: boolean }) {

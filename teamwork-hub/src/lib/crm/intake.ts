@@ -49,7 +49,12 @@ export const inquirySchema = z
 
 export type InquiryInput = z.input<typeof inquirySchema>;
 
-export const RATE_LIMIT = { max: 5, windowMinutes: 60 };
+/**
+ * Per-IP limit, plus an org-wide ceiling on public web inquiries. The IP comes from forwarding
+ * headers a client can forge (or may be missing), so the org-wide ceiling is what actually bounds a
+ * flood of fake leads/tasks; staff-entered leads are never counted against it.
+ */
+export const RATE_LIMIT = { max: 5, windowMinutes: 60, orgWebMax: 30 };
 
 export const hashIp = (ip: string | null | undefined) =>
   ip ? createHash("sha256").update(`teamwork-inquiry:${ip}`).digest("hex").slice(0, 32) : null;
@@ -98,9 +103,19 @@ export async function createLeadFromInquiry(tx: Tx, orgId: string, input: Inquir
   const d = inquirySchema.parse(input);
   const now = meta.now ?? new Date();
   const ipHash = hashIp(meta.ip);
+  const since = new Date(now.getTime() - RATE_LIMIT.windowMinutes * 60_000);
+
+  if ((meta.source ?? "web_inquiry") === "web_inquiry") {
+    // Serialize public submissions per org so concurrent requests can't all pass the count.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"crm-inquiry:" + orgId}))`);
+    const [{ n }] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(leads)
+      .where(and(eq(leads.orgId, orgId), gt(leads.createdAt, since), eq(leads.source, "web_inquiry")));
+    if (n >= RATE_LIMIT.orgWebMax) throw new DomainError("We're receiving an unusual number of inquiries right now. Please try again later or call the front desk.");
+  }
 
   if (ipHash) {
-    const since = new Date(now.getTime() - RATE_LIMIT.windowMinutes * 60_000);
     const [{ n }] = await tx
       .select({ n: sql<number>`count(*)::int` })
       .from(leads)
