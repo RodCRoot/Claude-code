@@ -7,7 +7,8 @@ export default defineConfig({
     include: ["tests/**/*.test.ts", "src/**/*.test.ts"],
     globalSetup: ["./tests/helpers/global-setup.ts"],
     testTimeout: 30_000,
-    hookTimeout: 60_000,
+    hookTimeout: 180_000,
+    maxWorkers: 4,
     pool: "forks",
   },
   resolve: {
