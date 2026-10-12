@@ -134,7 +134,13 @@ export async function confirmMfaEnrollment(tx: Tx, v: Viewer, code: string) {
 }
 
 export async function disableMfa(tx: Tx, v: Viewer, targetUserId: string) {
-  if (targetUserId !== v.userId) assertCan(v, "settings.manage");
+  if (targetUserId !== v.userId) {
+    assertCan(v, "settings.manage");
+    const [u] = await tx.select({ role: users.role }).from(users).where(and(eq(users.id, targetUserId), eq(users.orgId, v.orgId)));
+    if (!u) throw new UserError("User not found.");
+    // Same rule as disabling/resetting: only an owner can weaken another owner's or an admin's sign-in.
+    if ((u.role === "owner" || u.role === "admin") && v.role !== "owner") throw new AuthzError();
+  }
   await tx.update(users).set({ mfaEnabled: false, mfaSecret: null }).where(and(eq(users.id, targetUserId), eq(users.orgId, v.orgId)));
   await audit(tx, { orgId: v.orgId, actorUserId: v.userId, actorRole: v.role }, "user.mfa_disabled", "user", targetUserId);
 }

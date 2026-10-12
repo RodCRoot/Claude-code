@@ -3,6 +3,7 @@ import Papa from "papaparse";
 import type { Tx } from "@/db";
 import { importRows, maxes, metricDefinitions, metricValues } from "@/db/schema";
 import type { Viewer } from "@/lib/authz/policy";
+import { CSV_FORMULA_ESCAPE } from "@/lib/csv";
 import { getBatch } from "./batches";
 import type { MetricCell } from "./types";
 
@@ -123,5 +124,5 @@ export async function rejectedRowsCsv(tx: Tx, v: Viewer, batchId: string): Promi
     for (const h of headers) o[h] = r.raw[h] ?? "";
     return o;
   });
-  return Papa.unparse({ fields: ["row_number", "status", "errors", "warnings", ...headers], data: data.map((d) => Object.values(d)) as unknown[][] });
+  return Papa.unparse({ fields: ["row_number", "status", "errors", "warnings", ...headers], data: data.map((d) => Object.values(d)) as unknown[][] }, { escapeFormulae: CSV_FORMULA_ESCAPE });
 }

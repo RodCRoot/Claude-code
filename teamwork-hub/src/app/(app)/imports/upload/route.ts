@@ -4,6 +4,7 @@ import { getViewer } from "@/lib/auth/viewer";
 import { can } from "@/lib/authz/policy";
 import { UserError } from "@/lib/actions";
 import { createBatch } from "@/lib/imports/batches";
+import { sameOrigin } from "@/lib/training/http";
 
 /**
  * Multipart upload for the import wizard. A route handler (not a server action) so large
@@ -11,6 +12,8 @@ import { createBatch } from "@/lib/imports/batches";
  * with its checksum before anything else happens.
  */
 export async function POST(req: NextRequest) {
+  // Route handlers don't get Server Actions' built-in origin check.
+  if (!sameOrigin(req)) return new NextResponse("Cross-origin upload refused.", { status: 403 });
   const v = await getViewer();
   if (!v) return NextResponse.redirect(new URL("/login", req.url), 303);
   if (!can(v, "imports.manage")) return NextResponse.redirect(new URL("/denied", req.url), 303);

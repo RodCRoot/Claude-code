@@ -38,6 +38,8 @@ import {
 } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import { athleteCapabilities, AuthzError, can, isStaff, type Viewer } from "@/lib/authz/policy";
+import { CSV_FORMULA_ESCAPE } from "@/lib/csv";
+import { objectAccess } from "@/lib/forms/access";
 import { objectStore, saveObject, sha256Bytes } from "@/lib/storage";
 
 export const EXPORT_SCHEMA_VERSION = "teamwork-export/1";
@@ -88,7 +90,7 @@ function cell(v: unknown): string | number | boolean | null {
 function toCsv(rows: Record<string, unknown>[]): string {
   if (!rows.length) return "";
   const fields = Object.keys(rows[0]);
-  return Papa.unparse({ fields, data: rows.map((r) => fields.map((f) => cell(r[f]))) });
+  return Papa.unparse({ fields, data: rows.map((r) => fields.map((f) => cell(r[f]))) }, { escapeFormulae: CSV_FORMULA_ESCAPE });
 }
 
 const inIds = (col: Parameters<typeof inArray>[0], ids: string[]): SQL => (ids.length ? inArray(col, ids) : sql`false`);
@@ -257,13 +259,29 @@ export async function buildExport(tx: Tx, v: Viewer, scope: ExportScope): Promis
   };
 
   const personIdList = peopleRows.map((p) => p.id);
-  const forms = await tx
-    .select()
-    .from(formRequests)
-    .where(and(eq(formRequests.orgId, orgId), sql`${formRequests.completedPdfObjectId} is not null`, scope.kind === "org" ? sql`true` : inIds(formRequests.subjectPersonId, personIdList)));
+  // Stored files (completed form PDFs, archived documents) follow the same per-file rules as
+  // /api/files: an exporter without imports.manage (e.g. an assigned coach) only gets files they
+  // could already open, so an export can't be used to reach intake/medical PDFs or staff archives.
+  const fileFilter = async <T>(rows: T[], objectIdOf: (r: T) => string) => {
+    if (can(v, "imports.manage")) return rows;
+    const out: T[] = [];
+    for (const r of rows) if ((await objectAccess(tx, v, objectIdOf(r))).allowed) out.push(r);
+    if (out.length < rows.length) manifest.notes.push(`${rows.length - out.length} stored file(s) excluded: the exporter cannot open them.`);
+    return out;
+  };
+  const forms = await fileFilter(
+    await tx
+      .select()
+      .from(formRequests)
+      .where(and(eq(formRequests.orgId, orgId), sql`${formRequests.completedPdfObjectId} is not null`, scope.kind === "org" ? sql`true` : inIds(formRequests.subjectPersonId, personIdList))),
+    (f) => f.completedPdfObjectId!,
+  );
   datasets.completed_forms = forms.map((f) => ({ id: f.id, subjectPersonId: f.subjectPersonId, athleteId: f.athleteId, templateVersionId: f.templateVersionId, status: f.status, completedAt: f.completedAt, integrityHash: f.integrityHash, source: f.source }));
   for (const f of forms) await addObject("form_request", f.id, f.completedPdfObjectId!, "forms");
-  const arch = await tx.select().from(archivedDocuments).where(and(eq(archivedDocuments.orgId, orgId), scope.kind === "org" ? sql`true` : inIds(archivedDocuments.personId, personIdList)));
+  const arch = await fileFilter(
+    await tx.select().from(archivedDocuments).where(and(eq(archivedDocuments.orgId, orgId), scope.kind === "org" ? sql`true` : inIds(archivedDocuments.personId, personIdList))),
+    (d) => d.objectId,
+  );
   datasets.archived_documents = arch;
   for (const d of arch) await addObject("archived_document", d.id, d.objectId, "archived_documents");
   const signals = await tx.select().from(rawSignals).where(and(eq(rawSignals.orgId, orgId), inIds(rawSignals.trialId, trialRows.map((t) => t.id))));

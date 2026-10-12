@@ -1,6 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Tx } from "@/db";
 import {
+  athletes,
   invoiceLines,
   invoices,
   memberships,
@@ -143,6 +144,12 @@ export async function createInvoiceRecord(tx: Tx, actor: AuditActor, input: Crea
 export async function createManualInvoice(tx: Tx, v: Viewer, input: Omit<CreateInvoiceInput, "orgId" | "source">) {
   assertCan(v, "billing.manage");
   await assertCanViewPayer(tx, v, input.payerAccountId);
+  // Line athletes come from the form and drive credit grants on payment: they must be in this org.
+  const athleteIds = [...new Set(input.lines.map((l) => l.athleteId).filter((x): x is string => !!x))];
+  if (athleteIds.length) {
+    const found = await tx.select({ id: athletes.id }).from(athletes).where(and(inArray(athletes.id, athleteIds), eq(athletes.orgId, v.orgId)));
+    if (found.length !== athleteIds.length) throw new UserError("Athlete not found.");
+  }
   return createInvoiceRecord(tx, actorOf(v), { ...input, orgId: v.orgId, source: "teamwork" });
 }
 
