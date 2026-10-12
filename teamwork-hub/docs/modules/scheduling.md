@@ -91,6 +91,18 @@ Files: `src/lib/calendar/oauth.ts` (protocol), `crypto.ts` (encryption), `tokens
 - `events.insert` (accepts `calendar.app.created`): https://developers.google.com/workspace/calendar/api/v3/reference/events/insert
 - `freebusy.query` (accepts `calendar.freebusy`): https://developers.google.com/workspace/calendar/api/v3/reference/freebusy/query
 
+## Locations (multi-site)
+
+Code: `src/lib/locations.ts`; UI: Schedule settings → **Locations** (CRUD + kiosk binding), Billing → Products → **Locations** (product scope).
+
+- `locations` (name, address, timezone defaulting to the facility timezone, active, sort order). Single-location orgs need none: every location column is nullable and "no location" means org-wide.
+- Sessions carry `location_id`, resolved at creation: explicit choice → series → resource → service type default (`resolveSessionLocation`). Series, resources and service types each have an optional `location_id`; `updateSession` can change it.
+- **Entitlement scope.** `products.location_ids` (empty = every location) with an optional per-membership override `memberships.location_ids` (null = follow the product; `setMembershipLocations`). Credits copy the scope at grant time into `credit_buckets.location_ids` (invoice lines: membership override, else product). `resolveEntitlement` / `reserveCredits` / waitlist promotion / attendance corrections only use memberships and buckets that cover the session's location. When only an out-of-scope membership would have paid, booking fails with a family-safe message, e.g. "Maya Parker's Sample: Unlimited Monthly Membership covers Bloomington sessions only. This session is at Linton. Please ask the front desk about a Linton option." Staff get the same reason plus the comp option.
+- **Filters.** Staff schedule (day/week/month) has a Location filter (`?location=`); families get location pills; the public `/classes` page has location pills and shows each session's location; `listSessions` returns `locationId`/`locationName`.
+- **Reports.** `attendance` and `utilization` (`locationAware: true`) group by location ("No location" for unassigned) and accept `?location=` (page, chart and CSV export).
+- **Kiosk.** `users.location_id` binds a kiosk login (`setKioskLocation`, schedule managers only, kiosk users only). A bound kiosk's roster and PIN check-in list only that location's sessions, and `markAttendance` refuses kiosk check-ins for other locations.
+- Seed: Bloomington (everything previously seeded) and Linton (sample room + a Mon/Wed series, future sessions only, no bookings); the sample Unlimited and 2x/Week memberships are limited to Bloomington. Addresses are left empty for Teamwork to fill in.
+
 ## Jobs emitted (for other modules)
 | Type | Payload | Dedupe key |
 |---|---|---|
@@ -102,6 +114,7 @@ Files: `src/lib/calendar/oauth.ts` (protocol), `crypto.ts` (encryption), `tokens
 
 ## Migrations
 - `0009_sched_kiosk_pins` — additive: `athlete_checkin_pins` (PK athlete, unique `(org_id, pin_hash)`), `kiosk_pin_attempts` (PK `(org_id, session_key)`).
+- `0012_loc_multi_location` — additive: `locations`; nullable `location_id` on `users`, `resources`, `service_types`, `class_series`, `schedule_sessions` (+ index `(org_id, location_id, starts_at)`); `location_ids` jsonb on `products` (default `[]`), `memberships` (nullable), `credit_buckets` (default `[]`).
 
 ## Seed
 Resources (Turf, Weight Room, Assessment Room — exclusive), a SAMPLE policy, four services, five weekly series (Marcus HS 6 AM M/W/F and Tu/Th 4:30 PM; Tess Youth Tu/Th 5:30 PM and Sat 9 AM; a sample Speed Camp), sessions from today−28 to today+21, an evening session today for the kiosk, a full class with a waitlist, a staff-cancelled session, private sessions and a comped assessment, ~290 bookings with attendance history (no-shows, late cancels) on a consistent credit ledger, coach availability and time off. Ethan, Sofia, Liam, Harper and Ava are left without credits/bookings (ledger tests rely on clean slates; Ava demonstrates the "needs credits" path).

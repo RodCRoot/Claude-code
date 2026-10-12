@@ -6,6 +6,7 @@ import { AuthzError, can, type Viewer } from "@/lib/authz/policy";
 import { localDayBounds, todayLocal } from "@/lib/time";
 import { markAttendance } from "./booking";
 import { kioskPinOnly, orgTimezone } from "./common";
+import { boundLocationId } from "@/lib/locations";
 
 /** Exactly what the kiosk may show. No ids of people, no birthdates, no contact info, no health data. */
 export type KioskAthlete = { bookingId: string; displayName: string; status: "booked" | "attended"; alerts: string[] };
@@ -27,10 +28,20 @@ export async function kioskRoster(tx: Tx, v: Viewer, opts: { now?: Date; q?: str
   if (v.role === "kiosk" && (await kioskPinOnly(tx, v.orgId))) return [];
   const tz = await orgTimezone(tx, v.orgId);
   const { start, end } = localDayBounds(todayLocal(tz, opts.now ?? new Date()), tz);
+  // A kiosk login bound to a location only ever sees that location's sessions.
+  const loc = v.role === "kiosk" ? await boundLocationId(tx, v) : null;
   const sessions = await tx
     .select({ id: scheduleSessions.id, title: scheduleSessions.title, startsAt: scheduleSessions.startsAt, endsAt: scheduleSessions.endsAt })
     .from(scheduleSessions)
-    .where(and(eq(scheduleSessions.orgId, v.orgId), ne(scheduleSessions.status, "cancelled"), gte(scheduleSessions.startsAt, start), lt(scheduleSessions.startsAt, end)))
+    .where(
+      and(
+        eq(scheduleSessions.orgId, v.orgId),
+        ne(scheduleSessions.status, "cancelled"),
+        gte(scheduleSessions.startsAt, start),
+        lt(scheduleSessions.startsAt, end),
+        loc ? eq(scheduleSessions.locationId, loc) : undefined,
+      ),
+    )
     .orderBy(asc(scheduleSessions.startsAt));
   if (!sessions.length) return [];
   const rows = await tx

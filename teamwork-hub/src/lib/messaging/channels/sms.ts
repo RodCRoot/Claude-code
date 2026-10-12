@@ -1,14 +1,22 @@
+import { ghlConfig, ghlSmsTransport } from "@/lib/integrations/gohighlevel/client";
 import { deliveryEnabled, testRecipients, type ChannelConfig, type ChannelResult, type OutboundMessage, type Transport } from "./types";
+
+const SUPPORTED = ["twilio", "gohighlevel"] as const;
 
 export function smsConfig(): ChannelConfig {
   const provider = process.env.SMS_PROVIDER && process.env.SMS_PROVIDER !== "none" ? process.env.SMS_PROVIDER : null;
   const missing: string[] = [];
   if (!provider) missing.push("SMS_PROVIDER");
-  if (!process.env.SMS_ACCOUNT_SID) missing.push("SMS_ACCOUNT_SID");
-  if (!process.env.SMS_AUTH_TOKEN) missing.push("SMS_AUTH_TOKEN");
-  if (!process.env.SMS_FROM) missing.push("SMS_FROM");
+  if (provider === "gohighlevel") {
+    // GoHighLevel sends from the sub-account's own numbers; no Twilio credentials involved.
+    missing.push(...ghlConfig().missing);
+  } else {
+    if (!process.env.SMS_ACCOUNT_SID) missing.push("SMS_ACCOUNT_SID");
+    if (!process.env.SMS_AUTH_TOKEN) missing.push("SMS_AUTH_TOKEN");
+    if (!process.env.SMS_FROM) missing.push("SMS_FROM");
+  }
   if (!deliveryEnabled()) missing.push("DELIVERY_ENABLED=true");
-  if (provider && provider !== "twilio") missing.push(`a transport for SMS_PROVIDER=${provider} (supported: twilio)`);
+  if (provider && !(SUPPORTED as readonly string[]).includes(provider)) missing.push(`a transport for SMS_PROVIDER=${provider} (supported: ${SUPPORTED.join(", ")})`);
   return { configured: missing.length === 0, missing, provider };
 }
 
@@ -30,11 +38,14 @@ const twilioTransport: Transport = async (msg) => {
   return { providerMessageId: json.sid ?? "twilio" };
 };
 
-let transport: Transport = twilioTransport;
+/** Provider transport for the configured SMS_PROVIDER (read at call time). */
+const providerTransport: Transport = (msg) => (process.env.SMS_PROVIDER === "gohighlevel" ? ghlSmsTransport(msg) : twilioTransport(msg));
+
+let transport: Transport = providerTransport;
 
 /** Test seam: replace the provider call (never used by the app at runtime). */
 export function __setSmsTransport(t: Transport | null) {
-  transport = t ?? twilioTransport;
+  transport = t ?? providerTransport;
 }
 
 export async function sendSms(msg: OutboundMessage): Promise<ChannelResult> {
@@ -54,6 +65,8 @@ export async function sendSms(msg: OutboundMessage): Promise<ChannelResult> {
     const { providerMessageId } = await transport({ ...msg, to, body: body.slice(0, 1500) });
     return { status: redirect.length ? "test_redirected" : "sent", address: to, providerMessageId };
   } catch (e) {
-    return { status: "failed", address: to, reason: e instanceof Error ? e.message : String(e), retryable: true };
+    // Errors that say retrying can't help (e.g. GHL: no contact for this number, bad token) are final.
+    const retryable = (e as { retryable?: unknown })?.retryable !== false;
+    return { status: "failed", address: to, reason: e instanceof Error ? e.message : String(e), retryable };
   }
 }

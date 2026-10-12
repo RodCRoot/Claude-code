@@ -17,6 +17,7 @@ const SOURCE_LABEL: Record<string, string> = {
   generic_csv: "Generic",
   generic_json: "Generic",
   wearable_csv: "Wearable",
+  gohighlevel: "GoHighLevel",
 };
 
 export default async function ImportsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {

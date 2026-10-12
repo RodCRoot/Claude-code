@@ -7,6 +7,7 @@ import { reportByKey, type ReportColumn } from "@/lib/reports";
 import { addDaysYmd, fmt, fmtDate, todayLocal } from "@/lib/time";
 import { formatMoney } from "@/lib/money";
 import { chartFor } from "@/lib/report-charts";
+import { listLocations, parseLocationParam } from "@/lib/locations";
 import { ChartFigure } from "@/components/charts/chart-figure";
 import { ReportBarChart } from "@/components/charts/report-chart";
 import { fmtChartValue } from "@/components/charts/format";
@@ -32,7 +33,7 @@ function cell(v: unknown, kind: ReportColumn["kind"], tz?: string) {
   }
 }
 
-export default async function ReportPage({ params, searchParams }: { params: Promise<{ key: string }>; searchParams: Promise<{ from?: string; to?: string }> }) {
+export default async function ReportPage({ params, searchParams }: { params: Promise<{ key: string }>; searchParams: Promise<{ from?: string; to?: string; location?: string }> }) {
   const v = await requireStaff();
   const { key } = await params;
   const def = reportByKey(key);
@@ -45,8 +46,11 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const valid = (s?: string) => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : undefined);
   const to = valid(sp.to) ?? today;
   const from = valid(sp.from) ?? addDaysYmd(to, -29);
-  const result = from > to ? null : await def.run(db, v.orgId, { from, to, tz });
-  const chart = result ? await chartFor(def.key, db, v.orgId, { from, to, tz }, result) : null;
+  const locs = def.locationAware ? await listLocations(db, v.orgId) : [];
+  const locationId = locs.find((l) => l.id === parseLocationParam(sp.location))?.id ?? null;
+  const range = { from, to, tz, locationId };
+  const result = from > to ? null : await def.run(db, v.orgId, range);
+  const chart = result ? await chartFor(def.key, db, v.orgId, range, result) : null;
   return (
     <>
       <PageHeader
@@ -57,7 +61,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
             <ButtonLink href="/reports" variant="ghost">
               All reports
             </ButtonLink>
-            <ButtonLink href={`/api/reports/${def.key}?from=${from}&to=${to}`} variant="secondary" download>
+            <ButtonLink href={`/api/reports/${def.key}?from=${from}&to=${to}${locationId ? `&location=${locationId}` : ""}`} variant="secondary" download>
               Export CSV
             </ButtonLink>
           </>
@@ -79,6 +83,21 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
           </label>
           <Input id="to" name="to" type="date" defaultValue={to} className="w-44" />
         </div>
+        {locs.length ? (
+          <div>
+            <label htmlFor="location" className="block text-sm font-medium text-ink-2">
+              Location
+            </label>
+            <select id="location" name="location" defaultValue={locationId ?? ""} className="h-10 w-48 rounded-lg border border-edge bg-surface px-3 text-sm">
+              <option value="">All locations</option>
+              {locs.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
         <button className="h-10 rounded-lg bg-brand px-4 text-sm font-medium text-brand-ink" type="submit">
           Apply
         </button>

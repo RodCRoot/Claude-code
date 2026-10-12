@@ -9,8 +9,10 @@ import {
   membershipHolds,
   memberships,
   people,
+  products,
   productVersions,
 } from "@/db/schema";
+import { joinNames, locationNames, scopeCovers } from "@/lib/locations";
 import type { ServiceType } from "./common";
 import { DEFAULT_TZ, localYmd } from "@/lib/time";
 
@@ -84,7 +86,18 @@ export type Entitlement =
   | { kind: "not_required" }
   | { kind: "unlimited"; membershipId: string }
   | { kind: "credits"; available: number }
-  | { kind: "none" };
+  | { kind: "none"; locationBlocked?: LocationBlock };
+
+/** A membership/credit would have paid, but it is scoped to other locations. */
+export type LocationBlock = { productName: string; coveredLocations: string[]; sessionLocation: string };
+
+/** Family-facing explanation (no dashes). */
+export function locationBlockMessage(athleteLabel: string, b: LocationBlock): string {
+  const covers = joinNames(b.coveredLocations);
+  // Family-facing text never carries em dashes, even when a product name does.
+  const product = b.productName.replace(/\s*[\u2014\u2015]\s*/g, ": ");
+  return `${athleteLabel}'s ${product} covers ${covers} sessions only. This session is at ${b.sessionLocation}. Please ask the front desk about a ${b.sessionLocation} option.`;
+}
 
 /** Does booking this service type need a membership/credit at all? */
 export function requiresEntitlement(st: Pick<ServiceType, "eligibility" | "creditCost">): boolean {
@@ -97,17 +110,28 @@ export function requiresEntitlement(st: Pick<ServiceType, "eligibility" | "credi
  *    on the session date, not on hold → "unlimited"
  * 2. otherwise eligible credits (unexpired, matching service type, available ≥ cost) → "credits"
  * 3. otherwise "none" (families are told they need a membership or credits; staff may comp).
+ * Location scope: memberships (membership override, else product) and credit buckets only count
+ * when they cover the session's location (empty scope = every location; a session without a
+ * location is covered by anything). When a scoped membership/credit is the only thing that would
+ * have paid, "none" carries `locationBlocked` so the caller can say why.
  */
 export async function resolveEntitlement(
   tx: Tx,
-  input: { orgId: string; athleteId: string; serviceType: Pick<ServiceType, "id" | "eligibility" | "creditCost">; at: Date; tz?: string },
+  input: { orgId: string; athleteId: string; serviceType: Pick<ServiceType, "id" | "eligibility" | "creditCost">; at: Date; tz?: string; locationId?: string | null },
 ): Promise<Entitlement> {
   if (!requiresEntitlement(input.serviceType)) return { kind: "not_required" };
   const day = localYmd(input.at, input.tz ?? DEFAULT_TZ);
+  const loc = input.locationId ?? null;
   const ms = await tx
-    .select({ id: memberships.id, serviceTypeIds: productVersions.serviceTypeIds })
+    .select({
+      id: memberships.id,
+      serviceTypeIds: productVersions.serviceTypeIds,
+      scope: sql<string[]>`coalesce(${memberships.locationIds}, ${products.locationIds})`,
+      productName: products.name,
+    })
     .from(memberships)
     .innerJoin(productVersions, eq(productVersions.id, memberships.productVersionId))
+    .innerJoin(products, eq(products.id, productVersions.productId))
     .where(
       and(
         eq(memberships.orgId, input.orgId),
@@ -119,8 +143,10 @@ export async function resolveEntitlement(
         sql`not exists (select 1 from ${membershipHolds} h where h.membership_id = ${memberships.id} and h.start_date <= ${day} and h.end_date >= ${day})`,
       ),
     );
-  const unlimited = ms.find((m) => !m.serviceTypeIds?.length || m.serviceTypeIds.includes(input.serviceType.id));
+  const forService = ms.filter((m) => !m.serviceTypeIds?.length || m.serviceTypeIds.includes(input.serviceType.id));
+  const unlimited = forService.find((m) => scopeCovers(m.scope, loc));
   if (unlimited) return { kind: "unlimited", membershipId: unlimited.id };
+  const blockedBy = forService.find((m) => !scopeCovers(m.scope, loc));
 
   const [row] = await tx
     .select({ available: sql<number>`coalesce(sum(${creditBuckets.available}),0)::int` })
@@ -134,8 +160,20 @@ export async function resolveEntitlement(
         or(isNull(creditBuckets.expiresAt), gt(creditBuckets.expiresAt, input.at)),
         or(sql`${creditBuckets.periodStart} is null`, lte(creditBuckets.periodStart, day)),
         sql`(jsonb_array_length(${creditBuckets.serviceTypeIds}) = 0 or ${creditBuckets.serviceTypeIds} ? ${input.serviceType.id})`,
+        loc ? sql`(jsonb_array_length(${creditBuckets.locationIds}) = 0 or ${creditBuckets.locationIds} ? ${loc})` : undefined,
       ),
     );
   if (row && row.available > 0) return { kind: "credits", available: row.available };
+  if (blockedBy && loc) {
+    const names = await locationNames(tx, input.orgId, [...blockedBy.scope, loc]);
+    return {
+      kind: "none",
+      locationBlocked: {
+        productName: blockedBy.productName,
+        coveredLocations: blockedBy.scope.map((id) => names.get(id) ?? "another location"),
+        sessionLocation: names.get(loc) ?? "another location",
+      },
+    };
+  }
   return { kind: "none" };
 }

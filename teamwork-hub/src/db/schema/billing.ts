@@ -39,6 +39,11 @@ export const products = pgTable("products", {
   publiclyListed: boolean("publicly_listed").notNull().default(false),
   sku: text("sku"),
   trackInventory: boolean("track_inventory").notNull().default(false),
+  /**
+   * Locations this product's memberships/credits are valid at; empty = every location.
+   * Lives on the product (not the immutable version) because it is a scope rule, not a price term.
+   */
+  locationIds: jsonb("location_ids").$type<string[]>().notNull().default([]),
   isDemo: isDemo(),
   createdAt: createdAt(),
 });
@@ -114,6 +119,8 @@ export const memberships = pgTable(
     /** Which system bills this membership. Imported Zen Planner memberships stay "external" until cutover. */
     billingProvider: text("billing_provider").$type<"stripe" | "paypal" | "manual" | "external_zenplanner" | "none">().notNull(),
     providerSubscriptionId: text("provider_subscription_id"),
+    /** Per-membership location override; null = use the product's locations. */
+    locationIds: jsonb("location_ids").$type<string[]>(),
     source: text("source").notNull().default("teamwork"),
     createdBy: uuid("created_by"),
     isDemo: isDemo(),
@@ -416,6 +423,8 @@ export const creditBuckets = pgTable(
     sourceInvoiceLineId: uuid("source_invoice_line_id").references(() => invoiceLines.id),
     sourceKind: text("source_kind").$type<"purchase" | "membership_period" | "staff_grant" | "imported" | "rollover">().notNull(),
     serviceTypeIds: jsonb("service_type_ids").$type<string[]>().notNull().default([]),
+    /** Locations these credits can be spent at; empty = any (copied from the product/membership at grant). */
+    locationIds: jsonb("location_ids").$type<string[]>().notNull().default([]),
     granted: integer("granted").notNull(),
     /** Denormalized balance maintained in the same transaction as each ledger entry. */
     available: integer("available").notNull(),

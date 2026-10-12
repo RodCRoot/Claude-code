@@ -13,13 +13,15 @@ import { DEFAULT_TZ, fmt, todayLocal } from "@/lib/time";
 import { generateSeriesAction, removeAvailabilityAction, removeBusyBlockAction } from "../actions";
 import { ScheduleTabs } from "../_components/calendar";
 import { disconnectCalendarAction } from "./calendar-actions";
-import { AvailabilityForm, OneOffSessionForm, PolicyForm, ResourceForm, SeriesForm, ServiceTypeForm, TimeOffForm } from "./forms";
+import { AvailabilityForm, KioskLocationForm, LocationForm, OneOffSessionForm, PolicyForm, ResourceForm, SeriesForm, ServiceTypeForm, TimeOffForm } from "./forms";
+import { kioskLogins, listLocations } from "@/lib/locations";
 
 export const metadata = { title: "Schedule settings" };
 
 const TABS = [
   { key: "services", label: "Services" },
   { key: "policies", label: "Cancellation policies" },
+  { key: "locations", label: "Locations" },
   { key: "resources", label: "Rooms & resources" },
   { key: "series", label: "Class series" },
   { key: "session", label: "One-off session" },
@@ -126,11 +128,14 @@ export default async function ScheduleSettingsPage({ searchParams }: { searchPar
   const tz = org?.timezone ?? DEFAULT_TZ;
   const today = todayLocal(tz);
   const coaches = (await listCoaches(db, v.orgId)).map((c) => ({ id: c.id, name: c.name }));
-  const [svcs, pols, rooms] = await Promise.all([
+  const [svcs, pols, rooms, locs] = await Promise.all([
     db.select().from(serviceTypes).where(eq(serviceTypes.orgId, v.orgId)).orderBy(asc(serviceTypes.name)),
     db.select().from(cancellationPolicies).where(eq(cancellationPolicies.orgId, v.orgId)).orderBy(asc(cancellationPolicies.name)),
     db.select().from(resources).where(eq(resources.orgId, v.orgId)).orderBy(asc(resources.name)),
+    listLocations(db, v.orgId),
   ]);
+  const locOpts = locs.filter((l) => l.active).map((l) => ({ id: l.id, name: l.name }));
+  const locName = new Map(locs.map((l) => [l.id, l.name]));
   const opt = <T extends { id: string; name: string }>(xs: T[]) => xs.map((x) => ({ id: x.id, name: x.name }));
 
   let body: React.ReactNode = null;
@@ -161,7 +166,7 @@ export default async function ScheduleSettingsPage({ searchParams }: { searchPar
                   </>
                 }
               >
-                <ServiceTypeForm st={st} policies={opt(pols)} forms={forms} />
+                <ServiceTypeForm st={st} policies={opt(pols)} forms={forms} locations={locOpts} />
               </Details>
             ))}
           </CardBody>
@@ -169,7 +174,7 @@ export default async function ScheduleSettingsPage({ searchParams }: { searchPar
         <Card>
           <CardHeader title="Add a service" />
           <CardBody>
-            <ServiceTypeForm policies={opt(pols)} forms={forms} />
+            <ServiceTypeForm policies={opt(pols)} forms={forms} locations={locOpts} />
           </CardBody>
         </Card>
       </div>
@@ -199,6 +204,42 @@ export default async function ScheduleSettingsPage({ searchParams }: { searchPar
         </Card>
       </div>
     );
+  } else if (tab === "locations") {
+    const kiosks = await kioskLogins(db, v.orgId);
+    body = (
+      <div className="space-y-6">
+        <Callout tone="info" title="How locations work">
+          Sessions take their location from the series, then the room, then the service. Products can be limited to locations in Billing (e.g. a Bloomington membership only books Bloomington sessions). Sessions with no location are open to every membership.
+        </Callout>
+        <Card>
+          <CardHeader title="Locations" kicker={`${locs.length} configured`} />
+          <CardBody className="space-y-2">
+            {locs.length === 0 ? <EmptyState title="No locations yet">A single-location facility doesn&apos;t need any. Add one per site when you run classes in more than one place.</EmptyState> : null}
+            {locs.map((l) => (
+              <Details key={l.id} title={l.name} meta={<>{!l.active ? <Badge variant="red">inactive</Badge> : null}<span>{l.address ?? "No address"}</span></>}>
+                <LocationForm l={l} defaultTz={tz} />
+              </Details>
+            ))}
+          </CardBody>
+        </Card>
+        <Card>
+          <CardHeader title="Add a location" />
+          <CardBody>
+            <LocationForm defaultTz={tz} />
+          </CardBody>
+        </Card>
+        <Card>
+          <CardHeader title="Kiosk logins" kicker="Bind a kiosk to a location" />
+          <CardBody className="space-y-3">
+            {kiosks.length === 0 ? <p className="text-sm text-ink-3">No kiosk logins.</p> : null}
+            {kiosks.map((k) => (
+              <KioskLocationForm key={k.id} kiosk={k} locations={locOpts} />
+            ))}
+            <p className="text-xs text-ink-3">A bound kiosk lists and checks in only that location&apos;s sessions (name list and PIN check-in).</p>
+          </CardBody>
+        </Card>
+      </div>
+    );
   } else if (tab === "resources") {
     body = (
       <div className="space-y-6">
@@ -207,8 +248,8 @@ export default async function ScheduleSettingsPage({ searchParams }: { searchPar
           <CardBody className="space-y-2">
             {rooms.length === 0 ? <EmptyState title="No resources yet" /> : null}
             {rooms.map((r) => (
-              <Details key={r.id} title={r.name} meta={<>{r.exclusive ? <Badge variant="blue">exclusive</Badge> : null}{!r.active ? <Badge variant="red">inactive</Badge> : null}<span>{r.kind}</span></>}>
-                <ResourceForm r={r} />
+              <Details key={r.id} title={r.name} meta={<>{r.exclusive ? <Badge variant="blue">exclusive</Badge> : null}{!r.active ? <Badge variant="red">inactive</Badge> : null}{r.locationId ? <Badge>{locName.get(r.locationId)}</Badge> : null}<span>{r.kind}</span></>}>
+                <ResourceForm r={r} locations={locOpts} />
               </Details>
             ))}
           </CardBody>
@@ -216,7 +257,7 @@ export default async function ScheduleSettingsPage({ searchParams }: { searchPar
         <Card>
           <CardHeader title="Add a resource" />
           <CardBody>
-            <ResourceForm />
+            <ResourceForm locations={locOpts} />
           </CardBody>
         </Card>
       </div>
@@ -241,6 +282,7 @@ export default async function ScheduleSettingsPage({ searchParams }: { searchPar
                       {s.weekdays.map((d) => WD[d]).join("/")} {s.startTimeLocal.slice(0, 5)} · {s.durationMinutes} min
                     </span>
                     <span>{s.coachUserId ? coachName.get(s.coachUserId) : "No coach"}</span>
+                    {s.locationId ? <Badge>{locName.get(s.locationId)}</Badge> : null}
                     {!s.active ? <Badge variant="red">inactive</Badge> : null}
                   </>
                 }
@@ -254,7 +296,7 @@ export default async function ScheduleSettingsPage({ searchParams }: { searchPar
                     Generate sessions
                   </SubmitButton>
                 </ActionForm>
-                <SeriesForm s={s} services={opt(svcs)} coaches={coaches} rooms={opt(rooms)} today={today} />
+                <SeriesForm s={s} services={opt(svcs)} coaches={coaches} rooms={opt(rooms)} today={today} locations={locOpts} />
               </Details>
             ))}
           </CardBody>
@@ -262,7 +304,7 @@ export default async function ScheduleSettingsPage({ searchParams }: { searchPar
         <Card>
           <CardHeader title="Add a series" />
           <CardBody>
-            <SeriesForm services={opt(svcs.filter((s) => s.active))} coaches={coaches} rooms={opt(rooms.filter((r) => r.active))} today={today} />
+            <SeriesForm services={opt(svcs.filter((s) => s.active))} coaches={coaches} rooms={opt(rooms.filter((r) => r.active))} today={today} locations={locOpts} />
           </CardBody>
         </Card>
       </div>
@@ -272,7 +314,7 @@ export default async function ScheduleSettingsPage({ searchParams }: { searchPar
       <Card>
         <CardHeader title="Create a one-off session" kicker="Camp day, event, extra class" />
         <CardBody>
-          <OneOffSessionForm services={opt(svcs.filter((s) => s.active))} coaches={coaches} rooms={opt(rooms.filter((r) => r.active))} today={today} />
+          <OneOffSessionForm services={opt(svcs.filter((s) => s.active))} coaches={coaches} rooms={opt(rooms.filter((r) => r.active))} today={today} locations={locOpts} />
           <p className="mt-3 text-xs text-ink-3">For private sessions and assessments use the slot finder under “Private sessions” so coach availability and buffers are respected.</p>
         </CardBody>
       </Card>

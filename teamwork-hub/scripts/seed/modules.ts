@@ -11,6 +11,7 @@ import { seedScience } from "./science";
 export const moduleSeeds: [string, (ctx: SeedCtx) => Promise<void>][] = [
   ["scheduling", seedScheduling],
   ["billing", seedBilling],
+  ["locations", (ctx) => import("./locations").then((m) => m.seedLocations(ctx))], // after scheduling + billing
   ["documents", (ctx) => import("./documents").then((m) => m.seedDocuments(ctx))],
   ["training", seedTraining],
   ["crm", (ctx) => import("./crm").then((m) => m.seedCrm(ctx))],

@@ -257,7 +257,7 @@ export async function seedCore(ctx: SeedCtx) {
   ]);
 
   // --- Integration state: honest defaults -------------------------------------------
-  for (const provider of ["stripe", "paypal", "venmo", "hawkin", "google_calendar", "email", "sms", "teambuildr", "zenplanner", "object_storage"] as const) {
+  for (const provider of ["stripe", "paypal", "venmo", "hawkin", "google_calendar", "email", "sms", "teambuildr", "zenplanner", "gohighlevel", "object_storage"] as const) {
     await tx.insert(integrations).values({
       orgId,
       provider,

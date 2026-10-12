@@ -9,6 +9,7 @@ import { markAttendance } from "./booking";
 import { actorOf, orgTimezone, pgCode } from "./common";
 import { kioskName } from "./kiosk";
 import { hashCheckInPin, isTrivialPin, PIN_PATTERN } from "./pin-hash";
+import { boundLocationId } from "@/lib/locations";
 
 /**
  * Kiosk check-in by PIN.
@@ -132,6 +133,7 @@ export async function kioskPinCheckIn(tx: Tx, v: Viewer, input: { pin: string; s
 
   const tz = await orgTimezone(tx, v.orgId);
   const { start, end } = localDayBounds(todayLocal(tz, now), tz);
+  const kioskLocation = v.role === "kiosk" ? await boundLocationId(tx, v) : null;
   const todays = await tx
     .select({ bookingId: bookings.id, status: bookings.status, title: scheduleSessions.title, startsAt: scheduleSessions.startsAt, endsAt: scheduleSessions.endsAt })
     .from(bookings)
@@ -144,6 +146,7 @@ export async function kioskPinCheckIn(tx: Tx, v: Viewer, input: { pin: string; s
         ne(scheduleSessions.status, "cancelled"),
         gte(scheduleSessions.startsAt, start),
         lt(scheduleSessions.startsAt, end),
+        kioskLocation ? eq(scheduleSessions.locationId, kioskLocation) : undefined,
       ),
     )
     .orderBy(asc(scheduleSessions.startsAt));

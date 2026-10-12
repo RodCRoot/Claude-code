@@ -42,6 +42,7 @@ import { DEFAULT_TZ } from "@/lib/time";
 import { advanceHawkinCheckpoint } from "@/lib/integrations/hawkin/checkpoint";
 import { COMMITTERS, findExternal, prepareExtra, type Created, type RowOutcome, type UpdateRecord } from "./commit";
 import { identityKey, matchPerson } from "./identity";
+import { peopleByAddress } from "@/lib/messaging/inbound";
 import { autoMap, fieldMapping, mappingOptions, metricHeaders, missingRequired, normalizeRow, OPTION_PREFIX } from "./mapping";
 import { parseDate } from "./normalize";
 import { ParseError, parseUpload, type ParsedFile } from "./parse";
@@ -265,7 +266,9 @@ export async function validateBatch(tx: Tx, v: Viewer, batchId: string) {
   for (let i = 0; i < parsed.rows.length; i++) {
     const raw = parsed.rows[i];
     const rowNumber = i + 2; // header is line 1
-    const r = normalizeRow(schema, raw, b.mapping, ctx, metrics);
+    const base = normalizeRow(schema, raw, b.mapping, ctx, metrics);
+    // Some sources put several people on one line (a GHL contact naming siblings): one row each.
+    for (const r of schema.split ? schema.split(base) : [base]) {
     const p: Planned = {
       rowNumber,
       raw,
@@ -385,6 +388,29 @@ export async function validateBatch(tx: Tx, v: Viewer, batchId: string) {
             : `Guardian "${g.firstName} ${g.lastName}" is ambiguous (${gm.candidates.length} candidates) — add member IDs to the export.`,
         );
       }
+    }
+
+    // GoHighLevel: the contact's phone/email belong to the parent. Propose (never auto-link) a match.
+    if (schema.id === "gohighlevel.contacts") {
+      const gc = (n.guardianContact ?? {}) as { phone?: string | null; email?: string | null };
+      const cands = new Map<string, string>();
+      if (gc.email) for (const m of await peopleByAddress(tx, v.orgId, "email", gc.email)) cands.set(m.id, m.name);
+      if (gc.phone) for (const m of await peopleByAddress(tx, v.orgId, "sms", gc.phone)) cands.set(m.id, m.name);
+      if (p.matchPersonId) cands.delete(p.matchPersonId);
+      if (cands.size === 1) {
+        const [[gid, gname]] = [...cands.entries()];
+        n._guardianPersonId = gid;
+        p.warnings.push(`Parent phone/email matches ${gname}. Confirming this row links them as ${String(n.firstName)}'s guardian.`);
+        if (p.status === "ready") p.status = "needs_review";
+      } else if (cands.size > 1) {
+        n._guardianPersonId = null;
+        n._guardianSkip = true;
+        p.warnings.push(`Parent phone/email matches ${cands.size} people (${[...cands.values()].join(", ")}). No guardian will be linked automatically; link the right one in People.`);
+        if (p.status === "ready") p.status = "needs_review";
+      } else if (gc.email || gc.phone) {
+        p.warnings.push("No one in Teamwork has this phone/email yet: a placeholder parent/guardian record will be created with it.");
+      }
+    }
     }
   }
 

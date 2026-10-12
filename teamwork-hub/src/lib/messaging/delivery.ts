@@ -178,11 +178,14 @@ export async function deliverOne(
   const res = d.channel === "email" ? await sendEmail(out) : await sendSms(out);
   const attempts = d.attempts + 1;
   if (res.status === "failed") {
-    const final = job.attempts >= job.maxAttempts;
+    const permanent = res.retryable === false;
+    const final = permanent || job.attempts >= job.maxAttempts;
     await tx
       .update(messageDeliveries)
       .set({ attempts, status: final ? "failed" : "queued", statusReason: `${final ? "Gave up" : "Will retry"}: ${res.reason ?? "provider error"}`, updatedAt: new Date() })
       .where(eq(messageDeliveries.id, d.id));
+    // Retrying can't help (e.g. no GHL contact for this number): record it and stop.
+    if (permanent) return { status: "failed" };
     // The caller throws AFTER committing this update so the job queue applies
     // exponential backoff (and dead-letters after maxAttempts).
     return { status: "failed", error: res.reason ?? "delivery failed" };

@@ -4,7 +4,8 @@ import type { OrgCapability } from "@/lib/authz/policy";
 import { localDayBounds } from "@/lib/time";
 
 export type ReportColumn = { key: string; label: string; kind?: "money" | "int" | "pct" | "date" | "datetime" | "text" };
-export type ReportRange = { from: string; to: string; tz: string };
+/** `locationId` narrows location-aware reports (attendance, utilization) to one location. */
+export type ReportRange = { from: string; to: string; tz: string; locationId?: string | null };
 export type ReportResult = { rows: Record<string, unknown>[]; summary?: { label: string; value: string | number; kind?: ReportColumn["kind"] }[]; notes?: string[] };
 
 export type ReportDef = {
@@ -13,6 +14,8 @@ export type ReportDef = {
   category: "Memberships" | "Attendance" | "Money" | "Retention" | "Staff";
   /** Plain-language definition shown with the report. */
   definition: string;
+  /** Report honours `ReportRange.locationId` (shows the location filter). */
+  locationAware?: boolean;
   cap: OrgCapability;
   columns: ReportColumn[];
   run: (tx: Tx, orgId: string, r: ReportRange) => Promise<ReportResult>;
@@ -26,6 +29,8 @@ const bounds = (r: ReportRange) => {
   return { start, end };
 };
 const n = (v: unknown) => (v == null ? 0 : Number(v));
+/** SQL filter on schedule_sessions alias `s` for the optional location. */
+const locFilter = (r: ReportRange) => (r.locationId ? sql`and s.location_id = ${r.locationId}` : sql``);
 
 export const REPORTS: ReportDef[] = [
   {
@@ -68,9 +73,11 @@ export const REPORTS: ReportDef[] = [
     title: "Attendance by service",
     category: "Attendance",
     definition:
-      "Bookings for sessions that started in the date range, by service type. Attended = checked in or marked attended. No-show and late-cancel follow each session type's cancellation policy. Cancelled-in-time bookings are not counted as attendance.",
+      "Bookings for sessions that started in the date range, by location and service type. Attended = checked in or marked attended. No-show and late-cancel follow each session type's cancellation policy. Cancelled-in-time bookings are not counted as attendance. Sessions without a location are shown as 'No location'.",
     cap: "reports.operational",
+    locationAware: true,
     columns: [
+      { key: "location", label: "Location" },
       { key: "service", label: "Service" },
       { key: "sessions", label: "Sessions", kind: "int" },
       { key: "booked", label: "Booked", kind: "int" },
@@ -83,15 +90,16 @@ export const REPORTS: ReportDef[] = [
       const { start, end } = bounds(r);
       const rows = await q(
         tx,
-        sql`select st.name as service, count(distinct s.id)::int as sessions,
+        sql`select coalesce(l.name, 'No location') as location, st.name as service, count(distinct s.id)::int as sessions,
               count(b.id) filter (where b.status in ('booked','attended','no_show'))::int as booked,
               count(b.id) filter (where b.status = 'attended')::int as attended,
               count(b.id) filter (where b.status = 'no_show')::int as no_show,
               count(b.id) filter (where b.status = 'late_cancelled')::int as late_cancel
             from schedule_sessions s join service_types st on st.id = s.service_type_id
+            left join locations l on l.id = s.location_id
             left join bookings b on b.session_id = s.id
-            where s.org_id = ${orgId} and s.starts_at >= ${start} and s.starts_at < ${end} and s.status <> 'cancelled'
-            group by st.name order by st.name`,
+            where s.org_id = ${orgId} and s.starts_at >= ${start} and s.starts_at < ${end} and s.status <> 'cancelled' ${locFilter(r)}
+            group by 1, 2 order by 1, 2`,
       );
       for (const x of rows) x.attendance_rate = n(x.attended) + n(x.no_show) ? n(x.attended) / (n(x.attended) + n(x.no_show)) : null;
       return { rows, summary: [{ label: "Attended visits", value: rows.reduce((s, x) => s + n(x.attended), 0) }, { label: "No-shows", value: rows.reduce((s, x) => s + n(x.no_show), 0) }] };
@@ -101,9 +109,11 @@ export const REPORTS: ReportDef[] = [
     key: "utilization",
     title: "Session utilization",
     category: "Attendance",
-    definition: "For non-cancelled sessions in the range: fill rate = booked (incl. attended/no-show) ÷ capacity; show-up rate = attended ÷ capacity. Grouped by coach and service.",
+    definition: "For non-cancelled sessions in the range: fill rate = booked (incl. attended/no-show) ÷ capacity; show-up rate = attended ÷ capacity. Grouped by location, coach and service.",
     cap: "reports.operational",
+    locationAware: true,
     columns: [
+      { key: "location", label: "Location" },
       { key: "coach", label: "Coach" },
       { key: "service", label: "Service" },
       { key: "sessions", label: "Sessions", kind: "int" },
@@ -117,12 +127,13 @@ export const REPORTS: ReportDef[] = [
       const { start, end } = bounds(r);
       const rows = await q(
         tx,
-        sql`select coalesce(u.display_name, 'Unassigned') as coach, st.name as service, count(*)::int as sessions, sum(s.capacity)::int as capacity,
+        sql`select coalesce(l.name, 'No location') as location, coalesce(u.display_name, 'Unassigned') as coach, st.name as service, count(*)::int as sessions, sum(s.capacity)::int as capacity,
               sum((select count(*) from bookings b where b.session_id = s.id and b.status in ('booked','attended','no_show')))::int as booked,
               sum((select count(*) from bookings b where b.session_id = s.id and b.status = 'attended'))::int as attended
             from schedule_sessions s join service_types st on st.id = s.service_type_id left join users u on u.id = s.coach_user_id
-            where s.org_id = ${orgId} and s.starts_at >= ${start} and s.starts_at < ${end} and s.status <> 'cancelled'
-            group by 1, 2 order by 1, 2`,
+            left join locations l on l.id = s.location_id
+            where s.org_id = ${orgId} and s.starts_at >= ${start} and s.starts_at < ${end} and s.status <> 'cancelled' ${locFilter(r)}
+            group by 1, 2, 3 order by 1, 2, 3`,
       );
       for (const x of rows) {
         x.fill_rate = n(x.capacity) ? n(x.booked) / n(x.capacity) : null;

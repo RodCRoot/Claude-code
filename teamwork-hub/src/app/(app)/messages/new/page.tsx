@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FamilyStyleHint } from "@/app/(app)/messages/_components/family-style-hint";
 import { db } from "@/db";
 import { Badge, Callout, Card, CardBody, CardHeader, EmptyState, Field, Input, PageHeader, Select, Textarea } from "@/components/ui";
 import { requireViewer } from "@/lib/auth/viewer";
@@ -142,6 +143,7 @@ export default async function NewMessagePage({ searchParams }: { searchParams: P
                 <Field label="Message" htmlFor="body" hint={tpl?.isSample ? "Prefilled from a SAMPLE template — edit before sending." : undefined}>
                   <Textarea id="body" name="body" required maxLength={5000} rows={6} defaultValue={prefill?.body ?? ""} />
                 </Field>
+                <FamilyStyleHint target="body" subjectTarget="subject" />
                 {route.recipients.length > 1 ? (
                   <fieldset className="space-y-1 text-sm">
                     <legend className="mb-1 text-sm font-medium text-ink-2">Conversation</legend>

@@ -22,6 +22,8 @@ export type GrantInput = {
   sourceInvoiceLineId?: string | null;
   membershipId?: string | null;
   serviceTypeIds?: string[];
+  /** Locations the credits may be spent at; empty/omitted = any. */
+  locationIds?: string[];
   expiresAt?: Date | null;
   periodStart?: string | null;
   periodEnd?: string | null;
@@ -48,6 +50,7 @@ export async function grantCredits(tx: Tx, g: GrantInput) {
       sourceInvoiceLineId: g.sourceInvoiceLineId ?? null,
       sourceKind: g.sourceKind,
       serviceTypeIds: g.serviceTypeIds ?? [],
+      locationIds: g.locationIds ?? [],
       granted: g.amount,
       available: g.amount,
       expiresAt: g.expiresAt ?? null,
@@ -90,7 +93,7 @@ export class InsufficientCreditsError extends Error {
  */
 async function lockEligibleBuckets(
   tx: Tx,
-  r: { orgId: string; athleteId: string; serviceTypeId: string; amount: number; sessionStartsAt: Date; preferBucketId?: string | null },
+  r: { orgId: string; athleteId: string; serviceTypeId: string; amount: number; sessionStartsAt: Date; preferBucketId?: string | null; locationId?: string | null },
 ) {
   return tx
     .select()
@@ -104,6 +107,7 @@ async function lockEligibleBuckets(
         or(isNull(creditBuckets.expiresAt), gt(creditBuckets.expiresAt, r.sessionStartsAt)),
         or(sql`${creditBuckets.periodStart} is null`, lte(creditBuckets.periodStart, sql`(${r.sessionStartsAt.toISOString()}::timestamptz)::date`)),
         sql`(jsonb_array_length(${creditBuckets.serviceTypeIds}) = 0 or ${creditBuckets.serviceTypeIds} ? ${r.serviceTypeId})`,
+        r.locationId ? sql`(jsonb_array_length(${creditBuckets.locationIds}) = 0 or ${creditBuckets.locationIds} ? ${r.locationId})` : undefined,
       ),
     )
     .orderBy(
@@ -120,7 +124,7 @@ async function lockEligibleBuckets(
  */
 export async function reserveCredits(
   tx: Tx,
-  r: { orgId: string; athleteId: string; bookingId: string; serviceTypeId: string; cost: number; sessionStartsAt: Date; actorUserId?: string | null },
+  r: { orgId: string; athleteId: string; bookingId: string; serviceTypeId: string; cost: number; sessionStartsAt: Date; actorUserId?: string | null; locationId?: string | null },
 ) {
   const key = `reserve:${r.bookingId}`;
   const [prior] = await tx.select().from(creditLedger).where(eq(creditLedger.idempotencyKey, key));
@@ -260,7 +264,7 @@ export async function bookingNetCharge(tx: Tx, bookingId: string) {
  */
 export async function resettleBookingCharge(
   tx: Tx,
-  r: { bookingId: string; charge: boolean; serviceTypeId: string; sessionStartsAt: Date; actorUserId: string; reason: string },
+  r: { bookingId: string; charge: boolean; serviceTypeId: string; sessionStartsAt: Date; actorUserId: string; reason: string; locationId?: string | null },
 ): Promise<{ delta: number; bucketId: string | null }> {
   const c = await bookingNetCharge(tx, r.bookingId);
   if (!c) return { delta: 0, bucketId: null };
@@ -281,6 +285,7 @@ export async function resettleBookingCharge(
       amount: diff,
       sessionStartsAt: r.sessionStartsAt,
       preferBucketId: c.reserveBucketId,
+      locationId: r.locationId,
     });
     if (!candidates[0]) throw new InsufficientCreditsError();
     bucketId = candidates[0].id;

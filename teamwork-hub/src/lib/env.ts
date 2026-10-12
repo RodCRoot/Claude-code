@@ -46,10 +46,19 @@ const schema = z.object({
   EMAIL_PROVIDER: z.enum(["none", "smtp", "postmark", "sendgrid"]).default("none"),
   EMAIL_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().optional(),
-  SMS_PROVIDER: z.enum(["none", "twilio"]).default("none"),
+  SMS_PROVIDER: z.enum(["none", "twilio", "gohighlevel"]).default("none"),
   SMS_ACCOUNT_SID: z.string().optional(),
   SMS_AUTH_TOKEN: z.string().optional(),
   SMS_FROM: z.string().optional(),
+  /**
+   * GoHighLevel / LeadConnector API v2 (services.leadconnectorhq.com). A Private Integration Token
+   * (or sub-account OAuth access token) with conversations/message.write + contacts.readonly scopes,
+   * and the sub-account (location) id. Without both, GHL stays "not configured".
+   */
+  GHL_API_KEY: z.string().optional(),
+  GHL_LOCATION_ID: z.string().optional(),
+  /** Optional: the GHL phone number to send from (E.164); GHL uses the sub-account default when unset. */
+  GHL_FROM_NUMBER: z.string().optional(),
   /** Comma-separated allowlist; when set, all external delivery is redirected here. */
   DELIVERY_TEST_RECIPIENTS: z.string().optional(),
   /** Must be explicitly "true" for any real external delivery. */
@@ -108,6 +117,7 @@ export const integrationEnvVars: Record<string, string[]> = {
   google_calendar: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "CALENDAR_TOKEN_KEY"],
   email: ["EMAIL_PROVIDER", "EMAIL_API_KEY", "EMAIL_FROM", "DELIVERY_ENABLED", "DELIVERY_TEST_RECIPIENTS"],
   sms: ["SMS_PROVIDER", "SMS_ACCOUNT_SID", "SMS_AUTH_TOKEN", "SMS_FROM", "DELIVERY_ENABLED", "DELIVERY_TEST_RECIPIENTS"],
+  gohighlevel: ["GHL_API_KEY", "GHL_LOCATION_ID", "GHL_FROM_NUMBER (optional)"],
 };
 
 export function hasEnv(...names: string[]): boolean {

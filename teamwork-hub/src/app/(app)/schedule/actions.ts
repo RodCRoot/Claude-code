@@ -29,6 +29,7 @@ import { canRunSession, getSession, orgTimezone } from "@/lib/scheduling/common"
 import { cancelSeriesFrom, editSeriesSessions } from "@/lib/scheduling/series-edit";
 import { bookBatch, nextSeriesSessions } from "@/lib/scheduling/batch-booking";
 import { setCheckInPin } from "@/lib/scheduling/kiosk-pin";
+import { locationSchema, saveLocation, setKioskLocation } from "@/lib/locations";
 
 const run = (fn: () => Promise<ActionState | void>) => safeAction(fn)();
 const refresh = () => revalidatePath("/schedule", "layout");
@@ -174,9 +175,12 @@ export async function updateSessionAction(_prev: ActionState, fd: FormData): Pro
         version: z.coerce.number().int(),
         notes: z.string().max(2000).optional(),
         visibility: z.enum(["public", "members", "private"]),
+        locationId: z.preprocess((x) => (x === "" || x === "none" ? null : x), z.string().uuid().nullable().optional()),
       })
       .parse(formToObject(fd));
-    await db.transaction((tx) => updateSession(tx, v, { sessionId: reqId(fd, "sessionId"), ...p, notes: p.notes?.trim() || null }));
+    // Only touch the location when the form carried the field.
+    const locationId = fd.has("locationId") ? (p.locationId ?? null) : undefined;
+    await db.transaction((tx) => updateSession(tx, v, { sessionId: reqId(fd, "sessionId"), ...p, locationId, notes: p.notes?.trim() || null }));
     refresh();
     return { ok: true, message: "Session updated." };
   });
@@ -194,6 +198,7 @@ export async function createSessionAction(_prev: ActionState, fd: FormData): Pro
         durationMinutes: z.coerce.number().int().min(5).max(24 * 60),
         coachUserId: z.preprocess((x) => (x === "" ? null : x), z.string().uuid().nullable()),
         resourceId: z.preprocess((x) => (x === "" ? null : x), z.string().uuid().nullable()),
+        locationId: z.preprocess((x) => (x === "" || x == null ? null : x), z.string().uuid().nullable()),
         capacity: z.coerce.number().int().min(0).max(500),
         waitlistCapacity: z.coerce.number().int().min(0).max(200),
         visibility: z.enum(["public", "members", "private"]),
@@ -322,6 +327,28 @@ export async function setCheckInPinAction(_prev: ActionState, fd: FormData): Pro
 }
 
 // --- Settings ----------------------------------------------------------------------------
+
+export async function saveLocationAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const v = await requireViewer();
+    const input = locationSchema.parse(formToObject(fd));
+    await db.transaction((tx) => saveLocation(tx, v, input));
+    refresh();
+    revalidatePath("/classes");
+    return { ok: true, message: "Location saved." };
+  });
+}
+
+export async function setKioskLocationAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const v = await requireViewer();
+    const locationId = str(fd, "locationId") ? reqId(fd, "locationId") : null;
+    await db.transaction((tx) => setKioskLocation(tx, v, { userId: reqId(fd, "userId"), locationId }));
+    refresh();
+    revalidatePath("/kiosk");
+    return { ok: true, message: locationId ? "Kiosk bound to the location." : "Kiosk shows all locations." };
+  });
+}
 
 export async function saveResourceAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
   return run(async () => {

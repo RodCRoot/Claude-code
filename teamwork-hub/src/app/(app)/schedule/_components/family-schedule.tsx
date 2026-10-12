@@ -13,6 +13,7 @@ import { bookingSettings } from "@/lib/scheduling/common";
 import { resolveEntitlement } from "@/lib/scheduling/eligibility";
 import { athleteBookingsIn, familyAthletes, listSessions, type SessionListItem } from "@/lib/scheduling/queries";
 import { addDaysYmd, fmt, fmtDate, localToUtc } from "@/lib/time";
+import { listLocations, parseLocationParam } from "@/lib/locations";
 import { bookAction, cancelBookingAction, rescheduleAction } from "../actions";
 import { capacityText, DaysView, MonthView, SessionCard } from "./calendar";
 import { CalendarToolbar, hrefWith, type Params } from "./nav";
@@ -33,8 +34,10 @@ export async function FamilySchedule({ viewer, params, range, tz, today }: { vie
   const bookableCount = athletes.filter((a) => a.canBook && a.active).length;
   const now = new Date();
   const settings = await bookingSettings(db, viewer.orgId);
+  const locs = await listLocations(db, viewer.orgId, { activeOnly: true });
+  const locationId = parseLocationParam(params.location);
   const [sessions, ent, upcoming, policies] = await Promise.all([
-    listSessions(db, viewer, { from: range.from, to: range.to, familyAthleteIds: athletes.map((a) => a.id) }),
+    listSessions(db, viewer, { from: range.from, to: range.to, familyAthleteIds: athletes.map((a) => a.id), filters: { locationId } }),
     resolveEntitlement(db, { orgId: viewer.orgId, athleteId: selected.id, serviceType: { id: ANY_SERVICE, eligibility: {}, creditCost: 1 }, at: now }),
     upcomingBookingsFor(db, viewer.orgId, [selected.id], now),
     db
@@ -97,7 +100,7 @@ export async function FamilySchedule({ viewer, params, range, tz, today }: { vie
       const opensAt = settings.bookingWindowDays != null ? s.startsAt.getTime() - settings.bookingWindowDays * 86_400_000 : null;
       const waitOpen = s.waitlisted < s.waitlistCapacity;
       if (now >= s.endsAt) action = <p className="mt-2 text-xs text-ink-3">Ended.</p>;
-      else if (now.getTime() > cutoffAt) action = <p className="mt-2 text-xs text-ink-3">Online booking closed{now < s.startsAt ? " — call the front desk" : ""}.</p>;
+      else if (now.getTime() > cutoffAt) action = <p className="mt-2 text-xs text-ink-3">Online booking closed{now < s.startsAt ? ". Please call the front desk" : ""}.</p>;
       else if (opensAt && now.getTime() < opensAt) action = <p className="mt-2 text-xs text-ink-3">Booking opens {fmt(new Date(opensAt), "MMM d", tz)}.</p>;
       else if (cap.full && !waitOpen) action = <p className="mt-2 text-xs font-medium text-ink-3">Full</p>;
       else
@@ -141,6 +144,24 @@ export async function FamilySchedule({ viewer, params, range, tz, today }: { vie
               )}
             >
               {a.first} {a.last}
+            </Link>
+          ))}
+        </nav>
+      ) : null}
+
+      {locs.length > 1 ? (
+        <nav aria-label="Choose location" className="flex flex-wrap gap-2">
+          {[{ id: "", name: "All locations" }, ...locs].map((l) => (
+            <Link
+              key={l.id || "all"}
+              href={hrefWith("/schedule", { ...params, athlete: selected.id }, { location: l.id })}
+              aria-current={(locationId ?? "") === l.id ? "true" : undefined}
+              className={cn(
+                "inline-flex min-h-11 items-center rounded-full border px-4 text-sm font-medium",
+                (locationId ?? "") === l.id ? "border-ink bg-ink text-surface" : "border-edge bg-surface hover:bg-surface-2",
+              )}
+            >
+              {l.name}
             </Link>
           ))}
         </nav>

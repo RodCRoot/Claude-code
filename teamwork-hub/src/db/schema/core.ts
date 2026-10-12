@@ -32,6 +32,28 @@ export const organizations = pgTable("organizations", {
   createdAt: createdAt(),
 });
 
+/**
+ * A physical facility (e.g. Bloomington, Linton). Sessions, series, resources and service types
+ * may point at one; products/memberships may be scoped to a set of them (empty = every location).
+ * Rows with no location are org-wide (single-location orgs never need to create one).
+ */
+export const locations = pgTable(
+  "locations",
+  {
+    id: id(),
+    orgId: orgId(),
+    name: text("name").notNull(),
+    address: text("address"),
+    /** IANA timezone; defaults to the facility timezone. */
+    timezone: text("timezone").notNull().default("America/Indiana/Indianapolis"),
+    active: boolean("active").notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(0),
+    isDemo: isDemo(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("locations_org_name_uq").on(t.orgId, sql`lower(${t.name})`)],
+);
+
 // ---------------------------------------------------------------------------
 // Identity: person ≠ login ≠ athlete ≠ guardian ≠ household ≠ payer
 // ---------------------------------------------------------------------------
@@ -87,6 +109,8 @@ export const users = pgTable(
     lastLoginAt: ts("last_login_at"),
     failedLoginCount: integer("failed_login_count").notNull().default(0),
     lockedUntil: ts("locked_until"),
+    /** Kiosk logins bound to a location only see/check in that location's sessions. Null = all. */
+    locationId: uuid("location_id").references(() => locations.id),
     isDemo: isDemo(),
     createdAt: createdAt(),
   },

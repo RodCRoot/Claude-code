@@ -15,6 +15,7 @@ import {
   type Viewer,
 } from "@/lib/authz/policy";
 import { createDeliveries, type Channel } from "./delivery";
+import { lintBlockMessage, lintFamilyMessage } from "./family-style";
 import { ageOn, messagingSettings, recipientForPerson, routeForAthlete, type Recipient } from "./routing";
 import { todayLocal } from "@/lib/time";
 
@@ -298,6 +299,12 @@ async function addParticipant(tx: Tx, threadId: string, p: { personId?: string |
   return row;
 }
 
+/** Staff → family text must pass the family style lint (no em dashes, card numbers, SSNs, security codes). */
+export function assertFamilyStyle(body: string, subject?: string | null) {
+  const r = lintFamilyMessage(`${subject ? `${subject}\n` : ""}${body}`, { requireSignOff: false });
+  if (!r.ok) throw new UserError(lintBlockMessage(r), { body: r.blocks.map((b) => b.message).join(" ") });
+}
+
 async function staffParticipant(tx: Tx, v: Viewer, threadId: string) {
   return addParticipant(tx, threadId, { userId: v.userId, personId: v.personId, role: "staff", read: true });
 }
@@ -325,6 +332,7 @@ const startStaffSchema = z.object({
 export async function startStaffThread(tx: Tx, v: Viewer, input: z.input<typeof startStaffSchema>, now = new Date()) {
   assertCan(v, "messages.inbox");
   const data = startStaffSchema.parse(input);
+  assertFamilyStyle(data.body, data.subject);
   const caps = await athleteCapabilities(tx, v, data.athleteId);
   if (!caps.has("messages.send")) throw new AuthzError("You can only message families of athletes you are assigned to.");
 
@@ -440,6 +448,7 @@ export async function postMessage(tx: Tx, v: Viewer, input: z.input<typeof postS
     const caps = await athleteCapabilities(tx, v, t.athleteId);
     if (!caps.has("messages.send")) throw new AuthzError();
   }
+  if (mode === "staff" && !data.internal && t.kind !== "staff") assertFamilyStyle(data.body);
   const key = cmidFor(v, data.clientMutationId);
   const prior = await existingByCmid(tx, key);
   if (prior) {
@@ -531,6 +540,7 @@ const leadThreadSchema = z.object({
 export async function startLeadThread(tx: Tx, v: Viewer, input: z.input<typeof leadThreadSchema>, now = new Date()) {
   assertCan(v, "crm.manage");
   const data = leadThreadSchema.parse(input);
+  assertFamilyStyle(data.body, data.subject);
   const [l] = await tx.select().from(leads).where(and(eq(leads.id, data.leadId), eq(leads.orgId, v.orgId)));
   if (!l) throw new UserError("Lead not found.");
   const prior = await existingByCmid(tx, cmidFor(v, data.clientMutationId));

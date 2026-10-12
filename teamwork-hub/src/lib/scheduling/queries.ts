@@ -4,6 +4,7 @@ import {
   athletes,
   bookings,
   cancellationPolicies,
+  locations,
   people,
   resources,
   scheduleSessions,
@@ -16,7 +17,7 @@ import { creditSummary } from "@/lib/credits";
 import { creditStateFor } from "./booking";
 import { resolveEntitlement } from "./eligibility";
 
-export type SessionFilters = { coachUserId?: string | null; serviceTypeId?: string | null; resourceId?: string | null };
+export type SessionFilters = { coachUserId?: string | null; serviceTypeId?: string | null; resourceId?: string | null; locationId?: string | null };
 
 const coachUser = aliasedTable(users, "coach_user");
 
@@ -45,6 +46,8 @@ export async function listSessions(tx: Tx, v: Viewer, input: { from: Date; to: D
       originalCoachUserId: scheduleSessions.originalCoachUserId,
       coachName: coachUser.displayName,
       resourceName: resources.name,
+      locationId: scheduleSessions.locationId,
+      locationName: locations.name,
       serviceTypeId: serviceTypes.id,
       serviceName: serviceTypes.name,
       serviceKind: serviceTypes.kind,
@@ -57,6 +60,7 @@ export async function listSessions(tx: Tx, v: Viewer, input: { from: Date; to: D
     .innerJoin(serviceTypes, eq(serviceTypes.id, scheduleSessions.serviceTypeId))
     .leftJoin(coachUser, eq(coachUser.id, scheduleSessions.coachUserId))
     .leftJoin(resources, eq(resources.id, scheduleSessions.resourceId))
+    .leftJoin(locations, eq(locations.id, scheduleSessions.locationId))
     .where(
       and(
         eq(scheduleSessions.orgId, v.orgId),
@@ -65,6 +69,7 @@ export async function listSessions(tx: Tx, v: Viewer, input: { from: Date; to: D
         f.coachUserId ? eq(scheduleSessions.coachUserId, f.coachUserId) : sql`true`,
         f.serviceTypeId ? eq(scheduleSessions.serviceTypeId, f.serviceTypeId) : sql`true`,
         f.resourceId ? eq(scheduleSessions.resourceId, f.resourceId) : sql`true`,
+        f.locationId ? eq(scheduleSessions.locationId, f.locationId) : sql`true`,
         visibility,
       ),
     )
@@ -101,20 +106,21 @@ export async function familyAthletes(tx: Tx, v: Viewer, at = new Date()) {
 }
 
 /** How an athlete would pay for a given service type right now (for the family booking card). */
-export async function entitlementLabel(tx: Tx, orgId: string, athleteId: string, st: { id: string; eligibility: typeof serviceTypes.$inferSelect.eligibility; creditCost: number }, at: Date) {
-  const e = await resolveEntitlement(tx, { orgId, athleteId, serviceType: st, at });
+export async function entitlementLabel(tx: Tx, orgId: string, athleteId: string, st: { id: string; eligibility: typeof serviceTypes.$inferSelect.eligibility; creditCost: number }, at: Date, locationId?: string | null) {
+  const e = await resolveEntitlement(tx, { orgId, athleteId, serviceType: st, at, locationId });
   return e;
 }
 
 export async function sessionDetail(tx: Tx, v: Viewer, sessionId: string) {
   if (!isStaff(v)) throw new AuthzError();
   const [row] = await tx
-    .select({ session: scheduleSessions, service: serviceTypes, policy: cancellationPolicies, coachName: coachUser.displayName, resourceName: resources.name })
+    .select({ session: scheduleSessions, service: serviceTypes, policy: cancellationPolicies, coachName: coachUser.displayName, resourceName: resources.name, locationName: locations.name })
     .from(scheduleSessions)
     .innerJoin(serviceTypes, eq(serviceTypes.id, scheduleSessions.serviceTypeId))
     .leftJoin(cancellationPolicies, eq(cancellationPolicies.id, serviceTypes.cancellationPolicyId))
     .leftJoin(coachUser, eq(coachUser.id, scheduleSessions.coachUserId))
     .leftJoin(resources, eq(resources.id, scheduleSessions.resourceId))
+    .leftJoin(locations, eq(locations.id, scheduleSessions.locationId))
     .where(and(eq(scheduleSessions.id, sessionId), eq(scheduleSessions.orgId, v.orgId)));
   if (!row) return null;
   let originalCoachName: string | null = null;

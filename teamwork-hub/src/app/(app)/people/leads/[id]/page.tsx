@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FamilyStyleHint } from "@/app/(app)/messages/_components/family-style-hint";
 import { notFound } from "next/navigation";
 import { inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -186,6 +187,7 @@ export default async function LeadDetail({ params, searchParams }: { params: Pro
                 <Field label={`Message to ${contactPerson.firstName}`} htmlFor="lm-body">
                   <Textarea id="lm-body" name="body" required maxLength={5000} rows={3} />
                 </Field>
+                <FamilyStyleHint target="lm-body" subjectTarget="lm-subject" />
                 <fieldset className="flex flex-wrap gap-4 text-sm">
                   <legend className="sr-only">Channels</legend>
                   <label className="flex min-h-11 items-center gap-2">

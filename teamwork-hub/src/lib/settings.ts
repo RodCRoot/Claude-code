@@ -83,7 +83,8 @@ export async function recheckIntegrations(tx: Tx, v: Viewer) {
   assertCan(v, "integrations.manage");
   const rows = await tx.select().from(integrations).where(eq(integrations.orgId, v.orgId));
   for (const r of rows) {
-    const vars = (integrationEnvVars[r.provider] ?? []).map((s) => s.split(" ")[0]).filter((n) => !["PAYPAL_ENV", "HAWKIN_API_BASE", "HAWKIN_ORG_SCOPE", "DELIVERY_TEST_RECIPIENTS", "STRIPE_PUBLISHABLE_KEY"].includes(n));
+    const envVars = r.provider === "sms" && process.env.SMS_PROVIDER === "gohighlevel" ? ["SMS_PROVIDER", "GHL_API_KEY", "GHL_LOCATION_ID", "DELIVERY_ENABLED"] : (integrationEnvVars[r.provider] ?? []);
+    const vars = envVars.map((s) => s.split(" ")[0]).filter((n) => !["PAYPAL_ENV", "HAWKIN_API_BASE", "HAWKIN_ORG_SCOPE", "DELIVERY_TEST_RECIPIENTS", "STRIPE_PUBLISHABLE_KEY", "GHL_FROM_NUMBER"].includes(n));
     if (!vars.length) continue;
     let present = vars.every((n) => !!process.env[n] && process.env[n] !== "none");
     if ((r.provider === "email" || r.provider === "sms") && process.env.DELIVERY_ENABLED !== "true") present = false;
@@ -110,5 +111,10 @@ export const INTEGRATION_INFO: Record<IntegrationProvider, { label: string; purp
   sms: { label: "SMS delivery", purpose: "Text messages with consent, opt-out, and quiet hours. Off unless DELIVERY_ENABLED=true.", module: "/messages" },
   teambuildr: { label: "TeamBuildr", purpose: "Historical import from TeamBuildr exports (no live API assumed).", module: "/imports" },
   zenplanner: { label: "Zen Planner", purpose: "Historical import from Zen Planner exports (no live API assumed).", module: "/imports" },
+  gohighlevel: {
+    label: "GoHighLevel (LeadConnector)",
+    purpose: "Send SMS through Teamwork's existing GHL sub-account (SMS_PROVIDER=gohighlevel), look up GHL contacts by phone/email, and import GHL contact exports in the Import Center. Contacts are filed under the athlete's name; phone/email belong to the parent.",
+    module: "/imports",
+  },
   object_storage: { label: "File storage", purpose: "Original imports, completed form PDFs, raw force-plate signals, exports.", module: "/settings/integrations" },
 };
