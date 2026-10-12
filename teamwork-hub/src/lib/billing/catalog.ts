@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, isNull, lte, or, gte, sql } from "drizzle-orm";
 import type { Tx } from "@/db";
-import { products, productVersions, type ProductKind } from "@/db/schema";
+import { memberships, products, productVersions, type ProductKind } from "@/db/schema";
+import { assertLocationIds } from "@/lib/locations";
 import { assertCan, type Viewer } from "@/lib/authz/policy";
 import { audit } from "@/lib/audit";
 import { UserError } from "./errors";
@@ -120,6 +121,34 @@ export async function createProductVersion(tx: Tx, v: Viewer, productId: string,
     after: { version: ver.version, priceMinor: ver.priceMinor },
   });
   return ver;
+}
+
+/**
+ * Limit where a product's memberships and credits can be used (empty = every location).
+ * Scope is not a price term, so it lives on the product and applies to existing memberships too.
+ * Credits already granted keep the scope they were granted with.
+ */
+export async function setProductLocations(tx: Tx, v: Viewer, productId: string, locationIds: string[]) {
+  assertCan(v, "billing.manage");
+  const ids = await assertLocationIds(tx, v.orgId, locationIds);
+  const [before] = await tx.select().from(products).where(and(eq(products.id, productId), eq(products.orgId, v.orgId)));
+  if (!before) throw new UserError("Product not found.");
+  await tx.update(products).set({ locationIds: ids }).where(eq(products.id, productId));
+  await audit(tx, actorOf(v), "billing.product.locations", "product", productId, {
+    summary: ids.length ? `Limited ${before.name} to ${ids.length} location(s)` : `${before.name} valid at every location`,
+    before: { locationIds: before.locationIds },
+    after: { locationIds: ids },
+  });
+}
+
+/** Per-membership location override (null = follow the product). */
+export async function setMembershipLocations(tx: Tx, v: Viewer, membershipId: string, locationIds: string[] | null) {
+  assertCan(v, "billing.manage");
+  const ids = locationIds === null ? null : await assertLocationIds(tx, v.orgId, locationIds);
+  const [before] = await tx.select().from(memberships).where(and(eq(memberships.id, membershipId), eq(memberships.orgId, v.orgId)));
+  if (!before) throw new UserError("Membership not found.");
+  await tx.update(memberships).set({ locationIds: ids, updatedAt: new Date() }).where(eq(memberships.id, membershipId));
+  await audit(tx, actorOf(v), "billing.membership.locations", "membership", membershipId, { before: { locationIds: before.locationIds }, after: { locationIds: ids } });
 }
 
 export async function setProductActive(tx: Tx, v: Viewer, productId: string, active: boolean) {

@@ -1,7 +1,7 @@
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Field, Input, Select, Textarea } from "@/components/ui";
-import type { cancellationPolicies, classSeries, resources, serviceTypes } from "@/db/schema";
-import { addAvailabilityAction, addTimeOffAction, createSessionAction, savePolicyAction, saveResourceAction, saveSeriesAction, saveServiceTypeAction } from "../actions";
+import type { cancellationPolicies, classSeries, locations as locationsT, resources, serviceTypes } from "@/db/schema";
+import { addAvailabilityAction, addTimeOffAction, createSessionAction, saveLocationAction, savePolicyAction, saveResourceAction, saveSeriesAction, saveServiceTypeAction, setKioskLocationAction } from "../actions";
 
 type Opt = { id: string; name: string };
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -33,7 +33,24 @@ function Check({ name, label, defaultChecked, hint, value }: { name: string; lab
 
 const grid = "grid gap-3 sm:grid-cols-2 lg:grid-cols-3";
 
-export function ResourceForm({ r }: { r?: typeof resources.$inferSelect }) {
+/** Location picker; renders nothing until the org has at least one location. */
+export function LocationSelect({ id, defaultValue, locations, label = "Location", emptyLabel = "No specific location" }: { id: string; defaultValue?: string | null; locations?: Opt[]; label?: string; emptyLabel?: string }) {
+  if (!locations?.length) return null;
+  return (
+    <Field label={label} htmlFor={id}>
+      <Select id={id} name="locationId" defaultValue={defaultValue ?? ""} className="h-11">
+        <option value="">{emptyLabel}</option>
+        {locations.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.name}
+          </option>
+        ))}
+      </Select>
+    </Field>
+  );
+}
+
+export function ResourceForm({ r, locations }: { r?: typeof resources.$inferSelect; locations?: Opt[] }) {
   const k = r?.id ?? "new";
   return (
     <ActionForm action={saveResourceAction} className="space-y-3" resetOnSuccess={!r}>
@@ -52,6 +69,7 @@ export function ResourceForm({ r }: { r?: typeof resources.$inferSelect }) {
         <Field label="Capacity (optional)" htmlFor={`rc-${k}`}>
           <Input id={`rc-${k}`} name="capacity" type="number" min={0} defaultValue={r?.capacity ?? ""} className="h-11" />
         </Field>
+        <LocationSelect id={`rl-${k}`} defaultValue={r?.locationId} locations={locations} />
       </div>
       <div className="flex flex-wrap gap-x-6">
         <Check name="exclusive" label="Exclusive (can't be double-booked)" defaultChecked={r?.exclusive} />
@@ -104,7 +122,7 @@ export function PolicyForm({ p }: { p?: typeof cancellationPolicies.$inferSelect
   );
 }
 
-export function ServiceTypeForm({ st, policies, forms }: { st?: typeof serviceTypes.$inferSelect; policies: Opt[]; forms: Opt[] }) {
+export function ServiceTypeForm({ st, policies, forms, locations }: { st?: typeof serviceTypes.$inferSelect; policies: Opt[]; forms: Opt[]; locations?: Opt[] }) {
   const k = st?.id ?? "new";
   const el = st?.eligibility ?? {};
   return (
@@ -126,6 +144,7 @@ export function ServiceTypeForm({ st, policies, forms }: { st?: typeof serviceTy
         <Field label="Color" htmlFor={`scol-${k}`}>
           <Input id={`scol-${k}`} name="color" type="color" defaultValue={st?.color ?? "#2563eb"} className="h-11 p-1" />
         </Field>
+        <LocationSelect id={`sl-${k}`} defaultValue={st?.locationId} locations={locations} label="Default location" emptyLabel="Any / set per session" />
         <Field label="Duration (minutes)" htmlFor={`sd-${k}`}>
           <Input id={`sd-${k}`} name="defaultDurationMinutes" type="number" min={5} defaultValue={st?.defaultDurationMinutes ?? 60} className="h-11" />
         </Field>
@@ -184,7 +203,7 @@ export function ServiceTypeForm({ st, policies, forms }: { st?: typeof serviceTy
   );
 }
 
-export function SeriesForm({ s, services, coaches, rooms, today }: { s?: typeof classSeries.$inferSelect; services: Opt[]; coaches: Opt[]; rooms: Opt[]; today: string }) {
+export function SeriesForm({ s, services, coaches, rooms, today, locations }: { s?: typeof classSeries.$inferSelect; services: Opt[]; coaches: Opt[]; rooms: Opt[]; today: string; locations?: Opt[] }) {
   const k = s?.id ?? "new";
   return (
     <ActionForm action={saveSeriesAction} className="space-y-3" resetOnSuccess={!s}>
@@ -231,6 +250,7 @@ export function SeriesForm({ s, services, coaches, rooms, today }: { s?: typeof 
             ))}
           </Select>
         </Field>
+        <LocationSelect id={`tl-${k}`} defaultValue={s?.locationId} locations={locations} emptyLabel="From room / service" />
         <Field label="Capacity" htmlFor={`tcap-${k}`}>
           <Input id={`tcap-${k}`} name="capacity" type="number" min={1} defaultValue={s?.capacity ?? 12} className="h-11" />
         </Field>
@@ -349,7 +369,7 @@ export function TimeOffForm({ coaches, fixedCoachId, today }: { coaches: Opt[]; 
   );
 }
 
-export function OneOffSessionForm({ services, coaches, rooms, today }: { services: Opt[]; coaches: Opt[]; rooms: Opt[]; today: string }) {
+export function OneOffSessionForm({ services, coaches, rooms, today, locations }: { services: Opt[]; coaches: Opt[]; rooms: Opt[]; today: string; locations?: Opt[] }) {
   return (
     <ActionForm action={createSessionAction} className="space-y-3">
       <div className={grid}>
@@ -397,6 +417,7 @@ export function OneOffSessionForm({ services, coaches, rooms, today }: { service
             ))}
           </Select>
         </Field>
+        <LocationSelect id="os-loc" locations={locations} emptyLabel="From room / service" />
         <Field label="Capacity" htmlFor="os-cap">
           <Input id="os-cap" name="capacity" type="number" min={0} defaultValue={10} className="h-11" />
         </Field>
@@ -412,6 +433,52 @@ export function OneOffSessionForm({ services, coaches, rooms, today }: { service
         </Field>
       </div>
       <SubmitButton className="min-h-11">Create session</SubmitButton>
+    </ActionForm>
+  );
+}
+
+export function LocationForm({ l, defaultTz }: { l?: typeof locationsT.$inferSelect; defaultTz: string }) {
+  const k = l?.id ?? "new";
+  return (
+    <ActionForm action={saveLocationAction} className="space-y-3" resetOnSuccess={!l}>
+      {l ? <input type="hidden" name="id" value={l.id} /> : null}
+      <div className={grid}>
+        <Field label="Name" htmlFor={`ln-${k}`} required>
+          <Input id={`ln-${k}`} name="name" defaultValue={l?.name} required maxLength={80} className="h-11" />
+        </Field>
+        <Field label="Address" htmlFor={`la-${k}`}>
+          <Input id={`la-${k}`} name="address" defaultValue={l?.address ?? ""} maxLength={300} className="h-11" />
+        </Field>
+        <Field label="Timezone" htmlFor={`lt-${k}`} hint="IANA name; defaults to the facility timezone">
+          <Input id={`lt-${k}`} name="timezone" defaultValue={l?.timezone ?? defaultTz} className="h-11" />
+        </Field>
+        <Field label="Sort order" htmlFor={`lo-${k}`}>
+          <Input id={`lo-${k}`} name="sortOrder" type="number" min={0} max={999} defaultValue={l?.sortOrder ?? 0} className="h-11" />
+        </Field>
+      </div>
+      <Check name="active" label="Active" defaultChecked={l?.active ?? true} />
+      <SubmitButton className="min-h-11">{l ? "Save location" : "Add location"}</SubmitButton>
+    </ActionForm>
+  );
+}
+
+export function KioskLocationForm({ kiosk, locations }: { kiosk: { id: string; displayName: string; locationId: string | null }; locations: Opt[] }) {
+  return (
+    <ActionForm action={setKioskLocationAction} className="flex flex-wrap items-end gap-2">
+      <input type="hidden" name="userId" value={kiosk.id} />
+      <Field label={kiosk.displayName} htmlFor={`kl-${kiosk.id}`}>
+        <Select id={`kl-${kiosk.id}`} name="locationId" defaultValue={kiosk.locationId ?? ""} className="h-11">
+          <option value="">All locations</option>
+          {locations.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <SubmitButton variant="secondary" className="min-h-11">
+        Save
+      </SubmitButton>
     </ActionForm>
   );
 }

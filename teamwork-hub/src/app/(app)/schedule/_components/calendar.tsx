@@ -56,6 +56,7 @@ export function SessionCard({ s, tz, href, children }: { s: SessionListItem; tz:
           <span>No coach</span>
         )}
         {s.resourceName ? <span>· {s.resourceName}</span> : null}
+        {s.locationName ? <span>· {s.locationName}</span> : null}
       </div>
       {!cancelled ? (
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">

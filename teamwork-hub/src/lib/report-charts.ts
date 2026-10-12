@@ -67,6 +67,7 @@ export async function attendanceByWeek(tx: Tx, orgId: string, r: ReportRange): P
         count(b.id) filter (where b.status = 'late_cancelled')::int as late_cancel
       from schedule_sessions s left join bookings b on b.session_id = s.id
       where s.org_id = ${orgId} and s.starts_at >= ${start} and s.starts_at < ${end} and s.status <> 'cancelled'
+        ${r.locationId ? sql`and s.location_id = ${r.locationId}` : sql``}
       group by 1`)
   ).rows as Row[];
   const data = bucketByWeek(r.from, r.to, rows, ["attended", "no_show", "late_cancel"]);

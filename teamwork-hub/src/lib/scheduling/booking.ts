@@ -22,7 +22,8 @@ import {
   type Booking,
   type Session,
 } from "./common";
-import { checkEligibility, resolveEntitlement, requiresEntitlement } from "./eligibility";
+import { checkEligibility, locationBlockMessage, resolveEntitlement, requiresEntitlement } from "./eligibility";
+import { boundLocationId } from "@/lib/locations";
 
 export type BookInput = {
   sessionId: string;
@@ -128,8 +129,12 @@ export async function bookInternal(tx: Tx, v: Viewer, input: BookInput, opts: { 
   // --- Entitlement ----------------------------------------------------------------------
   const ent = input.comp
     ? ({ kind: "comp" } as const)
-    : await resolveEntitlement(tx, { orgId: v.orgId, athleteId: input.athleteId, serviceType: st, at: session.startsAt, tz: settings.timezone });
+    : await resolveEntitlement(tx, { orgId: v.orgId, athleteId: input.athleteId, serviceType: st, at: session.startsAt, tz: settings.timezone, locationId: session.locationId });
   if (ent.kind === "none") {
+    if (ent.locationBlocked) {
+      const why = locationBlockMessage(label, ent.locationBlocked);
+      throw new UserError(staffActor ? `${why} Book as a comp (with a reason) or sell a ${ent.locationBlocked.sessionLocation} package first.` : why);
+    }
     throw new UserError(staffActor ? `${label} has no membership or credits for ${st.name}. Book as a comp (with a reason) or sell a package first.` : `${label} ${NEEDS_ENTITLEMENT}`);
   }
 
@@ -153,7 +158,7 @@ export async function bookInternal(tx: Tx, v: Viewer, input: BookInput, opts: { 
   let final = booking;
   if (status === "booked" && ent.kind === "credits") {
     try {
-      const r = await reserveCredits(tx, { orgId: v.orgId, athleteId: input.athleteId, bookingId: booking.id, serviceTypeId: st.id, cost: st.creditCost, sessionStartsAt: session.startsAt, actorUserId: v.userId });
+      const r = await reserveCredits(tx, { orgId: v.orgId, athleteId: input.athleteId, bookingId: booking.id, serviceTypeId: st.id, cost: st.creditCost, sessionStartsAt: session.startsAt, actorUserId: v.userId, locationId: session.locationId });
       [final] = await tx.update(bookings).set({ creditBucketId: r.bucketId, entitlementSource: "credit" }).where(eq(bookings.id, booking.id)).returning();
     } catch (e) {
       if (e instanceof InsufficientCreditsError) throw new UserError(`${label} ${NEEDS_ENTITLEMENT}`);
@@ -274,18 +279,18 @@ export async function promoteWaitlist(tx: Tx, v: Viewer, sessionId: string, opts
     let membershipId = w.membershipId;
     let creditBucketId: string | null = null;
     if (!reason && entitlementSource !== "comp" && requiresEntitlement(st)) {
-      const ent = await resolveEntitlement(tx, { orgId: v.orgId, athleteId: w.athleteId, serviceType: st, at: session.startsAt, tz: settings.timezone });
+      const ent = await resolveEntitlement(tx, { orgId: v.orgId, athleteId: w.athleteId, serviceType: st, at: session.startsAt, tz: settings.timezone, locationId: session.locationId });
       if (ent.kind === "unlimited") {
         entitlementSource = "unlimited";
         membershipId = ent.membershipId;
       } else {
         try {
-          const r = await reserveCredits(tx, { orgId: v.orgId, athleteId: w.athleteId, bookingId: w.id, serviceTypeId: st.id, cost: st.creditCost, sessionStartsAt: session.startsAt, actorUserId: v.userId });
+          const r = await reserveCredits(tx, { orgId: v.orgId, athleteId: w.athleteId, bookingId: w.id, serviceTypeId: st.id, cost: st.creditCost, sessionStartsAt: session.startsAt, actorUserId: v.userId, locationId: session.locationId });
           entitlementSource = "credit";
           creditBucketId = r.bucketId;
         } catch (e) {
           if (!(e instanceof InsufficientCreditsError)) throw e;
-          reason = "No active membership or available credits.";
+          reason = ent.kind === "none" && ent.locationBlocked ? locationBlockMessage(label, ent.locationBlocked) : "No active membership or available credits.";
         }
       }
     }
@@ -333,6 +338,8 @@ export async function markAttendance(
   if (kiosk) {
     if (!can(v, "schedule.checkin")) throw new AuthzError();
     if (input.outcome !== "attended") throw new AuthzError("The kiosk can only check athletes in.");
+    const kioskLocation = await boundLocationId(tx, v);
+    if (kioskLocation && session.locationId !== kioskLocation) throw new AuthzError("This kiosk checks in its own location's sessions only. Please see the front desk.");
   } else if (!canRunSession(v, session)) {
     throw new AuthzError("Only schedule managers or this session's coach can take attendance.");
   }
@@ -366,6 +373,7 @@ export async function markAttendance(
         charge,
         serviceTypeId: st.id,
         sessionStartsAt: session.startsAt,
+        locationId: session.locationId,
         actorUserId: v.userId,
         reason: `Attendance corrected: ${booking.status.replace("_", "-")} → ${input.outcome.replace("_", "-")}`,
       }));

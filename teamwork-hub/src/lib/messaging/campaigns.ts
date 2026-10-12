@@ -1,4 +1,5 @@
 import { and, desc, eq, sql } from "drizzle-orm";
+import { lintBlockMessage, lintFamilyMessage } from "./family-style";
 import { z } from "zod";
 import type { Tx } from "@/db";
 import { campaignRecipients, campaigns, jobs, messageTemplates, segments, users, type CampaignStatus } from "@/db/schema";
@@ -137,6 +138,8 @@ async function readyToSend(tx: Tx, v: Viewer, c: Campaign, now: Date) {
   const tpl = await loadTemplate(tx, v.orgId, c.templateId);
   if (!tpl) throw new DomainError("The template no longer exists.");
   if (tpl.isSample) throw new DomainError(`"${tpl.name}" is marked SAMPLE. Replace the sample text and clear the SAMPLE flag before broadcasting it.`);
+  const style = lintFamilyMessage(`${tpl.subject ? `${tpl.subject}\n` : ""}${tpl.body}`, { requireSignOff: false });
+  if (!style.ok) throw new DomainError(lintBlockMessage(style, `Template "${tpl.name}"`));
   const seg = await loadSegment(tx, v.orgId, c.segmentId);
   if (!seg || seg.archivedAt) throw new DomainError("The segment no longer exists.");
   await assertFiltersAllowed(tx, v, seg.filters);

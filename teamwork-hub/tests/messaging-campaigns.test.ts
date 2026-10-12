@@ -46,7 +46,7 @@ beforeAll(async () => {
   ctx = await seedOrg();
   const [t] = await tx()
     .insert(messageTemplates)
-    .values({ orgId: ctx.orgId, key: "test_announce", name: "Gym closure", channel: "email", subject: "Closed Monday — {{org_name}}", body: "Hi {{recipient_first_name}}, the gym is closed Monday. See you Tuesday, {{athlete_first_name}}!", isSample: false })
+    .values({ orgId: ctx.orgId, key: "test_announce", name: "Gym closure", channel: "email", subject: "Closed Monday: {{org_name}}", body: "Hi {{recipient_first_name}}, the gym is closed Monday. See you Tuesday, {{athlete_first_name}}!", isSample: false })
     .returning();
   templateId = t.id;
   // A medical form (health data) pending for Maya.

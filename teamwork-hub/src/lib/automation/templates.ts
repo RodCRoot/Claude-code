@@ -5,6 +5,7 @@ import { automationRules, messageTemplates } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import { assertCan, type Viewer } from "@/lib/authz/policy";
 import { DomainError } from "@/lib/messaging/errors";
+import { lintBlockMessage, lintFamilyMessage, replaceEmDashes } from "@/lib/messaging/family-style";
 
 export type MessageTemplate = typeof messageTemplates.$inferSelect;
 
@@ -61,9 +62,22 @@ const templateSchema = z.object({
   subject: z.preprocess((x) => (x === "" ? undefined : x), z.string().trim().max(200).optional()),
   body: z.string().trim().min(1, "Write the message").max(5000),
   isSample: z.boolean().default(false),
+  /** Staff accepted the offer to replace em dashes ("comma" | "period") before saving. */
+  fixDashes: z.enum(["comma", "period"]).optional(),
 });
 
+/** Templates go to families: apply an accepted dash fix, then block on the family style lint. */
+function applyFamilyStyle(d: z.infer<typeof templateSchema>) {
+  if (d.fixDashes) {
+    d.body = replaceEmDashes(d.body, d.fixDashes);
+    if (d.subject) d.subject = replaceEmDashes(d.subject, d.fixDashes);
+  }
+  const r = lintFamilyMessage(`${d.subject ? `${d.subject}\n` : ""}${d.body}`, { requireSignOff: false });
+  if (!r.ok) throw new DomainError(lintBlockMessage(r, "This template"), { body: r.blocks.map((b) => b.message).join(" ") });
+}
+
 function validateVars(d: z.infer<typeof templateSchema>) {
+  applyFamilyStyle(d);
   const unknown = templateVariables(`${d.subject ?? ""} ${d.body}`).filter((v) => !(v in TEMPLATE_VARIABLES));
   if (unknown.length) throw new DomainError(`Unknown variable(s): ${unknown.map((u) => `{{${u}}}`).join(", ")}`, { body: "Use only the listed variables" });
   if (d.channel === "sms" && d.body.length > 480) throw new DomainError("SMS templates should stay under 480 characters (3 segments).", { body: "Too long for SMS" });

@@ -50,6 +50,10 @@ Re-import of the same or an overlapping file: rows whose source record id is alr
 | `generic.metric_values` | metric_values (`other_vendor`, `aggregation single`) | |
 | `wearable.daily_csv` | wearable_observations; empty value → `quality=missing` | |
 
+### GoHighLevel contacts
+
+`gohighlevel.contacts`: one GHL contact line → one row per athlete named on it (siblings sharing a surname are split on `,` `&` `+` `/` `;` `and`); the contact's phone/email are the parent's and become the guardian contact (proposed match in review, or a placeholder guardian per contact). See `docs/modules/crm-messaging.md` → GoHighLevel.
+
 ## Hawkin Dynamics API
 
 `src/lib/integrations/hawkin/client.ts` (server-only): refresh token from `HAWKIN_REFRESH_TOKEN` exchanged at `GET {base}/token` (`Authorization: Bearer <refresh>`) for a 1-hour access token, refreshed 5 min early and on 401. Never logged, stored, or put in errors (tests assert this). Base from `HAWKIN_API_BASE` (default Americas).

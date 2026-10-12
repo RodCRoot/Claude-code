@@ -32,6 +32,7 @@ Owner module for leads, family messaging, message delivery, automations and the 
 - `messaging/threads.ts` — access rules, lists with unread counts (`thread_participants.last_read_at`), start/post/assign/close, internal notes, client mutation ids (namespaced by user), `systemSend` for automations.
 - `messaging/routing.ts` — minors → each active guardian with `canMessageStaff` (independently); the minor only if `settings.messaging.minorAthletesMayMessage`; adults → themselves. Missing DOB + guardians = treated as minor.
 - `messaging/delivery.ts` — one `message_deliveries` row per recipient per channel. In-app always `delivered`. Email: suppressed if opted out / no address. SMS: requires `opted_in`. Quiet hours (per-person on the channel's `comm_preferences` row, else org `settings.quietHours`) defer the `messaging.deliver` job to the end of the window in facility time (DST-safe). Consent is re-checked at send time.
+- `messaging/family-style.ts` — `lintFamilyMessage(text)`, shared by template save, campaign submit/approve, and staff → family messages (`startStaffThread`, `postMessage` replies that aren't internal notes, `startLeadThread`). **Blocks**: em dashes (also U+2015 and a spaced `--`), Luhn-valid card numbers, SSNs, card security codes. **Warns**: staff jargon (comp, entitlement, credit bucket, ZP/Zen Planner, GHL, no-show, roster…), bank routing/account numbers, missing sign-off. `replaceEmDashes(text, "comma" | "period")` is the offered fix: composers show a live "Family message check" (`_components/family-style-hint.tsx`) with "Replace dashes with commas/periods" buttons; the template form also has a "replace on save" choice (`fixDashes`). Family-written messages and internal notes are never blocked. `CARD_UPDATE_SNIPPET` is the SAMPLE app-first card-update text (seeded as the "Card update instructions, app first (SAMPLE)" template).
 - `messaging/channels/{email,sms}.ts` — adapters. `not_configured` unless provider vars are set **and** `DELIVERY_ENABLED=true`. Email: Postmark or SendGrid HTTP APIs; SMS: Twilio. With `DELIVERY_TEST_RECIPIENTS` every send goes to the first email / phone in that list and the row is `test_redirected` (original address kept on the row).
 - `messaging/outbox.ts` — Outbox listing, retry (resets attempts, re-queues failed delivery), cancel.
 - `automation/templates.ts`, `automation/rules.ts`, `automation/engine.ts` — render, CRUD, trigger evaluation, dispatch, preview, session notices.
@@ -105,7 +106,7 @@ When no `session_cancelled`/`session_changed` rule is enabled, the notify handle
 
 ## Provider configuration
 
-Email: `EMAIL_PROVIDER=postmark|sendgrid`, `EMAIL_API_KEY`, `EMAIL_FROM`. SMS: `SMS_PROVIDER=twilio`, `SMS_ACCOUNT_SID`, `SMS_AUTH_TOKEN`, `SMS_FROM`. Plus `DELIVERY_ENABLED=true`. Use `DELIVERY_TEST_RECIPIENTS=qa@example.com,+15555550123` for staging. `EMAIL_PROVIDER=smtp` is accepted by env validation but has no transport, so it reports not configured. `sent` means the provider accepted the message (a later hard bounce turns it into `failed`). Delivery receipts (`delivered`) are not consumed yet.
+Email: `EMAIL_PROVIDER=postmark|sendgrid`, `EMAIL_API_KEY`, `EMAIL_FROM`. SMS: `SMS_PROVIDER=twilio`, `SMS_ACCOUNT_SID`, `SMS_AUTH_TOKEN`, `SMS_FROM`; or `SMS_PROVIDER=gohighlevel` with `GHL_API_KEY`, `GHL_LOCATION_ID` (optional `GHL_FROM_NUMBER`), see *GoHighLevel* below. Plus `DELIVERY_ENABLED=true`. Use `DELIVERY_TEST_RECIPIENTS=qa@example.com,+15555550123` for staging. `EMAIL_PROVIDER=smtp` is accepted by env validation but has no transport, so it reports not configured. `sent` means the provider accepted the message (a later hard bounce turns it into `failed`). Delivery receipts (`delivered`) are not consumed yet.
 
 ### Provider setup (webhooks)
 
@@ -129,3 +130,26 @@ Hard bounces / complaints flag the address in `undeliverable_addresses` (one act
 - Phone matching uses the last 10 digits (North American numbers); international numbers sharing those digits would collide.
 - No lead-capture embeds/landing-page builder beyond `/inquire`; no lead scoring, no attachments in messages.
 - Assessment scheduling links a lead to a session but does not create a booking (leads are not athletes until conversion).
+
+## GoHighLevel (GHL / LeadConnector)
+
+Teamwork's current CRM/SMS tool. Code: `src/lib/integrations/gohighlevel/client.ts` (client + SMS transport), `src/lib/imports/schemas/gohighlevel.ts` (import schema), `tests/gohighlevel.test.ts` (mocked `fetch` only; nothing reaches GHL).
+
+- **Not configured** without `GHL_API_KEY` and `GHL_LOCATION_ID` (`ghlConfig()`, Settings → Integrations row `gohighlevel`, migration `0013_crm_ghl_integration_row` adds the row to existing orgs). External sending still needs `DELIVERY_ENABLED=true`; `DELIVERY_TEST_RECIPIENTS` redirection applies as for Twilio.
+- **SMS** (`SMS_PROVIDER=gohighlevel`): `findGhlContact({ phone })` then `sendGhlSms({ contactId, message, toNumber })`. Teamwork never creates or merges GHL contacts: a number with no GHL contact fails as **final** (`retryable: false`, delivery row `failed`, job not retried). 401/403/400 are final; 429, 5xx and network errors are retried by the job queue. A 200 without `messageId` is not treated as sent. Provider message id is stored as `ghl:<messageId>`.
+- **Contact lookup**: `findGhlContact({ phone } | { email })` (GHL's duplicate-search rules).
+- **Import Center → "GoHighLevel: Contacts"** (`gohighlevel.contacts`). GHL contacts are filed under the athlete's name and carry the parent's phone/email; one contact often names siblings ("Riley, Sam, Alex Exampleton", "Quinn & Rowan Samplefield"). Each named athlete becomes its own import row (`ImportSchemaDef.split`), identified by name only (never by the parent's email/phone). Name-only matches are always "ambiguous" → identity review; nothing is merged automatically. The phone/email become the guardian contact: an existing person with that exact email/phone is proposed in review ("Parent phone/email matches …"); several matches → no guardian linked, flagged; no match → one placeholder guardian per contact ("Parent/guardian <Surname>", holding the phone/email) linked to every sibling with conservative guardianship defaults (no health access, not emergency contact) in one household. Re-imports are idempotent via `external_ids` (`contact_athlete`, `contact_guardian`). Evidence level for column names: unverified (configurable mapping).
+
+### Research (fetched 2026-10-12)
+
+Official docs portal https://highlevel.stoplight.io/docs/integrations (JS-rendered; content read from the OpenAPI specs it is built from: https://raw.githubusercontent.com/GoHighLevel/highlevel-api-docs/main/apps/conversations.json and …/apps/contacts.json).
+
+| Item | Evidence | Source |
+|---|---|---|
+| Base URL `https://services.leadconnectorhq.com` | vendor spec (`servers`) | conversations.json |
+| `Authorization: Bearer` with a Sub-Account access token **or Private Integration Token** | vendor spec (`securitySchemes.bearer`) | conversations.json |
+| `POST /conversations/messages`, header `Version: 2021-04-15`, body `{ type: "SMS", contactId, message, fromNumber?, toNumber? }`, scope `conversations/message.write`; 200 → `{ conversationId, messageId, status }` (all required) | vendor spec (`SendMessageBodyDto`, `SendMessageResponseDto`) | conversations.json |
+| `GET /contacts/search/duplicate?locationId=&number=&email=` (URL-encode `+`/`@`), header `Version: 2021-07-28`, scope `contacts.readonly` | vendor spec | contacts.json |
+| Duplicate-search **response body** (`{ contact }`) | **unverified**: the spec documents 200 with an empty description; parsed defensively, anything else = "no match" | contacts.json |
+| Contact CSV export column names (Contact Id, First Name, Last Name, Phone, Email, Tags) | **unverified**: aliases + editable mapping | none (no public export spec) |
+| Rate limits, inbound SMS/STOP webhooks | not implemented; inbound replies and opt-outs stay in GHL | none |

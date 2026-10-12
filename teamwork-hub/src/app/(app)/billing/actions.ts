@@ -8,7 +8,7 @@ import { products, type ProductKind } from "@/db/schema";
 import { requireViewer } from "@/lib/auth/viewer";
 import { safeAction, UserError, type ActionState } from "@/lib/actions";
 import { assertCan } from "@/lib/authz/policy";
-import { createProduct, createProductVersion, setProductActive, versionOn, type VersionInput } from "@/lib/billing/catalog";
+import { createProduct, createProductVersion, setProductActive, setProductLocations, versionOn, type VersionInput } from "@/lib/billing/catalog";
 import { startCheckout } from "@/lib/billing/checkout";
 import { UserError as BillingUserError } from "@/lib/billing/errors";
 import { createManualInvoice, issueInvoice, markUncollectible, recordManualPayment, voidInvoice, type LineInput, type ManualMethod } from "@/lib/billing/invoices";
@@ -88,6 +88,15 @@ export async function createVersionAction(_p: ActionState, fd: FormData) {
     const v = await requireViewer();
     const ver = await db.transaction((tx) => createProductVersion(tx, v, s(fd, "productId"), versionFromForm(fd)));
     return { ok: true, message: `Version ${ver.version} takes effect ${ver.effectiveFrom}. Existing memberships keep their version.` };
+  });
+}
+
+export async function productLocationsAction(_p: ActionState, fd: FormData) {
+  return run(async () => {
+    const v = await requireViewer();
+    const ids = fd.getAll("locationIds").filter((x): x is string => typeof x === "string" && x !== "");
+    await db.transaction((tx) => setProductLocations(tx, v, s(fd, "productId"), ids));
+    return { ok: true, message: ids.length ? "Location limits saved." : "Valid at every location." };
   });
 }
 

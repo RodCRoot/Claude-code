@@ -4,8 +4,8 @@
  */
 export { bookSession, cancelBooking, markAttendance, promoteWaitlist, rescheduleBooking, restoreBookingCredit, upcomingBookingsFor } from "./booking";
 export type { BookInput, BookResult, CancelInput, CancelResult, CancelMode, AttendanceOutcome } from "./booking";
-export { checkEligibility, resolveEntitlement, requiresEntitlement, ageOn } from "./eligibility";
-export type { Entitlement, EligibilityResult } from "./eligibility";
+export { checkEligibility, resolveEntitlement, requiresEntitlement, ageOn, locationBlockMessage } from "./eligibility";
+export type { Entitlement, EligibilityResult, LocationBlock } from "./eligibility";
 export { seriesOccurrences, generateSeriesSessions, createSession, substituteCoach, cancelSession, updateSession } from "./sessions";
 export { findAvailableSlots, bookPrivateSlot, listCoaches } from "./availability";
 export { attendanceHistory, MILESTONES, listSessions, sessionDetail } from "./queries";

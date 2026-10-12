@@ -201,8 +201,19 @@ const commitPerson: Committer = async (c, row, out) => {
 const commitFamilyLink: Committer = async (c, row, out) => {
   const n = row.normalized as Record<string, unknown>;
   const { personId: childId, athleteId } = await ensurePerson(c, row, out);
-  const guardianId = n._guardianPersonId as string;
-  const hhKey = String(n.householdKey);
+  const gid = await linkGuardian(c, out, { guardianId: n._guardianPersonId as string, childId, athleteId: athleteId!, householdKey: String(n.householdKey), householdName: String(n.householdName), relationship: String(n.relationship ?? "parent") });
+  await linkExternal(c, c.schema.recordEntityType, row.sourceRecordId!, "guardianship", gid);
+};
+
+/** Household (+ members) and an active guardianship with conservative defaults. Returns the guardianship id. */
+async function linkGuardian(
+  c: CommitCtx,
+  out: RowOutcome,
+  input: { guardianId: string; childId: string; athleteId: string; householdKey: string; householdName: string; relationship: string },
+): Promise<string> {
+  const { guardianId, childId, athleteId } = input;
+  const hhKey = input.householdKey;
+  const n = { householdName: input.householdName, relationship: input.relationship };
   const householdId = await cached(c, `household:${hhKey}`, async () => {
     const existing = await findExternal(c.tx, c.orgId, c.schema.idSource, "household", hhKey);
     if (existing) return existing;
@@ -240,7 +251,49 @@ const commitFamilyLink: Committer = async (c, row, out) => {
     out.created.push({ type: "guardianship", id: gid });
     out.action = "create";
   } else out.action = "link";
-  await linkExternal(c, c.schema.recordEntityType, row.sourceRecordId!, "guardianship", gid);
+  return gid;
+}
+
+/**
+ * GoHighLevel contact row = one athlete named on the contact. The contact's phone/email belong to
+ * the parent: link the person staff confirmed in review, or create one placeholder guardian per
+ * contact ("Parent/guardian <Surname>") carrying the phone/email for staff to complete.
+ */
+const commitGhlContact: Committer = async (c, row, out) => {
+  const n = row.normalized as Record<string, unknown>;
+  const { personId: childId, athleteId, createdPerson } = await ensurePerson(c, row, out);
+  const gc = (n.guardianContact ?? {}) as { phone?: string | null; email?: string | null };
+  const hhKey = String(n.householdKey);
+  let guardianId = (n._guardianPersonId as string | null) ?? null;
+  if (!n._guardianSkip && !guardianId && (gc.phone || gc.email)) {
+    guardianId = await cached(c, `ghl-guardian:${hhKey}`, async () => {
+      const existing = await findExternal(c.tx, c.orgId, c.schema.idSource, "contact_guardian", hhKey);
+      if (existing) return existing;
+      const [g] = await c.tx
+        .insert(people)
+        .values({
+          orgId: c.orgId,
+          firstName: "Parent/guardian",
+          lastName: String(n.lastName ?? "Unknown"),
+          email: gc.email || null,
+          phone: gc.phone || null,
+          status: "active",
+          source: c.schema.idSource,
+        })
+        .returning({ id: people.id });
+      out.created.push({ type: "person", id: g.id });
+      out.warnings.push("Created a placeholder parent/guardian (name unknown in GHL). Add their real name in People.");
+      await linkExternal(c, "contact_guardian", hhKey, "person", g.id);
+      return g.id;
+    });
+  }
+  if (guardianId && guardianId !== childId && athleteId) {
+    await linkGuardian(c, out, { guardianId, childId, athleteId, householdKey: `ghl:${hhKey}`, householdName: String(n.householdName), relationship: "parent" });
+  } else if (n._guardianSkip) {
+    out.warnings.push("Parent phone/email matched several people; no guardian linked.");
+  }
+  await linkExternal(c, c.schema.recordEntityType, row.sourceRecordId!, "person", childId);
+  out.action = createdPerson ? "create" : "link";
 };
 
 const commitMembership: Committer = async (c, row, out) => {
@@ -751,6 +804,7 @@ export const COMMITTERS: Record<string, Committer> = {
   "hawkin.api_tests": commitHawkin,
   "generic.metric_values": commitMetricValue,
   "wearable.daily_csv": commitWearable,
+  "gohighlevel.contacts": commitGhlContact,
 };
 
 /** Pre-compute per-batch data a committer needs (e.g. all questions per questionnaire). */

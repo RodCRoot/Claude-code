@@ -80,6 +80,7 @@ const templateInput = (fd: FormData) => ({
   subject: str(fd, "subject"),
   body: str(fd, "body"),
   isSample: bool(fd, "isSample"),
+  fixDashes: str(fd, "fixDashes") === "comma" || str(fd, "fixDashes") === "period" ? (str(fd, "fixDashes") as "comma" | "period") : undefined,
 });
 
 export const createTemplateAction = domainAction(async (_p: ActionState, fd: FormData): Promise<ActionState> => {

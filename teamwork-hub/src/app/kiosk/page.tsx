@@ -6,6 +6,7 @@ import { kioskRoster } from "@/lib/scheduling/kiosk";
 import { DEFAULT_TZ, fmtTime } from "@/lib/time";
 import { kioskPinOnly } from "@/lib/scheduling/common";
 import { kioskCheckInAction } from "./actions";
+import { boundLocationId, getLocation } from "@/lib/locations";
 import { KioskPinPad } from "./pin-pad";
 
 export const dynamic = "force-dynamic";
@@ -15,9 +16,12 @@ export default async function KioskPage({ searchParams }: { searchParams: Promis
   const { q } = await searchParams;
   const tz = (await getOrg(v.orgId))?.timezone ?? DEFAULT_TZ;
   const pinOnly = await kioskPinOnly(db, v.orgId);
+  const boundId = v.role === "kiosk" ? await boundLocationId(db, v) : null;
+  const locationLabel = boundId ? <p className="text-sm font-medium text-ink-3">{(await getLocation(db, v.orgId, boundId)).name} check-in</p> : null;
   if (pinOnly && v.role === "kiosk") {
     return (
       <div className="mx-auto max-w-md space-y-6">
+        {locationLabel}
         <h1 className="text-2xl font-bold">Welcome! Enter your PIN to check in.</h1>
         <KioskPinPad />
         <p className="text-center text-ink-3">No PIN yet? Please see the front desk.</p>
@@ -29,6 +33,7 @@ export default async function KioskPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="space-y-6">
+      {locationLabel}
       <h1 className="text-2xl font-bold">Welcome! Enter your PIN or find your name to check in.</h1>
       <details className="rounded-2xl border border-edge bg-surface sm:max-w-md" open={!q}>
         <summary className="flex min-h-14 cursor-pointer items-center px-4 text-lg font-semibold">Check in with a PIN</summary>

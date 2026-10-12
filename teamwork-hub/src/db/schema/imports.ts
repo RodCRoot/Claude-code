@@ -3,7 +3,7 @@ import { createdAt, id, orgId, ts } from "./_common";
 import { people } from "./core";
 import { storedObjects } from "./documents";
 
-export type ImportSource = "zenplanner" | "teambuildr" | "hawkin_file" | "hawkin_api" | "generic_csv" | "generic_json" | "wearable_csv";
+export type ImportSource = "zenplanner" | "teambuildr" | "hawkin_file" | "hawkin_api" | "generic_csv" | "generic_json" | "wearable_csv" | "gohighlevel";
 export type ImportStatus = "uploaded" | "mapped" | "validated" | "committed" | "reverted" | "failed";
 
 export const importBatches = pgTable("import_batches", {
@@ -86,6 +86,7 @@ export type IntegrationProvider =
   | "sms"
   | "teambuildr"
   | "zenplanner"
+  | "gohighlevel"
   | "object_storage";
 
 export type IntegrationStatus = "not_configured" | "configured_unverified" | "verified_sandbox" | "connected" | "error" | "disabled";

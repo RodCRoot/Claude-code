@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FamilyStyleHint } from "@/app/(app)/messages/_components/family-style-hint";
 import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { ActionForm, SubmitButton } from "@/components/forms";
@@ -123,6 +124,7 @@ export default async function ThreadPage({ params }: { params: Promise<{ threadI
                 <Field label={staff ? "Message" : "Reply"} htmlFor="reply-body">
                   <Textarea id="reply-body" name="body" required maxLength={5000} rows={4} />
                 </Field>
+                {staff && t.kind !== "staff" ? <FamilyStyleHint target="reply-body" /> : null}
                 {staff ? (
                   <fieldset className="flex flex-wrap items-center gap-4 text-sm">
                     <legend className="mb-1 text-xs text-ink-3">Also send a copy by (replies only; consent & quiet hours apply):</legend>

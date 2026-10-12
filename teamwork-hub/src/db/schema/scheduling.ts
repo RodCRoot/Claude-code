@@ -13,7 +13,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { createdAt, id, isDemo, orgId, ts, updatedAt } from "./_common";
-import { athletes, users } from "./core";
+import { athletes, locations, users } from "./core";
 
 export const resources = pgTable("resources", {
   id: id(),
@@ -23,6 +23,7 @@ export const resources = pgTable("resources", {
   capacity: integer("capacity"),
   /** Exclusive resources cannot be double-booked (enforced by an exclusion constraint). */
   exclusive: boolean("exclusive").notNull().default(false),
+  locationId: uuid("location_id").references(() => locations.id),
   active: boolean("active").notNull().default(true),
 });
 
@@ -64,6 +65,8 @@ export const serviceTypes = pgTable("service_types", {
   color: text("color").notNull().default("#2563eb"),
   /** Is the coach exclusively occupied (private/assessment) or can they overlap? */
   exclusiveCoach: boolean("exclusive_coach").notNull().default(false),
+  /** Default location for new sessions of this service (series/resource/explicit choice win). */
+  locationId: uuid("location_id").references(() => locations.id),
   active: boolean("active").notNull().default(true),
 });
 
@@ -84,6 +87,7 @@ export const classSeries = pgTable("class_series", {
   endsOn: date("ends_on"),
   coachUserId: uuid("coach_user_id").references(() => users.id),
   resourceId: uuid("resource_id").references(() => resources.id),
+  locationId: uuid("location_id").references(() => locations.id),
   capacity: integer("capacity").notNull(),
   waitlistCapacity: integer("waitlist_capacity").notNull().default(5),
   active: boolean("active").notNull().default(true),
@@ -110,6 +114,8 @@ export const scheduleSessions = pgTable(
     /** Substitution keeps the originally scheduled coach for history. */
     originalCoachUserId: uuid("original_coach_user_id").references(() => users.id),
     resourceId: uuid("resource_id").references(() => resources.id),
+    /** Where the session happens. Null = org-wide / unassigned (any membership location covers it). */
+    locationId: uuid("location_id").references(() => locations.id),
     capacity: integer("capacity").notNull(),
     waitlistCapacity: integer("waitlist_capacity").notNull().default(0),
     bufferBeforeMinutes: integer("buffer_before_minutes").notNull().default(0),
@@ -129,6 +135,7 @@ export const scheduleSessions = pgTable(
   },
   (t) => [
     index("sessions_org_time_idx").on(t.orgId, t.startsAt),
+    index("sessions_org_location_time_idx").on(t.orgId, t.locationId, t.startsAt),
     uniqueIndex("sessions_series_start_uq").on(t.seriesId, t.startsAt),
   ],
 );

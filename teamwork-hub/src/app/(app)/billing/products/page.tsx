@@ -4,7 +4,8 @@ import { Badge, Callout, Card, CardBody, CardHeader, Field, Input, PageHeader, S
 import { can } from "@/lib/authz/policy";
 import { listCatalog, PRODUCT_KINDS } from "@/lib/billing/catalog";
 import { fmtDate, todayLocal } from "@/lib/time";
-import { createProductAction, createVersionAction, toggleProductAction } from "../actions";
+import { createProductAction, createVersionAction, productLocationsAction, toggleProductAction } from "../actions";
+import { listLocations } from "@/lib/locations";
 import { BillingTabs, Money, requireBillingStaff } from "../_components";
 
 export const metadata = { title: "Products" };
@@ -35,6 +36,8 @@ export default async function ProductsPage() {
   const v = await requireBillingStaff();
   const today = todayLocal();
   const catalog = await listCatalog(db, v.orgId, today);
+  const locs = await listLocations(db, v.orgId);
+  const locName = new Map(locs.map((l) => [l.id, l.name]));
   const manage = can(v, "billing.manage");
   return (
     <>
@@ -54,6 +57,24 @@ export default async function ProductsPage() {
                     <div className="font-medium">{p.name}</div>
                     {p.sku ? <div className="text-xs text-ink-3">SKU {p.sku}</div> : null}
                     {!p.active ? <Badge>archived</Badge> : null}
+                    {locs.length ? (
+                      <div className="mt-1 text-xs text-ink-3">{p.locationIds.length ? `Only at ${p.locationIds.map((id) => locName.get(id) ?? "?").join(", ")}` : "All locations"}</div>
+                    ) : null}
+                    {manage && locs.length ? (
+                      <details className="mt-1">
+                        <summary className="cursor-pointer text-xs">Locations</summary>
+                        <ActionForm action={productLocationsAction} className="mt-2 space-y-2 rounded-lg border border-edge p-2">
+                          <input type="hidden" name="productId" value={p.id} />
+                          {locs.map((l) => (
+                            <label key={l.id} className="flex items-center gap-2 text-sm">
+                              <input type="checkbox" name="locationIds" value={l.id} defaultChecked={p.locationIds.includes(l.id)} className="size-4" /> {l.name}
+                            </label>
+                          ))}
+                          <p className="text-xs text-ink-3">None ticked = valid at every location.</p>
+                          <SubmitButton size="sm">Save</SubmitButton>
+                        </ActionForm>
+                      </details>
+                    ) : null}
                   </Td>
                   <Td>{PRODUCT_KINDS.find((k) => k.value === p.kind)?.label}</Td>
                   <Td align="right">{current ? <><Money minor={current.priceMinor} currency={current.currency} />{current.interval !== "none" ? `/${current.interval}` : ""}</> : <span className="text-ink-3">none in effect</span>}</Td>

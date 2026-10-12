@@ -1,6 +1,7 @@
 import { and, eq, gte, inArray, lt } from "drizzle-orm";
 import type { Tx } from "@/db";
-import { bookings, classSeries, resources, scheduleSessions, users } from "@/db/schema";
+import { bookings, classSeries, resources, scheduleSessions, serviceTypes, users } from "@/db/schema";
+import { getLocation } from "@/lib/locations";
 import { UserError } from "@/lib/actions";
 import { audit } from "@/lib/audit";
 import { assertCan, STAFF, type Viewer } from "@/lib/authz/policy";
@@ -27,10 +28,13 @@ export async function generateSeriesSessions(
   if (!Number.isInteger(weeks) || weeks < 1 || weeks > 52) throw new UserError("Choose between 1 and 52 weeks.", { weeks: "1–52" });
   const st = await getServiceType(tx, v.orgId, series.serviceTypeId);
   let exclusiveResource = false;
+  let resourceLocationId: string | null = null;
   if (series.resourceId) {
-    const [r] = await tx.select({ exclusive: resources.exclusive }).from(resources).where(eq(resources.id, series.resourceId));
+    const [r] = await tx.select({ exclusive: resources.exclusive, locationId: resources.locationId }).from(resources).where(eq(resources.id, series.resourceId));
     exclusiveResource = !!r?.exclusive;
+    resourceLocationId = r?.locationId ?? null;
   }
+  const locationId = series.locationId ?? resourceLocationId ?? st.locationId ?? null;
   const from = input.fromYmd ?? todayLocal(series.timezone);
   const to = input.toYmd ?? addDaysYmd(from, weeks * 7 - 1);
   const all = seriesOccurrences(series, from, to);
@@ -65,6 +69,7 @@ export async function generateSeriesSessions(
             timezone: series.timezone,
             coachUserId: series.coachUserId,
             resourceId: series.resourceId,
+            locationId,
             capacity: series.capacity,
             waitlistCapacity: series.waitlistCapacity,
             bufferBeforeMinutes: st.bufferBeforeMinutes,
@@ -91,11 +96,24 @@ export type CreateSessionInput = {
   durationMinutes?: number | null;
   coachUserId?: string | null;
   resourceId?: string | null;
+  /** Explicit location; otherwise the resource's, then the service type's. */
+  locationId?: string | null;
   capacity?: number | null;
   waitlistCapacity?: number | null;
   visibility?: "public" | "members" | "private";
   notes?: string | null;
 };
+
+/** Session location: explicit → resource → service type (validated against the org). */
+export async function resolveSessionLocation(tx: Tx, orgId: string, input: { locationId?: string | null; resourceId?: string | null; serviceTypeId: string }): Promise<string | null> {
+  if (input.locationId) return (await getLocation(tx, orgId, input.locationId)).id;
+  if (input.resourceId) {
+    const [r] = await tx.select({ locationId: resources.locationId }).from(resources).where(and(eq(resources.id, input.resourceId), eq(resources.orgId, orgId)));
+    if (r?.locationId) return r.locationId;
+  }
+  const [st] = await tx.select({ locationId: serviceTypes.locationId }).from(serviceTypes).where(and(eq(serviceTypes.id, input.serviceTypeId), eq(serviceTypes.orgId, orgId)));
+  return st?.locationId ?? null;
+}
 
 export async function assertCoach(tx: Tx, orgId: string, userId: string) {
   const [u] = await tx.select({ role: users.role, orgId: users.orgId }).from(users).where(eq(users.id, userId));
@@ -116,6 +134,7 @@ export async function createSession(tx: Tx, v: Viewer, input: CreateSessionInput
   const duration = input.durationMinutes ?? st.defaultDurationMinutes;
   if (!(duration > 0)) throw new UserError("Duration must be positive.", { durationMinutes: "Must be > 0" });
   const tz = await orgTimezone(tx, v.orgId);
+  const locationId = await resolveSessionLocation(tx, v.orgId, { locationId: input.locationId, resourceId: input.resourceId, serviceTypeId: st.id });
   const [s] = await withConflictMessage(() =>
     tx
       .insert(scheduleSessions)
@@ -128,6 +147,7 @@ export async function createSession(tx: Tx, v: Viewer, input: CreateSessionInput
         timezone: tz,
         coachUserId: input.coachUserId ?? null,
         resourceId: input.resourceId ?? null,
+        locationId,
         capacity: input.capacity ?? st.defaultCapacity,
         waitlistCapacity: input.waitlistCapacity ?? 0,
         bufferBeforeMinutes: st.bufferBeforeMinutes,
@@ -206,7 +226,7 @@ export async function cancelSession(tx: Tx, v: Viewer, input: { sessionId: strin
 export async function updateSession(
   tx: Tx,
   v: Viewer,
-  input: { sessionId: string; version: number; title?: string; startsAt?: Date; durationMinutes?: number; capacity?: number; waitlistCapacity?: number; resourceId?: string | null; notes?: string | null; visibility?: "public" | "members" | "private" },
+  input: { sessionId: string; version: number; title?: string; startsAt?: Date; durationMinutes?: number; capacity?: number; waitlistCapacity?: number; resourceId?: string | null; locationId?: string | null; notes?: string | null; visibility?: "public" | "members" | "private" },
 ) {
   assertCan(v, "schedule.manage");
   const s = await lockSession(tx, v.orgId, input.sessionId);
@@ -224,6 +244,8 @@ export async function updateSession(
     }
   }
   if (input.capacity != null && input.capacity < 0) throw new UserError("Capacity can't be negative.");
+  let locationId = s.locationId;
+  if (input.locationId !== undefined) locationId = input.locationId ? (await getLocation(tx, v.orgId, input.locationId)).id : null;
   const [u] = await withConflictMessage(() =>
     tx
       .update(scheduleSessions)
@@ -234,6 +256,7 @@ export async function updateSession(
         capacity: input.capacity ?? s.capacity,
         waitlistCapacity: input.waitlistCapacity ?? s.waitlistCapacity,
         resourceId: input.resourceId === undefined ? s.resourceId : input.resourceId,
+        locationId,
         exclusiveResource,
         notes: input.notes === undefined ? s.notes : input.notes,
         visibility: input.visibility ?? s.visibility,
@@ -246,8 +269,8 @@ export async function updateSession(
   await queueCalendarSync(tx, s.id);
   await audit(tx, actorOf(v), "session.update", "schedule_session", s.id, {
     summary: `Updated ${u.title}`,
-    before: { startsAt: s.startsAt, capacity: s.capacity, resourceId: s.resourceId },
-    after: { startsAt: u.startsAt, capacity: u.capacity, resourceId: u.resourceId },
+    before: { startsAt: s.startsAt, capacity: s.capacity, resourceId: s.resourceId, locationId: s.locationId },
+    after: { startsAt: u.startsAt, capacity: u.capacity, resourceId: u.resourceId, locationId: u.locationId },
   });
   return u;
 }

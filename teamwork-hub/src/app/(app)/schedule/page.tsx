@@ -8,6 +8,7 @@ import { listCoaches } from "@/lib/scheduling/availability";
 import { calendarRange, parseView, parseYmd } from "@/lib/scheduling/calendar-range";
 import { listSessions } from "@/lib/scheduling/queries";
 import { DEFAULT_TZ, todayLocal } from "@/lib/time";
+import { listLocations, parseLocationParam } from "@/lib/locations";
 import { DaysView, MonthView, ScheduleTabs, SessionCard } from "./_components/calendar";
 import { CalendarToolbar, flatParams, hrefWith } from "./_components/nav";
 import { FamilySchedule } from "./_components/family-schedule";
@@ -41,12 +42,14 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     coachUserId: coachParam && coachParam !== "all" ? coachParam : null,
     serviceTypeId: params.service || null,
     resourceId: params.resource || null,
+    locationId: parseLocationParam(params.location),
   };
-  const [sessions, coaches, services, rooms] = await Promise.all([
+  const [sessions, coaches, services, rooms, locs] = await Promise.all([
     listSessions(db, v, { from: range.from, to: range.to, filters }),
     listCoaches(db, v.orgId),
     db.select({ id: serviceTypes.id, name: serviceTypes.name }).from(serviceTypes).where(eq(serviceTypes.orgId, v.orgId)).orderBy(asc(serviceTypes.name)),
     db.select({ id: resources.id, name: resources.name }).from(resources).where(eq(resources.orgId, v.orgId)).orderBy(asc(resources.name)),
+    listLocations(db, v.orgId),
   ]);
   const dayHref = (d: string) => hrefWith("/schedule", params, { view: "day", date: d });
   const live = sessions.filter((s) => s.status !== "cancelled");
@@ -76,9 +79,23 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       />
       <ScheduleTabs current="calendar" staff manager={manager} />
 
-      <form method="get" className="mb-4 grid gap-3 rounded-xl border border-edge bg-surface p-3 sm:grid-cols-2 lg:grid-cols-[repeat(3,minmax(0,1fr))_auto]" aria-label="Filter sessions">
+      <form method="get" className="mb-4 grid gap-3 rounded-xl border border-edge bg-surface p-3 sm:grid-cols-2 lg:grid-cols-[repeat(4,minmax(0,1fr))_auto]" aria-label="Filter sessions">
         <input type="hidden" name="view" value={view} />
         <input type="hidden" name="date" value={range.anchor} />
+        {locs.length ? (
+          <label className="text-sm">
+            <span className="mb-1 block font-medium text-ink-2">Location</span>
+            <select name="location" defaultValue={filters.locationId ?? ""} className="h-11 w-full rounded-lg border border-edge bg-surface px-3 text-sm">
+              <option value="">All locations</option>
+              {locs.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                  {l.active ? "" : " (inactive)"}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <label className="text-sm">
           <span className="mb-1 block font-medium text-ink-2">Coach</span>
           <select name="coach" defaultValue={coachParam ?? "all"} className="h-11 w-full rounded-lg border border-edge bg-surface px-3 text-sm">

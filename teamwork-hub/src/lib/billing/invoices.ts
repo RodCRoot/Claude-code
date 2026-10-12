@@ -7,6 +7,8 @@ import {
   memberships,
   membershipEvents,
   organizations,
+  products,
+  productVersions,
   transactions,
   type EntitlementSpec,
 } from "@/db/schema";
@@ -321,6 +323,21 @@ export async function settleInvoiceIfCovered(tx: Tx, invoiceId: string, actor: A
   return { paid: true };
 }
 
+/** Locations granted credits may be used at: the membership's override, else the product's (empty = any). */
+async function creditLocationScope(tx: Tx, productVersionId: string | null, membershipId: string | null): Promise<string[]> {
+  if (membershipId) {
+    const [m] = await tx.select({ ids: memberships.locationIds }).from(memberships).where(eq(memberships.id, membershipId));
+    if (m?.ids) return m.ids;
+  }
+  if (!productVersionId) return [];
+  const [p] = await tx
+    .select({ ids: products.locationIds })
+    .from(productVersions)
+    .innerJoin(products, eq(products.id, productVersions.productId))
+    .where(eq(productVersions.id, productVersionId));
+  return p?.ids ?? [];
+}
+
 /**
  * Grant what each line entitles: credits (exactly once per invoice line via the unique
  * source_invoice_line_id) and membership activation.
@@ -348,6 +365,7 @@ export async function applyInvoiceEntitlements(tx: Tx, invoiceId: string, actor:
         sourceInvoiceLineId: line.id,
         membershipId,
         serviceTypeIds: e.serviceTypeIds ?? [],
+        locationIds: await creditLocationScope(tx, line.productVersionId, membershipId),
         expiresAt,
         periodStart: inv.periodStart,
         periodEnd: inv.periodEnd,

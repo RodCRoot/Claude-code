@@ -7,6 +7,7 @@ import { createLeadFromInquiry, type InquiryInput } from "../../src/lib/crm/inta
 import { addLeadNote, changeStage, markContacted } from "../../src/lib/crm/leads";
 import { ensureStages } from "../../src/lib/crm/stages";
 import { postMessage, startFamilyThread, startStaffThread } from "../../src/lib/messaging/threads";
+import { CARD_UPDATE_SNIPPET } from "../../src/lib/messaging/family-style";
 import type { SeedCtx } from "./context";
 
 /**
@@ -93,37 +94,38 @@ export async function seedCrm(ctx: SeedCtx) {
   const maya = await startStaffThread(tx, erin, {
     athleteId: ctx.athletes.maya,
     subject: "Maya's summer training plan",
-    body: "Hi! Coach Marcus put together a summer plan for Maya — 3 sessions/week. Want us to hold those slots? (sample)",
+    body: "Hi! Coach Marcus put together a summer plan for Maya, 3 sessions/week. Want us to hold those slots? (sample)",
     channels: ["email"],
     mode: "separate",
   });
   const [mayaAlex] = maya.threadIds;
   ctx.extra.crm.thread_maya_alex = mayaAlex;
   ctx.extra.crm.thread_maya_jordan = maya.threadIds[1];
-  await postMessage(tx, alex, { threadId: mayaAlex, body: "Yes please — Tuesdays and Thursdays work best. (sample)" });
+  await postMessage(tx, alex, { threadId: mayaAlex, body: "Yes please, Tuesdays and Thursdays work best. (sample)" });
   await postMessage(tx, erin, { threadId: mayaAlex, body: "Alex prefers Tue/Thu; check with Marcus about Saturday capacity before confirming.", internal: true });
 
   const leo = await startFamilyThread(tx, casey, { athleteId: ctx.athletes.leo, subject: "Pickup on Wednesdays", body: "I'll be picking Leo up on Wednesdays this month. Anything I need to sign? (sample)" });
   ctx.extra.crm.thread_leo_casey = leo.threadId;
-  await postMessage(tx, rod, { threadId: leo.threadId, body: "Custody note on file — both parents may receive training updates. No extra form needed.", internal: true });
-  await postMessage(tx, marcus, { threadId: leo.threadId, body: "Thanks Casey — noted. Nothing else to sign. (sample)" });
+  await postMessage(tx, rod, { threadId: leo.threadId, body: "Custody note on file: both parents may receive training updates. No extra form needed.", internal: true });
+  await postMessage(tx, marcus, { threadId: leo.threadId, body: "Thanks Casey, noted. Nothing else to sign. Coach Marcus (sample)" });
 
   const d = await startFamilyThread(tx, dana, { athleteId: ctx.athletes.dana, subject: "Moving to early mornings", body: "Could I switch to the 6am group starting next week? (sample)" });
   ctx.extra.crm.thread_dana = d.threadId;
 
-  const c = await startFamilyThread(tx, chris, { athleteId: ctx.athletes.ava, subject: "Ava missed Saturday", body: "Ava was sick Saturday — can she make it up? (sample)" });
+  const c = await startFamilyThread(tx, chris, { athleteId: ctx.athletes.ava, subject: "Ava missed Saturday", body: "Ava was sick Saturday. Can she make it up? (sample)" });
   ctx.extra.crm.thread_ava_chris = c.threadId;
 
   // --- SAMPLE templates + DISABLED rules ------------------------------------------------
   const templates: { key: string; name: string; channel: "in_app" | "email" | "sms"; subject?: string; body: string }[] = [
-    { key: "session_cancelled", name: "Session cancelled (SAMPLE)", channel: "email", subject: "Cancelled: {{session_title}}", body: "SAMPLE TEXT — Hi {{guardian_first_name}}, {{session_title}} on {{session_time}} for {{athlete_first_name}} is cancelled. Any credit used has been returned. — {{org_name}}" },
-    { key: "session_changed", name: "Session changed (SAMPLE)", channel: "email", subject: "Updated: {{session_title}}", body: "SAMPLE TEXT — Hi {{guardian_first_name}}, {{session_title}} for {{athlete_first_name}} has moved to {{session_time}}. — {{org_name}}" },
-    { key: "form_missing", name: "Form reminder (SAMPLE)", channel: "email", subject: "Reminder: {{form_name}}", body: "SAMPLE TEXT — Hi {{guardian_first_name}}, we still need {{form_name}} for {{athlete_first_name}} before their next session. — {{org_name}}" },
-    { key: "payment_failed", name: "Payment failed (SAMPLE)", channel: "email", subject: "Payment issue on invoice {{invoice_number}}", body: "SAMPLE TEXT — Hi {{recipient_first_name}}, a payment of {{invoice_amount}} for invoice {{invoice_number}} didn't go through. Please update your payment method in the family portal. — {{org_name}}" },
-    { key: "renewal_upcoming", name: "Renewal reminder (SAMPLE)", channel: "email", subject: "{{athlete_first_name}}'s membership renews {{renewal_date}}", body: "SAMPLE TEXT — Hi {{recipient_first_name}}, {{athlete_first_name}}'s membership renews on {{renewal_date}}. Reply with any questions. — {{org_name}}" },
-    { key: "attendance_lapsed", name: "We miss you (SAMPLE)", channel: "sms", body: "SAMPLE TEXT — Hi {{guardian_first_name}}, we haven't seen {{athlete_first_name}} since {{last_attended_date}}. Want help booking the next session? — {{org_name}}" },
-    { key: "lead_created", name: "New inquiry thank-you (SAMPLE)", channel: "email", subject: "Thanks for reaching out to {{org_name}}", body: "SAMPLE TEXT — Hi {{recipient_first_name}}, thanks for asking about training for {{lead_first_name}}. A coach will reach out within one business day to set up an assessment. — {{org_name}}" },
-    { key: "assessment_completed", name: "Assessment follow-up (SAMPLE)", channel: "email", subject: "Next steps after {{athlete_first_name}}'s assessment", body: "SAMPLE TEXT — Hi {{recipient_first_name}}, thanks for coming in for {{session_title}}. We'll send {{athlete_first_name}}'s recommended plan shortly. — {{org_name}}" },
+    { key: "session_cancelled", name: "Session cancelled (SAMPLE)", channel: "email", subject: "Cancelled: {{session_title}}", body: "SAMPLE TEXT: Hi {{guardian_first_name}}, {{session_title}} on {{session_time}} for {{athlete_first_name}} is cancelled. Any credit used has been returned. Thanks, {{org_name}}" },
+    { key: "session_changed", name: "Session changed (SAMPLE)", channel: "email", subject: "Updated: {{session_title}}", body: "SAMPLE TEXT: Hi {{guardian_first_name}}, {{session_title}} for {{athlete_first_name}} has moved to {{session_time}}. Thanks, {{org_name}}" },
+    { key: "form_missing", name: "Form reminder (SAMPLE)", channel: "email", subject: "Reminder: {{form_name}}", body: "SAMPLE TEXT: Hi {{guardian_first_name}}, we still need {{form_name}} for {{athlete_first_name}} before their next session. Thanks, {{org_name}}" },
+    { key: "payment_failed", name: "Payment failed (SAMPLE)", channel: "email", subject: "Payment issue on invoice {{invoice_number}}", body: "SAMPLE TEXT: Hi {{recipient_first_name}}, a payment of {{invoice_amount}} for invoice {{invoice_number}} didn't go through. Please update your payment method in the family portal. Thanks, {{org_name}}" },
+    { key: "renewal_upcoming", name: "Renewal reminder (SAMPLE)", channel: "email", subject: "{{athlete_first_name}}'s membership renews {{renewal_date}}", body: "SAMPLE TEXT: Hi {{recipient_first_name}}, {{athlete_first_name}}'s membership renews on {{renewal_date}}. Reply with any questions. Thanks, {{org_name}}" },
+    { key: "attendance_lapsed", name: "We miss you (SAMPLE)", channel: "sms", body: "SAMPLE TEXT: Hi {{guardian_first_name}}, we haven't seen {{athlete_first_name}} since {{last_attended_date}}. Want help booking the next session? Thanks, {{org_name}}" },
+    { key: "lead_created", name: "New inquiry thank-you (SAMPLE)", channel: "email", subject: "Thanks for reaching out to {{org_name}}", body: "SAMPLE TEXT: Hi {{recipient_first_name}}, thanks for asking about training for {{lead_first_name}}. A coach will reach out within one business day to set up an assessment. Thanks, {{org_name}}" },
+    { key: "card_update", name: "Card update instructions, app first (SAMPLE)", channel: "sms", body: CARD_UPDATE_SNIPPET },
+    { key: "assessment_completed", name: "Assessment follow-up (SAMPLE)", channel: "email", subject: "Next steps after {{athlete_first_name}}'s assessment", body: "SAMPLE TEXT: Hi {{recipient_first_name}}, thanks for coming in for {{session_title}}. We'll send {{athlete_first_name}}'s recommended plan shortly. Thanks, {{org_name}}" },
   ];
   const tplIds: Record<string, string> = {};
   for (const t of templates) {
@@ -163,7 +165,7 @@ export async function seedCrm(ctx: SeedCtx) {
       name: "Facility announcement (SAMPLE)",
       channel: "email",
       subject: "News from {{org_name}}",
-      body: "SAMPLE TEXT — Hi {{recipient_first_name}}, a quick update for {{athlete_first_name}}'s family: … — {{org_name}}",
+      body: "SAMPLE TEXT: Hi {{recipient_first_name}}, a quick update for {{athlete_first_name}}'s family: … Thanks, {{org_name}}",
       isSample: true,
     })
     .returning();
@@ -171,7 +173,7 @@ export async function seedCrm(ctx: SeedCtx) {
     .insert(segments)
     .values({ orgId, name: "Active members (families)", description: "Athletes with an active membership → their guardians, or adult athletes themselves. (sample)", filters: { audience: "athletes", athleteActive: "active", membershipStatus: "active" }, createdByUserId: erin.userId, isDemo: true })
     .returning();
-  await tx.insert(segments).values({ orgId, name: "Open leads — new", description: "Lead contacts still in the New stage. (sample)", filters: { audience: "leads", leadStage: "new" }, createdByUserId: erin.userId, isDemo: true });
+  await tx.insert(segments).values({ orgId, name: "Open leads: new", description: "Lead contacts still in the New stage. (sample)", filters: { audience: "leads", leadStage: "new" }, createdByUserId: erin.userId, isDemo: true });
   const [draft] = await tx
     .insert(campaigns)
     .values({ orgId, name: "Holiday hours (sample draft)", templateId: announce.id, segmentId: activeMembers.id, channels: ["in_app", "email"], status: "draft", createdByUserId: erin.userId, isDemo: true })

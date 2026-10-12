@@ -10,6 +10,7 @@ import { AuthzError, isAdmin } from "@/lib/authz/policy";
 import { listTemplates } from "@/lib/automation/templates";
 import { campaignReport, getCampaign, previewCampaign, REPORT_STATUSES, statusLabel, type Campaign } from "@/lib/messaging/campaigns";
 import { DomainError } from "@/lib/messaging/errors";
+import { lintFamilyMessage } from "@/lib/messaging/family-style";
 import { messagingSettings } from "@/lib/messaging/routing";
 import { fmt } from "@/lib/time";
 import { campaignStepAction, saveCampaignAction } from "../../actions";
@@ -291,6 +292,21 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
                   <p className="mt-1 text-sm font-semibold">{preview.sample.subject}</p>
                   <p className="mt-1 whitespace-pre-wrap text-sm">{preview.sample.body}</p>
                   {preview.sample.missing.length ? <p className="mt-1 text-xs text-warn">Missing values: {preview.sample.missing.join(", ")}</p> : null}
+                  {(() => {
+                    const lint = lintFamilyMessage(`${preview.sample.subject ? `${preview.sample.subject}\n` : ""}${preview.sample.body}`);
+                    return lint.issues.length ? (
+                      <ul className="mt-2 space-y-1 border-t border-edge pt-2 text-xs">
+                        {lint.issues.map((i, k) => (
+                          <li key={k} className={i.severity === "block" ? "text-bad" : "text-ink-2"}>
+                            <span className="font-semibold">{i.severity === "block" ? "Must fix in the template: " : "Suggestion: "}</span>
+                            {i.message}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-2 text-xs text-ok">Family message check passed.</p>
+                    );
+                  })()}
                 </div>
                 <Table caption="Recipients">
                   <thead>

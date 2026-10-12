@@ -7,6 +7,7 @@ import { audit } from "@/lib/audit";
 import { assertCan, AuthzError, can, STAFF, type Viewer } from "@/lib/authz/policy";
 import { localToUtc } from "@/lib/time";
 import { actorOf, orgTimezone } from "./common";
+import { getLocation } from "@/lib/locations";
 
 // ---------------------------------------------------------------------------
 // Schemas (shared by server actions; FormData strings are coerced)
@@ -29,6 +30,7 @@ export const resourceSchema = z.object({
   kind: z.enum(["room", "area", "equipment"]),
   capacity: optInt(0, 1000),
   exclusive: bool,
+  locationId: optUuid,
   active: bool,
 });
 
@@ -61,6 +63,7 @@ export const serviceTypeSchema = z.object({
   minAge: optInt(0, 120),
   maxAge: optInt(0, 120),
   requiredFormTemplateIds: ids,
+  locationId: optUuid,
 });
 
 export const seriesSchema = z.object({
@@ -74,6 +77,7 @@ export const seriesSchema = z.object({
   endsOn: optYmd,
   coachUserId: optUuid,
   resourceId: optUuid,
+  locationId: optUuid,
   capacity: int(1, 500),
   waitlistCapacity: int(0, 200),
   active: bool,
@@ -103,7 +107,8 @@ export const timeOffSchema = z.object({
 
 export async function saveResource(tx: Tx, v: Viewer, input: z.infer<typeof resourceSchema>) {
   assertCan(v, "schedule.manage");
-  const values = { name: input.name, kind: input.kind, capacity: input.capacity ?? null, exclusive: input.exclusive, active: input.active };
+  if (input.locationId) await getLocation(tx, v.orgId, input.locationId);
+  const values = { name: input.name, kind: input.kind, capacity: input.capacity ?? null, exclusive: input.exclusive, locationId: input.locationId ?? null, active: input.active };
   if (input.id) {
     const [before] = await tx.select().from(resources).where(and(eq(resources.id, input.id), eq(resources.orgId, v.orgId)));
     if (!before) throw new UserError("Resource not found.");
@@ -144,6 +149,7 @@ export async function savePolicy(tx: Tx, v: Viewer, input: z.infer<typeof policy
 export async function saveServiceType(tx: Tx, v: Viewer, input: z.infer<typeof serviceTypeSchema>) {
   assertCan(v, "schedule.manage");
   if (input.minAge != null && input.maxAge != null && input.minAge > input.maxAge) throw new UserError("Minimum age is above maximum age.", { minAge: "Check ages" });
+  if (input.locationId) await getLocation(tx, v.orgId, input.locationId);
   if (input.cancellationPolicyId) {
     const [p] = await tx.select({ id: cancellationPolicies.id }).from(cancellationPolicies).where(and(eq(cancellationPolicies.id, input.cancellationPolicyId), eq(cancellationPolicies.orgId, v.orgId)));
     if (!p) throw new UserError("Policy not found.");
@@ -168,6 +174,7 @@ export async function saveServiceType(tx: Tx, v: Viewer, input: z.infer<typeof s
     active: input.active,
     color: input.color,
     eligibility,
+    locationId: input.locationId ?? null,
   };
   if (input.id) {
     const [before] = await tx.select().from(serviceTypes).where(and(eq(serviceTypes.id, input.id), eq(serviceTypes.orgId, v.orgId)));
@@ -191,7 +198,8 @@ export async function saveSeries(tx: Tx, v: Viewer, input: z.infer<typeof series
     const [r] = await tx.select({ id: resources.id }).from(resources).where(and(eq(resources.id, input.resourceId), eq(resources.orgId, v.orgId)));
     if (!r) throw new UserError("Resource not found.");
   }
-  const tz = await orgTimezone(tx, v.orgId);
+  const loc = input.locationId ? await getLocation(tx, v.orgId, input.locationId) : null;
+  const tz = loc?.timezone ?? (await orgTimezone(tx, v.orgId));
   const values = {
     serviceTypeId: input.serviceTypeId,
     title: input.title,
@@ -202,6 +210,7 @@ export async function saveSeries(tx: Tx, v: Viewer, input: z.infer<typeof series
     endsOn: input.endsOn ?? null,
     coachUserId: input.coachUserId ?? null,
     resourceId: input.resourceId ?? null,
+    locationId: loc?.id ?? null,
     capacity: input.capacity,
     waitlistCapacity: input.waitlistCapacity,
     active: input.active,

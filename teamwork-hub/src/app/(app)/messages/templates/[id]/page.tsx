@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FamilyStyleHint } from "@/app/(app)/messages/_components/family-style-hint";
 import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -72,6 +73,14 @@ export default async function TemplateEditor({ params }: { params: Promise<{ id:
               </Field>
               <Field label="Body" htmlFor="body" required>
                 <Textarea id="body" name="body" required maxLength={5000} rows={8} defaultValue={t?.body} />
+              </Field>
+              <FamilyStyleHint target="body" subjectTarget="subject" />
+              <Field label="If the text has em dashes when you save" htmlFor="fixDashes" hint="Family messages never use em dashes; saving is refused unless they are replaced.">
+                <Select id="fixDashes" name="fixDashes" defaultValue="">
+                  <option value="">Don&apos;t change my text (save will be refused)</option>
+                  <option value="comma">Replace them with commas</option>
+                  <option value="period">Replace them with periods</option>
+                </Select>
               </Field>
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" name="isSample" defaultChecked={t?.isSample ?? false} className="size-4" /> This is SAMPLE text (not yet approved wording)

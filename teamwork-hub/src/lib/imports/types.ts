@@ -101,6 +101,8 @@ export type ImportSchemaDef = {
   /** Not offered in the upload wizard (e.g. API-fed schemas). */
   internal?: boolean;
   normalize(fields: Record<string, FieldValue>, raw: Record<string, string | null>, ctx: NormalizeCtx, metrics: MetricCell[]): NormalizedRow;
+  /** Optional: one source line → several import rows (e.g. a GHL contact naming several siblings). */
+  split?(row: NormalizedRow): NormalizedRow[];
 };
 
 export type RowAction = "create" | "link" | "update" | "skip" | "reject";
