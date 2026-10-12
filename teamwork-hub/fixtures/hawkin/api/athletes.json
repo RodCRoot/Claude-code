@@ -1,0 +1,9 @@
+{
+  "data": [
+    { "id": "hkath-maya", "name": "Maya Parker", "active": true, "teams": [{ "id": "team-hs", "name": "HS (sample)" }], "groups": [], "dob": "2011-01-21" },
+    { "id": "hkath-leo", "name": "Leo Rivera", "active": true, "teams": [{ "id": "team-hs", "name": "HS (sample)" }], "groups": [{ "id": "grp-speed" }] },
+    { "id": "hkath-noah", "name": "Noah Kim", "active": false, "teams": [], "groups": [] },
+    { "id": "hkath-new", "name": "Jamie Ortiz", "active": true, "teams": [{ "id": "team-other" }], "groups": [] }
+  ],
+  "count": 4
+}

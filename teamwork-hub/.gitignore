@@ -34,6 +34,7 @@ yarn-error.log*
 .env*
 !.env.example
 .storage/
+backups/
 test-results/
 playwright-report/
 

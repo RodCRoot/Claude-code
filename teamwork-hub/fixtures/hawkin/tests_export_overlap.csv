@@ -1,0 +1,4 @@
+Test ID,Athlete,Athlete Active,Test Type,Timestamp,Trial,Jump Height(m),Jump Height(in),Peak Propulsive Force(N),Braking RFD(N/s),RSI-modified(m/s),Body Weight(kg),Body Weight(lb),Notes
+hkcsv-0003,Maya Parker,true,Countermovement Jump,2026-03-08T03:10:00-04:00,1,0.4400,17.32,1851.0,5200,0.520,,119.7,
+hkcsv-0004,Noah Kim,false,Squat Jump,2026-11-01T01:30:00-04:00,1,0.3810,,1650.25,,,,,vendor recalculated jump height
+hkcsv-0006,Maya Parker,true,Countermovement Jump,2026-03-15T16:02:00-04:00,1,0.4455,17.54,1860.4,5302.1,0.531,54.6,,new test

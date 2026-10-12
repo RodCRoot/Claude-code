@@ -1,0 +1,21 @@
+{
+  "data": [
+    {
+      "id": "hkapi-0003",
+      "timestamp": 1793518200,
+      "segment": "Squat Jump:1",
+      "active": true,
+      "testType": { "id": "SJ-type-id", "name": "Squat Jump" },
+      "athlete": { "id": "hkath-noah", "name": "Noah Kim", "active": false },
+      "Jump Height(m)": 0.38,
+      "Peak Propulsive Force(N)": 1650.25,
+      "Braking RFD(N/s)": null,
+      "RSI-modified(m/s)": null
+    }
+  ],
+  "hasMore": false,
+  "nextCursor": null,
+  "lastSyncTime": 1793520000,
+  "lastTestTime": 1793518200,
+  "count": 3
+}
