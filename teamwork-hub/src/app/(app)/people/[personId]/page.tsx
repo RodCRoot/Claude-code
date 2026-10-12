@@ -39,6 +39,8 @@ import {
   updatePersonAction,
 } from "../actions";
 import { AddGuardianForm, GuardianEditor } from "./guardian-forms";
+import { attendanceHistory } from "@/lib/scheduling";
+import { AttendanceHistoryPanel } from "@/lib/scheduling/components/attendance-history";
 
 export const metadata = { title: "Person" };
 
@@ -266,6 +268,15 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
                   <div className="mt-4 text-sm text-ink-3">
                     Coaches: {d.coaches.length ? d.coaches.map((c) => c.name).join(", ") : "none assigned"}
                   </div>
+                </CardBody>
+              </Card>
+            ) : null}
+
+            {athlete ? (
+              <Card>
+                <CardHeader title="Attendance" kicker="Visits, no-shows & milestones" />
+                <CardBody>
+                  <AttendanceHistoryPanel data={await attendanceHistory(db, v, athlete.id)} limit={10} />
                 </CardBody>
               </Card>
             ) : null}
