@@ -2,6 +2,7 @@ import type { SeedCtx } from "./context";
 import { seedScheduling } from "./scheduling";
 import { seedTraining } from "./training";
 import { seedBilling } from "./billing";
+import { seedScience } from "./science";
 
 /**
  * Module seed registry, run in order after the core identity seed.
@@ -13,4 +14,5 @@ export const moduleSeeds: [string, (ctx: SeedCtx) => Promise<void>][] = [
   ["documents", (ctx) => import("./documents").then((m) => m.seedDocuments(ctx))],
   ["training", seedTraining],
   ["crm", (ctx) => import("./crm").then((m) => m.seedCrm(ctx))],
+  ["science", seedScience], // keep after any training seed (uses its set_logs if present)
 ];
