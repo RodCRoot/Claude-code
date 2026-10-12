@@ -65,6 +65,12 @@ export async function bookingSettings(tx: Tx, orgId: string): Promise<BookingSet
   };
 }
 
+/** Org setting `kioskPinOnly`: the kiosk never lists names; athletes check in by PIN only. */
+export async function kioskPinOnly(tx: Tx, orgId: string): Promise<boolean> {
+  const [o] = await tx.select({ settings: organizations.settings }).from(organizations).where(eq(organizations.id, orgId));
+  return (o?.settings as Record<string, unknown> | null)?.kioskPinOnly === true;
+}
+
 export async function orgTimezone(tx: Tx, orgId: string): Promise<string> {
   const [o] = await tx.select({ timezone: organizations.timezone }).from(organizations).where(eq(organizations.id, orgId));
   return o?.timezone ?? DEFAULT_TZ;
@@ -163,7 +169,22 @@ export async function recordPendingFee(
       dedupeKey: `sched-fee:${booking.id}`,
       createdBy: v.userId,
     })
-    .onConflictDoNothing();
+    // A fee cancelled by an earlier attendance correction is reopened (never duplicated).
+    .onConflictDoUpdate({
+      target: [tasks.orgId, tasks.dedupeKey],
+      set: { status: "open", completedAt: null, completedBy: null },
+      setWhere: sql`${tasks.status} = 'cancelled'`,
+    });
+}
+
+/** Attendance corrected to attended: an open pending no-show fee task no longer applies. Returns true if one was cancelled. */
+export async function cancelPendingFee(tx: Tx, v: Viewer, bookingId: string): Promise<boolean> {
+  const rows = await tx
+    .update(tasks)
+    .set({ status: "cancelled", completedAt: new Date(), completedBy: v.userId })
+    .where(and(eq(tasks.orgId, v.orgId), eq(tasks.dedupeKey, `sched-fee:${bookingId}`), inArray(tasks.status, ["open", "in_progress"])))
+    .returning({ id: tasks.id });
+  return rows.length > 0;
 }
 
 export async function bookingsForSessions(tx: Tx, sessionIds: string[]) {

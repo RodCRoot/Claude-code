@@ -4,13 +4,14 @@ import { bookings, creditLedger, scheduleSessions } from "@/db/schema";
 import { UserError } from "@/lib/actions";
 import { audit } from "@/lib/audit";
 import { AuthzError, athleteCapabilities, can, type Viewer } from "@/lib/authz/policy";
-import { InsufficientCreditsError, reserveCredits, restoreCredit, settleReservation, type Settlement } from "@/lib/credits";
+import { InsufficientCreditsError, reserveCredits, resettleBookingCharge, restoreCredit, settleReservation, type Settlement } from "@/lib/credits";
 import { enqueue } from "@/lib/jobs";
 import { fmt } from "@/lib/time";
 import {
   actorOf,
   athleteName,
   bookingSettings,
+  cancelPendingFee,
   canRunSession,
   compactWaitlist,
   getServiceType,
@@ -347,6 +348,7 @@ export async function markAttendance(
   const policy = await policyFor(tx, st);
 
   if (booking.status === input.outcome) return { status: booking.status, changed: false };
+  let correction: { creditDelta: number; feeCancelled: boolean } | null = null;
   if (booking.status === "booked") {
     let outcome: Settlement;
     if (input.outcome === "attended") outcome = "consume";
@@ -354,11 +356,29 @@ export async function markAttendance(
     await settleReservation(tx, { bookingId: booking.id, outcome, actorUserId: v.userId, reason: input.outcome === "attended" ? "Attended" : "No-show" });
     if (input.outcome === "no_show" && policy?.noShowPenalty === "fee") await recordPendingFee(tx, v, { booking, session, policy, kind: "no_show", athleteLabel: label });
   } else if ((booking.status === "attended" || booking.status === "no_show") && !kiosk) {
-    // Correction. attended→no_show under a non-forfeit policy gives the credit back.
-    if (booking.status === "attended" && input.outcome === "no_show" && policy?.noShowPenalty !== "forfeit_credit") {
-      await restoreCredit(tx, { bookingId: booking.id, actorUserId: v.userId, reason: "Corrected attendance to no-show (policy: no forfeit)" });
-      if (policy?.noShowPenalty === "fee") await recordPendingFee(tx, v, { booking, session, policy, kind: "no_show", athleteLabel: label });
+    // Correction: move the booking's net credit charge to what the new outcome costs.
+    // attended → charged; no_show → charged only under a forfeit policy (release/fee policies give it back).
+    const charge = input.outcome === "attended" || policy?.noShowPenalty === "forfeit_credit";
+    let creditDelta = 0;
+    try {
+      ({ delta: creditDelta } = await resettleBookingCharge(tx, {
+        bookingId: booking.id,
+        charge,
+        serviceTypeId: st.id,
+        sessionStartsAt: session.startsAt,
+        actorUserId: v.userId,
+        reason: `Attendance corrected: ${booking.status.replace("_", "-")} → ${input.outcome.replace("_", "-")}`,
+      }));
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        throw new UserError(`${label} has no session credit left to cover this attendance. Add or sell credits first (or restore the credit afterwards with a reason), then correct it.`);
+      }
+      throw e;
     }
+    let feeCancelled = false;
+    if (input.outcome === "no_show" && policy?.noShowPenalty === "fee") await recordPendingFee(tx, v, { booking, session, policy, kind: "no_show", athleteLabel: label });
+    if (input.outcome === "attended") feeCancelled = await cancelPendingFee(tx, v, booking.id);
+    correction = { creditDelta, feeCancelled };
   } else {
     throw new UserError(`Can't record attendance for a ${booking.status.replace("_", " ")} booking.`);
   }
@@ -371,12 +391,22 @@ export async function markAttendance(
       updatedAt: now,
     })
     .where(eq(bookings.id, booking.id));
-  await audit(tx, actorOf(v), input.outcome === "attended" ? "booking.check_in" : "booking.no_show", "booking", booking.id, {
-    summary: `${label} ${input.outcome === "attended" ? "checked in" : "marked no-show"} — ${session.title}${kiosk ? " (kiosk)" : ""}`,
-    before: { status: booking.status },
-    after: { status: input.outcome },
-  });
-  return { status: input.outcome, changed: true };
+  if (correction) {
+    const credit =
+      correction.creditDelta < 0 ? `${-correction.creditDelta} credit re-charged` : correction.creditDelta > 0 ? `${correction.creditDelta} credit returned` : "credits unchanged";
+    await audit(tx, actorOf(v), "booking.attendance_correct", "booking", booking.id, {
+      summary: `${label} attendance corrected ${booking.status.replace("_", "-")} → ${input.outcome.replace("_", "-")} — ${session.title} (${credit}${correction.feeCancelled ? "; pending no-show fee cancelled" : ""})`,
+      before: { status: booking.status },
+      after: { status: input.outcome, creditDelta: correction.creditDelta, feeCancelled: correction.feeCancelled },
+    });
+  } else {
+    await audit(tx, actorOf(v), input.outcome === "attended" ? "booking.check_in" : "booking.no_show", "booking", booking.id, {
+      summary: `${label} ${input.outcome === "attended" ? "checked in" : "marked no-show"} — ${session.title}${kiosk ? " (kiosk)" : ""}`,
+      before: { status: booking.status },
+      after: { status: input.outcome },
+    });
+  }
+  return { status: input.outcome, changed: true, creditDelta: correction?.creditDelta ?? null };
 }
 
 /** Staff override: give back a consumed/forfeited credit (e.g. excused no-show). Once per booking; reason required. */

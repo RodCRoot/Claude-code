@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import {
+  athleteCheckinPins,
   bookings,
   busyBlocks,
   cancellationPolicies,
@@ -11,6 +12,7 @@ import {
 } from "../../src/db/schema";
 import { grantCredits, reserveCredits, settleReservation } from "../../src/lib/credits";
 import { seriesOccurrences } from "../../src/lib/scheduling/recurrence";
+import { hashCheckInPin } from "../../src/lib/scheduling/pin-hash";
 import { addDaysYmd, localToUtc } from "../../src/lib/time";
 import type { SeedCtx } from "./context";
 
@@ -288,4 +290,13 @@ export async function seedScheduling(ctx: SeedCtx) {
   ]);
   const offDay = addDaysYmd(today, 4);
   await tx.insert(busyBlocks).values({ orgId, coachUserId: ctx.users.tess, startsAt: localToUtc(offDay, "00:00", tz), endsAt: localToUtc(addDaysYmd(offDay, 1), "00:00", tz), source: "time_off", reason: "Personal day (demo)" });
+
+  // --- Demo kiosk check-in PIN (synthetic): Eli checks in at the kiosk with 2580 -----------
+  // Hashed with a key derived from SESSION_SECRET, so it is skipped when no secret is configured.
+  if ((process.env.SESSION_SECRET ?? "").length >= 32) {
+    await tx.insert(athleteCheckinPins).values({ athleteId: ctx.athletes.eli, orgId, pinHash: hashCheckInPin(orgId, DEMO_KIOSK_PIN), setByUserId: ctx.users.erin });
+  }
 }
+
+/** Synthetic demo PIN for Eli (kiosk check-in). Not a real credential. */
+export const DEMO_KIOSK_PIN = "2580";

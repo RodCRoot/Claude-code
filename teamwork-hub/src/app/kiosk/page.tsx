@@ -4,7 +4,9 @@ import { ActionForm, SubmitButton } from "@/components/forms";
 import { getOrg, requireViewer } from "@/lib/auth/viewer";
 import { kioskRoster } from "@/lib/scheduling/kiosk";
 import { DEFAULT_TZ, fmtTime } from "@/lib/time";
+import { kioskPinOnly } from "@/lib/scheduling/common";
 import { kioskCheckInAction } from "./actions";
+import { KioskPinPad } from "./pin-pad";
 
 export const dynamic = "force-dynamic";
 
@@ -12,12 +14,28 @@ export default async function KioskPage({ searchParams }: { searchParams: Promis
   const v = await requireViewer();
   const { q } = await searchParams;
   const tz = (await getOrg(v.orgId))?.timezone ?? DEFAULT_TZ;
+  const pinOnly = await kioskPinOnly(db, v.orgId);
+  if (pinOnly && v.role === "kiosk") {
+    return (
+      <div className="mx-auto max-w-md space-y-6">
+        <h1 className="text-2xl font-bold">Welcome! Enter your PIN to check in.</h1>
+        <KioskPinPad />
+        <p className="text-center text-ink-3">No PIN yet? Please see the front desk.</p>
+      </div>
+    );
+  }
   const sessions = await kioskRoster(db, v, { q });
   const now = new Date();
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Welcome! Find your name to check in.</h1>
+      <h1 className="text-2xl font-bold">Welcome! Enter your PIN or find your name to check in.</h1>
+      <details className="rounded-2xl border border-edge bg-surface sm:max-w-md" open={!q}>
+        <summary className="flex min-h-14 cursor-pointer items-center px-4 text-lg font-semibold">Check in with a PIN</summary>
+        <div className="px-2 pb-2">
+          <KioskPinPad bare />
+        </div>
+      </details>
       <form method="get" role="search" className="flex gap-2">
         <label htmlFor="kq" className="sr-only">
           Find your name

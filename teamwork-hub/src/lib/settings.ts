@@ -13,6 +13,8 @@ export type OrgPolicies = {
   familyBookingCutoffMinutes: number;
   quietHours: { start: string; end: string };
   minorsReceiveDirectMessages: boolean;
+  /** Kiosk shows no name list; athletes check in with their PIN only. */
+  kioskPinOnly: boolean;
 };
 
 export const DEFAULT_POLICIES: OrgPolicies = {
@@ -22,6 +24,7 @@ export const DEFAULT_POLICIES: OrgPolicies = {
   familyBookingCutoffMinutes: 60,
   quietHours: { start: "21:00", end: "07:30" },
   minorsReceiveDirectMessages: false,
+  kioskPinOnly: false,
 };
 
 export function policiesOf(settings: Record<string, unknown> | null | undefined): OrgPolicies {
@@ -41,6 +44,7 @@ export const orgSettingsSchema = z.object({
   quietStart: hhmm,
   quietEnd: hhmm,
   minorsReceiveDirectMessages: z.coerce.boolean(),
+  kioskPinOnly: z.coerce.boolean().default(false),
   headline: z.string().trim().max(160).optional(),
   intro: z.string().trim().max(800).optional(),
 });
@@ -57,6 +61,7 @@ export async function updateOrgSettings(tx: Tx, v: Viewer, raw: unknown) {
     familyBookingCutoffMinutes: input.familyBookingCutoffMinutes,
     quietHours: { start: input.quietStart, end: input.quietEnd },
     minorsReceiveDirectMessages: input.minorsReceiveDirectMessages,
+    kioskPinOnly: input.kioskPinOnly,
     ...(input.headline || input.intro
       ? { publicSite: { ...((org.settings?.publicSite as object) ?? {}), ...(input.headline ? { headline: input.headline } : {}), ...(input.intro ? { intro: input.intro } : {}), draft: false } }
       : {}),

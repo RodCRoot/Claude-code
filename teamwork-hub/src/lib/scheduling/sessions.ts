@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, gte, inArray, lt } from "drizzle-orm";
 import type { Tx } from "@/db";
 import { bookings, classSeries, resources, scheduleSessions, users } from "@/db/schema";
 import { UserError } from "@/lib/actions";
@@ -6,7 +6,7 @@ import { audit } from "@/lib/audit";
 import { assertCan, STAFF, type Viewer } from "@/lib/authz/policy";
 import { settleReservation } from "@/lib/credits";
 import { enqueue } from "@/lib/jobs";
-import { addDaysYmd, fmt, todayLocal } from "@/lib/time";
+import { addDaysYmd, fmt, localYmd, todayLocal } from "@/lib/time";
 import { seriesOccurrences } from "./recurrence";
 
 export { seriesOccurrences, type SeriesShape } from "./recurrence";
@@ -33,8 +33,23 @@ export async function generateSeriesSessions(
   }
   const from = input.fromYmd ?? todayLocal(series.timezone);
   const to = input.toYmd ?? addDaysYmd(from, weeks * 7 - 1);
-  const occ = seriesOccurrences(series, from, to);
-  if (!occ.length) return { created: 0, skipped: 0 };
+  const all = seriesOccurrences(series, from, to);
+  if (!all.length) return { created: 0, skipped: 0 };
+  // Idempotent per local date too: a session whose time was edited ("this / following / all")
+  // must not get a twin at the template time when the series is generated again.
+  const existing = await tx
+    .select({ startsAt: scheduleSessions.startsAt, tz: scheduleSessions.timezone })
+    .from(scheduleSessions)
+    .where(
+      and(
+        eq(scheduleSessions.seriesId, series.id),
+        gte(scheduleSessions.startsAt, new Date(all[0].startsAt.getTime() - 2 * 86_400_000)),
+        lt(scheduleSessions.startsAt, new Date(all[all.length - 1].startsAt.getTime() + 2 * 86_400_000)),
+      ),
+    );
+  const taken = new Set(existing.map((e) => localYmd(e.startsAt, e.tz)));
+  const occ = all.filter((o) => !taken.has(o.date));
+  if (!occ.length) return { created: 0, skipped: all.length };
   const rows = await withConflictMessage(
     () =>
       tx
@@ -66,7 +81,7 @@ export async function generateSeriesSessions(
   );
   for (const r of rows) await queueCalendarSync(tx, r.id);
   await audit(tx, actorOf(v), "series.generate", "class_series", series.id, { summary: `Generated ${rows.length} session(s) for "${series.title}" ${from} → ${to}` });
-  return { created: rows.length, skipped: occ.length - rows.length };
+  return { created: rows.length, skipped: all.length - rows.length };
 }
 
 export type CreateSessionInput = {
@@ -82,7 +97,7 @@ export type CreateSessionInput = {
   notes?: string | null;
 };
 
-async function assertCoach(tx: Tx, orgId: string, userId: string) {
+export async function assertCoach(tx: Tx, orgId: string, userId: string) {
   const [u] = await tx.select({ role: users.role, orgId: users.orgId }).from(users).where(eq(users.id, userId));
   if (!u || u.orgId !== orgId || !STAFF.includes(u.role)) throw new UserError("Choose a staff member as the coach.");
 }
