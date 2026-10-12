@@ -2,7 +2,8 @@ import { ColumnChart } from "@/components/charts/bar-chart";
 import { ChartFigure } from "@/components/charts/chart-figure";
 import { TrendChart } from "@/components/charts/trend-chart";
 import { ActionForm, SubmitButton } from "@/components/forms";
-import { Card, CardBody, CardHeader, EmptyState, Field, Input, PageHeader, Select, Stat, Table, Td, Th } from "@/components/ui";
+import { Card, CardBody, CardHeader, EmptyState, Field, Input, Select, Table, Td, Th } from "@/components/ui";
+import { HeroStat, ModuleHero } from "../../training/_components/tb";
 import { db } from "@/db";
 import { requireViewer } from "@/lib/auth/viewer";
 import { canOnAthlete } from "@/lib/authz/policy";
@@ -36,15 +37,16 @@ export default async function LoadPage({ searchParams }: { searchParams: SP }) {
   const a = L.acwr;
   return (
     <>
-      <PageHeader kicker="Sports science" title="Load monitoring" description={`Session load ${FORMULAS.srpe_load_v1.definition} Reported in arbitrary units (AU).`} />
-      <div className="mb-4">
+      <ModuleHero kicker="Sports science · AMS · Load" title={athlete.name} description={`Session load ${FORMULAS.srpe_load_v1.definition} Reported in arbitrary units (AU).`}>
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          <HeroStat label="ACWR (acwr_rolling_v1)" value={a.ratio === null ? "—" : fmtN(a.ratio)} hint={a.ratio === null ? a.reason : `acute ${fmtN(a.acuteMean, 0)} ÷ chronic ${fmtN(a.chronicMean, 0)} AU/day`} />
+          <HeroStat label={`7-day load (to ${L.metricsAsOf.slice(5)})`} value={L.weeklyLoad === null ? "—" : `${Math.round(L.weeklyLoad)} AU`} hint={L.weeklyLoad === null ? "Needs all 7 days known" : "srpe_load_v1 sum"} />
+          <HeroStat label="Monotony / strain" value={L.monotony === null ? "—" : fmtN(L.monotony)} hint={L.strain === null ? "Needs 7 known days with variation" : `strain ${Math.round(L.strain)} AU`} />
+          <HeroStat label="Data coverage (56 d)" value={`${Math.round(coverage56 * 100)}%`} hint="Days with known load (logged or rest)" />
+        </div>
+      </ModuleHero>
+      <div className="mb-4 rounded-lg border border-edge bg-surface p-3 empty:hidden">
         <AthletePicker athletes={athletes} current={athlete.id} />
-      </div>
-      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="ACWR (acwr_rolling_v1)" value={a.ratio === null ? "—" : fmtN(a.ratio)} hint={a.ratio === null ? a.reason : `acute ${fmtN(a.acuteMean, 0)} ÷ chronic ${fmtN(a.chronicMean, 0)} AU/day`} />
-        <Stat label={`7-day load (to ${L.metricsAsOf.slice(5)})`} value={L.weeklyLoad === null ? "—" : `${Math.round(L.weeklyLoad)} AU`} hint={L.weeklyLoad === null ? "Needs all 7 days known" : "srpe_load_v1 sum"} />
-        <Stat label="Monotony / strain" value={L.monotony === null ? "—" : fmtN(L.monotony)} hint={L.strain === null ? "Needs 7 known days with variation" : `strain ${Math.round(L.strain)} AU`} />
-        <Stat label="Data coverage (56 d)" value={`${Math.round(coverage56 * 100)}%`} hint="Days with known load (logged or rest)" />
       </div>
       <Card className="mb-6">
         <CardHeader title="Comparison windows" kicker={`Metrics as of ${L.metricsAsOf}${L.metricsAsOf !== L.to ? " (today not logged yet)" : ""} · formula versions shown`} />

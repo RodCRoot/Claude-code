@@ -5,6 +5,7 @@ import { fmt, todayLocal } from "@/lib/time";
 import { recentLogsForCoach, todaysWorkoutSummary } from "@/lib/training/dashboard";
 import { prAlerts } from "@/lib/training/review";
 import { Card, CardBody, CardHeader, EmptyState, StatusBadge } from "@/components/ui";
+import { PrBadge, TrendArrow } from "./tb";
 
 /**
  * Server components exported for the Today and People dashboards.
@@ -85,17 +86,19 @@ export async function PrAlertsCard({ viewer, since, limit = 10 }: { viewer: View
         ) : (
           <ul className="divide-y divide-edge text-sm">
             {alerts.map((a, i) => (
-              <li key={i} className="flex flex-wrap items-baseline justify-between gap-2 py-2">
+              <li key={i} className="py-2">
                 <span>
                   <Link href={`/training/athletes/${a.athleteId}`} className="font-medium hover:underline">
                     {a.athleteName}
                   </Link>{" "}
                   · {a.exerciseName}
                 </span>
-                <span className="tabular">
-                  <strong>
+                <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 tabular">
+                  <PrBadge label={a.kind === "tested" ? "Max" : "PR"} />
+                  <strong className="text-base">
                     {a.value} {a.unit}
-                  </strong>{" "}
+                  </strong>
+                  <TrendArrow delta={typeof a.value === "number" && typeof a.previous === "number" ? a.value - a.previous : null} good digits={1} />
                   <span className="text-xs text-ink-3">
                     {a.kind === "tested" ? "tested max" : "e1RM"} (prev {a.previous} {a.unit}) · {a.date}
                   </span>

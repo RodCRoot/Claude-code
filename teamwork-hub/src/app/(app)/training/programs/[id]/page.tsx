@@ -230,7 +230,7 @@ export default async function ProgramBuilder({ params, searchParams }: { params:
                   <div key={d.id} className="flex flex-wrap items-start gap-2">
                     <details>
                       <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium text-brand">Copy day</summary>
-                      <ActionForm action={copyDayAction} className="mt-1 grid grid-cols-2 gap-2 rounded-lg border border-edge p-2 sm:grid-cols-[5rem_5rem_1fr_auto] sm:items-end">
+                      <ActionForm action={copyDayAction} className="mt-1 grid grid-cols-2 items-end gap-2 rounded-lg border border-edge bg-surface p-2">
                         <input type="hidden" name="programId" value={program.id} />
                         <input type="hidden" name="dayId" value={d.id} />
                         <Field label="To week" htmlFor={`cd-w-${d.id}`}>

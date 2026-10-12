@@ -71,7 +71,7 @@ export function WeightRoom({ athletes, groupName, date }: { athletes: RosterAthl
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <SyncBanner className="flex-1" />
-        <button type="button" onClick={exit} className={buttonClass("danger", "lg")}>
+        <button type="button" onClick={exit} className={buttonClass("danger", "lg", "bg-[#b91c1c]! text-white hover:bg-[#991b1b]! hover:opacity-100!")}>
           Exit weight room
         </button>
       </div>
@@ -79,10 +79,11 @@ export function WeightRoom({ athletes, groupName, date }: { athletes: RosterAthl
       {!selected ? (
         <section aria-label={`${groupName} athletes`}>
           {athletes.length === 0 ? <p className="text-sm text-ink-3">No athletes in your scope for this group.</p> : null}
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {athletes.map((a) => {
               const p = a.workout?.progress;
               const pct = p && p.total ? Math.round((p.done / p.total) * 100) : 0;
+              const done = a.workout?.status === "completed";
               return (
                 <li key={a.athleteId}>
                   <button
@@ -93,18 +94,24 @@ export function WeightRoom({ athletes, groupName, date }: { athletes: RosterAthl
                       setWorkout(null);
                       if (a.workout) void load(a.workout.id);
                     }}
-                    className="flex min-h-28 w-full flex-col justify-between rounded-xl border border-edge bg-surface p-3 text-left hover:border-brand disabled:opacity-60"
+                    className={cn(
+                      "flex min-h-36 w-full flex-col justify-between gap-2 rounded-xl border-2 bg-surface p-3 text-left transition-colors hover:border-brand focus-visible:border-brand disabled:opacity-60 sm:p-4",
+                      done ? "border-ok/70" : "border-edge",
+                    )}
                     aria-label={`${a.name}: ${a.workout ? `${p?.done ?? 0} of ${p?.total ?? 0} sets` : "no workout"}`}
                   >
-                    <span className="text-lg font-semibold leading-tight">{a.name}</span>
-                    <span className="text-xs text-ink-3">{a.workout ? a.workout.title : "No workout on this date"}</span>
+                    <span className="flex items-start justify-between gap-2">
+                      <span className="min-w-0 text-xl leading-tight font-extrabold break-words sm:text-2xl">{a.name}</span>
+                      {a.workout ? <span className={cn("shrink-0 text-xl font-extrabold tabular sm:text-2xl", done ? "text-ok" : "text-brand")}>{pct}%</span> : null}
+                    </span>
+                    <span className="text-sm text-ink-3">{a.workout ? a.workout.title : "No workout on this date"}</span>
                     {a.workout ? (
-                      <span className="mt-2 block">
-                        <span className="block h-2 overflow-hidden rounded-full bg-surface-2" aria-hidden>
-                          <span className={cn("block h-full rounded-full", a.workout.status === "completed" ? "bg-ok" : "bg-brand")} style={{ width: `${pct}%` }} />
+                      <span className="block">
+                        <span className="block h-3 overflow-hidden rounded-full bg-surface-2" aria-hidden>
+                          <span className={cn("block h-full rounded-full", done ? "bg-ok" : "bg-brand")} style={{ width: `${pct}%` }} />
                         </span>
-                        <span className="mt-1 block text-xs tabular text-ink-2">
-                          {p?.done}/{p?.total} sets{a.workout.status === "completed" ? " · done" : ""}
+                        <span className="mt-1 block text-sm font-semibold tabular text-ink-2">
+                          {p?.done}/{p?.total} sets{done ? " · done ✓" : ""}
                         </span>
                       </span>
                     ) : null}
@@ -120,7 +127,7 @@ export function WeightRoom({ athletes, groupName, date }: { athletes: RosterAthl
             <button type="button" onClick={() => (setSelected(null), setWorkout(null))} className={buttonClass("secondary", "lg")}>
               ← All athletes
             </button>
-            <h2 className="text-xl font-bold">{selected.name}</h2>
+            <h2 className="text-2xl font-extrabold">{selected.name}</h2>
           </div>
           {error ? <p role="alert" className="mb-3 text-sm text-bad">{error}</p> : null}
           {!workout ? (
@@ -139,7 +146,7 @@ export function WeightRoom({ athletes, groupName, date }: { athletes: RosterAthl
                       type="button"
                       onClick={() => setItemIdx(i)}
                       aria-current={i === itemIdx ? "step" : undefined}
-                      className={cn("min-h-11 shrink-0 rounded-lg border px-3 text-sm font-medium", i === itemIdx ? "border-brand bg-brand text-brand-ink" : done ? "border-ok/40 text-ok" : "border-edge")}
+                      className={cn("min-h-12 shrink-0 rounded-lg border-2 px-3 text-sm font-bold", i === itemIdx ? "border-brand bg-brand text-brand-ink" : done ? "border-ok/60 bg-surface text-ok" : "border-edge bg-surface")}
                     >
                       {it.blockLabel} {it.performed.name}
                       {done ? " ✓" : ""}

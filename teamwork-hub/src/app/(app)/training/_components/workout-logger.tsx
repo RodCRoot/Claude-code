@@ -8,6 +8,7 @@ import { buttonClass } from "@/components/ui";
 import type { WorkoutDetail } from "@/lib/training/logging";
 import { describePrescription, type ExpandedSet } from "@/lib/training/formulas";
 import { enqueue, flush, retryNow, useSetQueue, type QueuedSet } from "./set-queue";
+import { ProgressBar } from "./tb";
 
 type FullItem = WorkoutDetail["items"][number];
 /** What the logger needs from an item (the offline copy carries only this). */
@@ -112,7 +113,7 @@ function SetRow({
   const id = `${item.id}-${s.setIndex}-${side}`;
   const status = pending ? "pending" : logged?.completed ? "logged" : "open";
   const label = `Set ${s.setIndex + 1}${side !== "both" ? ` ${side === "left" ? "L" : "R"}` : ""}`;
-  const input = cn("w-full rounded-lg border border-edge bg-surface px-2 text-center tabular", big ? "h-12 text-lg" : "h-11 text-base");
+  const input = cn("mt-0.5 w-full rounded-md border border-edge bg-surface px-1 text-center font-bold tabular text-ink focus:border-brand", big ? "h-12 text-lg" : "h-11 text-base");
 
   function log() {
     enqueue({
@@ -130,44 +131,62 @@ function SetRow({
   }
 
   return (
-    <li className={cn("rounded-lg border px-3 py-2", status === "logged" ? "border-ok/40 bg-ok/5" : status === "pending" ? "border-warn/40 bg-warn/5" : "border-edge")} data-testid={`set-${s.setIndex}-${side}`}>
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-sm font-semibold">
-          {label}
-          {s.isWarmup ? <span className="ml-1 text-xs font-normal text-ink-3">warm-up</span> : null}
+    <li
+      className={cn(
+        "rounded-lg border-l-4 px-3 py-2",
+        status === "logged" ? "border-ok bg-ok/[0.06]" : status === "pending" ? "border-warn bg-warn/[0.07]" : "border-edge bg-surface-2/60",
+      )}
+      data-testid={`set-${s.setIndex}-${side}`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-2">
+          <span
+            aria-hidden
+            className={cn(
+              "inline-flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-extrabold tabular",
+              status === "logged" ? "bg-ok text-surface" : "border border-edge bg-surface text-ink-2",
+            )}
+          >
+            {status === "logged" ? "✓" : s.setIndex + 1}
+          </span>
+          <span className="text-sm font-bold">
+            {label}
+            {s.isWarmup ? <span className="ml-1 rounded bg-surface px-1 text-[10px] font-semibold uppercase tracking-wide text-ink-3">warm-up</span> : null}
+          </span>
         </span>
-        <span className="text-xs text-ink-3">
-          Target: {prescribedLabel(s, item)}
-          {status === "logged" ? <span className="ml-2 font-semibold text-ok">✓ saved</span> : status === "pending" ? <span className="ml-2 font-semibold text-warn">● unsynced</span> : null}
+        <span className="min-w-0 text-right text-xs text-ink-2">
+          <span className="text-ink-3">Target </span>
+          <span className="font-semibold tabular">{prescribedLabel(s, item) || "—"}</span>
+          {status === "logged" ? <span className="ml-2 font-bold text-ok">✓ saved</span> : status === "pending" ? <span className="ml-2 font-bold text-warn">● unsynced</span> : null}
         </span>
       </div>
       {canLog ? (
-        <div className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(4.5rem,1fr))] items-end gap-2">
+        <div className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(4.25rem,1fr))] items-end gap-1.5">
           {showReps ? (
-            <label className="text-xs text-ink-3" htmlFor={`${id}-reps`}>
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-3" htmlFor={`${id}-reps`}>
               Reps
               <input id={`${id}-reps`} inputMode="numeric" type="number" min={0} max={500} value={reps} onChange={(e) => setReps(e.target.value)} className={input} />
             </label>
           ) : null}
           {showLoad ? (
-            <label className="text-xs text-ink-3" htmlFor={`${id}-load`}>
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-3" htmlFor={`${id}-load`}>
               Load ({unit})
               <input id={`${id}-load`} inputMode="decimal" type="number" step="0.5" min={0} max={5000} value={load} onChange={(e) => setLoad(e.target.value)} className={input} />
             </label>
           ) : null}
           {showTime ? (
-            <label className="text-xs text-ink-3" htmlFor={`${id}-dur`}>
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-3" htmlFor={`${id}-dur`}>
               Time (s)
               <input id={`${id}-dur`} inputMode="decimal" type="number" step="0.01" min={0} value={dur} onChange={(e) => setDur(e.target.value)} className={input} />
             </label>
           ) : null}
           {showDist ? (
-            <label className="text-xs text-ink-3" htmlFor={`${id}-dist`}>
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-3" htmlFor={`${id}-dist`}>
               Distance (m)
               <input id={`${id}-dist`} inputMode="decimal" type="number" step="0.1" min={0} value={dist} onChange={(e) => setDist(e.target.value)} className={input} />
             </label>
           ) : null}
-          <label className="text-xs text-ink-3" htmlFor={`${id}-rpe`}>
+          <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-3" htmlFor={`${id}-rpe`}>
             RPE
             <input id={`${id}-rpe`} inputMode="decimal" type="number" step="0.5" min={0} max={10} placeholder="–" value={rpe} onChange={(e) => setRpe(e.target.value)} className={input} />
           </label>
@@ -176,14 +195,14 @@ function SetRow({
           </button>
         </div>
       ) : logged ? (
-        <p className="mt-1 text-sm tabular">
-          Actual: {logged.reps ?? "—"} reps{logged.load != null ? ` @ ${logged.load} ${logged.loadUnit}` : ""}
+        <p className="mt-1 pl-9 text-sm font-semibold tabular">
+          <span className="font-normal text-ink-3">Actual </span> {logged.reps ?? "—"} reps{logged.load != null ? ` @ ${logged.load} ${logged.loadUnit}` : ""}
           {logged.durationS != null ? ` · ${logged.durationS}s` : ""}
           {logged.distanceM != null ? ` · ${logged.distanceM} m` : ""}
           {logged.rpe != null ? ` · RPE ${logged.rpe}` : ""}
         </p>
       ) : (
-        <p className="mt-1 text-xs text-ink-3">Not logged</p>
+        <p className="mt-1 pl-9 text-xs text-ink-3">Not logged</p>
       )}
     </li>
   );
@@ -221,21 +240,27 @@ export function ItemCard({ item, canLog, big = false, workoutId, showLinks = tru
     }
   }
   const warnings = item.groups.filter((g) => g.loadWarning).map((g) => g.loadWarning!);
+  const slotsTotal = item.sets.length * sides.length;
+  const slotsDone = slotsTotal - open.length;
   return (
-    <section className="rounded-xl border border-edge bg-surface p-3 sm:p-4" aria-labelledby={`item-${item.id}`} data-testid={`item-${item.blockLabel}`}>
-      <header className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3 id={`item-${item.id}`} className="text-base font-semibold">
-            <span className="mr-2 rounded bg-brand/10 px-1.5 py-0.5 text-xs font-bold text-brand">{item.blockLabel}</span>
+    <section className="overflow-hidden rounded-xl border border-edge bg-surface shadow-[0_1px_3px_rgb(16_24_40/0.06)]" aria-labelledby={`item-${item.id}`} data-testid={`item-${item.blockLabel}`}>
+      <header className="flex flex-wrap items-start justify-between gap-2 p-3 sm:p-4">
+        <div className="flex min-w-0 flex-1 gap-3">
+          <span aria-hidden className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg bg-ink text-base font-extrabold text-surface">
+            {item.blockLabel}
+          </span>
+          <div className="min-w-0 flex-1">
+          <h3 id={`item-${item.id}`} className="text-lg leading-tight font-extrabold">
+            <span className="sr-only">{item.blockLabel} </span>
             {item.performed.name}
-            {item.performed.isUnilateral ? <span className="ml-1 text-xs font-normal text-ink-3">(each side)</span> : null}
+            {item.performed.isUnilateral ? <span className="ml-1 text-xs font-medium text-ink-3">(each side)</span> : null}
           </h3>
           {item.substituted ? <p className="text-xs text-warn">Substituted for {item.exercise.name}</p> : null}
-          <ul className="mt-1 space-y-0.5 text-xs text-ink-3">
+          <ul className="mt-1.5 flex flex-wrap gap-1.5 text-xs">
             {item.groups.map((g, i) => (
-              <li key={i}>
+              <li key={i} className="rounded-md bg-surface-2 px-2 py-1 font-semibold text-ink-2 tabular">
                 {describePrescription(g)}
-                {g.loadMethod && g.targetLoad != null ? <span className="block pl-2">↳ {g.loadMethod}</span> : null}
+                {g.loadMethod && g.targetLoad != null ? <span className="block font-normal text-ink-3">↳ {g.loadMethod}</span> : null}
               </li>
             ))}
           </ul>
@@ -246,9 +271,20 @@ export function ItemCard({ item, canLog, big = false, workoutId, showLinks = tru
           ))}
           {item.notes ? <p className="mt-1 text-sm">{item.notes}</p> : null}
           {item.athleteModification ? <p className="mt-1 text-xs text-ink-2">Modification: {item.athleteModification}</p> : null}
-          {item.exercise.coachingNotes ? <p className="mt-1 text-xs text-ink-2">Cue: {item.exercise.coachingNotes}</p> : null}
+          {item.exercise.coachingNotes ? (
+            <p className="mt-1.5 rounded-md border-l-2 border-brand bg-brand/[0.06] px-2 py-1 text-xs text-ink-2">
+              <span className="font-bold">Cue:</span> {item.exercise.coachingNotes}
+            </p>
+          ) : null}
+          <div className="mt-2 flex items-center gap-2">
+            <ProgressBar done={slotsDone} total={slotsTotal} className="flex-1" />
+            <span className="shrink-0 text-xs font-semibold tabular text-ink-2">
+              {slotsDone}/{slotsTotal} sets
+            </span>
+          </div>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
           {canLog && open.length ? (
             <button type="button" onClick={doneAsPrescribed} className={buttonClass("outline", big ? "lg" : "md", "min-h-11")}>
               Done as prescribed ({open.length})
@@ -266,7 +302,7 @@ export function ItemCard({ item, canLog, big = false, workoutId, showLinks = tru
           ) : null}
         </div>
       </header>
-      <ol className="mt-3 space-y-2">
+      <ol className="space-y-1.5 border-t border-edge bg-surface px-2 py-2 sm:px-3">
         {item.sets.flatMap((s) =>
           sides.map((side) => (
             <SetRow
@@ -324,8 +360,8 @@ export function CompleteWorkoutForm({ workout }: { workout: Pick<WorkoutDetail, 
   }
 
   return (
-    <form onSubmit={submit} className="rounded-xl border border-edge bg-surface p-4" aria-labelledby={`${fid}-h`}>
-      <h3 id={`${fid}-h`} className="font-semibold">
+    <form onSubmit={submit} className="rounded-xl border-2 border-brand/40 bg-surface p-4" aria-labelledby={`${fid}-h`}>
+      <h3 id={`${fid}-h`} className="text-lg font-extrabold">
         {workout.status === "completed" ? "Update completion" : "Finish workout"}
       </h3>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">

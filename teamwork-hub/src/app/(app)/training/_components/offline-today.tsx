@@ -60,10 +60,13 @@ export function OfflineToday() {
       {data.workouts.length === 0 ? <p className="text-sm text-ink-3">No workout scheduled for {fmtDate(data.date)}.</p> : null}
       {data.workouts.map((w) => (
         <article key={w.id} aria-labelledby={`w-${w.id}`} className="space-y-3">
-          <header className="flex flex-wrap items-center justify-between gap-2">
-            <h2 id={`w-${w.id}`} className="text-lg font-bold">
-              {w.title}
-            </h2>
+          <header className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-edge bg-surface p-4">
+            <div className="min-w-0">
+              <div className="kicker">Session</div>
+              <h2 id={`w-${w.id}`} className="text-xl leading-tight font-extrabold">
+                {w.title}
+              </h2>
+            </div>
             <StatusBadge status={w.status} />
           </header>
           {w.status === "skipped" ? <Callout tone="warn">This workout is marked skipped. Reopen it online before logging.</Callout> : null}

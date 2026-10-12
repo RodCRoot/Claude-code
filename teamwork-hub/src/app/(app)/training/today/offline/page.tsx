@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireViewer } from "@/lib/auth/viewer";
-import { PageHeader } from "@/components/ui";
+import { ModuleHero } from "../../_components/tb";
 import { OfflineToday } from "../../_components/offline-today";
 
 export const metadata = { title: "Today's training (offline copy)" };
@@ -15,7 +15,7 @@ export default async function TrainingTodayOffline() {
   if (viewer.role !== "athlete") redirect("/training/today");
   return (
     <div className="mx-auto max-w-3xl">
-      <PageHeader kicker="Training" title="Today's workout" description="Log each set as you go. Entries save on this device first and sync automatically." />
+      <ModuleHero kicker="Training" title="Today's workout" description="Log each set as you go. Entries save on this device first and sync automatically." />
       <OfflineToday />
     </div>
   );
