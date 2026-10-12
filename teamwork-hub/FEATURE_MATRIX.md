@@ -107,6 +107,7 @@ Security review: see `docs/SECURITY-REVIEW.md` (10 findings fixed with regressio
 | Weight-room tablet view (coach-scoped) | verified locally | `training.test.ts`, browser | — |
 | Coach review, PR alerts, adherence, progress charts, scoped opt-in leaderboard, CSV export | verified locally | `training.test.ts` | Fewer report types than TeamBuildr |
 | VBT data | implemented (CSV import only) | `training.test.ts` | No device connectivity (by design) |
+| VBT math: load–velocity profile → estimated 1RM (`lv_profile_v1`), published velocity→%1RM curves (`mpv_squat_v1`/`mpv_bench_v1`/`mpv_generic_v1`), velocity zones, relative strength (`rel_strength_v1`) | verified locally | `training-vbt.test.ts` (pure), `training-vbt-maxes.test.ts` (suggest/confirm from `vbt_readings`, authz, kg conversion) | Ported from the proven Vantage engine (`claude/athlete-training-platform` branch). No UI yet — suggest/confirm are lib functions awaiting a surface on the athlete training page |
 
 ## Sports science / AMS (evidence: public docs; all indices are documented Teamwork calculations)
 
