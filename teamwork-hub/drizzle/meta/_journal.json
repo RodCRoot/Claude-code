@@ -71,6 +71,13 @@
       "when": 1791784003829,
       "tag": "0009_crm_preferences_campaigns_inbound",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791787843290,
+      "tag": "0010_sched_kiosk_pins",
+      "breakpoints": true
     }
   ]
 }

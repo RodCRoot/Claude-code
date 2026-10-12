@@ -6,6 +6,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   time,
   uniqueIndex,
@@ -274,4 +275,39 @@ export const calendarEventLinks = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [uniqueIndex("cal_link_uq").on(t.connectionId, t.sessionId)],
+);
+
+/**
+ * Optional per-athlete kiosk check-in PIN (4–6 digits). Only a keyed hash is stored:
+ * HMAC-SHA256(key derived from SESSION_SECRET, "<orgId>:<pin>") so the kiosk can look a PIN up
+ * without listing names. Unique per org so a PIN identifies exactly one athlete.
+ * Kept out of `athletes` so ordinary athlete queries can never select it.
+ */
+export const athleteCheckinPins = pgTable(
+  "athlete_checkin_pins",
+  {
+    athleteId: uuid("athlete_id")
+      .primaryKey()
+      .references(() => athletes.id, { onDelete: "cascade" }),
+    orgId: orgId(),
+    pinHash: text("pin_hash").notNull(),
+    setByUserId: uuid("set_by_user_id").references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("checkin_pin_org_hash_uq").on(t.orgId, t.pinHash)],
+);
+
+/** Failed kiosk PIN attempts per kiosk login session (keyed by the session token hash), for rate limiting. */
+export const kioskPinAttempts = pgTable(
+  "kiosk_pin_attempts",
+  {
+    orgId: orgId(),
+    sessionKey: text("session_key").notNull(),
+    failedCount: integer("failed_count").notNull().default(0),
+    windowStartedAt: ts("window_started_at").notNull().defaultNow(),
+    lockedUntil: ts("locked_until"),
+    updatedAt: updatedAt(),
+  },
+  (t) => [primaryKey({ columns: [t.orgId, t.sessionKey] })],
 );

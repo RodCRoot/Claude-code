@@ -65,6 +65,13 @@ export default async function SettingsPage() {
             <Field label="Family booking cutoff (minutes before start)" htmlFor="familyBookingCutoffMinutes">
               <Input id="familyBookingCutoffMinutes" name="familyBookingCutoffMinutes" type="number" min={0} defaultValue={p.familyBookingCutoffMinutes} />
             </Field>
+            <label className="flex min-h-11 items-start gap-2 text-sm sm:col-span-2">
+              <input type="checkbox" name="kioskPinOnly" defaultChecked={p.kioskPinOnly} className="mt-1" />
+              <span>
+                Kiosk: PIN check-in only
+                <span className="block text-xs text-ink-3">The check-in kiosk never lists names; athletes enter the PIN a guardian or staff member set for them.</span>
+              </span>
+            </label>
             <p className="text-xs text-ink-3 sm:col-span-2">Cancellation and no-show penalties are set per session type in Schedule → Settings.</p>
           </CardBody>
         </Card>

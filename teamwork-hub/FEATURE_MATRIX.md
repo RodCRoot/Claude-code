@@ -32,7 +32,11 @@ Security review: see `docs/SECURITY-REVIEW.md` (10 findings fixed with regressio
 
 | Feature | Status | Test evidence | Gaps |
 |---|---|---|---|
-| Recurring classes (DST-correct), private sessions, assessments, camps | verified locally | `scheduling.test.ts` | "Edit all future sessions" of a series not implemented |
+| Recurring classes (DST-correct), private sessions, assessments, camps | verified locally | `scheduling.test.ts` | — |
+| Series edits (this / following / all: time, coach, room, capacity; cancel from a date) with explicit over-capacity choices | verified locally | `scheduling-series-edit.test.ts` (incl. concurrency, DST), browser 390px | No date/weekday moves for a whole series |
+| Family multi-booking (several children, or next N weeks; all-or-nothing or partial; idempotent) | verified locally | `scheduling-family-batch.test.ts` (incl. concurrency), browser 390px | — |
+| Kiosk PIN check-in (hashed, per-session rate limit, optional PIN-only kiosk) | verified locally | `scheduling-kiosk-pin.test.ts`, browser 390px | PIN uniqueness per org can reveal that a PIN is taken when choosing one |
+| Attendance corrections re-settle credits and no-show fees | verified locally | `scheduling-attendance-correction.test.ts` | — |
 | Day/week/month calendars, roster, check-in, attendance, no-show, late cancel | verified locally | `scheduling.test.ts`, browser | — |
 | Capacity + waitlist + auto-promotion (with credit reservation) | verified locally | concurrency test (10 parallel → 1 booked) | — |
 | Coach/room overlap prevention incl. buffers | verified locally | DB exclusion constraint tests | — |

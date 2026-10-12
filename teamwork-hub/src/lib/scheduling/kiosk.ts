@@ -5,7 +5,7 @@ import { UserError } from "@/lib/actions";
 import { AuthzError, can, type Viewer } from "@/lib/authz/policy";
 import { localDayBounds, todayLocal } from "@/lib/time";
 import { markAttendance } from "./booking";
-import { orgTimezone } from "./common";
+import { kioskPinOnly, orgTimezone } from "./common";
 
 /** Exactly what the kiosk may show. No ids of people, no birthdates, no contact info, no health data. */
 export type KioskAthlete = { bookingId: string; displayName: string; status: "booked" | "attended"; alerts: string[] };
@@ -23,6 +23,8 @@ function assertKioskAccess(v: Viewer) {
 /** Today's (facility-local) sessions with booked/checked-in athletes, minimal fields only. */
 export async function kioskRoster(tx: Tx, v: Viewer, opts: { now?: Date; q?: string } = {}): Promise<KioskSession[]> {
   assertKioskAccess(v);
+  // PIN-only kiosks never receive a name list (enforced here, not just hidden in the UI).
+  if (v.role === "kiosk" && (await kioskPinOnly(tx, v.orgId))) return [];
   const tz = await orgTimezone(tx, v.orgId);
   const { start, end } = localDayBounds(todayLocal(tz, opts.now ?? new Date()), tz);
   const sessions = await tx
@@ -65,6 +67,7 @@ export async function kioskRoster(tx: Tx, v: Viewer, opts: { now?: Date; q?: str
 /** One-tap kiosk check-in: today's sessions only; consumes the reserved credit. */
 export async function kioskCheckIn(tx: Tx, v: Viewer, input: { bookingId: string; now?: Date }) {
   assertKioskAccess(v);
+  if (v.role === "kiosk" && (await kioskPinOnly(tx, v.orgId))) throw new UserError("Please check in with your PIN.");
   const now = input.now ?? new Date();
   const [b] = await tx
     .select({ status: bookings.status, startsAt: scheduleSessions.startsAt, tz: scheduleSessions.timezone })

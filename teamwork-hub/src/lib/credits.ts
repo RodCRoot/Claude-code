@@ -84,6 +84,37 @@ export class InsufficientCreditsError extends Error {
 }
 
 /**
+ * Lock the athlete's buckets that can pay `amount` for this service at this session time, best first
+ * (`preferBucketId` first when given, then soonest-expiring, then oldest). FOR UPDATE re-evaluates
+ * "available >= amount" after waiting on a concurrent writer.
+ */
+async function lockEligibleBuckets(
+  tx: Tx,
+  r: { orgId: string; athleteId: string; serviceTypeId: string; amount: number; sessionStartsAt: Date; preferBucketId?: string | null },
+) {
+  return tx
+    .select()
+    .from(creditBuckets)
+    .where(
+      and(
+        eq(creditBuckets.orgId, r.orgId),
+        eq(creditBuckets.athleteId, r.athleteId),
+        eq(creditBuckets.status, "active"),
+        sql`${creditBuckets.available} >= ${r.amount}`,
+        or(isNull(creditBuckets.expiresAt), gt(creditBuckets.expiresAt, r.sessionStartsAt)),
+        or(sql`${creditBuckets.periodStart} is null`, lte(creditBuckets.periodStart, sql`(${r.sessionStartsAt.toISOString()}::timestamptz)::date`)),
+        sql`(jsonb_array_length(${creditBuckets.serviceTypeIds}) = 0 or ${creditBuckets.serviceTypeIds} ? ${r.serviceTypeId})`,
+      ),
+    )
+    .orderBy(
+      ...(r.preferBucketId ? [sql`(${creditBuckets.id} = ${r.preferBucketId}) desc`] : []),
+      sql`${creditBuckets.expiresAt} asc nulls last`,
+      asc(creditBuckets.createdAt),
+    )
+    .for("update");
+}
+
+/**
  * Reserve `cost` credits for a booking from the soonest-expiring eligible bucket.
  * Must run inside the booking transaction.
  */
@@ -96,23 +127,7 @@ export async function reserveCredits(
   if (prior) return { bucketId: prior.bucketId, reused: true };
   if (r.cost === 0) return { bucketId: null, reused: false };
 
-  // Lock eligible buckets; FOR UPDATE re-evaluates "available >= cost" after waiting on a concurrent writer.
-  const candidates = await tx
-    .select()
-    .from(creditBuckets)
-    .where(
-      and(
-        eq(creditBuckets.orgId, r.orgId),
-        eq(creditBuckets.athleteId, r.athleteId),
-        eq(creditBuckets.status, "active"),
-        sql`${creditBuckets.available} >= ${r.cost}`,
-        or(isNull(creditBuckets.expiresAt), gt(creditBuckets.expiresAt, r.sessionStartsAt)),
-        or(sql`${creditBuckets.periodStart} is null`, lte(creditBuckets.periodStart, sql`(${r.sessionStartsAt.toISOString()}::timestamptz)::date`)),
-        sql`(jsonb_array_length(${creditBuckets.serviceTypeIds}) = 0 or ${creditBuckets.serviceTypeIds} ? ${r.serviceTypeId})`,
-      ),
-    )
-    .orderBy(sql`${creditBuckets.expiresAt} asc nulls last`, asc(creditBuckets.createdAt))
-    .for("update");
+  const candidates = await lockEligibleBuckets(tx, { ...r, amount: r.cost });
   const bucket = candidates[0];
   if (!bucket) throw new InsufficientCreditsError();
 
@@ -177,13 +192,18 @@ export async function settleReservation(tx: Tx, s: { bookingId: string; outcome:
 export async function restoreCredit(tx: Tx, r: { bookingId: string; actorUserId: string; reason: string }) {
   if (!r.reason.trim()) throw new Error("A reason is required to restore a credit.");
   const [settle] = await tx.select().from(creditLedger).where(eq(creditLedger.idempotencyKey, `settle:${r.bookingId}`));
-  if (!settle || settle.kind === "release") return { restored: false };
-  const cost = -settle.deltaReserved;
+  if (!settle) return { restored: false };
+  // Net-aware: a release, or an attendance correction, may already have given the credit back.
+  const charge = await bookingNetCharge(tx, r.bookingId);
+  if (!charge || charge.net <= 0) return { restored: false };
+  const cost = charge.net;
+  const bucketId = charge.lastChargeBucketId;
+  await tx.select({ id: creditBuckets.id }).from(creditBuckets).where(eq(creditBuckets.id, bucketId)).for("update");
   const inserted = await tx
     .insert(creditLedger)
     .values({
       orgId: settle.orgId,
-      bucketId: settle.bucketId,
+      bucketId,
       athleteId: settle.athleteId,
       kind: "restore",
       deltaAvailable: cost,
@@ -195,8 +215,89 @@ export async function restoreCredit(tx: Tx, r: { bookingId: string; actorUserId:
     .onConflictDoNothing({ target: creditLedger.idempotencyKey })
     .returning();
   if (!inserted.length) return { restored: false };
-  await tx.update(creditBuckets).set({ available: sql`${creditBuckets.available} + ${cost}` }).where(eq(creditBuckets.id, settle.bucketId));
+  await tx.update(creditBuckets).set({ available: sql`${creditBuckets.available} + ${cost}` }).where(eq(creditBuckets.id, bucketId));
   return { restored: true };
+}
+
+/**
+ * Credits currently charged to a booking = −Σ delta_available of its ledger entries
+ * (reserve/consume/forfeit charge; release/restore give back). Null when the booking never
+ * reserved credits (unlimited membership, comp, free service).
+ */
+export async function bookingNetCharge(tx: Tx, bookingId: string) {
+  const rows = await tx.select().from(creditLedger).where(eq(creditLedger.bookingId, bookingId));
+  const reserve = rows.find((e) => e.idempotencyKey === `reserve:${bookingId}`);
+  if (!reserve) return null;
+  const net = 0 - rows.reduce((sum, e) => sum + e.deltaAvailable, 0) || 0;
+  // Corrections are numbered (`correct:<id>:<n>`); timestamps can tie inside one transaction.
+  const prefix = `correct:${bookingId}:`;
+  const corrections = rows
+    .filter((e) => e.idempotencyKey.startsWith(prefix))
+    .sort((a, b) => Number(a.idempotencyKey.slice(prefix.length)) - Number(b.idempotencyKey.slice(prefix.length)));
+  // The bucket that paid most recently: the latest correction re-charge, else the reservation.
+  const lastCharge = [...corrections].reverse().find((e) => e.deltaAvailable < 0);
+  return {
+    cost: reserve.deltaReserved,
+    net,
+    settled: rows.some((e) => e.idempotencyKey === `settle:${bookingId}`),
+    corrections: corrections.length,
+    staffRestored: rows.some((e) => e.idempotencyKey === `restore:${bookingId}`),
+    lastChargeBucketId: lastCharge?.bucketId ?? reserve.bucketId,
+    reserveBucketId: reserve.bucketId,
+    orgId: reserve.orgId,
+    athleteId: reserve.athleteId,
+  };
+}
+
+/**
+ * Re-settle a booking whose reservation was already settled (attendance correction).
+ * charge=true → the booking should cost its credit (attended, or no-show under a forfeit policy);
+ * charge=false → it should cost nothing (no-show under a release/fee policy).
+ * Writes at most one ledger entry (`correct:<bookingId>:<n>`) moving the net charge to the target:
+ * a refund goes back to the bucket that paid last; a re-charge prefers the original bucket, else any
+ * eligible bucket (row-locked). Throws InsufficientCreditsError when nothing can pay.
+ * Callers must hold the booking row lock so <n> is serialized per booking.
+ */
+export async function resettleBookingCharge(
+  tx: Tx,
+  r: { bookingId: string; charge: boolean; serviceTypeId: string; sessionStartsAt: Date; actorUserId: string; reason: string },
+): Promise<{ delta: number; bucketId: string | null }> {
+  const c = await bookingNetCharge(tx, r.bookingId);
+  if (!c) return { delta: 0, bucketId: null };
+  if (!c.settled) throw new Error("resettleBookingCharge: the reservation is not settled yet");
+  // A staff credit restore (restoreCredit, "restore:<id>") is final: later corrections never re-charge it.
+  const target = r.charge && !c.staffRestored ? c.cost : 0;
+  const diff = target - c.net;
+  if (diff === 0) return { delta: 0, bucketId: null };
+  let bucketId: string;
+  if (diff < 0) {
+    bucketId = c.lastChargeBucketId;
+    await tx.select({ id: creditBuckets.id }).from(creditBuckets).where(eq(creditBuckets.id, bucketId)).for("update");
+  } else {
+    const candidates = await lockEligibleBuckets(tx, {
+      orgId: c.orgId,
+      athleteId: c.athleteId,
+      serviceTypeId: r.serviceTypeId,
+      amount: diff,
+      sessionStartsAt: r.sessionStartsAt,
+      preferBucketId: c.reserveBucketId,
+    });
+    if (!candidates[0]) throw new InsufficientCreditsError();
+    bucketId = candidates[0].id;
+  }
+  await tx.insert(creditLedger).values({
+    orgId: c.orgId,
+    bucketId,
+    athleteId: c.athleteId,
+    kind: diff > 0 ? "consume" : "restore",
+    deltaAvailable: -diff,
+    bookingId: r.bookingId,
+    actorUserId: r.actorUserId,
+    reason: r.reason,
+    idempotencyKey: `correct:${r.bookingId}:${c.corrections + 1}`,
+  });
+  await tx.update(creditBuckets).set({ available: sql`${creditBuckets.available} - ${diff}` }).where(eq(creditBuckets.id, bucketId));
+  return { delta: -diff, bucketId };
 }
 
 /** Attributable staff adjustment on an existing bucket (positive or negative). */

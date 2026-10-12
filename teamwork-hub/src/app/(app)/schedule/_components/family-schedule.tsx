@@ -30,6 +30,7 @@ export async function FamilySchedule({ viewer, params, range, tz, today }: { vie
     );
   }
   const selected = athletes.find((a) => a.id === params.athlete) ?? athletes[0];
+  const bookableCount = athletes.filter((a) => a.canBook && a.active).length;
   const now = new Date();
   const settings = await bookingSettings(db, viewer.orgId);
   const [sessions, ent, upcoming, policies] = await Promise.all([
@@ -109,6 +110,12 @@ export async function FamilySchedule({ viewer, params, range, tz, today }: { vie
               {cap.full ? `Join waitlist for ${selected.first}` : `Book ${selected.first}`}
             </SubmitButton>
             {s.creditCost > 0 ? <p className="mt-1 text-xs text-ink-3">Uses {s.creditCost} credit{s.creditCost === 1 ? "" : "s"} unless covered by an unlimited membership.</p> : null}
+            {bookableCount > 1 || s.seriesId ? (
+              <Link href={`/schedule/family-book?session=${s.id}&athlete=${selected.id}`} className="mt-1 inline-flex min-h-11 items-center text-sm font-medium text-brand hover:underline">
+                {bookableCount > 1 ? "Book several athletes" : "Book several weeks"}
+                {bookableCount > 1 && s.seriesId ? " or weeks" : ""} →
+              </Link>
+            ) : null}
           </ActionForm>
         );
     }
@@ -162,6 +169,11 @@ export async function FamilySchedule({ viewer, params, range, tz, today }: { vie
               {selected.canBook ? (
                 <ButtonLink href={`/schedule/book?athlete=${selected.id}`} variant="outline" className="min-h-11">
                   Book an assessment
+                </ButtonLink>
+              ) : null}
+              {selected.canBook ? (
+                <ButtonLink href={`/schedule/athletes/${selected.id}#checkin-pin`} variant="outline" className="min-h-11">
+                  Check-in PIN
                 </ButtonLink>
               ) : null}
             </div>

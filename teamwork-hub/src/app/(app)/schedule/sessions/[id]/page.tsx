@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
+import { resources } from "@/db/schema";
+import { SeriesEditForm } from "../../_components/series-edit-form";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Badge, ButtonLink, Callout, Card, CardBody, CardHeader, EmptyState, Field, Input, PageHeader, Select, Stat, StatusBadge, Textarea } from "@/components/ui";
 import { requireStaff } from "@/lib/auth/viewer";
@@ -14,6 +17,7 @@ import {
   attendanceAction,
   bookAction,
   cancelBookingAction,
+  cancelSeriesFromAction,
   cancelSessionAction,
   promoteWaitlistAction,
   restoreCreditAction,
@@ -46,6 +50,9 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const occupying = count("booked") + count("attended") + count("no_show");
   const results = runner && q ? await searchBookableAthletes(db, v, q) : [];
   const coaches = manager ? await listCoaches(db, v.orgId) : [];
+  const rooms = manager
+    ? await db.select({ id: resources.id, name: resources.name }).from(resources).where(and(eq(resources.orgId, v.orgId), eq(resources.active, true))).orderBy(asc(resources.name))
+    : [];
   const rosterIds = new Set(d.roster.filter((r) => ["booked", "waitlisted", "attended", "no_show"].includes(r.booking.status)).map((r) => r.booking.athleteId));
 
   return (
@@ -337,6 +344,52 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
 
           {manager && !cancelled ? (
             <>
+              {!started ? (
+                <Card>
+                  <CardHeader title={s.seriesId ? "Change this or the series" : "Change time, coach or room"} kicker={s.seriesId ? "Recurring series" : undefined} />
+                  <CardBody>
+                    <SeriesEditForm
+                      sessionId={s.id}
+                      version={s.version}
+                      inSeries={!!s.seriesId}
+                      defaults={{
+                        time: fmt(s.startsAt, "HH:mm", tz),
+                        duration: Math.round((s.endsAt.getTime() - s.startsAt.getTime()) / 60_000),
+                        capacity: s.capacity,
+                        waitlistCapacity: s.waitlistCapacity,
+                        coachUserId: s.coachUserId,
+                        resourceId: s.resourceId,
+                      }}
+                      coaches={coaches}
+                      rooms={rooms}
+                    />
+                  </CardBody>
+                </Card>
+              ) : null}
+              {s.seriesId ? (
+                <Card>
+                  <CardHeader title="Cancel the series from this date" />
+                  <CardBody>
+                    <ActionForm action={cancelSeriesFromAction} className="space-y-3">
+                      <input type="hidden" name="seriesId" value={s.seriesId} />
+                      <Field label="First date to cancel" htmlFor="csf-date" required>
+                        <Input id="csf-date" name="fromYmd" type="date" required defaultValue={localYmd(s.startsAt, tz)} className="h-11" />
+                      </Field>
+                      <Field label="Reason (shared with families)" htmlFor="csf-reason" required>
+                        <Input id="csf-reason" name="reason" required className="h-11" />
+                      </Field>
+                      <SubmitButton
+                        variant="danger"
+                        className="min-h-11"
+                        pendingText="Cancelling…"
+                        confirm="Cancel every upcoming session of this series from that date? All their credits are returned, families are notified, and the series ends the day before."
+                      >
+                        Cancel from this date
+                      </SubmitButton>
+                    </ActionForm>
+                  </CardBody>
+                </Card>
+              ) : null}
               <Card>
                 <CardHeader title="Substitute coach" />
                 <CardBody>

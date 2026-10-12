@@ -14,7 +14,7 @@ const on = (fd: FormData, k: string) => fd.get(k) === "on";
 export const saveOrgSettingsAction = safeAction(async (_p: ActionState, fd: FormData) => {
   const v = await requireViewer();
   const o = formToObject(fd);
-  await db.transaction((tx) => updateOrgSettings(tx, v, { ...o, requireStaffMfa: on(fd, "requireStaffMfa"), minorsReceiveDirectMessages: on(fd, "minorsReceiveDirectMessages") }));
+  await db.transaction((tx) => updateOrgSettings(tx, v, { ...o, requireStaffMfa: on(fd, "requireStaffMfa"), minorsReceiveDirectMessages: on(fd, "minorsReceiveDirectMessages"), kioskPinOnly: on(fd, "kioskPinOnly") }));
   revalidatePath("/", "layout");
   return { ok: true, message: "Settings saved." };
 });

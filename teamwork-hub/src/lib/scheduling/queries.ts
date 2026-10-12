@@ -34,6 +34,7 @@ export async function listSessions(tx: Tx, v: Viewer, input: { from: Date; to: D
     .select({
       id: scheduleSessions.id,
       title: scheduleSessions.title,
+      seriesId: scheduleSessions.seriesId,
       startsAt: scheduleSessions.startsAt,
       endsAt: scheduleSessions.endsAt,
       status: scheduleSessions.status,

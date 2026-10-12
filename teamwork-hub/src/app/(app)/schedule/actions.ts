@@ -24,8 +24,11 @@ import {
 import { bookPrivateSlot } from "@/lib/scheduling/availability";
 import { bookSession, cancelBooking, markAttendance, promoteWaitlist, rescheduleBooking, restoreBookingCredit } from "@/lib/scheduling/booking";
 import { cancelSession, createSession, generateSeriesSessions, substituteCoach, updateSession } from "@/lib/scheduling/sessions";
-import { localToUtc } from "@/lib/time";
+import { fmt, localToUtc } from "@/lib/time";
 import { canRunSession, getSession, orgTimezone } from "@/lib/scheduling/common";
+import { cancelSeriesFrom, editSeriesSessions } from "@/lib/scheduling/series-edit";
+import { bookBatch, nextSeriesSessions } from "@/lib/scheduling/batch-booking";
+import { setCheckInPin } from "@/lib/scheduling/kiosk-pin";
 
 const run = (fn: () => Promise<ActionState | void>) => safeAction(fn)();
 const refresh = () => revalidatePath("/schedule", "layout");
@@ -73,9 +76,11 @@ export async function attendanceAction(_prev: ActionState, fd: FormData): Promis
   return run(async () => {
     const v = await requireViewer();
     const outcome = str(fd, "outcome") === "no_show" ? "no_show" : "attended";
-    await db.transaction((tx) => markAttendance(tx, v, { bookingId: reqId(fd, "bookingId"), outcome, method: "staff" }));
+    const r = await db.transaction((tx) => markAttendance(tx, v, { bookingId: reqId(fd, "bookingId"), outcome, method: "staff" }));
     refresh();
-    return { ok: true, message: outcome === "attended" ? "Checked in." : "Marked no-show." };
+    const delta = "creditDelta" in r ? r.creditDelta : null;
+    const credit = delta == null ? "" : delta < 0 ? " Corrected: the session credit was charged." : delta > 0 ? " Corrected: the session credit was returned." : " Corrected (credits unchanged).";
+    return { ok: true, message: `${outcome === "attended" ? "Checked in." : "Marked no-show."}${credit}` };
   });
 }
 
@@ -200,6 +205,119 @@ export async function createSessionAction(_prev: ActionState, fd: FormData): Pro
     });
     refresh();
     return { ok: true, message: "Session created.", data: { id: s.id } };
+  });
+}
+
+// --- Series edits ----------------------------------------------------------------------------
+
+export async function seriesEditAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const v = await requireViewer();
+    const scope = z.enum(["this", "following", "all"]).parse(str(fd, "scope") || "this");
+    const mode = z.enum(["refuse", "skip_conflicting", "keep_bookings_over_capacity"]).parse(str(fd, "onCapacityConflict") || "refuse");
+    const optInt = (k: string, min: number, max: number) => {
+      const raw = str(fd, k);
+      if (!raw) return undefined;
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < min || n > max) throw new UserError(`Check the ${k === "durationMinutes" ? "duration" : k === "waitlistCapacity" ? "waitlist size" : k}.`, { [k]: `${min}–${max}` });
+      return n;
+    };
+    const optRef = (k: string) => {
+      const raw = str(fd, k);
+      if (raw === "" || raw === "keep") return undefined;
+      if (raw === "none") return null;
+      return reqId(fd, k);
+    };
+    const changes = {
+      startTimeLocal: str(fd, "startTimeLocal") || undefined,
+      durationMinutes: optInt("durationMinutes", 5, 24 * 60),
+      coachUserId: optRef("coachUserId"),
+      resourceId: optRef("resourceId"),
+      capacity: optInt("capacity", 0, 500),
+      waitlistCapacity: optInt("waitlistCapacity", 0, 200),
+    };
+    const r = await db.transaction((tx) =>
+      editSeriesSessions(tx, v, { sessionId: reqId(fd, "sessionId"), version: Number(str(fd, "version")), scope, changes, onCapacityConflict: mode }),
+    );
+    if (!r.applied) {
+      const tz = await orgTimezone(db, v.orgId);
+      return {
+        ok: false,
+        error: `${r.conflicts.length} session(s) already hold more athletes than the new size. Nothing was changed — choose how to handle them below.`,
+        data: {
+          conflicts: r.conflicts.map((c) => ({
+            id: c.sessionId,
+            when: fmt(c.startsAt, "EEE MMM d h:mm a", tz),
+            title: c.title,
+            occupying: c.occupying,
+            waitlisted: c.waitlisted,
+            newCapacity: c.newCapacity,
+            newWaitlistCapacity: c.newWaitlistCapacity,
+          })),
+        },
+      };
+    }
+    refresh();
+    const kept = r.keptCapacity.length ? ` ${r.keptCapacity.length} over-full session(s) kept their current size.` : "";
+    return {
+      ok: true,
+      message: `${r.updated} session(s) updated${r.notified ? `; ${r.notified} change notice(s) queued for families` : ""}.${kept} Bookings were kept.`,
+      data: { sessionId: str(fd, "sessionId") },
+    };
+  });
+}
+
+export async function cancelSeriesFromAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const v = await requireViewer();
+    const r = await db.transaction((tx) => cancelSeriesFrom(tx, v, { seriesId: reqId(fd, "seriesId"), fromYmd: str(fd, "fromYmd"), reason: str(fd, "reason") }));
+    refresh();
+    return { ok: true, message: `${r.cancelled} session(s) cancelled and ${r.released} booking(s) released (credits returned). Families are notified per session; the series now ends before that date.` };
+  });
+}
+
+// --- Family multi-booking -------------------------------------------------------------------
+
+export async function batchBookAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const v = await requireViewer();
+    const athleteIds = fd.getAll("athleteId").map((x) => uuid.safeParse(x));
+    if (!athleteIds.length) throw new UserError("Choose at least one athlete.", { athleteId: "Required" });
+    if (athleteIds.some((x) => !x.success)) throw new UserError("Missing or invalid reference. Reload the page and try again.");
+    const weeks = Number(str(fd, "weeks") || "1");
+    const mode = str(fd, "mode") === "partial" ? "partial" : "all_or_nothing";
+    const sessionId = reqId(fd, "sessionId");
+    const r = await db.transaction(async (tx) => {
+      const sessions = await nextSeriesSessions(tx, v, { sessionId, weeks });
+      const items = sessions.flatMap((s) => athleteIds.map((a) => ({ sessionId: s.id, athleteId: a.data! })));
+      return bookBatch(tx, v, { items, mode, idempotencyKey: str(fd, "idem"), allowWaitlist: checked(fd, "waitlist") });
+    });
+    if (r.committed) refresh();
+    const tz = await orgTimezone(db, v.orgId);
+    const results = r.results.map((x) => ({
+      athlete: x.athleteLabel,
+      session: x.sessionTitle,
+      when: x.startsAt ? fmt(x.startsAt, "EEE MMM d h:mm a", tz) : "",
+      outcome: x.outcome,
+      waitlistPosition: x.waitlistPosition,
+      error: x.error,
+    }));
+    const summary = !r.committed
+      ? `Nothing was booked: ${r.failed} of ${r.results.length} couldn't be booked, and you chose all-or-nothing.`
+      : `${r.booked} booked${r.waitlisted ? `, ${r.waitlisted} waitlisted` : ""}${r.failed ? `, ${r.failed} not booked` : ""}.`;
+    return r.committed && r.failed === 0 ? { ok: true, message: summary, data: { results } } : { ok: false, error: summary, data: { results, committed: r.committed } };
+  });
+}
+
+// --- Kiosk check-in PIN ---------------------------------------------------------------------
+
+export async function setCheckInPinAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const v = await requireViewer();
+    const clear = str(fd, "intent") === "clear";
+    const r = await db.transaction((tx) => setCheckInPin(tx, v, { athleteId: reqId(fd, "athleteId"), pin: clear ? null : str(fd, "pin") }));
+    refresh();
+    return { ok: true, message: r.set ? "PIN saved. Use it at the front-desk kiosk to check in." : "PIN removed." };
   });
 }
 
