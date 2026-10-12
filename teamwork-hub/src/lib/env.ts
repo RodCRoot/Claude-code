@@ -29,6 +29,8 @@ const schema = z.object({
 
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+  /** 32 random bytes, base64 (`openssl rand -base64 32`). Encrypts stored Google OAuth tokens. */
+  CALENDAR_TOKEN_KEY: z.string().optional(),
 
   EMAIL_PROVIDER: z.enum(["none", "smtp", "postmark", "sendgrid"]).default("none"),
   EMAIL_API_KEY: z.string().optional(),
@@ -71,7 +73,7 @@ export const integrationEnvVars: Record<string, string[]> = {
   paypal: ["PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET", "PAYPAL_WEBHOOK_ID", "PAYPAL_ENV"],
   venmo: ["PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET", "PAYPAL_WEBHOOK_ID (Venmo runs through PayPal Checkout)"],
   hawkin: ["HAWKIN_REFRESH_TOKEN", "HAWKIN_API_BASE", "HAWKIN_ORG_SCOPE"],
-  google_calendar: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
+  google_calendar: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "CALENDAR_TOKEN_KEY"],
   email: ["EMAIL_PROVIDER", "EMAIL_API_KEY", "EMAIL_FROM", "DELIVERY_ENABLED", "DELIVERY_TEST_RECIPIENTS"],
   sms: ["SMS_PROVIDER", "SMS_ACCOUNT_SID", "SMS_AUTH_TOKEN", "SMS_FROM", "DELIVERY_ENABLED", "DELIVERY_TEST_RECIPIENTS"],
 };

@@ -212,19 +212,46 @@ export const busyBlocks = pgTable(
   (t) => [index("busy_blocks_coach_idx").on(t.coachUserId, t.startsAt)],
 );
 
-export const calendarConnections = pgTable("calendar_connections", {
-  id: id(),
+export const calendarConnections = pgTable(
+  "calendar_connections",
+  {
+    id: id(),
+    orgId: orgId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    provider: text("provider").notNull().default("google"),
+    /** The Teamwork-owned (app-created) calendar that receives session copies. */
+    externalCalendarId: text("external_calendar_id"),
+    /** Calendar queried for free/busy (the coach's own calendar, normally "primary"). Null = externalCalendarId. */
+    freebusyCalendarId: text("freebusy_calendar_id"),
+    status: text("status").$type<"not_configured" | "connected" | "error" | "disabled">().notNull(),
+    syncDirection: text("sync_direction").$type<"push_events" | "freebusy_only" | "both">().notNull().default("both"),
+    lastSyncAt: ts("last_sync_at"),
+    lastError: text("last_error"),
+    connectedAt: ts("connected_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("cal_conn_user_provider_uq").on(t.orgId, t.userId, t.provider)],
+);
+
+/**
+ * OAuth tokens for a calendar connection, AES-256-GCM encrypted (src/lib/calendar/crypto.ts).
+ * Kept out of calendar_connections so status queries can never select a token by accident.
+ */
+export const calendarOauthTokens = pgTable("calendar_oauth_tokens", {
+  connectionId: uuid("connection_id")
+    .primaryKey()
+    .references(() => calendarConnections.id, { onDelete: "cascade" }),
   orgId: orgId(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id),
-  provider: text("provider").notNull().default("google"),
-  externalCalendarId: text("external_calendar_id"),
-  status: text("status").$type<"not_configured" | "connected" | "error" | "disabled">().notNull(),
-  syncDirection: text("sync_direction").$type<"push_events" | "freebusy_only" | "both">().notNull().default("both"),
-  lastSyncAt: ts("last_sync_at"),
-  lastError: text("last_error"),
+  refreshTokenEnc: text("refresh_token_enc").notNull(),
+  accessTokenEnc: text("access_token_enc"),
+  accessTokenExpiresAt: ts("access_token_expires_at"),
+  /** Space-delimited scopes Google actually granted (granular consent may grant fewer). */
+  scopes: text("scopes").notNull(),
+  refreshedAt: ts("refreshed_at"),
   createdAt: createdAt(),
+  updatedAt: updatedAt(),
 });
 
 /** Teamwork is the source of truth for sessions; Google receives copies. */

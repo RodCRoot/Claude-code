@@ -49,8 +49,40 @@ Cancellation policies are fully configurable (Settings → Cancellation policies
 - `calendarJobHandlers(tx, factory)` → push (POST), update (PUT with `If-Match` etag) or delete (DELETE; 404/410 = already gone). **Conflict handling:** a 412 (event edited in Google) is resolved by overwriting with Teamwork's version and noting it on the link.
 - **Retries:** 429/5xx/network errors throw → job queue exponential backoff (`maxAttempts` 8) and the link records `attempts`/`last_error`; permanent 4xx errors stop and mark the link `error`.
 - **Free/busy:** `syncFreeBusy` → `importFreeBusy` replaces `busy_blocks(source='google_freebusy')` inside the window; the slot finder subtracts them.
-- **Not configured:** without `GOOGLE_CLIENT_ID/SECRET` (and a per-coach token store, not yet built) the default provider factory returns `null`; jobs complete with link status `error: not configured` and no retry storm. Settings → Calendar sync shows `<NotConfigured>`. Internal scheduling is unaffected.
-- Follow-up needed for live sync: OAuth consent route + encrypted refresh-token storage per `calendar_connections` row (small additive schema change), and registering `calendarJobHandlers` in the worker (`scripts/worker.ts` does not exist yet).
+- **Not configured:** without `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and a valid `CALENDAR_TOKEN_KEY` (or before a coach connects) the default provider factory returns `null`; jobs complete with link status `error: not configured` and no retry storm. Settings shows `<NotConfigured>` naming the missing variables. Internal scheduling is unaffected.
+- Idempotent delivery: a job for a link that is already `synced` at the session's current version (or already `deleted`) is a no-op.
+- Handlers are registered in `src/lib/jobs-registry.ts` (worker: `pnpm jobs:work`).
+
+### OAuth connect flow (per coach)
+Files: `src/lib/calendar/oauth.ts` (protocol), `crypto.ts` (encryption), `tokens.ts` (storage, refresh, disconnect, provider factory), `connect.ts` (callback completion), routes `src/app/api/calendar/google/{start,callback}/route.ts`, action `src/app/(app)/schedule/settings/calendar-actions.ts`. UI: Schedule → Settings → Availability → “My Google Calendar” (every staff member); managers also see all connections under Settings → Calendar sync.
+
+1. `GET /api/calendar/google/start` — staff only (owner/admin/operations/coach). Always for the **signed-in** user; no user id is accepted. Sets an httpOnly, `SameSite=Lax`, 10-minute cookie `tw_gcal_oauth` (path = callback) holding a random nonce, then redirects to Google with `access_type=offline`, `prompt=consent`, PKCE `S256`, and a `state` = base64url(JSON `{user, org, nonce, exp}`) + HMAC-SHA256 (key HKDF-derived from `SESSION_SECRET`).
+2. `GET /api/calendar/google/callback` — verifies the state signature (constant-time), expiry, that it belongs to the **current** user + org, and that its nonce equals the cookie's (same browser). Only then is the code exchanged server-side (`client_secret` + PKCE verifier, derived from the nonce with the server key, never sent to the browser). The cookie is consumed on every callback. Redirects back with a short result code only (`?calendar=connected|denied|expired|invalid_state|…`).
+3. On success: the coach's dedicated **“Teamwork Hub”** secondary calendar is created (or reused if it still exists; if it was deleted, a new one is created and old links reset), tokens are encrypted and stored, the connection becomes `connected`, upcoming sessions (60 days) are queued for push and a free/busy import (28 days) is queued.
+4. **Scopes (minimal):** `calendar.app.created` (create the Teamwork calendar and manage events *only on calendars this app created*) and `calendar.freebusy` (busy/free only, no event details; queried on the coach's `primary` calendar). Granular consent is honored: only push → `sync_direction=push_events`; only free/busy → `freebusy_only`; neither → nothing stored.
+5. **Disconnect** (`disconnectCalendar`): a coach may disconnect only their own connection; owner/admin (`integrations.manage`) may disconnect anyone's (operations cannot). The refresh token is revoked at Google (`POST https://oauth2.googleapis.com/revoke`), then the token row is deleted and the connection set `disabled` — local deletion happens even if Google can't be reached (audit + UI tell the coach to remove access under Google Account → Security → Third-party access). The “Teamwork Hub” calendar stays in the coach's Google account; they may delete it.
+
+### Token storage
+- Table `calendar_oauth_tokens` (migration `0004_cal_tokens`), one row per connection, separate from `calendar_connections` so status/UI queries can never select a token. Columns: `refresh_token_enc`, `access_token_enc`, `access_token_expires_at`, granted `scopes`, `refreshed_at`.
+- AES-256-GCM, random 96-bit IV per value, format `v1.<iv>.<ciphertext>.<tag>`; key = HKDF-SHA256(`CALENDAR_TOKEN_KEY`). The connection id is the GCM additional authenticated data, so tampered bytes or a ciphertext copied to another row fail authentication.
+- `CALENDAR_TOKEN_KEY` = 32 random bytes, base64 (`openssl rand -base64 32`). Changing it makes stored tokens unreadable → each connection is marked `error` (“reconnect”) on next use; no crash.
+- `getAccessToken` returns the cached access token if it has > 60 s left, else refreshes (`grant_type=refresh_token`, token row locked `FOR UPDATE` when called inside a transaction). A `refresh_token` in the response replaces the stored one (rotation). `invalid_grant`/401 → connection `error` with “Google Calendar access was revoked or expired… reconnect”, grant deleted, audit `calendar.token_refresh_failed`, non-retryable. Network/5xx → retryable, connection untouched. A Calendar API 401 drops the cached access token so the retry refreshes.
+- Tokens are never logged, returned to the client, put in audit summaries/before/after, job payloads or redirect URLs; token-endpoint errors surface only Google's error code. Audit events: `calendar.connected`, `calendar.disconnected`, `calendar.token_refresh_failed`.
+
+### Google Cloud console setup (one-time)
+1. Google Cloud console → create/select a project → **APIs & Services → Library** → enable **Google Calendar API**.
+2. **Google Auth Platform → Branding / Audience (OAuth consent screen)**: app name “Teamwork Hub”, support email, authorized domain = the production domain. User type **Internal** if every coach uses a Teamwork Google Workspace account (no verification needed); otherwise **External** — while in *Testing*, add each coach as a test user (refresh tokens for Testing apps expire after 7 days), then publish; `calendar.app.created` / `calendar.freebusy` may require Google verification for External production apps.
+3. **Data access (scopes)**: add `https://www.googleapis.com/auth/calendar.app.created` and `https://www.googleapis.com/auth/calendar.freebusy`.
+4. **Clients → Create client → Web application**. Authorized redirect URI: `${APP_URL}/api/calendar/google/callback` (exact match, e.g. `https://hub.example.com/api/calendar/google/callback`; add `http://localhost:3000/api/calendar/google/callback` for local testing).
+5. Set on the server: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `CALENDAR_TOKEN_KEY` (`openssl rand -base64 32`), and make sure `APP_URL` is the public origin. Restart, then Settings → Integrations → Re-check.
+
+### Reference docs (checked 2026-10-12)
+- OAuth 2.0 for web server apps: https://developers.google.com/identity/protocols/oauth2/web-server
+- PKCE (supported by Google's authorization server): https://developers.google.com/identity/protocols/oauth2/native-app
+- Calendar API scopes: https://developers.google.com/workspace/calendar/api/auth
+- `calendars.insert` (scope `calendar.app.created`): https://developers.google.com/workspace/calendar/api/v3/reference/calendars/insert
+- `events.insert` (accepts `calendar.app.created`): https://developers.google.com/workspace/calendar/api/v3/reference/events/insert
+- `freebusy.query` (accepts `calendar.freebusy`): https://developers.google.com/workspace/calendar/api/v3/reference/freebusy/query
 
 ## Jobs emitted (for other modules)
 | Type | Payload | Dedupe key |
