@@ -7,7 +7,7 @@ import { cn } from "@/lib/cn";
 
 export function Card({ className, children, id }: { className?: string; children: React.ReactNode; id?: string }) {
   return (
-    <section id={id} className={cn("rounded-xl border border-edge bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.04)]", className)}>
+    <section id={id} className={cn("min-w-0 rounded-xl border border-edge bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.04)]", className)}>
       {children}
     </section>
   );

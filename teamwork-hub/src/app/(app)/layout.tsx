@@ -4,11 +4,18 @@ import { logoutAction } from "@/lib/auth/actions";
 import { navFor, ROLE_LABEL } from "@/lib/nav";
 import { isDemoMode } from "@/lib/env";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { STAFF_ROLES } from "@/lib/auth/session";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const viewer = await requireViewer();
   if (viewer.role === "kiosk") redirect("/kiosk");
   const org = await getOrg(viewer.orgId);
+  // Enforce staff MFA when the organization requires it.
+  if (org?.settings?.requireStaffMfa && STAFF_ROLES.includes(viewer.role) && !(viewer as { mfaEnabled?: boolean }).mfaEnabled) {
+    const path = (await headers()).get("x-pathname") ?? "";
+    if (!path.startsWith("/settings/security")) redirect("/settings/security?required=1");
+  }
   const brand = org?.branding?.primaryColor;
   return (
     <div className="lg:flex" style={brand ? ({ ["--brand" as string]: brand } as React.CSSProperties) : undefined}>

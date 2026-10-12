@@ -24,7 +24,8 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
     personId: user.personId,
     displayName: user.displayName,
     mfaVerified: session.mfaVerified,
-  };
+    mfaEnabled: user.mfaEnabled,
+  } as Viewer & { mfaEnabled: boolean };
 });
 
 /** Session exists but MFA is pending — used by the /login/mfa page. */
