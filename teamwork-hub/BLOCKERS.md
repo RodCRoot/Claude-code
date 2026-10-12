@@ -13,3 +13,6 @@ Items that need Rod (or a provider) to unblock. Independent work continues witho
 | Email/SMS provider | Deliberately off | Provider keys + `DELIVERY_ENABLED=true` + consent records. | All external delivery recorded as `not_configured`/`suppressed`; in-app messaging works. |
 | Approved Teamwork legal language (waiver, membership agreement) | Needed | Final approved text from Rod/counsel. | Forms use clearly labeled SAMPLE text. |
 | Real prices & policies | Needed | Rod to enter in Settings → Products / Policies. | Products are "Sample …" with placeholder prices. |
+
+## Note from Rod's own Zen Planner playbooks (2026-10-12)
+Rod's documented procedures (hold-request, membership-hold, membership-status-check, add-membership) state a hard rule: **automation must never submit Zen Planner login credentials, even autofilled ones — Rod clicks Login himself**, and only one Zen Planner session may be open at a time (a second session silently resets the first). So even with a Chrome connection, Zen Planner exploration needs Rod present to click Login. Export-based imports avoid this entirely. The Hub's import design follows the same rule (no stored Zen Planner password; files only).
