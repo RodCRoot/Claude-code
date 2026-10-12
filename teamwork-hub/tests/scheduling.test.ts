@@ -40,6 +40,8 @@ const db = () => testDb();
 
 beforeAll(async () => {
   ctx = await seedOrg();
+  // These tests exercise credit-based entitlement; neutralize memberships created by the billing demo seed in this isolated org.
+  await db().execute(sql`update memberships set status = 'cancelled' where org_id = ${ctx.orgId}`);
   // The seed leaves these athletes credit-free (shared ledger tests rely on that); give them credits here.
   for (const k of ["ethan", "sofia", "liam", "harper"]) await giveCredits(ctx, k, 20);
 });
