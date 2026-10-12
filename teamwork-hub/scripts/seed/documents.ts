@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import path from "node:path";
-import { eq } from "drizzle-orm";
-import { formTemplates, formTemplateVersions, type FormField, type SignerRequirement } from "../../src/db/schema";
+import { eq, sql } from "drizzle-orm";
+import { formTemplates, formTemplateVersions, organizations, type FormField, type SignerRequirement } from "../../src/db/schema";
 import type { Viewer } from "../../src/lib/authz/policy";
 import type { Role } from "../../src/db/schema";
 import { addDaysYmd, localToUtc } from "../../src/lib/time";
@@ -169,10 +169,29 @@ export async function seedDocuments(ctx: SeedCtx) {
     signRequest(
       tx,
       s.v,
-      { requestId, role: s.role, typedName: s.name, consent: true, values: s.values ?? {}, inPersonSignerPersonId: s.inPerson ? ctx.people[s.inPerson] : null },
+      {
+        requestId,
+        role: s.role,
+        typedName: s.name,
+        consent: true,
+        values: s.values ?? {},
+        inPersonSignerPersonId: s.inPerson ? ctx.people[s.inPerson] : null,
+        identityAttested: !!s.inPerson,
+      },
       evidence(s.ip),
       s.when,
     );
+
+  // The synthetic history below predates signer identity step-up (no email is ever sent by
+  // the seed), so the requirement is switched off explicitly while it is generated: those
+  // signatures honestly record `session_password`. The override is removed at the end, so
+  // the org runs on the default (step-up ON for waivers and agreements).
+  const setStepUpOverride = (value: object | null) =>
+    tx
+      .update(organizations)
+      .set({ settings: value ? sql`${organizations.settings} || ${JSON.stringify({ formsStepUp: value })}::jsonb` : sql`${organizations.settings} - 'formsStepUp'` })
+      .where(eq(organizations.id, orgId));
+  await setStepUpOverride({ requireForKinds: [], allowSessionMfa: true });
 
   // --- Templates -------------------------------------------------------------------
   const waiver = await template("Liability Waiver & Release", "waiver", 12, true);
@@ -291,6 +310,7 @@ export async function seedDocuments(ctx: SeedCtx) {
   await sign(req.mediaMaya, { v: alex, role: "guardian", name: "Alex Parker", values: { field_media_permission: "Internal coaching use only" }, when: at(5), ip: 10 });
   req.mediaLeo = (await issue(dv1.id, "leo", "leo_rivera", 14)).id; // pending — Sam and Casey
 
+  await setStepUpOverride(null);
   ctx.extra.formRequests = req;
   // Sanity: both waiver versions are published (v1 stays immutable; v2 is current).
   const pub = await tx.select({ id: formTemplateVersions.id, status: formTemplateVersions.status }).from(formTemplateVersions).where(eq(formTemplateVersions.templateId, waiver.id));

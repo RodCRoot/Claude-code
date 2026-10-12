@@ -1,11 +1,15 @@
 import Link from "next/link";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
+import { organizations } from "@/db/schema";
+import { stepUpSettingsOf } from "@/lib/forms/step-up";
+import { emailConfig } from "@/lib/messaging/channels/email";
 import { requireViewer } from "@/lib/auth/viewer";
 import { accessibleAthleteIds, can, coachAthleteIds, isStaff, type Viewer } from "@/lib/authz/policy";
 import { missingForms } from "@/lib/forms/status";
 import { athleteOptions, listRequests, listTemplates } from "@/lib/forms/queries";
 import { listArchive } from "@/lib/forms/archive";
-import { PILOT_NOTICE } from "@/lib/forms/consent";
+import { IDENTITY_NOTICE, PILOT_NOTICE } from "@/lib/forms/consent";
 import { isAdultAt } from "@/lib/forms/context";
 import { TEMPLATE_KINDS } from "@/lib/forms/templates";
 import { fmt, fmtDate, todayLocal } from "@/lib/time";
@@ -19,6 +23,7 @@ import {
   EmptyState,
   Field,
   Input,
+  NotConfigured,
   PageHeader,
   Select,
   Stat,
@@ -29,7 +34,7 @@ import {
   Th,
 } from "@/components/ui";
 import { ActionForm, SubmitButton } from "@/components/forms";
-import { createTemplateAction, issueAction, remindOverdueAction, renewalsAction } from "./actions";
+import { createTemplateAction, issueAction, remindOverdueAction, renewalsAction, stepUpSettingsAction } from "./actions";
 import { SampleBadge } from "./_components/markdown";
 
 export const metadata = { title: "Documents" };
@@ -279,10 +284,53 @@ async function MissingTab({ v, scope, manage }: { v: Viewer; scope: string[] | "
   );
 }
 
+async function StepUpSettingsCard({ v }: { v: Viewer }) {
+  const [org] = await db.select({ settings: organizations.settings }).from(organizations).where(eq(organizations.id, v.orgId));
+  const s = stepUpSettingsOf(org?.settings);
+  const editable = can(v, "settings.manage");
+  const email = emailConfig();
+  return (
+    <Card id="identity-verification">
+      <CardHeader title="Signer identity verification" kicker="Step-up before signing" />
+      <CardBody className="space-y-3">
+        <p className="text-sm text-ink-3">
+          For the form kinds checked below, a signature is accepted only after the signer enters a one-time code emailed to the address on file (6 digits, 10 minutes, 5 attempts),
+          or completed MFA this session if allowed. Staff can instead verify identity in person and record the signature as witness (<code>staff_witnessed_in_person</code>). The method is
+          stored with each signature and printed on the PDF.
+        </p>
+        {!email.configured ? (
+          <NotConfigured provider="Email delivery" envVars={email.missing}>
+            Verification codes cannot be emailed, so families cannot self-sign forms that require identity verification. Nothing is skipped: staff must verify identity in person and record those signatures.
+          </NotConfigured>
+        ) : null}
+        <ActionForm action={stepUpSettingsAction} className="space-y-3">
+          <fieldset disabled={!editable} className="space-y-3">
+            <legend className="text-sm font-medium">Require identity verification for</legend>
+            <div className="flex flex-wrap gap-x-5 gap-y-2">
+              {TEMPLATE_KINDS.map((k) => (
+                <label key={k} className="flex min-h-10 items-center gap-2 text-sm">
+                  <input type="checkbox" name="requireForKinds" value={k} defaultChecked={(s.requireForKinds as string[]).includes(k)} className="size-4" />
+                  {k.replace("_", " ")}
+                </label>
+              ))}
+            </div>
+            <label className="flex min-h-10 items-center gap-2 text-sm">
+              <input type="checkbox" name="allowSessionMfa" defaultChecked={s.allowSessionMfa} className="size-4" />
+              Accept a session that completed multi-factor sign-in (users with MFA enabled) instead of an emailed code
+            </label>
+          </fieldset>
+          {editable ? <SubmitButton pendingText="Saving…">Save verification settings</SubmitButton> : <p className="text-xs text-ink-3">Only owners and admins can change this.</p>}
+        </ActionForm>
+      </CardBody>
+    </Card>
+  );
+}
+
 async function TemplatesTab({ v }: { v: Viewer }) {
   const templates = await listTemplates(db, v.orgId);
   return (
     <div className="space-y-5">
+      <StepUpSettingsCard v={v} />
       {templates.length === 0 ? (
         <EmptyState title="No templates yet">Create the first form template below.</EmptyState>
       ) : (
@@ -384,6 +432,7 @@ async function FamilyDocuments({ v, sp }: { v: Viewer; sp: Awaited<SP> }) {
       <PageHeader kicker="Documents" title="Forms" description="Review and sign forms for your family, and download copies of everything you’ve signed." />
       <Callout className="mb-5" title="About electronic signing">
         {PILOT_NOTICE}
+        <span className="mt-2 block">{IDENTITY_NOTICE}</span>
       </Callout>
       {kids.length === 0 ? (
         <EmptyState title="No athletes linked to your account">If you expected to see your child here, contact Teamwork staff to link your account.</EmptyState>

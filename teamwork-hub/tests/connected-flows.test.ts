@@ -34,6 +34,7 @@ import { convertLead, conversionPreview } from "@/lib/crm/convert";
 import { mkSession } from "./scheduling-helpers";
 import { checkoutSessionEvent, signedHeaders, TEST_WHSEC } from "./fixtures/payments/stripe";
 import { closeTestDb, seedOrg, testDb, viewerFor } from "./helpers/db";
+import { verifyByEmail } from "./helpers/step-up";
 import type { Viewer } from "@/lib/authz/policy";
 
 let ctx: Awaited<ReturnType<typeof seedOrg>>;
@@ -85,6 +86,8 @@ describe("Path 1: registration → form → invoice → verified payment → ent
     const issued = await db.transaction((tx) => issueRequests(tx, erin, { templateId: tpl.id, target: { kind: "athlete", athleteId: fam.athleteId } }));
     const reqId = issued.ids[0];
     expect(issued.created).toBe(1);
+    // Waivers require signer identity step-up: the parent enters the code emailed to them.
+    await verifyByEmail(db, parent, String(reqId));
     await db.transaction((tx) => signRequest(tx, parent, { requestId: String(reqId), role: "guardian", typedName: "Morgan Flowtest", consent: true, values: {} }, ev));
 
     // 4. Still no entitlement → booking refused with a clear message.

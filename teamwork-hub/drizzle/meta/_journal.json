@@ -29,6 +29,20 @@
       "when": 1791777991876,
       "tag": "0003_per_org_source_uniques",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791779541165,
+      "tag": "0004_docs_signer_step_up",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791779542408,
+      "tag": "0005_docs_form_version_status_guard",
+      "breakpoints": true
     }
   ]
 }

@@ -146,6 +146,59 @@ export const signatures = pgTable(
   (t) => [uniqueIndex("signatures_role_uq").on(t.formRequestId, t.signerRole)],
 );
 
+export type StepUpChallengeStatus =
+  /** Code delivered (or redirected to a test recipient); awaiting entry. */
+  | "pending"
+  /** Correct code entered; may be consumed by exactly one signature before it expires. */
+  | "verified"
+  /** Used by a signature (`signature_id`). */
+  | "consumed"
+  /** Too many wrong attempts. */
+  | "locked"
+  /** Replaced by a newer code for the same signer. */
+  | "superseded"
+  /** Email could not be sent (not configured / provider failure): never usable. */
+  | "undeliverable";
+
+/**
+ * One-time codes for signer identity step-up. Only an HMAC of the code is stored.
+ * Bound to (request, signer person, requesting user); a code is usable for one signature.
+ */
+export const signerStepUpChallenges = pgTable(
+  "signer_step_up_challenges",
+  {
+    id: id(),
+    orgId: orgId(),
+    formRequestId: uuid("form_request_id")
+      .notNull()
+      .references(() => formRequests.id),
+    signerPersonId: uuid("signer_person_id")
+      .notNull()
+      .references(() => people.id),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    signerRole: text("signer_role").notNull(),
+    channel: text("channel").$type<"email">().notNull().default("email"),
+    /** The address on file the code was sent to (before any test redirect). */
+    address: text("address").notNull(),
+    codeHash: text("code_hash").notNull(),
+    expiresAt: ts("expires_at").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(5),
+    status: text("status").$type<StepUpChallengeStatus>().notNull().default("pending"),
+    /** Messaging adapter result: sent | test_redirected | not_configured | failed. */
+    deliveryStatus: text("delivery_status"),
+    deliveryReason: text("delivery_reason"),
+    providerMessageId: text("provider_message_id"),
+    verifiedAt: ts("verified_at"),
+    consumedAt: ts("consumed_at"),
+    signatureId: uuid("signature_id").references(() => signatures.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("step_up_signer_idx").on(t.formRequestId, t.signerPersonId, t.createdAt)],
+);
+
 export const formAuditEvents = pgTable("form_audit_events", {
   id: id(),
   formRequestId: uuid("form_request_id")

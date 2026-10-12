@@ -217,7 +217,7 @@ describe("signing rules", () => {
     expect(dana.signatures[0].signerRole).toBe("adult_athlete");
     expect(dana.signatures[0].relationship).toBe("self");
     const zoe = await ctxOf(R().waiver_zoe);
-    expect(zoe.signatures[0].authMethod).toMatch(/^in_person_staff_witnessed; witness=Erin/);
+    expect(zoe.signatures[0].authMethod).toMatch(/^staff_witnessed_in_person; witness=Erin .*; identity=staff_attested$/);
     expect(zoe.signatures[0].signerPersonId).toBe(ctx.people.zoe_guardian);
     // A coach cannot record in-person signatures.
     const marcus = await viewerFor(ctx, "marcus");

@@ -36,14 +36,36 @@ export function computeIntegrity(ctx: Pick<RequestContext, "req" | "version" | "
   });
 }
 
-export function describeAuthMethod(m: string): string {
-  if (m.startsWith("in_person_staff_witnessed")) {
-    const witness = /witness=(.*)$/.exec(m)?.[1];
-    return `In person at Teamwork, witnessed by staff${witness ? ` ${witness}` : ""}`;
+/** Parse `auth_method` evidence: `<method>; key=value; …` (see signing.ts resolveIdentity). */
+export function parseAuthMethod(m: string): { method: string; params: Record<string, string> } {
+  const [method, ...rest] = m.split(";").map((s) => s.trim());
+  const params: Record<string, string> = {};
+  for (const p of rest) {
+    const i = p.indexOf("=");
+    if (i > 0) params[p.slice(0, i)] = p.slice(i + 1);
   }
-  if (m === "session_password_mfa") return "Signed-in account (password + MFA)";
-  if (m === "session_password") return "Signed-in account session";
-  return m;
+  return { method, params };
+}
+
+const SESSION_LABEL: Record<string, string> = {
+  session_password_mfa: "Signed-in account (password + MFA)",
+  session_password: "Signed-in account session",
+};
+
+/** Human-readable identity evidence; the raw `auth_method` value is always shown alongside it. */
+export function describeAuthMethod(m: string): string {
+  const { method, params } = parseAuthMethod(m);
+  if (method === "staff_witnessed_in_person") {
+    return `In person at Teamwork; staff witness ${params.witness ?? "(unknown)"} attested the signer's identity`;
+  }
+  if (method === "in_person_staff_witnessed") {
+    // Legacy (before identity step-up): witnessed, identity attestation not recorded.
+    return `In person at Teamwork, witnessed by staff${params.witness ? ` ${params.witness}` : ""}`;
+  }
+  const session = SESSION_LABEL[method] ?? method;
+  if (params.step_up === "email_otp") return `${session} + one-time code sent to the signer's email on file`;
+  if (params.step_up === "session_mfa") return `${session}; identity step-up satisfied by MFA this session`;
+  return session;
 }
 
 export async function buildPdf(ctx: RequestContext, completedAt: Date, integrity: string) {
@@ -72,7 +94,8 @@ export async function buildPdf(ctx: RequestContext, completedAt: Date, integrity
       signedAt: s.signedAt,
       ip: s.ip,
       userAgent: s.userAgent,
-      authMethod: describeAuthMethod(s.authMethod),
+      authMethodLabel: describeAuthMethod(s.authMethod),
+      authMethod: s.authMethod,
     })),
     completedAt,
     integrityHash: integrity,
