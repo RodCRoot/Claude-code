@@ -32,4 +32,4 @@ Merged: scheduling depth (series edits this/following/all with capacity-conflict
 Migrations: 0009 crm preferences/campaigns/inbound, 0010 kiosk pins, 0011 custom fields (renumbered at merge; `drizzle-kit generate` reports no drift).
 Test infrastructure: vitest hook timeout 180 s and max 4 workers (seeding grew); job-count assertion scoped per org.
 
-Verified: `pnpm test` 455/455, typecheck/lint clean, production build OK.
+Verified: `pnpm test` 455/455, typecheck/lint clean, production build OK; Playwright against the production build 234/234 (auth/access, CSP sweep, axe WCAG 2.1 AA sweep for every role at desktop + 390px) and training offline/builder suite 4/4.
