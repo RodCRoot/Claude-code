@@ -12,7 +12,6 @@ import {
   notes,
   payerAccounts,
   payerAuthorizations,
-  payerBeneficiaries,
   people,
   personTags,
   tags,
