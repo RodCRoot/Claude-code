@@ -47,10 +47,14 @@ All demo data is synthetic (`is_demo = true`, `.test` email domains, "Sample" pr
 | `pnpm db:reset` / `pnpm db:seed` / `pnpm db:fresh` | **Development only** — refuse to run unless `APP_MODE=demo` |
 | `pnpm jobs:work` | Background job worker (outbox: messaging, reminders, renewals, syncs) |
 | `pnpm backup` | `pg_dump` backup (see `docs/BACKUP-RESTORE.md`) |
+| `pnpm restore:check [dump]` | Restore rehearsal: restores a dump into a scratch DB and compares migrations, schema, and row counts |
+| `pnpm monitoring:check` | Sends one synthetic, redacted error to Sentry (needs `SENTRY_DSN`) |
 
 ## Configuration (names only — never commit values)
 
-`DATABASE_URL`, `TEST_DATABASE_URL`, `SESSION_SECRET`, `APP_URL`, `APP_MODE` (`demo` | `staging` | `production`), `STORAGE_DIR`,
+`DATABASE_URL`, `TEST_DATABASE_URL`, `SESSION_SECRET`, `APP_URL`, `APP_MODE` (`demo` | `staging` | `production`),
+`STORAGE_BACKEND` (`local` | `s3`), `STORAGE_DIR`, `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT`, `S3_FORCE_PATH_STYLE`, `S3_PREFIX`, `S3_SSE`, `S3_KMS_KEY_ID` (+ standard `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` chain),
+`STAGING_BASIC_AUTH_USER`, `STAGING_BASIC_AUTH_PASSWORD`, `SENTRY_ENVIRONMENT`, `SENTRY_TRACES_SAMPLE_RATE`, `LOG_LEVEL`,
 `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PUBLISHABLE_KEY`,
 `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID`, `PAYPAL_ENV`,
 `HAWKIN_REFRESH_TOKEN`, `HAWKIN_API_BASE`, `HAWKIN_ORG_SCOPE`,
@@ -61,7 +65,7 @@ Missing provider variables leave that integration in an honest **not configured*
 
 ## Architecture
 
-Modular monolith: Next.js 16 App Router (server components + server actions + route handlers), TypeScript, Tailwind 4, Drizzle ORM on PostgreSQL 16, Postgres-backed job queue, local-disk object storage behind an S3-shaped interface. Conventions for contributors are in [`AGENTS.md`](AGENTS.md); design decisions in [`DECISIONS.md`](DECISIONS.md); per-module workflows, formulas, and provider research in `docs/modules/`.
+Modular monolith: Next.js 16 App Router (server components + server actions + route handlers), TypeScript, Tailwind 4, Drizzle ORM on PostgreSQL 16, Postgres-backed job queue, object storage on local disk or an S3-compatible bucket (`STORAGE_BACKEND`). Conventions for contributors are in [`AGENTS.md`](AGENTS.md); design decisions in [`DECISIONS.md`](DECISIONS.md); per-module workflows, formulas, and provider research in `docs/modules/`.
 
 Key guarantees:
 - **Authorization is server-side** in one policy module (`src/lib/authz/policy.ts`). Guardian permissions are per relationship; payment access never implies health-data access; coaches see only assigned athletes; kiosks see first name + last initial.
@@ -70,7 +74,9 @@ Key guarantees:
 
 ## Deployment
 
-No hosting was configured or changed during the build. To stage privately: provision Postgres 16, set the variables above with `APP_MODE=staging`, run `pnpm db:migrate`, `pnpm build && pnpm start`, and run `pnpm jobs:work` as a second process. Keep payment keys in test mode and `DELIVERY_ENABLED=false` until production review. Do not point the existing Teamwork domain at it.
+No hosting was configured or changed during the build. [`docs/DEPLOY.md`](docs/DEPLOY.md) has the exact steps for a private staging on Render using [`render.yaml`](render.yaml) (web + worker + Postgres 16, `APP_MODE=staging`, sandbox payments, `DELIVERY_ENABLED=false`, basic-auth gate) and the production [`Dockerfile`](Dockerfile), plus the health check (`GET /api/health`) and the pre-launch checklist. Do not point the existing Teamwork domain at staging.
+
+Production hardening in place: nonce-based CSP and security headers (`src/proxy.ts`), structured redacted JSON logs + optional server-side Sentry (`src/lib/observability.ts`, `src/instrumentation.ts`), private SSE-encrypted S3-compatible object storage (`src/lib/storage-s3.ts`), and a scripted restore rehearsal (`scripts/restore-check.sh`).
 
 ## Walkthrough (screenshots in `docs/screenshots/`, synthetic data)
 

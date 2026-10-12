@@ -12,7 +12,18 @@ const schema = z.object({
   APP_URL: z.string().url().default("http://localhost:3000"),
   /** "demo" enables synthetic seed + dev role switcher; never set in production. */
   APP_MODE: z.enum(["demo", "staging", "production"]).default("demo"),
+  /** Object storage: "local" (STORAGE_DIR on disk) or "s3" (S3-compatible bucket). */
+  STORAGE_BACKEND: z.enum(["local", "s3"]).default("local"),
   STORAGE_DIR: z.string().default("./.storage"),
+  S3_BUCKET: z.string().optional(),
+  S3_REGION: z.string().optional(),
+  /** Only for S3-compatible providers (R2, B2, MinIO); omit for AWS. */
+  S3_ENDPOINT: z.string().url().optional(),
+  S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).default("false"),
+  S3_PREFIX: z.string().optional(),
+  S3_SSE: z.enum(["AES256", "aws:kms", "none"]).default("AES256"),
+  S3_KMS_KEY_ID: z.string().optional(),
+  // Credentials: standard AWS chain (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY, profile, role).
 
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
@@ -42,7 +53,21 @@ const schema = z.object({
   /** Must be explicitly "true" for any real external delivery. */
   DELIVERY_ENABLED: z.enum(["true", "false"]).default("false"),
 
-  SENTRY_DSN: z.string().optional(),
+  /** Optional site-wide HTTP Basic Auth gate for a private staging deployment (src/proxy.ts). */
+  STAGING_BASIC_AUTH_USER: z.string().optional(),
+  STAGING_BASIC_AUTH_PASSWORD: z.string().min(16, "STAGING_BASIC_AUTH_PASSWORD must be at least 16 characters").optional(),
+
+  /** Server-side error reporting; Sentry is never loaded without it. */
+  SENTRY_DSN: z.string().url().optional(),
+  SENTRY_ENVIRONMENT: z.string().optional(),
+  SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0),
+  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+}).superRefine((e, ctx) => {
+  if (e.STORAGE_BACKEND === "s3") {
+    for (const k of ["S3_BUCKET", "S3_REGION"] as const) {
+      if (!e[k]) ctx.addIssue({ code: "custom", path: [k], message: `${k} is required when STORAGE_BACKEND=s3` });
+    }
+  }
 });
 
 export type Env = z.infer<typeof schema>;
@@ -51,7 +76,8 @@ let cached: Env | null = null;
 
 export function env(): Env {
   if (cached) return cached;
-  const parsed = schema.safeParse(process.env);
+  // `FOO=` in an env file means "unset", not an (invalid) empty value.
+  const parsed = schema.safeParse(Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== "")));
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
     throw new Error(`Invalid environment: ${issues}`);

@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { AuthzError } from "@/lib/authz/policy";
+import { reportError } from "@/lib/observability";
 
 /** Standard result for every server action used with <ActionForm>. */
 export type ActionState = {
@@ -25,7 +26,8 @@ export class UserError extends Error {
 /**
  * Wraps a server action so validation, permission, and business-rule errors
  * become a visible state rather than an unhandled exception. Unexpected errors
- * are logged (without payloads) and reported generically.
+ * are logged redacted (never the form payload), sent to Sentry when SENTRY_DSN is set,
+ * and reported to the user generically.
  */
 export function safeAction<T extends unknown[]>(fn: (...args: T) => Promise<ActionState | void>) {
   return async (...args: T): Promise<ActionState> => {
@@ -43,7 +45,7 @@ export function safeAction<T extends unknown[]>(fn: (...args: T) => Promise<Acti
       const pgCode = (e as { code?: string; cause?: { code?: string } })?.cause?.code ?? (e as { code?: string })?.code;
       if (pgCode === "23P01") return { ok: false, error: "That time conflicts with another booking for the same coach or room." };
       if (pgCode === "23505") return { ok: false, error: "That record already exists (duplicate)." };
-      console.error(JSON.stringify({ level: "error", msg: "action_failed", name: (e as Error)?.name, message: (e as Error)?.message }));
+      reportError(e, { where: "action", action: fn.name || "anonymous" });
       return { ok: false, error: "Something went wrong. Nothing was changed. Please try again." };
     }
   };

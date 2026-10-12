@@ -4,6 +4,7 @@ import { getViewer } from "@/lib/auth/viewer";
 import { audit } from "@/lib/audit";
 import { objectAccess } from "@/lib/forms/access";
 import { objectStore, sha256Bytes } from "@/lib/storage";
+import { reportError } from "@/lib/observability";
 
 /**
  * GET /api/files/:id — the only way stored objects leave the server (all modules).
@@ -24,12 +25,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   let bytes: Uint8Array;
   try {
     bytes = await objectStore().get(object.storageKey);
-  } catch {
-    console.error(JSON.stringify({ level: "error", msg: "stored_object_missing", objectId: object.id }));
+  } catch (e) {
+    reportError(e, { where: "route:/api/files/:id", reason: "stored_object_missing", objectId: object.id });
     return text(410, "This file is no longer available. Ask Teamwork staff for help.");
   }
   if (sha256Bytes(bytes) !== object.sha256) {
-    console.error(JSON.stringify({ level: "error", msg: "stored_object_checksum_mismatch", objectId: object.id }));
+    reportError(new Error("stored object checksum mismatch"), { where: "route:/api/files/:id", reason: "checksum_mismatch", objectId: object.id });
     return text(500, "This file failed its integrity check and was not served. Teamwork staff have been notified in the logs.");
   }
   await audit(db, { orgId: viewer.orgId, actorUserId: viewer.userId, actorRole: viewer.role }, "file.download", "stored_object", object.id, {

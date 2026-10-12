@@ -17,12 +17,18 @@
     "db:seed": "tsx --conditions=react-server scripts/seed.ts",
     "db:fresh": "tsx scripts/reset.ts && tsx scripts/migrate.ts && tsx --conditions=react-server scripts/seed.ts",
     "jobs:work": "tsx --conditions=react-server scripts/worker.ts",
-    "backup": "bash scripts/backup.sh"
+    "backup": "bash scripts/backup.sh",
+    "restore:check": "bash scripts/restore-check.sh",
+    "bootstrap:owner": "tsx --conditions=react-server scripts/bootstrap-owner.ts",
+    "monitoring:check": "tsx --conditions=react-server scripts/monitoring-check.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1149.0",
+    "@sentry/nextjs": "11.6.0",
     "bcryptjs": "^3.0.3",
     "date-fns": "^4.4.0",
     "date-fns-tz": "^3.2.0",
+    "dotenv": "^18.0.7",
     "drizzle-orm": "^0.45.4",
     "fflate": "0.8.2",
     "geist": "^1.7.2",
@@ -37,6 +43,7 @@
     "react-dom": "19.2.4",
     "recharts": "^3.10.1",
     "server-only": "^0.0.1",
+    "tsx": "^4.23.15",
     "zod": "^4.6.6"
   },
   "devDependencies": {
@@ -48,12 +55,11 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "dotenv": "^18.0.7",
+    "aws-sdk-client-mock": "4.1.0",
     "drizzle-kit": "^0.31.11",
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
     "tailwindcss": "^4",
-    "tsx": "^4.23.15",
     "typescript": "^5",
     "vite": "^7.2.0",
     "vitest": "4.1.10"

@@ -683,7 +683,7 @@ async function tryDelete(tx: Tx, type: string, ref: TableRef | "household_member
 
 export async function revertBatch(tx: Tx, v: Viewer, batchId: string) {
   const b = await getBatch(tx, v, batchId, true);
-  if (b.status === "reverted") return { alreadyReverted: true, deleted: 0, kept: [] as Created[] };
+  if (b.status === "reverted") return { alreadyReverted: true, deleted: 0, kept: [] as Created[], deletedStorageKeys: [] as string[] };
   if (b.status !== "committed") throw new UserError("Only committed imports can be reverted.");
   const rows = await tx.select().from(importRows).where(eq(importRows.batchId, b.id));
   const byType = new Map<string, Set<string>>();
@@ -704,12 +704,20 @@ export async function revertBatch(tx: Tx, v: Viewer, batchId: string) {
   }
   let deleted = 0;
   const kept: Created[] = [];
+  // Bytes of stored objects whose rows this revert deletes; the caller removes them from the
+  // object store after the transaction commits (deleteStoredBytes), never before.
+  const deletedStorageKeys: string[] = [];
   for (const [type, ref] of REVERT_ORDER) {
     const ids = [...(byType.get(type) ?? [])];
     if (!ids.length) continue;
+    const keys =
+      type === "stored_object"
+        ? await tx.select({ id: storedObjects.id, key: storedObjects.storageKey }).from(storedObjects).where(and(eq(storedObjects.orgId, v.orgId), inArray(storedObjects.id, ids)))
+        : [];
     const res = await tryDelete(tx, type, ref, ids);
     deleted += res.deleted;
     kept.push(...res.kept.map((id) => ({ type, id })));
+    deletedStorageKeys.push(...keys.filter((k) => !res.kept.includes(k.id)).map((k) => k.key));
   }
   // External ids this batch introduced are removed — except those for records that had to be kept
   // (still referenced by later data), so a re-import links to them instead of duplicating.
@@ -732,7 +740,7 @@ export async function revertBatch(tx: Tx, v: Viewer, batchId: string) {
     summary: `Reverted: deleted ${deleted} created record(s), restored ${updates.length} update(s), kept ${kept.length} still referenced elsewhere`,
     after: { kept },
   });
-  return { alreadyReverted: false, deleted, kept };
+  return { alreadyReverted: false, deleted, kept, deletedStorageKeys };
 }
 
 // ---------------------------------------------------------------------------

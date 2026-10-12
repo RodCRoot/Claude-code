@@ -50,7 +50,8 @@ export function backoffMs(attempts: number) {
 export async function runJobs(tx: Tx, handlers: Record<string, JobHandler>, workerId = `worker-${process.pid}`, limit = 10) {
   // Only claim job types this runner can handle, so specialised runners never steal (and fail) others' jobs.
   const claimed = await claimJobs(tx, workerId, limit, Object.keys(handlers));
-  const results: { id: string; type: string; status: string; error?: string }[] = [];
+  /** `cause` is the original thrown value (for error reporting); `error` its message. */
+  const results: { id: string; type: string; status: string; error?: string; cause?: unknown; attempts?: number }[] = [];
   for (const job of claimed) {
     const handler = handlers[job.type];
     try {
@@ -73,7 +74,7 @@ export async function runJobs(tx: Tx, handlers: Record<string, JobHandler>, work
           lockedAt: null,
         })
         .where(and(eq(jobs.id, job.id)));
-      results.push({ id: job.id, type: job.type, status: dead ? "dead" : "retry", error: msg });
+      results.push({ id: job.id, type: job.type, status: dead ? "dead" : "retry", error: msg, cause: e, attempts: job.attempts });
     }
   }
   return results;

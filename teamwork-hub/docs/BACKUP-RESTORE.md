@@ -5,7 +5,7 @@ Teamwork Hub keeps data in two places. **You must back up both.**
 | What | Where | How |
 | --- | --- | --- |
 | Database (all records, audit trail, import history) | PostgreSQL (`DATABASE_URL`) | `pnpm backup` (pg_dump) |
-| Files (signed form PDFs, archived Zen Planner documents, import source files, raw force-time signals, exports) | `STORAGE_DIR` (default `./.storage`) or the object-storage bucket | copy the directory / bucket |
+| Files (signed form PDFs, archived Zen Planner documents, import source files, raw force-time signals, exports) | `STORAGE_DIR` (default `./.storage`) with `STORAGE_BACKEND=local`, or the S3 bucket with `STORAGE_BACKEND=s3` | copy the directory; for S3 enable bucket versioning (+ optional cross-region replication) |
 
 Each `stored_objects` row records the file's SHA-256, so a restore can be verified file-by-file.
 
@@ -41,7 +41,52 @@ mkdir -p /srv/teamwork/storage && tar -xzf backups/storage-<stamp>.tgz -C /srv/t
 
 Point `DATABASE_URL` and `STORAGE_DIR` at the restored copies and start the app.
 
-## Verify a restore
+## Restore rehearsal (automated)
+
+`scripts/restore-check.sh` performs the restore + verification below end-to-end against a scratch
+database, so "we have backups" is a tested claim:
+
+```bash
+pnpm backup && pnpm restore:check                       # newest ./backups/*.dump
+pnpm restore:check backups/teamwork-<db>-<stamp>.dump   # a specific dump
+```
+
+It (1) verifies the `.sha256`, (2) creates an empty scratch database `teamwork_restore_check_<stamp>`
+on the same server and runs `pg_restore --exit-on-error`, (3) compares applied migrations (count
+and hashes) with `drizzle/*.sql` and with the source database, (4) compares schema object counts
+(tables, constraints, indexes, triggers), (5) compares exact row counts for every table,
+(6) prints the newest audit event, (7) with `STORAGE_BACKEND=local`, re-hashes every stored-object
+file, (8) writes a report to `backups/restore-check-<stamp>.txt` (mode 600) and drops the scratch
+database (`KEEP_RESTORE=1` keeps it). Exit code 0 = PASS, 2 = verification failed, 1 = setup error.
+Options: `RESTORE_DATABASE_URL` (restore into an existing empty database when the role cannot
+`CREATE DATABASE`, e.g. a second Render database), `RESTORE_ADMIN_URL`, `ALLOW_DRIFT=1` (source
+changed since the dump: row-count differences warn instead of fail), `BACKUP_DIR`.
+
+### Rehearsal results
+
+**2026-10-12, local development (PostgreSQL 16.15, pg_dump/pg_restore 16.15), seeded demo database `teamwork_hub_train`:**
+
+```
+[ok]   dump checksum matches teamwork-teamwork_hub_train-20261012T051736Z.dump.sha256   (672K dump)
+[ok]   pg_restore completed in 1s with --exit-on-error
+       migrations: restored=4 source=4 repo files=4
+[ok]   migrations applied in the restore match the repository and the source database
+[ok]   schema objects match: 103 tables, 286 constraints, 191 indexes, 4 triggers
+[ok]   row counts identical in all 103 tables (8166 rows)
+       key tables: athletes 17, audit_events 154, bookings 191, import_batches 1, invoices 10,
+                   memberships 4, metric_values 424, organizations 1, people 50, stored_objects 14
+[ok]   14 stored-object files present in ./.storage with matching SHA-256
+RESULT: PASS — the dump restores cleanly and matches the source.
+```
+
+Also verified: an empty staging-style database (org + owner invite only) restores with PASS; a dump
+whose bytes no longer match its `.sha256` fails before restoring (exit 2); a truncated dump with a
+matching checksum fails at `pg_restore` (exit 2); the scratch database is dropped in every case.
+
+Not yet rehearsed: a restore on Render (Render's managed backups / PITR restore into a new
+instance) and restoring S3 objects — do both before launch (see `docs/DEPLOY.md` checklist).
+
+## Verify a restore (manual)
 
 1. **Schema/migrations:** `psql "$DATABASE_URL" -c 'select count(*) from drizzle.__drizzle_migrations'` matches the number of files in `drizzle/*.sql`.
 2. **Row counts:** compare against the source (run on both):

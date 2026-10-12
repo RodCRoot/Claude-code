@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getViewer } from "@/lib/auth/viewer";
 import { AuthzError, type Viewer } from "@/lib/authz/policy";
 import { TrainingError } from "./common";
+import { reportError } from "@/lib/observability";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -31,7 +32,7 @@ export async function withViewer(req: Request, fn: (v: Viewer) => Promise<Respon
     if (e instanceof AuthzError) return json({ error: e.message }, 403);
     if (e instanceof z.ZodError) return json({ error: "Invalid input.", issues: e.issues.map((i) => `${i.path.join(".")}: ${i.message}`) }, 400);
     if (e instanceof TrainingError) return json({ error: e.message }, 422);
-    console.error(JSON.stringify({ level: "error", msg: "training_api_failed", name: (e as Error)?.name, message: (e as Error)?.message }));
+    reportError(e, { where: `route:${new URL(req.url).pathname.replace(/[0-9a-f-]{36}/gi, ":id")}` });
     return json({ error: "Server error. Your entries are kept and will be retried." }, 500);
   }
 }

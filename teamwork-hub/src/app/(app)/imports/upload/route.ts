@@ -4,6 +4,7 @@ import { getViewer } from "@/lib/auth/viewer";
 import { can } from "@/lib/authz/policy";
 import { UserError } from "@/lib/actions";
 import { createBatch } from "@/lib/imports/batches";
+import { reportError } from "@/lib/observability";
 
 /**
  * Multipart upload for the import wizard. A route handler (not a server action) so large
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.redirect(new URL(`/imports/${batch.id}${q}`, req.url), 303);
   } catch (e) {
     if (e instanceof UserError) return back(e.message);
-    console.error(JSON.stringify({ level: "error", msg: "import_upload_failed", name: (e as Error)?.name, message: (e as Error)?.message }));
+    reportError(e, { where: "route:/imports/upload" });
     return back("The upload failed. Nothing was saved.");
   }
 }

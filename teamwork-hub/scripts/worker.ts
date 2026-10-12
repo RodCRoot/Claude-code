@@ -16,6 +16,7 @@ import { db, getPool } from "../src/db";
 import { organizations } from "../src/db/schema";
 import { enqueue, runJobs } from "../src/lib/jobs";
 import { jobHandlers } from "../src/lib/jobs-registry";
+import { flushMonitoring, initMonitoring, log as olog, reportError } from "../src/lib/observability";
 
 const args = process.argv.slice(2);
 const once = args.includes("--once");
@@ -29,7 +30,8 @@ const interval = num("--interval", 2000);
 const workerId = `worker-${hostname()}-${process.pid}`;
 const STALE_MINUTES = 15;
 
-const log = (msg: string, extra: Record<string, unknown> = {}) => console.log(JSON.stringify({ t: new Date().toISOString(), worker: workerId, msg, ...extra }));
+// Structured, redacted JSON lines (src/lib/observability.ts).
+const log = (msg: string, extra: Record<string, unknown> = {}) => olog("info", msg, { worker: workerId, ...extra });
 
 async function housekeeping() {
   const res = await db.execute(sql`
@@ -52,8 +54,15 @@ async function pass() {
   for (;;) {
     const results = await runJobs(db, jobHandlers, workerId, limit);
     for (const r of results) {
-      log("job", { id: r.id, type: r.type, status: r.status, ...(r.error ? { error: r.error.slice(0, 300) } : {}) });
-      if (r.status === "dead") dead++;
+      if (r.status === "dead") {
+        dead++;
+        // Out of retries: needs a human. Logged + sent to Sentry (when SENTRY_DSN is set).
+        reportError(r.cause ?? new Error(r.error ?? "job failed"), { where: `job:${r.type}`, worker: workerId, jobId: r.id, attempts: r.attempts });
+      } else if (r.status === "retry") {
+        olog("warn", "job_retry", { worker: workerId, id: r.id, type: r.type, attempts: r.attempts, error: (r.error ?? "").slice(0, 300) });
+      } else {
+        log("job", { id: r.id, type: r.type, status: r.status });
+      }
     }
     total += results.length;
     if (results.length < limit) break;
@@ -66,11 +75,13 @@ process.on("SIGINT", () => (stopping = true));
 process.on("SIGTERM", () => (stopping = true));
 
 async function main() {
+  await initMonitoring("worker");
   log("start", { once, limit, interval });
   if (once) {
     const r = await pass();
     log("done", r);
     await getPool().end();
+    await flushMonitoring();
     process.exit(r.dead ? 2 : 0);
   }
   while (!stopping) {
@@ -78,15 +89,17 @@ async function main() {
       const r = await pass();
       if (r.total === 0) await new Promise((res) => setTimeout(res, interval));
     } catch (e) {
-      log("pass_failed", { error: e instanceof Error ? e.message : String(e) });
+      reportError(e, { where: "worker:pass", worker: workerId });
       await new Promise((res) => setTimeout(res, interval * 5));
     }
   }
   log("stopped");
   await getPool().end();
+  await flushMonitoring();
 }
 
-main().catch((e) => {
-  console.error(e);
+main().catch(async (e) => {
+  reportError(e, { where: "worker:main", worker: workerId });
+  await flushMonitoring();
   process.exit(1);
 });

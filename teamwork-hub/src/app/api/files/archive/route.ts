@@ -5,6 +5,7 @@ import { getViewer } from "@/lib/auth/viewer";
 import { UserError } from "@/lib/actions";
 import { AuthzError } from "@/lib/authz/policy";
 import { importArchive, MAX_ARCHIVE_BYTES } from "@/lib/forms/archive";
+import { reportError } from "@/lib/observability";
 
 /**
  * POST /api/files/archive (multipart) — import a historical signed PDF.
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
       for (const i of e.issues) fieldErrors[i.path.join(".")] ??= i.message;
       return Response.json({ ok: false, error: "Please fix the highlighted fields.", fieldErrors }, { status: 422 });
     }
-    console.error(JSON.stringify({ level: "error", msg: "archive_upload_failed", message: (e as Error)?.message }));
+    reportError(e, { where: "route:/api/files/archive" });
     return Response.json({ ok: false, error: "Upload failed. Nothing was saved." }, { status: 500 });
   }
 }

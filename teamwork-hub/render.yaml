@@ -1,0 +1,154 @@
+# Render Blueprint — PRIVATE STAGING for Teamwork Hub. Nothing here is deployed automatically:
+# Rod creates the Blueprint by hand (see docs/DEPLOY.md), with Blueprint file path
+# `teamwork-hub/render.yaml`.
+#
+# Staging guarantees encoded below:
+#   - APP_MODE=staging (no demo seed, no /dev/switch role switcher)
+#   - PayPal sandbox; Stripe keys must be test-mode (sk_test_/pk_test_) — live keys are refused
+#     outside APP_MODE=production by the payment adapters
+#   - DELIVERY_ENABLED=false (no real email/SMS leaves the system)
+#   - Site-wide HTTP Basic Auth gate (STAGING_BASIC_AUTH_*) in front of the app's own login
+#   - Postgres reachable only from Render services (empty ipAllowList)
+#   - Auto-deploy off: every deploy is a deliberate "Manual Deploy" click
+#   - No custom domain: never point the Teamwork domain at staging
+#
+# Values marked `sync: false` are prompted for once when the Blueprint is created; secrets are
+# never written in this file.
+
+databases:
+  - name: teamwork-hub-staging-db
+    databaseName: teamwork_hub_staging
+    user: teamwork_hub
+    plan: 0.1c-256mb
+    region: ohio
+    postgresMajorVersion: "16"
+    ipAllowList: [] # no external connections; only services in this Render workspace
+
+envVarGroups:
+  - name: teamwork-hub-staging-shared
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_MODE
+        value: staging
+      - key: DELIVERY_ENABLED
+        value: "false"
+      - key: PAYPAL_ENV
+        value: sandbox
+      - key: EMAIL_PROVIDER
+        value: none
+      - key: SMS_PROVIDER
+        value: none
+      - key: STORAGE_BACKEND
+        value: s3
+      - key: S3_SSE
+        value: AES256
+      - key: S3_PREFIX
+        value: staging
+      - key: SENTRY_ENVIRONMENT
+        value: staging
+      - key: SENTRY_TRACES_SAMPLE_RATE
+        value: "0"
+      - key: LOG_LEVEL
+        value: info
+
+services:
+  - type: web
+    name: teamwork-hub-staging
+    runtime: docker
+    rootDir: teamwork-hub
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    region: ohio
+    plan: 0.5c-512mb
+    numInstances: 1
+    healthCheckPath: /api/health
+    # Applies pending migrations (idempotent) before the new version receives traffic.
+    preDeployCommand: pnpm db:migrate
+    autoDeployTrigger: "off"
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - fromGroup: teamwork-hub-staging-shared
+      - key: DATABASE_URL
+        fromDatabase:
+          name: teamwork-hub-staging-db
+          property: connectionString
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: APP_URL # e.g. https://teamwork-hub-staging.onrender.com (no trailing slash)
+        sync: false
+      - key: STAGING_BASIC_AUTH_USER
+        sync: false
+      - key: STAGING_BASIC_AUTH_PASSWORD # 16+ characters
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_ENDPOINT # leave empty for AWS S3
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: SENTRY_DSN # optional; leave empty to keep Sentry off
+        sync: false
+      - key: STRIPE_SECRET_KEY # sk_test_… only
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY # pk_test_… only
+        sync: false
+      - key: PAYPAL_CLIENT_ID # sandbox app
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      - key: HAWKIN_REFRESH_TOKEN # optional
+        sync: false
+
+  - type: worker
+    name: teamwork-hub-staging-worker
+    runtime: docker
+    rootDir: teamwork-hub
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: pnpm jobs:work
+    region: ohio
+    plan: 0.5c-512mb
+    numInstances: 1
+    autoDeployTrigger: "off"
+    maxShutdownDelaySeconds: 60
+    envVars:
+      - fromGroup: teamwork-hub-staging-shared
+      - key: DATABASE_URL
+        fromDatabase:
+          name: teamwork-hub-staging-db
+          property: connectionString
+      # Same values as the web service (Render cannot copy a generated value across services):
+      # paste the web service's SESSION_SECRET here when prompted.
+      - key: SESSION_SECRET
+        sync: false
+      - key: APP_URL
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: HAWKIN_REFRESH_TOKEN # optional
+        sync: false
