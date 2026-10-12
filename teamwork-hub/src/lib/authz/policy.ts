@@ -68,7 +68,9 @@ export type OrgCapability =
   | "imports.manage"
   | "settings.manage"
   | "integrations.manage"
-  | "audit.read";
+  | "audit.read"
+  /** Payroll & staff pay. Operations can be granted access per person in Payroll → Settings (see canManagePayroll). */
+  | "payroll.manage";
 
 const ORG_MATRIX: Record<OrgCapability, Role[]> = {
   "people.manage": ["owner", "admin", "operations"],
@@ -88,6 +90,7 @@ const ORG_MATRIX: Record<OrgCapability, Role[]> = {
   "settings.manage": ["owner", "admin"],
   "integrations.manage": ["owner", "admin"],
   "audit.read": ["owner", "admin"],
+  "payroll.manage": ["owner", "admin"],
 };
 
 export function can(v: Viewer, cap: OrgCapability): boolean {

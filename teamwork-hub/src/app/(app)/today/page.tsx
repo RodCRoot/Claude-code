@@ -22,6 +22,7 @@ import {
 import { Badge, ButtonLink, Card, CardBody, CardHeader, EmptyState, PageHeader, Stat, StatusBadge } from "@/components/ui";
 import { fmt, fmtDate, fmtTime } from "@/lib/time";
 import { formatMoney } from "@/lib/money";
+import { TimeClockCard } from "@/components/time-clock-card";
 
 export const metadata = { title: "Today" };
 
@@ -104,6 +105,7 @@ async function StaffToday({ v, tz, greeting, dateLabel }: { v: Viewer; tz?: stri
           <Stat label="Unread messages" value={unread} />
         )}
       </div>
+      <TimeClockCard v={v} tz={tz} />
 
       <div className="grid gap-5 lg:grid-cols-3">
         <Card className="lg:col-span-2">
@@ -282,6 +284,7 @@ async function CoachToday({ v, tz, greeting, dateLabel }: { v: Viewer; tz?: stri
         <Stat label="Wellness check-ins today" value={`${overview.wellness.answered}/${overview.wellness.total}`} hint="not answered ≠ feeling fine" />
         <Stat label="Results to review" value={overview.toReview.length} tone={overview.toReview.length ? "warn" : undefined} />
       </div>
+      <TimeClockCard v={v} tz={tz} />
       <div className="grid gap-5 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader title="My sessions" />
