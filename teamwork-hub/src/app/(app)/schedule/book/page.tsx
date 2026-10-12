@@ -3,7 +3,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { resources, serviceTypes } from "@/db/schema";
 import { ActionForm, SubmitButton } from "@/components/forms";
-import { Callout, Card, CardBody, EmptyState, Field, Input, PageHeader, Select } from "@/components/ui";
+import { Callout, Card, CardBody, CardHeader, EmptyState, Field, Input, PageHeader, Select } from "@/components/ui";
 import { getOrg, requireViewer } from "@/lib/auth/viewer";
 import { can, isStaff } from "@/lib/authz/policy";
 import { findAvailableSlots, listCoaches } from "@/lib/scheduling/availability";
@@ -74,7 +74,8 @@ export default async function BookPage({ searchParams }: { searchParams: Promise
         <EmptyState title="No athletes you can book for">{staff ? "No active athletes are in your scope." : "Ask the front desk to link an athlete to your account."}</EmptyState>
       ) : (
         <>
-          <Card className="mb-6">
+          <Card className="mb-5">
+            <CardHeader kicker={staff ? "Staff booking" : "Step 1"} title="Find open times" />
             <CardBody className="pt-4">
               <form method="get" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Find open times">
                 <Field label="Service" htmlFor="service">
@@ -130,7 +131,7 @@ export default async function BookPage({ searchParams }: { searchParams: Promise
                   </div>
                 ) : null}
                 <div className="flex items-end">
-                  <button type="submit" className="h-11 w-full rounded-lg bg-brand px-4 text-sm font-medium text-brand-ink sm:w-auto">
+                  <button type="submit" className="h-11 w-full rounded-md bg-brand px-5 text-sm font-semibold text-brand-ink hover:brightness-110 sm:w-auto">
                     Find open times
                   </button>
                 </div>
@@ -145,18 +146,23 @@ export default async function BookPage({ searchParams }: { searchParams: Promise
                 Try another week or coach. {staff ? "Coach availability and time off are managed in Schedule settings → Availability." : ""}
               </EmptyState>
             ) : (
-              <div className="space-y-5">
+              <div className="space-y-4">
                 {svc && svc.creditCost > 0 && !comp ? (
                   <p className="text-sm text-ink-3">
                     Booking uses {svc.creditCost} credit{svc.creditCost === 1 ? "" : "s"} (or an unlimited membership that covers {svc.name}).
                   </p>
                 ) : null}
                 {[...grouped.entries()].map(([d, list]) => (
-                  <section key={d} aria-labelledby={`slots-${d}`}>
-                    <h2 id={`slots-${d}`} className="mb-2 text-sm font-semibold">
-                      {dayLabel(d, "EEEE, MMMM d")}
-                    </h2>
-                    <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  <section key={d} aria-labelledby={`slots-${d}`} className="overflow-hidden rounded-md border border-edge bg-surface shadow-[0_1px_3px_rgb(16_24_40/0.06)]">
+                    <div className="flex items-center justify-between gap-2 border-b border-edge bg-th px-4 py-2">
+                      <h2 id={`slots-${d}`} className="text-xs font-bold uppercase tracking-wide text-ink-2">
+                        {dayLabel(d, "EEEE, MMMM d")}
+                      </h2>
+                      <span className="text-xs text-ink-3 tabular">
+                        {list.length} open time{list.length === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                    <ul className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2 lg:grid-cols-4">
                       {list.map((s) => (
                         <li key={`${s.coachUserId}-${s.startsAt.toISOString()}`}>
                           <ActionForm action={bookSlotAction}>
@@ -172,9 +178,12 @@ export default async function BookPage({ searchParams }: { searchParams: Promise
                                 <input type="hidden" name="compReason" value={p.compReason ?? ""} />
                               </>
                             ) : null}
-                            <SubmitButton variant="outline" className="min-h-12 w-full justify-between" pendingText="Booking…">
-                              <span className="tabular">{fmt(s.startsAt, "h:mm a", tz)}</span>
-                              <span className="truncate text-xs text-ink-3">{s.coachName}</span>
+                            <SubmitButton variant="secondary" className="min-h-12 w-full justify-between gap-2 px-3" pendingText="Booking…">
+                              <span className="min-w-0 text-left">
+                                <span className="block font-bold tabular text-ink">{fmt(s.startsAt, "h:mm a", tz)}</span>
+                                <span className="block truncate text-xs font-normal text-ink-3">{s.coachName}</span>
+                              </span>
+                              <span className="rounded-md bg-brand px-2.5 py-1 text-xs font-semibold text-brand-ink">Book</span>
                             </SubmitButton>
                           </ActionForm>
                         </li>
