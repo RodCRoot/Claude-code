@@ -175,7 +175,7 @@ export async function seedScheduling(ctx: SeedCtx) {
     await grantCredits(tx, {
       orgId,
       athleteId: ctx.athletes[k],
-      amount: k === "dana" ? 40 : 60,
+      amount: k === "dana" ? 24 : 32,
       sourceKind: "staff_grant",
       actorUserId: ctx.users.erin,
       reason: "Demo credits (synthetic)",
