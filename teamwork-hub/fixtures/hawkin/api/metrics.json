@@ -1,0 +1,6 @@
+[
+  { "id": "jump_height_m", "label": "Jump Height", "units": "m" },
+  { "id": "peak_propulsive_force", "label": "Peak Propulsive Force", "units": "N" },
+  { "id": "braking_rfd", "label": "Braking RFD", "units": "N/s" },
+  { "id": "rsi_mod", "label": "RSI-modified", "units": "m/s" }
+]
