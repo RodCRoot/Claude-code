@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import type { Tx } from "@/db";
 import type { OrgCapability } from "@/lib/authz/policy";
 import { localDayBounds } from "@/lib/time";
+import { membershipAuditSweep } from "@/lib/member-ops/membership-audit";
 
 export type ReportColumn = { key: string; label: string; kind?: "money" | "int" | "pct" | "date" | "datetime" | "text" };
 /** `locationId` narrows location-aware reports (attendance, utilization) to one location. */
@@ -17,6 +18,8 @@ export type ReportDef = {
   /** Report honours `ReportRange.locationId` (shows the location filter). */
   locationAware?: boolean;
   cap: OrgCapability;
+  /** Point-in-time report: only the end ("as of") date applies. */
+  asOfOnly?: boolean;
   columns: ReportColumn[];
   run: (tx: Tx, orgId: string, r: ReportRange) => Promise<ReportResult>;
 };
@@ -33,6 +36,47 @@ const n = (v: unknown) => (v == null ? 0 : Number(v));
 const locFilter = (r: ReportRange) => (r.locationId ? sql`and s.location_id = ${r.locationId}` : sql``);
 
 export const REPORTS: ReportDef[] = [
+  {
+    key: "membership-audit",
+    title: "Membership audit",
+    category: "Memberships",
+    asOfOnly: true,
+    definition:
+      "Read-only sweep of every membership as of the end date: billed while not attending, holds / in-season over the policy caps or with no end date, commitments that rolled into a new commitment or whose cancellation is held past notice, families with 2+ athletes missing the family discount, billed while unsigned required documents block booking, failing cards, requests left unprocessed, and requests sent before a bill date that billed anyway. Each exception carries a dollar figure and how it was computed (Zen Planner-billed amounts are estimates). Most expensive first. Nothing is changed.",
+    cap: "reports.financial",
+    columns: [
+      { key: "exception", label: "Exception" },
+      { key: "athlete", label: "Athlete(s)" },
+      { key: "payer", label: "Payer" },
+      { key: "detail", label: "Detail" },
+      { key: "impact_minor", label: "$ impact", kind: "money" },
+      { key: "impact_basis", label: "How the $ was computed" },
+      { key: "recommendation", label: "Recommended action" },
+    ],
+    run: async (tx, orgId, r) => {
+      const res = await membershipAuditSweep(tx, orgId, { today: r.to });
+      return {
+        rows: res.exceptions.map((e) => ({
+          exception: e.label,
+          athlete: e.athleteNames,
+          payer: e.payerName,
+          detail: e.detail,
+          impact_minor: e.impactMinor,
+          impact_basis: e.impactBasis,
+          recommendation: e.recommendation,
+          person_id: e.personId,
+          type: e.type,
+        })),
+        summary: [
+          { label: "Exceptions", value: res.exceptions.length },
+          { label: "$ impact (sum of figures)", value: res.exceptions.reduce((s, e) => s + (e.impactMinor ?? 0), 0), kind: "money" },
+          { label: "Live memberships screened", value: res.screened.live },
+          { label: "Currently billed", value: res.screened.billed },
+        ],
+        notes: [`Screened ${res.screened.memberships} memberships for ${res.screened.athletes} athletes, ${res.screened.requests} logged requests, ${res.screened.payers} payers.`, ...res.skipped],
+      };
+    },
+  },
   {
     key: "active-memberships",
     title: "Active memberships",

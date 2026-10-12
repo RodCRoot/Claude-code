@@ -136,6 +136,11 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
                   Performance
                 </ButtonLink>
               ) : null}
+              {can(v, "billing.view_all") ? (
+                <ButtonLink href={`/people/${personId}/membership-status`} variant="secondary">
+                  Membership status
+                </ButtonLink>
+              ) : null}
             </>
           ) : null
         }

@@ -18,6 +18,7 @@ import { createDeliveries, type Channel } from "./delivery";
 import { lintBlockMessage, lintFamilyMessage } from "./family-style";
 import { ageOn, messagingSettings, recipientForPerson, routeForAthlete, type Recipient } from "./routing";
 import { todayLocal } from "@/lib/time";
+import { suggestSafely } from "@/lib/member-ops/requests";
 
 export type Thread = typeof threads.$inferSelect;
 export type ThreadKind = Thread["kind"];
@@ -409,10 +410,12 @@ export async function startFamilyThread(tx: Tx, v: Viewer, input: z.input<typeof
     .values({ orgId: v.orgId, subject: data.subject, athleteId: data.athleteId, kind: route.isMinor ? "family" : "athlete", status: "open", lastMessageAt: now })
     .returning();
   await addParticipant(tx, t.id, { personId: v.personId, userId: v.userId, role: v.role === "guardian" ? "guardian" : "athlete", read: true });
-  await tx
+  const [first] = await tx
     .insert(messages)
-    .values({ threadId: t.id, senderUserId: v.userId, senderPersonId: v.personId, body: data.body, clientMutationId: cmidFor(v, data.clientMutationId), createdAt: now });
+    .values({ threadId: t.id, senderUserId: v.userId, senderPersonId: v.personId, body: data.body, clientMutationId: cmidFor(v, data.clientMutationId), createdAt: now })
+    .returning({ id: messages.id });
   await audit(tx, actor(v), "messaging.thread_started", "thread", t.id, { summary: `Family started "${data.subject}"`, after: { athleteId: data.athleteId } });
+  await suggestSafely(tx, { orgId: v.orgId, body: `${data.subject}\n${data.body}`, sentAt: now, channel: "in_app", senderPersonId: v.personId, threadId: t.id, messageId: first.id });
   return { threadId: t.id, duplicate: false };
 }
 
@@ -489,6 +492,10 @@ export async function postMessage(tx: Tx, v: Viewer, input: z.input<typeof postS
     summary: data.internal ? "Added internal note" : `Message sent (${mode})`,
     after: { messageId: m.id },
   });
+  // Family asks (hold / pause / cancel / in season / card) become suggestions for staff to confirm.
+  if (mode === "family" && !data.internal) {
+    await suggestSafely(tx, { orgId: v.orgId, body: data.body, sentAt: now, channel: "in_app", senderPersonId: v.personId, threadId: t.id, messageId: m.id });
+  }
   return { messageId: m.id, duplicate: false };
 }
 

@@ -39,7 +39,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   return (
     <>
       <PageHeader kicker="People" title="Tasks & follow-ups" description="Manual tasks plus those created by automations, body-map reviews, and imports." />
-      <PeopleTabs current="tasks" showLeads={can(v, "crm.manage")} />
+      <PeopleTabs current="tasks" showLeads={can(v, "crm.manage")} showRequests={can(v, "people.manage") || can(v, "crm.manage")} />
       <div className="grid gap-5 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader

@@ -68,7 +68,7 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
         description={v.role === "coach" ? "Your assigned athletes and their guardians." : "Athletes, guardians, households, payers, leads, and staff — one identity per person."}
         actions={can(v, "people.manage") ? <ButtonLink href="/people/new">Register athlete</ButtonLink> : null}
       />
-      <PeopleTabs current="directory" showLeads={can(v, "crm.manage")} />
+      <PeopleTabs current="directory" showLeads={can(v, "crm.manage")} showRequests={can(v, "people.manage") || can(v, "crm.manage")} />
 
       <form role="search" className={`mb-4 grid gap-3 ${cfOptions.length ? "sm:grid-cols-[1fr_auto_auto_auto_auto_auto]" : "sm:grid-cols-[1fr_auto_auto_auto_auto]"}`} action="/people">
         <label className="sr-only" htmlFor="q">

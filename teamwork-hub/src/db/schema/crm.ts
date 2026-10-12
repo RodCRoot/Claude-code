@@ -1,9 +1,11 @@
 import {
   boolean,
+  date,
   index,
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   time,
   uniqueIndex,
@@ -392,4 +394,75 @@ export const jobs = pgTable(
     finishedAt: ts("finished_at"),
   },
   (t) => [uniqueIndex("jobs_dedupe_uq").on(t.dedupeKey), index("jobs_ready_idx").on(t.status, t.runAt)],
+);
+
+// ---------------------------------------------------------------------------
+// Member requests log (hold, pause, cancel, in-season, plan change, card, billing question)
+// ---------------------------------------------------------------------------
+
+export type MemberRequestType = "hold" | "pause" | "cancel" | "in_season" | "plan_change" | "card_update" | "billing_question" | "other";
+/**
+ * Where the request reached Teamwork. `email_forwarded` = forwarded by staff (these are the ones
+ * that sit); `phone_ai_recap` = an "AI Call Recap" email from the voice agent (never in the CRM).
+ */
+export type MemberRequestChannel = "email_direct" | "email_forwarded" | "sms" | "messenger" | "phone_ai_recap" | "web_form" | "in_app" | "in_person" | "other";
+/** `dismissed` is only for keyword suggestions staff decided were not requests. */
+export type MemberRequestStatus = "new" | "in_progress" | "resolved" | "declined" | "dismissed";
+
+/**
+ * One family request. `sent_on` is the date the FAMILY sent it (what policy and apologies key
+ * off), never when staff first saw it (`received_on`). Keyword suggestions from inbound messages
+ * are rows with `suggested = true` until staff confirm or dismiss them; nothing is auto-acted on.
+ */
+export const memberRequests = pgTable(
+  "member_requests",
+  {
+    id: id(),
+    orgId: orgId(),
+    type: text("type").$type<MemberRequestType>().notNull(),
+    channel: text("channel").$type<MemberRequestChannel>().notNull(),
+    requesterPersonId: uuid("requester_person_id").references(() => people.id),
+    sentOn: date("sent_on").notNull(),
+    receivedOn: date("received_on"),
+    /** What the family asked for, in staff's words (or the suggestion's matched excerpt). */
+    summary: text("summary"),
+    /** Family's requested effective date (e.g. hold start / cancel date), if stated. */
+    requestedEffectiveOn: date("requested_effective_on"),
+    threadId: uuid("thread_id").references(() => threads.id),
+    sourceMessageId: uuid("source_message_id").references(() => messages.id),
+    sourceInboundId: uuid("source_inbound_id").references(() => inboundMessages.id),
+    /** Pasted text for requests that never reached the CRM (forwarded email, call recap, Messenger). */
+    pastedText: text("pasted_text"),
+    status: text("status").$type<MemberRequestStatus>().notNull().default("new"),
+    suggested: boolean("suggested").notNull().default(false),
+    matchedKeyword: text("matched_keyword"),
+    confirmedAt: ts("confirmed_at"),
+    confirmedByUserId: uuid("confirmed_by_user_id").references(() => users.id),
+    ownerUserId: uuid("owner_user_id").references(() => users.id),
+    resolutionNotes: text("resolution_notes"),
+    resolvedAt: ts("resolved_at"),
+    resolvedByUserId: uuid("resolved_by_user_id").references(() => users.id),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id),
+    isDemo: isDemo(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("member_requests_org_status_idx").on(t.orgId, t.status, t.sentOn),
+    uniqueIndex("member_requests_source_message_uq").on(t.orgId, t.sourceMessageId),
+    uniqueIndex("member_requests_source_inbound_uq").on(t.orgId, t.sourceInboundId),
+  ],
+);
+
+export const memberRequestAthletes = pgTable(
+  "member_request_athletes",
+  {
+    requestId: uuid("request_id")
+      .notNull()
+      .references(() => memberRequests.id, { onDelete: "cascade" }),
+    athleteId: uuid("athlete_id")
+      .notNull()
+      .references(() => athletes.id),
+  },
+  (t) => [primaryKey({ columns: [t.requestId, t.athleteId] }), index("member_request_athletes_athlete_idx").on(t.athleteId)],
 );
