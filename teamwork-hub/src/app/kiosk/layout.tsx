@@ -25,15 +25,20 @@ export default async function KioskLayout({ children }: { children: React.ReactN
           </div>
           <div className="text-sm text-ink-3">{fmt(new Date(), "EEEE, MMMM d", tz)}</div>
         </div>
-        {v.role === "kiosk" ? (
-          <Link href="/kiosk/exit" className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm text-ink-3 hover:bg-surface-2">
-            Staff exit
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href="/kiosk/clock" className="inline-flex min-h-11 items-center rounded-lg border border-edge px-3 text-sm font-medium">
+            Staff time clock
           </Link>
-        ) : (
-          <Link href="/schedule" className="inline-flex min-h-11 items-center rounded-lg border border-edge px-3 text-sm font-medium">
-            Back to schedule
-          </Link>
-        )}
+          {v.role === "kiosk" ? (
+            <Link href="/kiosk/exit" className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm text-ink-3 hover:bg-surface-2">
+              Staff exit
+            </Link>
+          ) : (
+            <Link href="/schedule" className="inline-flex min-h-11 items-center rounded-lg border border-edge px-3 text-sm font-medium">
+              Back to schedule
+            </Link>
+          )}
+        </div>
       </header>
       <main id="main" className="flex-1 px-4 py-6 sm:px-8">
         <div className="mx-auto max-w-5xl">{children}</div>

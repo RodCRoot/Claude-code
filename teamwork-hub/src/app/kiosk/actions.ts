@@ -13,6 +13,7 @@ import { destroySession, SESSION_COOKIE, sha256, STAFF_ROLES, verifyCredentials 
 import { getOrg, requireViewer } from "@/lib/auth/viewer";
 import { kioskCheckIn } from "@/lib/scheduling/kiosk";
 import { kioskPinCheckIn } from "@/lib/scheduling/kiosk-pin";
+import { kioskStaffClock } from "@/lib/payroll/service";
 import { DEFAULT_TZ, fmtTime } from "@/lib/time";
 
 export async function kioskCheckInAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
@@ -58,6 +59,34 @@ export async function kioskPinCheckInAction(_prev: ActionState, fd: FormData): P
         alerts: r.alerts,
         sessions: r.sessions.map((s) => ({ title: s.title, time: `${fmtTime(s.startsAt, tz)} – ${fmtTime(s.endsAt, tz)}`, result: s.result })),
       },
+    };
+  })();
+}
+
+/** Staff time clock at the kiosk: a staff PIN toggles clock in/out. Same per-session rate limit as check-in PINs. */
+export async function kioskStaffClockAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  return safeAction(async () => {
+    const v = await requireViewer();
+    const token = (await cookies()).get(SESSION_COOKIE)?.value;
+    if (!token) throw new UserError("Please sign the kiosk in again.");
+    const r = await db.transaction((tx) => kioskStaffClock(tx, v, { pin: String(fd.get("pin") ?? ""), sessionKey: sha256(token) }));
+    if (!r.ok) {
+      const error =
+        r.reason === "invalid_format"
+          ? "Enter your 4–6 digit staff PIN."
+          : r.reason === "locked"
+            ? `Too many tries. Please wait ${Math.ceil(r.retryAfterSeconds / 60)} minute(s).`
+            : `That PIN didn't match. ${r.attemptsLeft} ${r.attemptsLeft === 1 ? "try" : "tries"} left.`;
+      return { ok: false, error };
+    }
+    const tz = (await getOrg(v.orgId))?.timezone ?? DEFAULT_TZ;
+    const first = r.name.replace(/^Coach\s+/, "").split(" ")[0];
+    return {
+      ok: true,
+      message:
+        r.action === "in"
+          ? `Clocked in at ${fmtTime(r.at, tz)}. Have a good shift, ${first}!`
+          : `Clocked out at ${fmtTime(r.at, tz)} — ${((r.shiftMs ?? 0) / 3_600_000).toFixed(2)} h. Thanks, ${first}!`,
     };
   })();
 }

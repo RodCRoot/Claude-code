@@ -15,5 +15,6 @@ export const moduleSeeds: [string, (ctx: SeedCtx) => Promise<void>][] = [
   ["training", seedTraining],
   ["crm", (ctx) => import("./crm").then((m) => m.seedCrm(ctx))],
   ["custom-fields", (ctx) => import("./custom-fields").then((m) => m.seedCustomFields(ctx))],
+  ["payroll", (ctx) => import("./payroll").then((m) => m.seedPayroll(ctx))],
   ["science", seedScience], // keep after any training seed (uses its set_logs if present)
 ];

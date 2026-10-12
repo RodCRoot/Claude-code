@@ -12,6 +12,7 @@ export function SettingsTabs({ current }: { current: string }) {
           { key: "custom-fields", href: "/settings/custom-fields", label: "Custom fields" },
           { key: "security", href: "/settings/security", label: "My security" },
           { key: "integrations", href: "/settings/integrations", label: "Integrations" },
+          { key: "payroll", href: "/payroll", label: "Payroll" },
           { key: "audit", href: "/settings/audit", label: "Audit log" },
         ]}
       />

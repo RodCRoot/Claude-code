@@ -6,3 +6,4 @@ export * from "./documents";
 export * from "./training";
 export * from "./science";
 export * from "./imports";
+export * from "./payroll";

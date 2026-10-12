@@ -133,6 +133,17 @@ Security review: see `docs/SECURITY-REVIEW.md` (10 findings fixed with regressio
 | Hawkin Cloud API sync (token exchange, historical windows, incremental `syncFrom`, backend filtering, pagination, backoff, checkpoints, schema-change warnings, raw curves) | implemented, configuration required | `hawkin.test.ts` (mocked HTTP) | Needs `HAWKIN_REFRESH_TOKEN`; response shapes partially unverified; rate limits undocumented |
 | Exports (org/athlete zip: CSV + JSON + PDFs + raw signals + checksummed manifest) | verified locally | `exports.test.ts` | — |
 
+## Staff time clock & payroll
+
+| Feature | Status | Test evidence | Gaps |
+|---|---|---|---|
+| Clock in/out (Today card, kiosk staff PIN, kiosk staff session); one open entry per person (partial unique index) | verified locally | `payroll.test.ts` (incl. 5 concurrent clock-ins) | — |
+| Corrections/void/manual add/flag acknowledgement with required reason, originals preserved (DB trigger), audited | verified locally | `payroll.test.ts` | — |
+| Pay-rate history by effective date; deduction % (default 17%, "confirm with your accountant") and rounding (truncate 2 dp like Zen Planner, or exact) as settings; integer-cent math | verified locally | `payroll-engine.test.ts` | Deduction is a single flat estimate, not tax withholding |
+| Abnormality flags (runaway / missed clock-out, tiny, missing usual weekday, off-pattern start, stray clock-out orphan, no rate), DST-safe; weekday estimates marked separately | verified locally | `payroll-engine.test.ts` | Thresholds are heuristics; tune in Payroll → Settings |
+| Payroll runs (draft → approved → exported, frozen by DB trigger), CSV export | verified locally | `payroll.test.ts` | No direct payroll-provider integration |
+| Zen Planner payroll paste/CSV import (dedupe, preview) | implemented, configuration required | `payroll-engine.test.ts`, `payroll.test.ts` | Column mapping unverified against a real export; one staff member per paste |
+
 ## Cross-module acceptance paths (brief §13)
 
 | Path | Status | Evidence |
