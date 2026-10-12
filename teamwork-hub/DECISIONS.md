@@ -26,3 +26,20 @@ Reversible implementation choices made autonomously during the build. Newest las
 - Coaches currently see facility-wide attendance/no-show reports (not health data). Restrict to assigned athletes?
 - Guardians see co-guardians' email/phone on their child's page (separated parents). Hide?
 - Login resolves by email across orgs; fine single-tenant, revisit if multi-tenant.
+- Exporting an approved payroll run marks it "exported" on download (GET, audited, idempotent; approved runs are immutable). Move to an explicit "Mark exported" button?
+
+## Open decisions for Rod (Teamwork membership policy, wave 4)
+Defaults come from Rod's documented procedures; every value is editable in Settings → Membership policy, and unconfirmed ones show "Needs confirmation".
+1. Family discount: 10% or 15%? (Sources disagree; 10% is in use and flagged.) Reference plan prices also differ between sources; the seeded "Sample —" plans are labelled to confirm.
+2. Does the partial first month (stub) count toward a 6- or 12-month commitment? Currently no: the term starts on the 1st after the stub.
+3. Should a hold extend the commitment end date? Currently no.
+4. In Season "commitment carries over": read as In Season months counting toward the commitment, end date unchanged.
+5. Are In Season terms capped for members not on a 12-month plan? Currently uncapped.
+6. "2 months" of hold / In Season is counted as 62 days. Calendar months instead?
+7. Unused sessions when a paid month goes on hold: weekly limit × days left ÷ 7, minus attended/no-show sessions; unlimited plans need staff to enter the number.
+8. Do past-due memberships count as "active" for punch-card use? Currently no.
+9. Generic decline / "do not honor" treated as retryable; family card-update wording is sample text.
+10. A plan version's own cancellation notice overrides the 30-day policy. Intended?
+11. College weekly plan bills every 7 days from start. Align to Mondays instead?
+12. Membership audit: In Season plans are recognised by name ("In Season"); siblings are grouped by payer account; Zen Planner-era amounts are estimates (no ZP billing history imported).
+13. Payroll: flag thresholds (over 12 h, 2.5× usual shift, under 0.5 h, 90 min off usual start) and the flat 17% deduction are placeholders; confirm with the accountant.

@@ -33,3 +33,25 @@ Migrations: 0009 crm preferences/campaigns/inbound, 0010 kiosk pins, 0011 custom
 Test infrastructure: vitest hook timeout 180 s and max 4 workers (seeding grew); job-count assertion scoped per org.
 
 Verified: `pnpm test` 455/455, typecheck/lint clean, production build OK; Playwright against the production build 234/234 (auth/access, CSP sweep, axe WCAG 2.1 AA sweep for every role at desktop + 390px) and training offline/builder suite 4/4.
+
+## Checkpoint 6 — Teamwork policies wave (2026-10-12)
+Merged:
+- **Multi-location:** locations; membership, product and credit scope per location, with a family-facing explanation when a plan doesn't cover a session's location.
+- **GoHighLevel adapter:** contacts import, not configured by default.
+- **Family message style lint.**
+- **Membership policy engine**, from Rod's documented procedures; policies only, no member data:
+  - billing on the 1st with a half-month stub;
+  - commitments roll to month to month;
+  - holds: capped, backdated only to the request date, punch-card makeup;
+  - fixed-term In Season memberships;
+  - weekly class caps enforced under a row lock;
+  - 30-day cancellation notice;
+  - automatic family discount;
+  - restart nudges;
+  - decline classification;
+  - Settings → Membership policy.
+- **Member requests log** (with suggestions from inbound messages), a read-only membership status page, and a membership audit sweep with a dollar figure for each exception.
+- **Staff time clock** (Today card plus kiosk PIN pad) and **payroll:** abnormality flags, estimates, approve/lock, CSV export, Zen Planner paste import.
+
+Migrations: 0012 locations, 0013 GHL integration row, 0014 membership policy, 0015–0016 payroll (and run/time-entry guard triggers), 0017 member requests (renumbered at merge; no drift).
+Policy questions for Rod are listed in DECISIONS.md.
