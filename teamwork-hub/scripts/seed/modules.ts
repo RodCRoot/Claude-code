@@ -12,4 +12,5 @@ export const moduleSeeds: [string, (ctx: SeedCtx) => Promise<void>][] = [
   ["billing", seedBilling],
   ["documents", (ctx) => import("./documents").then((m) => m.seedDocuments(ctx))],
   ["training", seedTraining],
+  ["crm", (ctx) => import("./crm").then((m) => m.seedCrm(ctx))],
 ];
