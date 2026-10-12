@@ -90,7 +90,7 @@ async function NewMembership({ orgId }: { orgId: string }) {
             </Field>
             <Field label="Start date" htmlFor="startDate" required><Input id="startDate" name="startDate" type="date" required defaultValue={today} /></Field>
             <Field label="Billing anchor day" htmlFor="anchorDay" hint="Day of month renewals bill (1–31; short months clamp). Defaults to the start day."><Input id="anchorDay" name="anchorDay" type="number" min={1} max={31} /></Field>
-            <Field label="Billed through" htmlFor="billingProvider" hint="Teamwork invoices can be paid online or offline. Provider subscriptions are not created automatically yet.">
+            <Field label="Billed through" htmlFor="billingProvider" hint="Teamwork invoices can be paid online or offline. To bill through a Stripe or PayPal subscription, switch it on the membership page after creating it.">
               <Select id="billingProvider" name="billingProvider" defaultValue="manual">
                 <option value="manual">Teamwork Hub invoices (pay online or offline)</option>
                 <option value="none">Complimentary — no billing</option>

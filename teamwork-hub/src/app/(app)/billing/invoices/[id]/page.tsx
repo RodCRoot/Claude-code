@@ -105,7 +105,14 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
               <>
                 <p className="text-sm">Pay <strong><Money minor={money.balanceMinor} currency={inv.currency} /></strong> securely on the provider&apos;s hosted page. We never see your card or bank numbers.</p>
                 {providers.map((p) =>
-                  p.configured ? (
+                  p.configured && p.name === "venmo" ? (
+                    inv.currency === "USD" ? (
+                      <div key={p.name}>
+                        <ButtonLink href={`/billing/invoices/${inv.id}/venmo`} variant="secondary" className="w-full">Pay with Venmo</ButtonLink>
+                        <p className="mt-1 text-xs text-ink-3">Venmo: US buyers, USD, Venmo app required. One-time payments only.</p>
+                      </div>
+                    ) : null
+                  ) : p.configured ? (
                     <ActionForm key={p.name} action={startCheckoutAction}>
                       <input type="hidden" name="invoiceId" value={inv.id} />
                       <input type="hidden" name="provider" value={p.name} />

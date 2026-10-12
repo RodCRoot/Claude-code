@@ -9,8 +9,10 @@ import { earliestCancelDate } from "@/lib/billing/memberships";
 import { membershipDetail, membershipPlanOptions } from "@/lib/billing/queries";
 import { formatMoney } from "@/lib/money";
 import { fmt, fmtDate, todayLocal } from "@/lib/time";
-import { addHoldAction, cancelMembershipAction, changePlanAction, cutoverAction, removeHoldAction } from "../../actions";
+import { billingMethodView } from "@/lib/billing/subscriptions";
+import { addHoldAction, cancelMembershipAction, cancelSubscriptionAction, changePlanAction, cutoverAction, removeHoldAction } from "../../actions";
 import { BillingTabs, InvoiceStatus, Money, PROVIDER_LABEL, requireBillingViewer } from "../../_components";
+import { BillingMethodCard } from "./_billing-method";
 
 export const metadata = { title: "Membership" };
 
@@ -25,6 +27,8 @@ export default async function MembershipPage({ params }: { params: Promise<{ id:
   const ext = d.m.billingProvider === "external_zenplanner";
   const live = ["pending", "trialing", "active", "on_hold", "past_due"].includes(d.m.status);
   const plans = manage ? await membershipPlanOptions(db, v.orgId, today) : [];
+  const method = manage ? await db.transaction((tx) => billingMethodView(tx, v, d.m.id)) : null;
+  const providerBilled = d.m.billingProvider === "stripe" || d.m.billingProvider === "paypal";
   return (
     <>
       <PageHeader
@@ -55,7 +59,7 @@ export default async function MembershipPage({ params }: { params: Promise<{ id:
               <dt className="text-ink-3">Includes</dt><dd>{d.version.unlimited ? "Unlimited sessions" : d.version.creditsPerPeriod ? `${d.version.creditsPerPeriod} credits/period` : "—"}</dd>
               <dt className="text-ink-3">Start</dt><dd>{fmtDate(d.m.startDate)}</dd>
               <dt className="text-ink-3">Anchor day</dt><dd>{d.m.billingAnchorDay ?? "—"}</dd>
-              <dt className="text-ink-3">Next bill</dt><dd>{ext ? "Zen Planner" : fmtDate(d.m.nextBillDate)}</dd>
+              <dt className="text-ink-3">Next bill</dt><dd>{ext ? "Zen Planner" : providerBilled ? `${PROVIDER_LABEL[d.m.billingProvider]} subscription` : fmtDate(d.m.nextBillDate)}</dd>
               <dt className="text-ink-3">Commitment</dt><dd>{d.version.commitmentMonths ? `${d.version.commitmentMonths} months` : "None"}</dd>
               <dt className="text-ink-3">Notice</dt><dd>{d.version.cancellationNoticeDays} days</dd>
               <dt className="text-ink-3">Discount</dt><dd>{d.m.discountId ? `Sibling ${d.version.familyDiscount?.siblingPercentOff ?? "?"}%` : "—"}</dd>
@@ -83,7 +87,7 @@ export default async function MembershipPage({ params }: { params: Promise<{ id:
                 {d.holds.map((h) => (
                   <li key={h.id} className="flex flex-wrap items-center justify-between gap-2">
                     <span>{fmtDate(h.startDate)} – {fmtDate(h.endDate)} <span className="text-ink-3">· {h.reason}</span></span>
-                    {manage && !ext && h.endDate >= today ? (
+                    {manage && !ext && !providerBilled && h.endDate >= today ? (
                       <ActionForm action={removeHoldAction}>
                         <input type="hidden" name="holdId" value={h.id} />
                         <SubmitButton size="sm" variant="ghost" confirm="End/remove this hold?">{h.startDate <= today ? "End now" : "Remove"}</SubmitButton>
@@ -98,7 +102,35 @@ export default async function MembershipPage({ params }: { params: Promise<{ id:
         </Card>
       </div>
 
-      {manage && !ext && live ? (
+      {method && !ext && live ? <BillingMethodCard view={method} /> : null}
+
+      {manage && providerBilled && live ? (
+        <div className="mt-6 grid gap-6 lg:grid-cols-2 [&>*]:min-w-0">
+          <Card>
+            <CardHeader title="Cancel subscription at period end" />
+            <CardBody>
+              <p className="mb-2 text-sm">
+                The {PROVIDER_LABEL[d.m.billingProvider]} subscription stops billing; the membership ends when the paid period ends. Terms still apply — earliest end if requested today: <strong>{fmtDate(earliestCancelDate(d.m, d.version, today))}</strong>.
+              </p>
+              <ActionForm action={cancelSubscriptionAction} className="space-y-3">
+                <input type="hidden" name="membershipId" value={d.m.id} />
+                <Field label="Requested on" htmlFor="pcr"><Input id="pcr" name="requestedOn" type="date" defaultValue={today} /></Field>
+                <Field label="Reason" htmlFor="pcre" required><Input id="pcre" name="reason" required /></Field>
+                <Field label="Override terms (reason)" htmlFor="pcor" hint="Only if the notice/commitment would end later than the paid period"><Input id="pcor" name="overrideReason" /></Field>
+                <SubmitButton variant="danger" confirm="Cancel the provider subscription at the end of the paid period?">Cancel at period end</SubmitButton>
+              </ActionForm>
+            </CardBody>
+          </Card>
+          <Card>
+            <CardHeader title="Holds & plan changes" />
+            <CardBody>
+              <p className="text-sm">Holds and plan changes aren&apos;t available while a provider subscription bills this membership — they would not change what {PROVIDER_LABEL[d.m.billingProvider]} charges. Switch back to Teamwork invoices first.</p>
+            </CardBody>
+          </Card>
+        </div>
+      ) : null}
+
+      {manage && !ext && !providerBilled && live ? (
         <div className="mt-6 grid gap-6 lg:grid-cols-3 [&>*]:min-w-0">
           <Card>
             <CardHeader title="Add hold / freeze" />

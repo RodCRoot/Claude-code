@@ -336,6 +336,29 @@ export const payouts = pgTable("payouts", {
   createdAt: createdAt(),
 });
 
+/**
+ * Provider-side recurring price/plan created for one immutable product version at one net amount
+ * (a sibling discount changes the amount, so it is part of the key). Stripe: product + price ids;
+ * PayPal: catalog product + billing plan ids. Cached so a plan is created at most once per key.
+ */
+export const providerPlans = pgTable(
+  "provider_plans",
+  {
+    id: id(),
+    orgId: orgId(),
+    provider: text("provider").$type<"stripe" | "paypal">().notNull(),
+    productVersionId: uuid("product_version_id")
+      .notNull()
+      .references(() => productVersions.id),
+    amountMinor: minor("amount_minor").notNull(),
+    currency: text("currency").notNull(),
+    providerProductId: text("provider_product_id").notNull(),
+    providerPlanId: text("provider_plan_id").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("provider_plans_uq").on(t.orgId, t.provider, t.productVersionId, t.amountMinor, t.currency)],
+);
+
 /** Tokenized references only. */
 export const paymentMethods = pgTable("payment_methods", {
   id: id(),

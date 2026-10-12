@@ -36,6 +36,20 @@
       "when": 1791779360575,
       "tag": "0004_cal_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791780731796,
+      "tag": "0005_bill_provider_plans",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791780733239,
+      "tag": "0006_bill_provider_billing_guard",
+      "breakpoints": true
     }
   ]
 }

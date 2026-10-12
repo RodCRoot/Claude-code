@@ -21,7 +21,18 @@ import { createInvoiceRecord } from "./invoices";
 import { actorOf, addIntervalYmd, addMonthsYmd } from "./util";
 
 export const LIVE_STATUSES: MembershipStatus[] = ["pending", "trialing", "active", "on_hold", "past_due"];
-export type InternalBillingProvider = "manual" | "stripe" | "paypal" | "none";
+export type InternalBillingProvider = "manual" | "none";
+
+/** Billed by a provider subscription (Stripe Billing / PayPal Subscriptions) rather than Teamwork invoices. */
+export function isProviderBilled(m: Pick<Membership, "billingProvider">): m is Pick<Membership, "billingProvider"> & { billingProvider: "stripe" | "paypal" } {
+  return m.billingProvider === "stripe" || m.billingProvider === "paypal";
+}
+
+function refuseProviderBilled(m: Membership, what: string) {
+  if (isProviderBilled(m)) {
+    throw new UserError(`${what} is not available while the ${m.billingProvider === "stripe" ? "Stripe" : "PayPal"} subscription bills this membership — it would not change what the provider charges. Switch back to Teamwork invoices first.`);
+  }
+}
 
 type Membership = typeof memberships.$inferSelect;
 type Version = typeof productVersions.$inferSelect;
@@ -100,6 +111,9 @@ export async function createMembership(
 
   const trial = version.trialDays > 0;
   const billingProvider = input.billingProvider ?? "manual";
+  if (billingProvider !== "manual" && billingProvider !== "none") {
+    throw new UserError("Create the membership with Teamwork invoices, then switch it to a Stripe or PayPal subscription from the membership page.");
+  }
   const [m] = await tx
     .insert(memberships)
     .values({
@@ -186,6 +200,7 @@ export async function addHold(tx: Tx, v: Viewer, input: { membershipId: string; 
   if (!input.startDate || !input.endDate || input.endDate < input.startDate) throw new UserError("Hold end date must be on or after its start date.");
   const m = await lockMembership(tx, v.orgId, input.membershipId);
   if (m.status === "cancelled" || m.status === "expired") throw new UserError("Cannot hold a cancelled or expired membership.");
+  refuseProviderBilled(m, "A hold");
   const overlap = await tx
     .select()
     .from(membershipHolds)
@@ -225,6 +240,7 @@ export async function changePlan(tx: Tx, v: Viewer, input: { membershipId: strin
   assertCan(v, "billing.manage");
   const m = await lockMembership(tx, v.orgId, input.membershipId);
   if (m.billingProvider === "external_zenplanner") throw new UserError("Plan changes for Zen Planner-billed memberships must be made in Zen Planner until cutover.");
+  refuseProviderBilled(m, "A plan change");
   if (!LIVE_STATUSES.includes(m.status)) throw new UserError("Only live memberships can change plans.");
   const { version: to, product } = await loadVersion(tx, v.orgId, input.toVersionId);
   if (product.kind !== "recurring_membership") throw new UserError("Choose a recurring membership plan.");
@@ -266,6 +282,7 @@ export async function cancelMembership(
   const m = await lockMembership(tx, v.orgId, input.membershipId);
   if (m.status === "cancelled" || m.status === "expired") throw new UserError("Membership is already ended.");
   if (m.billingProvider === "external_zenplanner") throw new UserError("Cancel Zen Planner-billed memberships in Zen Planner until cutover (Teamwork Hub does not bill them).");
+  if (isProviderBilled(m)) throw new UserError("This membership is billed by a provider subscription. Use “Cancel subscription at period end” so the provider stops charging too.");
   const [version] = await tx.select().from(productVersions).where(eq(productVersions.id, m.productVersionId));
   const earliest = earliestCancelDate(m, version, input.requestedOn);
   let cancelAt = earliest;
