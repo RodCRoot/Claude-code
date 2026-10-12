@@ -14,5 +14,5 @@ Items that need Rod (or a provider) to unblock. Independent work continues witho
 | Approved Teamwork legal language (waiver, membership agreement) | Needed | Final approved text from Rod/counsel. | Forms use clearly labeled SAMPLE text. |
 | Real prices & policies | Needed | Rod to enter in Settings → Products / Policies. | Products are "Sample …" with placeholder prices. |
 
-## Note from Rod's own Zen Planner playbooks (2026-10-12)
-Rod's documented procedures (hold-request, membership-hold, membership-status-check, add-membership) state a hard rule: **automation must never submit Zen Planner login credentials, even autofilled ones — Rod clicks Login himself**, and only one Zen Planner session may be open at a time (a second session silently resets the first). So even with a Chrome connection, Zen Planner exploration needs Rod present to click Login. Export-based imports avoid this entirely. The Hub's import design follows the same rule (no stored Zen Planner password; files only).
+## Zen Planner sign-in (updated 2026-10-12)
+Rod retired the old "never submit Zen Planner login credentials" rule: Claude may click Login with Chrome's saved, autofilled credentials. Two practical notes stay: keep only one Zen Planner tab/session open at a time (a second session resets the first), and never type or paste a password into chat.
