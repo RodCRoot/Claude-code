@@ -74,6 +74,13 @@ const STAFF = [
   "/reports/utilization",
   "/reports/collections",
   "/reports/receivables",
+  "/reports/membership-audit",
+  "/people/requests",
+  "/payroll",
+  "/payroll/staff",
+  "/payroll/import",
+  "/payroll/settings",
+  "/time",
   "/imports",
   "/imports/exports",
   "/imports/hawkin",
@@ -84,7 +91,7 @@ const STAFF = [
   "/settings/integrations",
   "/settings/audit",
 ];
-const COACH = ["/today", "/people", "/people/tasks", "/schedule", "/training", "/training/today", "/training/weight-room", "/training/review", "/science", "/science/load", "/performance", "/messages", "/documents", "/reports", "/reports/attendance", "/reports/utilization", "/settings/security"];
+const COACH = ["/today", "/people", "/people/tasks", "/schedule", "/training", "/training/today", "/training/weight-room", "/training/review", "/science", "/science/load", "/performance", "/messages", "/documents", "/reports", "/reports/attendance", "/reports/utilization", "/settings/security", "/time"];
 const FAMILY = ["/today", "/schedule", "/schedule/book", "/billing", "/training", "/science", "/science/wellness", "/science/body-map", "/performance", "/messages", "/documents"];
 
 type Role = { name: string; email?: string; routes: string[]; dynamic?: [string, RegExp][] };
@@ -98,6 +105,7 @@ const ROLES: Role[] = [
       ["/people?kind=athletes", /^\/people\/[0-9a-f-]{36}$/],
       ["/billing/invoices", /^\/billing\/invoices\/[0-9a-f-]{36}$/],
       ["/billing/memberships", /^\/billing\/memberships\/[0-9a-f-]{36}$/],
+      ["/payroll", /^\/payroll\/runs\/[0-9a-f-]{36}$/],
       ["/messages", /^\/messages\/[0-9a-f-]{36}$/],
       ["/performance", /^\/performance\/[0-9a-f-]{36}$/],
     ],
@@ -114,7 +122,7 @@ const ROLES: Role[] = [
     ],
   },
   { name: "athlete", email: USERS.maya, routes: FAMILY.filter((r) => r !== "/billing") },
-  { name: "kiosk", email: USERS.kiosk, routes: ["/kiosk"] },
+  { name: "kiosk", email: USERS.kiosk, routes: ["/kiosk", "/kiosk/clock"] },
 ];
 
 async function signIn(browser: Browser, opts: BrowserContextOptions, email: string) {

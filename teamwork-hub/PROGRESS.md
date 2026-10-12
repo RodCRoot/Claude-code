@@ -55,3 +55,8 @@ Merged:
 
 Migrations: 0012 locations, 0013 GHL integration row, 0014 membership policy, 0015–0016 payroll (and run/time-entry guard triggers), 0017 member requests (renumbered at merge; no drift).
 Policy questions for Rod are listed in DECISIONS.md.
+
+Verified:
+- `pnpm test` 568/568 (48 files); typecheck and lint clean; production build OK.
+- Playwright against the production build: 234/234.
+- The axe and CSP sweeps now also cover payroll, `/time`, member requests, the membership audit and the kiosk staff clock. Owner, coach and kiosk passed 180/180 at desktop and 390px.
