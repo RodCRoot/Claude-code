@@ -9,3 +9,14 @@
 - Synthetic seed: staff, 3 family structures (2 guardians/2 kids; unrelated same-surname; separated co-parents), adult self-payer, inactive athlete, 10 roster athletes, groups, coach scopes, notes, alerts, tasks, integration rows.
 
 Verified: `pnpm test` (9/9), `pnpm lint` clean, browser login → /today.
+
+## Checkpoint 2 — Lead modules (2026-10-12)
+- People: directory/search with coach scoping and contact redaction, person page (contact, athlete profile, guardians with independent permission flags, households, payer accounts, notes by visibility, tasks, tags, kiosk alerts, attendance), unified permission-gated timeline, registration that flags duplicates instead of merging.
+- Role dashboards (staff, coach, parent with child switcher, athlete), 13 reports with written definitions + CSV export, Settings (org/branding/policies, users/invites/reset links/roles, TOTP MFA enrollment + staff enforcement, integrations status, audit log), public site, security headers via `proxy.ts`.
+- Fix: React 19 form reset wiped user input on validation errors → `ActionForm` submits through a transition.
+
+## Checkpoint 3 — Seven modules merged (2026-10-12)
+Built in parallel worktrees and merged: scheduling/booking/kiosk/calendar adapter; billing/payments/ledger/POS; CRM/inbox/messaging/automations/worker; forms/signatures/PDFs; training/logging/weight room; sports science/performance/progress reports; Import Center/Hawkin sync/exports.
+Integration fixes during merge: seed ordering + per-test seed scoping, job runner claims only types it handles, per-org source-record uniqueness (`0003`), billing/calendar/export jobs registered with the worker, attendance panel on athlete profiles, body-map review tasks linked to the athlete and stripped of health details (operations can see tasks), table captions contained on mobile, inquiry layout de-duplicated.
+
+Verified (2026-10-12): `pnpm test` 273/273 (19 files, incl. cross-module acceptance paths), `pnpm typecheck` clean, `pnpm lint` clean, `pnpm build` succeeds, Playwright `e2e/` 10/10 (desktop + mobile), training offline-recovery e2e 1/1, browser sweep of every nav route for owner/operations/coach/3 guardians/2 athletes/kiosk with no page errors or horizontal overflow at 390px. Screenshots in `docs/screenshots/`.

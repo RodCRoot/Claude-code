@@ -16,7 +16,8 @@ export default defineConfig({
     launchOptions: { executablePath: process.env.PW_CHROMIUM ?? "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" },
     viewport: { width: 390, height: 844 },
   },
-  webServer: {
+  // Reuse an already-running app when TRAINING_E2E_BASE_URL is given (Next allows one dev server per project).
+  webServer: process.env.TRAINING_E2E_BASE_URL ? undefined : {
     command: "pnpm exec next dev -p 3105",
     url: "http://localhost:3105/login",
     reuseExistingServer: true,

@@ -1,6 +1,25 @@
 # Next steps (resume here)
 
-1. Module build-out in parallel: scheduling+credits, billing+payments, CRM+messaging, forms+signatures, training, sports science, imports+exports, reports, public site, dashboards.
-2. Merge, regenerate migrations, run full test suite, browser e2e, screenshots.
+Current state: all modules merged on branch `claude/teamwork-hub` (draft PR #12). Everything in FEATURE_MATRIX.md marked "verified locally" passes. No provider is sandbox-verified.
 
-Resume prompt: "Continue Teamwork Hub from teamwork-hub/NEXT_STEPS.md and PROGRESS.md; run `pnpm install && pnpm db:fresh && pnpm test` first."
+## Resume commands
+```bash
+cd teamwork-hub && pnpm install
+cp .env.example .env   # set SESSION_SECRET, DATABASE_URL, TEST_DATABASE_URL
+pnpm db:fresh && pnpm test && pnpm typecheck && pnpm lint
+pnpm dev               # then: PW_CHROMIUM=<chromium path> npx playwright test
+```
+
+## Prioritized backlog
+1. **Account research (blocked on access):** Zen Planner Studio and Hawkin Cloud read-only exploration → verify import mappings, save presets, adjust workflows. See BLOCKERS.md.
+2. **Sandbox verification:** Stripe test keys → run checkout + webhook round trip, verify refund/dispute/payout field names; PayPal sandbox → Orders + webhook verification; mark `verified_sandbox` only after a real round trip.
+3. **Recurring billing via provider:** Stripe Billing subscriptions / PayPal Subscriptions adapters (currently app-invoiced per period).
+4. **Google Calendar OAuth** consent + encrypted token storage (additive schema), then enable push/free-busy.
+5. **E-signature hardening:** stronger signer identity (email/SMS code or MFA), Unicode PDF font, approved legal text, block `published → draft` status changes in the trigger.
+6. **Messaging providers:** inbound email/SMS + bounce/STOP webhooks; family communication-preference screen.
+7. **Training:** service worker for full offline reload; drag-and-drop calendar builder.
+8. **Ops:** error monitoring SDK, CSP, S3 storage backend with deletes, restore rehearsal, staging deploy (private, payments in test mode, delivery off).
+9. **UX polish:** series "edit all future", multi-athlete family checkout, kiosk QR/PIN, custom-field definitions UI, report charts.
+
+## Resume prompt
+"Continue Teamwork Hub from `teamwork-hub/NEXT_STEPS.md`, `PROGRESS.md`, `FEATURE_MATRIX.md`, and `BLOCKERS.md` on branch `claude/teamwork-hub`. Run `pnpm install && pnpm db:fresh && pnpm test` first, then take the top unblocked item."

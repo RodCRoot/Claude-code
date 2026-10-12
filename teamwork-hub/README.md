@@ -71,3 +71,12 @@ Key guarantees:
 ## Deployment
 
 No hosting was configured or changed during the build. To stage privately: provision Postgres 16, set the variables above with `APP_MODE=staging`, run `pnpm db:migrate`, `pnpm build && pnpm start`, and run `pnpm jobs:work` as a second process. Keep payment keys in test mode and `DELIVERY_ENABLED=false` until production review. Do not point the existing Teamwork domain at it.
+
+## Walkthrough (screenshots in `docs/screenshots/`, synthetic data)
+
+- **Staff (Rod/Erin):** `01-staff-today` — sessions with check-in counts, follow-ups, missing forms, payment exceptions (pending vs settled), integration health. `02-schedule-week` → open a session for the roster. `03-billing-overview`, `04-report-collections` (settled vs pending vs attested), `05-import-center`, `06-integrations-status` (honest "not configured").
+- **Coach (Marcus):** `07-coach-today` — assigned sessions, wellness completion (no response ≠ fine), results to review, body-map queue. `08-weight-room` tablet logging, `09-science-hub`, `10-force-plate` (vendor vs Teamwork-derived metrics).
+- **Parent (Alex):** `11-parent-today-mobile` — child switcher, upcoming sessions, credits, forms to sign, invoices. `12-parent-forms-mobile` sign & download PDFs, `13-parent-booking-mobile`, `14-parent-messages-mobile`.
+- **Athlete (Maya):** `15-athlete-today-mobile`, `16-athlete-logging-mobile` (prescribed vs actual, offline queue), `17-body-map-mobile`.
+- **Permission example:** `18-guardian-no-health-performance-mobile` — Jordan sees progress but no wellness/body-map data.
+- **Kiosk:** `19-kiosk-tablet` — first name + last initial only. **Public:** `20-public-home`.

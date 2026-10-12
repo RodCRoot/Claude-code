@@ -158,11 +158,11 @@ async function StaffToday({ v, tz, greeting, dateLabel }: { v: Viewer; tz?: stri
             {forms.length === 0 ? <p className="text-sm text-ink-3">Every active athlete has current required forms.</p> : null}
             <ul className="space-y-1 text-sm">
               {forms.map((f, i) => (
-                <li key={i} className="flex justify-between gap-2">
-                  <Link href={`/people/${f.person_id}`} className="truncate hover:underline">
+                <li key={i}>
+                  <Link href={`/people/${f.person_id}`} className="font-medium hover:underline">
                     {f.name}
                   </Link>
-                  <span className="shrink-0 text-xs text-ink-3">
+                  <span className="block text-xs text-ink-3">
                     {f.template} · {f.status ? f.status.replace("_", " ") : "not sent"}
                   </span>
                 </li>
