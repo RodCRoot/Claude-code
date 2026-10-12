@@ -169,7 +169,7 @@ export default async function TemplatePage({ params, searchParams }: { params: P
           ) : null}
         </div>
 
-        <aside className="space-y-5">
+        <aside aria-label="Template details" className="space-y-5">
           {t.current ? (
             <Card>
               <CardHeader title="Issue requests" kicker={`v${t.current.version}`} />

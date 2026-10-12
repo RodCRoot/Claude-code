@@ -48,7 +48,7 @@ export function ChartFigure({
       {note ? <p className="mt-1 text-xs text-ink-3">{note}</p> : null}
       <details className="mt-2 text-sm">
         <summary className="cursor-pointer text-xs font-medium text-ink-3 hover:text-ink">Show data table</summary>
-        <div className="mt-2 max-h-72 overflow-auto rounded-lg border border-edge">
+        <div className="mt-2 max-h-72 overflow-auto rounded-lg border border-edge" tabIndex={0} role="region" aria-label={`${title} data`}>
           <table className="w-full border-collapse text-xs">
             <caption className="sr-only">{title} data</caption>
             <thead>

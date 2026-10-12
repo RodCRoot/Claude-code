@@ -143,7 +143,7 @@ export default async function ThreadPage({ params }: { params: Promise<{ threadI
         </div>
 
         {staff ? (
-          <aside className="space-y-4">
+          <aside aria-label="Conversation details" className="space-y-4">
             <Card>
               <CardHeader title="Participants" />
               <CardBody>

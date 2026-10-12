@@ -8,6 +8,7 @@ import { formToObject, safeAction, type ActionState } from "@/lib/actions";
 import { recheckIntegrations, updateOrgSettings } from "@/lib/settings";
 import { beginMfaEnrollment, changeRole, confirmMfaEnrollment, createResetToken, disableMfa, inviteUser, setUserDisabled } from "@/lib/auth/accounts";
 import { env } from "@/lib/env";
+import { createFieldDef, setFieldDefArchived, updateFieldDef } from "@/lib/people/custom-fields";
 
 const on = (fd: FormData, k: string) => fd.get(k) === "on";
 
@@ -75,4 +76,27 @@ export async function recheckIntegrationsAction() {
   const v = await requireViewer();
   await db.transaction((tx) => recheckIntegrations(tx, v));
   revalidatePath("/settings/integrations");
+}
+
+export const createCustomFieldAction = safeAction(async (_p: ActionState, fd: FormData) => {
+  const v = await requireViewer();
+  const row = await db.transaction((tx) => createFieldDef(tx, v, formToObject(fd)));
+  revalidatePath("/settings/custom-fields");
+  revalidatePath("/people");
+  return { ok: true, message: `Field "${row.label}" created (key ${row.key}).` };
+});
+
+export const updateCustomFieldAction = safeAction(async (_p: ActionState, fd: FormData) => {
+  const v = await requireViewer();
+  await db.transaction((tx) => updateFieldDef(tx, v, String(fd.get("id")), formToObject(fd)));
+  revalidatePath("/settings/custom-fields");
+  revalidatePath("/people");
+  return { ok: true, message: "Field saved." };
+});
+
+export async function archiveCustomFieldAction(fd: FormData) {
+  const v = await requireViewer();
+  await db.transaction((tx) => setFieldDefArchived(tx, v, String(fd.get("id")), fd.get("archive") === "true"));
+  revalidatePath("/settings/custom-fields");
+  revalidatePath("/people");
 }

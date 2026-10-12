@@ -63,7 +63,7 @@ export function AppNav({
   return (
     <>
       {/* Mobile top bar */}
-      <div className="no-print sticky top-0 z-30 flex items-center justify-between border-b border-edge bg-surface px-4 py-2 lg:hidden">
+      <header className="no-print sticky top-0 z-30 flex items-center justify-between border-b border-edge bg-surface px-4 py-2 lg:hidden">
         <Link href="/today" className="font-bold">
           {orgName} <span className="text-brand">Hub</span>
         </Link>
@@ -79,7 +79,7 @@ export function AppNav({
             {open ? "Close" : "Menu"}
           </button>
         </div>
-      </div>
+      </header>
       {open ? (
         <nav id="mobile-nav" aria-label="Main" className="no-print fixed inset-x-0 top-[57px] bottom-0 z-30 overflow-y-auto bg-surface p-4 lg:hidden">
           {links}
@@ -88,7 +88,7 @@ export function AppNav({
       ) : null}
 
       {/* Desktop sidebar */}
-      <aside className="no-print sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-edge bg-surface px-3 py-4 lg:flex">
+      <aside aria-label="Sidebar" className="no-print sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-edge bg-surface px-3 py-4 lg:flex">
         <Link href="/today" className="mb-1 px-3 text-lg font-bold tracking-tight">
           {orgName} <span className="text-brand">Hub</span>
         </Link>

@@ -330,15 +330,31 @@ export const personTags = pgTable(
   (t) => [primaryKey({ columns: [t.personId, t.tagId] })],
 );
 
-export const customFieldDefs = pgTable("custom_field_defs", {
-  id: id(),
-  orgId: orgId(),
-  key: text("key").notNull(),
-  label: text("label").notNull(),
-  fieldType: text("field_type").$type<"text" | "number" | "date" | "select" | "boolean">().notNull(),
-  options: jsonb("options").$type<string[]>(),
-  appliesTo: text("applies_to").$type<"person" | "athlete" | "lead">().notNull().default("person"),
-});
+export type CustomFieldType = "text" | "number" | "date" | "select" | "boolean";
+export type CustomFieldAppliesTo = "person" | "athlete" | "lead";
+/** staff = staff only; family = also shown (read-only) to the person's guardians / the athlete. */
+export type CustomFieldVisibility = "staff" | "family";
+
+/** Org-defined fields; values live in people.custom_fields keyed by `key`. Key and type are fixed after creation. */
+export const customFieldDefs = pgTable(
+  "custom_field_defs",
+  {
+    id: id(),
+    orgId: orgId(),
+    key: text("key").notNull(),
+    label: text("label").notNull(),
+    fieldType: text("field_type").$type<CustomFieldType>().notNull(),
+    options: jsonb("options").$type<string[]>(),
+    appliesTo: text("applies_to").$type<CustomFieldAppliesTo>().notNull().default("person"),
+    required: boolean("required").notNull().default(false),
+    visibility: text("visibility").$type<CustomFieldVisibility>().notNull().default("staff"),
+    showInList: boolean("show_in_list").notNull().default(false),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: createdAt(),
+    archivedAt: ts("archived_at"),
+  },
+  (t) => [uniqueIndex("custom_field_defs_org_key_uq").on(t.orgId, t.key)],
+);
 
 export const skillDefinitions = pgTable("skill_definitions", {
   id: id(),

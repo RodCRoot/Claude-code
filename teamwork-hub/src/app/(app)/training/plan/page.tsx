@@ -54,7 +54,7 @@ export default async function PlanPage() {
           {rows.size === 0 ? (
             <EmptyState title="No season blocks yet">Add one below.</EmptyState>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Season timeline">
               <div className="min-w-[640px]">
                 <div className="relative ml-40 h-6 border-b border-edge text-xs text-ink-3" aria-hidden>
                   {months.map((m) => (

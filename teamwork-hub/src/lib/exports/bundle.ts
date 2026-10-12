@@ -21,6 +21,7 @@ import {
   metricValues,
   organizations,
   people,
+  customFieldDefs,
   productVersions,
   products,
   questionnaireResponses,
@@ -129,6 +130,8 @@ export async function buildExport(tx: Tx, v: Viewer, scope: ExportScope): Promis
     athletes: athleteRows,
     guardianships: guardianRows,
     households: householdRows,
+    // Definitions that explain the keys inside people.customFields.
+    custom_field_defs: await tx.select().from(customFieldDefs).where(eq(customFieldDefs.orgId, orgId)),
     household_members: scope.kind === "org" ? hhMemberRows : await tx.select().from(householdMembers).where(inIds(householdMembers.householdId, hhIds)),
   };
 

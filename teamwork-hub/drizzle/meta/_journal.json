@@ -78,6 +78,13 @@
       "when": 1791787843290,
       "tag": "0010_sched_kiosk_pins",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791788803772,
+      "tag": "0011_people_custom_fields",
+      "breakpoints": true
     }
   ]
 }

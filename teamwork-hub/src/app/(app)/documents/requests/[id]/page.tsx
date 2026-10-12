@@ -238,7 +238,7 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
           ) : null}
         </div>
 
-        <aside className="space-y-5">
+        <aside aria-label="Request details" className="space-y-5">
           <Card>
             <CardHeader title="Signers" />
             <CardBody>

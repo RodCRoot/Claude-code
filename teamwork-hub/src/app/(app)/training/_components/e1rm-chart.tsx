@@ -16,7 +16,7 @@ export function E1rmChart({ points, unit, lift, from, to }: { points: Point[]; u
       <figcaption className="mb-2 text-sm font-medium text-ink-2">{title}</figcaption>
       <div className="h-64 w-full" role="img" aria-label={title}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={points} margin={{ top: 8, right: 12, bottom: 24, left: 8 }}>
+          <LineChart accessibilityLayer={false} data={points} margin={{ top: 8, right: 12, bottom: 24, left: 8 }}>
             <CartesianGrid stroke="var(--edge)" strokeDasharray="3 3" />
             <XAxis dataKey="date" tick={{ fontSize: 11, fill: "var(--ink-3)" }} label={{ value: "Date", position: "insideBottom", offset: -16, fill: "var(--ink-3)", fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11, fill: "var(--ink-3)" }} domain={[(min: number) => Math.floor((min - 10) / 5) * 5, (max: number) => Math.ceil((max + 10) / 5) * 5]} width={56} label={{ value: unit, angle: -90, position: "insideLeft", fill: "var(--ink-3)", fontSize: 11 }} />
