@@ -10,12 +10,13 @@ import { signingState, type SignOption } from "@/lib/forms/signing";
 import { verifyRequest } from "@/lib/forms/verify";
 import { describeAuthMethod } from "@/lib/forms/completion";
 import { displayValue, SIGNER_ROLE_LABEL, type SignerRole } from "@/lib/forms/fields";
-import { ESIGN_CONSENT_TEXT, PILOT_NOTICE } from "@/lib/forms/consent";
+import { ESIGN_CONSENT_TEXT, IDENTITY_NOTICE, PILOT_NOTICE } from "@/lib/forms/consent";
 import { esignProvider } from "@/lib/forms/esign-provider";
+import { stepUpStatus, type StepUpStatus } from "@/lib/forms/step-up";
 import { fmt, fmtDate } from "@/lib/time";
 import { Badge, ButtonLink, Callout, Card, CardBody, CardHeader, Field, Input, NotConfigured, PageHeader, Select, StatusBadge, Table, Td, Textarea, Th } from "@/components/ui";
 import { ActionForm, SubmitButton } from "@/components/forms";
-import { remindAction, signAction, voidAction } from "../../actions";
+import { remindAction, sendStepUpCodeAction, signAction, voidAction } from "../../actions";
 import { FormMarkdown, Hash, SampleBadge, SampleTextBanner } from "../../_components/markdown";
 
 export const metadata = { title: "Form request" };
@@ -40,6 +41,7 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
   const actorName = (uid: string | null) => (uid ? (actors.find((a) => a.id === uid)?.name ?? "Unknown user") : "System");
   const fields = (ctx.version.fields ?? []) as FormField[];
   const provider = esignProvider();
+  const stepUp = st.mine.length ? await stepUpStatus(db, v, ctx) : null;
 
   return (
     <>
@@ -108,7 +110,7 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
             </Card>
           ) : null}
 
-          {st.mine.length ? <SignCard requestId={ctx.req.id} options={st.mine} fields={fields} mode="self" /> : null}
+          {st.mine.length && stepUp ? <SignCard requestId={ctx.req.id} options={st.mine} fields={fields} mode="self" stepUp={stepUp} tz={tz} /> : null}
           {st.open && !st.mine.length && st.blockedReason && !access.manage ? <Callout tone="warn">{st.blockedReason}</Callout> : null}
           {access.manage && st.inPerson.length ? <SignCard requestId={ctx.req.id} options={st.inPerson} fields={fields} mode="in_person" /> : null}
 
@@ -148,6 +150,9 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
                           <details className="text-xs text-ink-3">
                             <summary className="cursor-pointer">Consent &amp; device</summary>
                             <p className="mt-1">{s.consentText}</p>
+                            <p className="mt-1 break-all">
+                              auth_method: <code>{s.authMethod}</code>
+                            </p>
                             <p className="mt-1 break-all">User agent: {s.userAgent ?? "not recorded"}</p>
                             <p className="mt-1">
                               Data hash <Hash value={s.dataHash} short />
@@ -304,6 +309,7 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
           ) : null}
 
           <Callout title="Pilot e-signature">{PILOT_NOTICE}</Callout>
+          {st.open ? <Callout title="Identity verification">{IDENTITY_NOTICE}</Callout> : null}
           {access.manage ? (
             <NotConfigured provider={provider.displayName} envVars={provider.requiredEnv()}>
               An established e-signature provider can replace the pilot typed-name workflow. The adapter interface is ready; no provider is connected, so nothing is sent externally.
@@ -315,9 +321,86 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
   );
 }
 
-function SignCard({ requestId, options, fields, mode }: { requestId: string; options: SignOption[]; fields: FormField[]; mode: "self" | "in_person" }) {
+/**
+ * Identity step-up for self-signing. Returns whether the signature form can be used now
+ * and whether it needs the code field. Never hides the requirement: when email can't be
+ * used, the signer is sent to staff for in-person verification.
+ */
+function StepUpPanel({ requestId, s, tz }: { requestId: string; s: StepUpStatus; tz: string }) {
+  if (s.satisfiedByMfa) {
+    return (
+      <Callout tone="ok" className="mb-4" title="Identity verified">
+        You completed multi-factor sign-in this session, which this organization accepts as identity verification for signing.
+      </Callout>
+    );
+  }
+  if (!s.emailOnFile) {
+    return (
+      <Callout tone="warn" className="mb-4" title="Identity verification needed">
+        This form requires a verification code sent to your email, but Teamwork has no email address on file for you. Ask Teamwork staff to verify your identity in person and record your signature.
+      </Callout>
+    );
+  }
+  if (!s.emailConfigured) {
+    return (
+      <Callout tone="warn" className="mb-4" title="Identity verification needed">
+        This form requires a verification code sent to your email, but email delivery is not configured for Teamwork Hub yet, so no code can be sent. Ask Teamwork staff to verify your identity in person and record your signature.
+      </Callout>
+    );
+  }
+  const l = s.latest;
+  const statusLine = !l
+    ? null
+    : s.verified
+      ? "Code accepted. Finish signing below before it expires."
+      : l.status === "undeliverable"
+        ? `The last code could not be delivered (${l.deliveryStatus === "not_configured" ? "email not configured" : (l.deliveryReason ?? "delivery failed")}). Request a new code or ask staff to verify you in person.`
+        : l.status === "locked"
+          ? "Too many incorrect codes. Request a new code."
+          : l.status === "expired"
+            ? "Your last code expired. Request a new code."
+            : l.status === "pending"
+              ? `Code sent ${fmt(l.createdAt, "h:mm a", tz)}${l.deliveryStatus === "test_redirected" ? " (test mode: redirected to the test recipient)" : ""}; valid until ${fmt(l.expiresAt, "h:mm a", tz)}. ${l.attemptsLeft} attempt${l.attemptsLeft === 1 ? "" : "s"} left.`
+              : null;
+  return (
+    <div className="mb-4 rounded-lg border border-edge p-4">
+      <p className="text-sm font-semibold">Step 1 — verify your identity</p>
+      <p className="mt-1 text-sm text-ink-3">
+        We’ll email a 6-digit code to <strong>{s.emailOnFile}</strong> (the address Teamwork has on file). Enter it below with your signature. Wrong address? Ask Teamwork staff to update it or to verify you in person.
+      </p>
+      {statusLine ? <p className="mt-2 text-sm">{statusLine}</p> : null}
+      {!s.verified ? (
+        <ActionForm action={sendStepUpCodeAction} className="mt-3">
+          <input type="hidden" name="requestId" value={requestId} />
+          <SubmitButton variant="outline" pendingText="Sending…">
+            {l ? "Email me a new code" : "Email me a code"}
+          </SubmitButton>
+        </ActionForm>
+      ) : null}
+    </div>
+  );
+}
+
+function SignCard({
+  requestId,
+  options,
+  fields,
+  mode,
+  stepUp,
+  tz,
+}: {
+  requestId: string;
+  options: SignOption[];
+  fields: FormField[];
+  mode: "self" | "in_person";
+  stepUp?: StepUpStatus;
+  tz?: string;
+}) {
   const needsData = options.some((o) => o.submitsData);
   const prefix = mode === "self" ? "s" : "ip";
+  const gated = mode === "self" && stepUp?.required && !stepUp.satisfiedByMfa;
+  const blocked = gated && (!stepUp!.emailOnFile || !stepUp!.emailConfigured);
+  const needsCode = gated && !blocked && !stepUp!.verified;
   return (
     <Card id={mode === "self" ? "sign" : "sign-in-person"}>
       <CardHeader
@@ -327,9 +410,11 @@ function SignCard({ requestId, options, fields, mode }: { requestId: string; opt
       <CardBody>
         {mode === "in_person" ? (
           <p className="mb-3 text-sm text-ink-3">
-            Hand the device to the signer. They read the document, type their own full legal name, and check the consent box. Your account is recorded as the witness.
+            Check the signer’s identity in person (for example a photo ID), then hand them the device. They read the document, type their own full legal name, and check the consent box. Your account is recorded as the witness who attested their identity (<code>staff_witnessed_in_person</code>).
           </p>
         ) : null}
+        {mode === "self" && stepUp?.required ? <StepUpPanel requestId={requestId} s={stepUp} tz={tz ?? "America/Indiana/Indianapolis"} /> : null}
+        {blocked ? null : (
         <ActionForm action={signAction} className="space-y-4">
           <input type="hidden" name="requestId" value={requestId} />
           {mode === "self" ? (
@@ -384,10 +469,31 @@ function SignCard({ requestId, options, fields, mode }: { requestId: string; opt
           <Field label="Type your full legal name" htmlFor={`${prefix}-name`} required hint="First and last name, as your signature.">
             <Input id={`${prefix}-name`} name="typedName" required autoComplete="name" minLength={3} maxLength={120} />
           </Field>
+          {needsCode ? (
+            <Field label="Verification code" htmlFor={`${prefix}-code`} required hint="The 6-digit code from the email (step 1).">
+              <Input
+                id={`${prefix}-code`}
+                name="stepUpCode"
+                required
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9 ]{6,7}"
+                maxLength={7}
+                className="max-w-40 tabular"
+              />
+            </Field>
+          ) : null}
+          {mode === "in_person" ? (
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" name="identityAttested" required className="mt-0.5 size-5 shrink-0" />
+              <span>I checked this signer’s identity in person and attest that they are the person selected above. My name is recorded as the witness.</span>
+            </label>
+          ) : null}
           <SubmitButton size="lg" pendingText="Signing…">
             {mode === "self" ? "Sign" : "Record signature"}
           </SubmitButton>
         </ActionForm>
+        )}
       </CardBody>
     </Card>
   );

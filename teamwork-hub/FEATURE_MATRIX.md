@@ -80,8 +80,9 @@ Test evidence refers to files in `tests/` (Vitest, real Postgres) and `e2e/` (Pl
 |---|---|---|---|
 | Versioned templates, immutable published versions, field builder, signer requirements | verified locally | `forms.test.ts` | Template text is SAMPLE and needs approved language |
 | Requests (athlete/group/missing), reminders, renewals/expiry, superseding | verified locally | `forms.test.ts` | — |
-| Guardian/adult signing with exact consent text, identity, relationship, evidence; multi-signer | verified locally | `forms.test.ts`, browser | Typed-name pilot only; stronger identity assurance needed |
-| Completed PDF with integrity hash; verify view; auth-checked download | verified locally | `forms-files.test.ts` | Standard font (non-Latin characters print as "?") |
+| Guardian/adult signing with exact consent text, identity, relationship, evidence; multi-signer | verified locally | `forms.test.ts`, browser | Typed-name pilot; no legal-enforceability claim |
+| Signer identity step-up (emailed one-time code, MFA session, or staff-attested in person), org setting | verified locally (email via test transport) | `forms-step-up.test.ts` | Real email needs EMAIL_PROVIDER + DELIVERY_ENABLED; without it, step-up forms need staff in-person verification |
+| Completed PDF with integrity hash; verify view; auth-checked download; Unicode fonts (Noto Sans + CJK/Hangul fallbacks) | verified locally | `forms-files.test.ts`, `forms-step-up.test.ts` | Scripts outside Latin/Greek/Cyrillic/CJK/Hangul (e.g. Arabic, Devanagari, emoji) still print "?" |
 | Historical archive import (never recreates signatures) | verified locally | `forms.test.ts` | — |
 | Established e-signature provider adapter | implemented, configuration required | interface only | No provider chosen/connected |
 

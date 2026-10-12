@@ -10,6 +10,7 @@ import { dataHash } from "./hash";
 import { isAdultAt, isOpen, loadRequestContext, signingGuardians, type RequestContext } from "./context";
 import { completeRequest } from "./completion";
 import { formEvent } from "./requests";
+import { consumeChallenge, sessionMfaSatisfies, stepUpRequiredFor, stepUpSettingsOf, verifiedChallenge } from "./step-up";
 
 /** Roles that may submit the form's field values (the first data-bearing signature). */
 const DATA_ROLES: SignerRole[] = ["guardian", "second_guardian", "adult_athlete"];
@@ -137,9 +138,57 @@ export type SignInput = {
   values: Record<string, unknown>;
   /** Staff-assisted in-person signing: the person physically signing. */
   inPersonSignerPersonId?: string | null;
+  /** In-person only: the witnessing staff member attests they verified the signer's identity. */
+  identityAttested?: boolean;
 };
 
+/** `authMethod` is the session's sign-in method (`session_password` / `session_password_mfa`). */
 export type SignEvidence = { ip: string | null; userAgent: string | null; authMethod: string };
+
+/** Signer identity step-up has not been satisfied (see step-up.ts). */
+export class StepUpRequiredError extends UserError {
+  constructor(message: string) {
+    super(message, { stepUpCode: "Enter the 6-digit code we emailed you." });
+    this.name = "StepUpRequiredError";
+  }
+}
+
+type StepUpMethod = "email_otp" | "session_mfa" | "staff_witnessed_in_person";
+
+/**
+ * Decide how this signer's identity was established and build the `auth_method`
+ * evidence string. Throws when step-up is required and not satisfied — never skips.
+ *   in person:  staff_witnessed_in_person; witness=<name> [<user id>]; identity=staff_attested
+ *   email OTP:  <session method>; step_up=email_otp; challenge=<id>
+ *   MFA:        session_password_mfa; step_up=session_mfa
+ */
+async function resolveIdentity(
+  tx: Tx,
+  v: Viewer,
+  ctx: RequestContext,
+  opt: SignOption,
+  inPerson: boolean,
+  input: SignInput,
+  evidence: SignEvidence,
+  now: Date,
+): Promise<{ authMethod: string; challengeId: string | null; stepUp: StepUpMethod | null }> {
+  if (inPerson) {
+    if (!input.identityAttested) {
+      throw new UserError("Confirm that you verified the signer's identity in person before recording their signature.", {
+        identityAttested: "Required: you are attesting to the signer's identity.",
+      });
+    }
+    return { authMethod: `staff_witnessed_in_person; witness=${v.displayName} [${v.userId}]; identity=staff_attested`, challengeId: null, stepUp: "staff_witnessed_in_person" };
+  }
+  const settings = stepUpSettingsOf(ctx.org?.settings);
+  if (!stepUpRequiredFor(settings, ctx.template.kind)) return { authMethod: evidence.authMethod, challengeId: null, stepUp: null };
+  const ch = await verifiedChallenge(tx, ctx.req.id, opt.signerPersonId, v.userId, now);
+  if (ch) return { authMethod: `${evidence.authMethod}; step_up=email_otp; challenge=${ch.id}`, challengeId: ch.id, stepUp: "email_otp" };
+  if (await sessionMfaSatisfies(tx, v, settings)) return { authMethod: "session_password_mfa; step_up=session_mfa", challengeId: null, stepUp: "session_mfa" };
+  throw new StepUpRequiredError(
+    "Verify your identity before signing: enter the 6-digit code we email to the address on file. If email isn't available, Teamwork staff can verify you in person.",
+  );
+}
 
 export function normalizeTypedName(s: string) {
   return s.normalize("NFC").replace(/\s+/g, " ").trim();
@@ -174,6 +223,7 @@ export async function signRequest(tx: Tx, v: Viewer, input: SignInput, evidence:
   if (!input.consent) throw new UserError("You must agree to sign electronically.", { consent: "Check the box to agree to the statement above." });
 
   let data = ctx.req.submittedData;
+  const freezeData = !data;
   if (!data) {
     if (st.needsData) {
       if (!opt.submitsData) throw new UserError("A parent/guardian or adult athlete must complete the form first.");
@@ -181,17 +231,22 @@ export async function signRequest(tx: Tx, v: Viewer, input: SignInput, evidence:
       if (!res.ok) throw new UserError("Please fix the highlighted fields.", res.errors);
       data = res.data;
     } else data = {};
+  }
+
+  // Identity step-up is resolved before anything is written.
+  const identity = await resolveIdentity(tx, v, ctx, opt, inPerson, input, evidence, now);
+
+  if (freezeData) {
     await tx.update(formRequests).set({ submittedData: data }).where(eq(formRequests.id, ctx.req.id));
     ctx.req.submittedData = data;
   }
   const dh = dataHash(data);
 
   let signerUserId: string | null = null;
-  let authMethod = evidence.authMethod;
+  const authMethod = identity.authMethod;
   if (inPerson) {
     const [u] = await tx.select({ id: users.id }).from(users).where(eq(users.personId, opt.signerPersonId));
     signerUserId = u?.id ?? null;
-    authMethod = `in_person_staff_witnessed; witness=${v.displayName} [${v.userId}]`;
   } else {
     signerUserId = v.userId;
   }
@@ -217,15 +272,17 @@ export async function signRequest(tx: Tx, v: Viewer, input: SignInput, evidence:
       signedAt,
     })
     .returning();
+  if (identity.challengeId) await consumeChallenge(tx, identity.challengeId, sig.id, signedAt);
   await formEvent(tx, ctx.req.id, "signed", v.userId, {
     signatureId: sig.id,
     role: opt.role,
     signerPersonId: opt.signerPersonId,
     inPerson,
+    stepUp: identity.stepUp,
     dataHash: dh,
   });
   await audit(tx, { orgId: v.orgId, actorUserId: v.userId, actorRole: v.role }, "forms.sign", "form_request", ctx.req.id, {
-    summary: `${SIGNER_ROLE_LABEL[opt.role]} signature recorded${inPerson ? " in person (staff witnessed)" : ""}`,
+    summary: `${SIGNER_ROLE_LABEL[opt.role]} signature recorded${inPerson ? " in person (staff witnessed, identity attested)" : identity.stepUp ? ` (identity: ${identity.stepUp.replaceAll("_", " ")})` : ""}`,
     after: { signatureId: sig.id, role: opt.role },
   });
 

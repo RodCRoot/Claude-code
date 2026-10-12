@@ -15,7 +15,7 @@ pnpm dev               # then: PW_CHROMIUM=<chromium path> npx playwright test
 2. **Sandbox verification:** Stripe test keys → run checkout + webhook round trip, verify refund/dispute/payout field names; PayPal sandbox → Orders + webhook verification; mark `verified_sandbox` only after a real round trip.
 3. **Recurring billing via provider:** Stripe Billing subscriptions / PayPal Subscriptions adapters (currently app-invoiced per period).
 4. **Google Calendar OAuth** consent + encrypted token storage (additive schema), then enable push/free-busy.
-5. **E-signature hardening:** stronger signer identity (email/SMS code or MFA), Unicode PDF font, approved legal text, block `published → draft` status changes in the trigger.
+5. **E-signature hardening (remaining):** approved legal/consent text from counsel; configure an email provider so families can self-sign step-up forms (until then staff verify in person); optional SMS codes; rate limiting per IP on code requests. (Done: email-code identity step-up, Unicode PDF fonts, `published → draft/retired` trigger guard.)
 6. **Messaging providers:** inbound email/SMS + bounce/STOP webhooks; family communication-preference screen.
 7. **Training:** service worker for full offline reload; drag-and-drop calendar builder.
 8. **Ops:** error monitoring SDK, CSP, S3 storage backend with deletes, restore rehearsal, staging deploy (private, payments in test mode, delivery off).

@@ -1,11 +1,14 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { formatInTimeZone } from "date-fns-tz";
 import { parseMarkdown, type Inline } from "@/lib/forms/markdown";
+import { PdfFonts, type Run } from "./fonts";
 
 /**
  * Renders a completed form to PDF with pdf-lib (no external services).
  * Contents: org name, form title + version + content hash, full body text,
  * submitted field values, signature evidence, and an integrity footer on every page.
+ * Text is set in embedded Unicode fonts (Noto Sans + CJK fallbacks, see ./fonts.ts),
+ * so names and answers in any bundled script render as typed.
  */
 
 export type PdfSignature = {
@@ -17,6 +20,9 @@ export type PdfSignature = {
   signedAt: Date;
   ip: string | null;
   userAgent: string | null;
+  /** Human-readable identity verification (describeAuthMethod). */
+  authMethodLabel: string;
+  /** Raw `auth_method` evidence value, exactly as stored and hashed. */
   authMethod: string;
 };
 
@@ -49,53 +55,23 @@ const MUTED = rgb(0.38, 0.41, 0.47);
 const LINE = rgb(0.82, 0.84, 0.88);
 const WARN = rgb(0.6, 0.27, 0.02);
 
-const REPLACEMENTS: Record<string, string> = {
-  "≤": "<=",
-  "≥": ">=",
-  "≠": "!=",
-  "→": "->",
-  "←": "<-",
-  "✓": "[x]",
-  "✔": "[x]",
-  "✗": "[ ]",
-  " ": " ",
-  " ": " ",
-  " ": " ",
-  "​": "",
-  "\t": "    ",
-};
+export const PDF_PILOT_NOTICE =
+  "Pilot notice: typed-name e-signature pilot with signer identity verification as recorded above. " +
+  "This is not a complete production e-signature system and no claim is made about legal enforceability.";
 
-type Fonts = { regular: PDFFont; bold: PDFFont; italic: PDFFont; boldItalic: PDFFont; mono: PDFFont };
+type Color = ReturnType<typeof rgb>;
+const isSpace = (t: Run) => /^\s+$/.test(t.text);
 
 class Writer {
   page!: PDFPage;
   y = 0;
   pages: PDFPage[] = [];
-  private charset: Set<number>;
 
   constructor(
     private doc: PDFDocument,
-    public fonts: Fonts,
+    public fonts: PdfFonts,
   ) {
-    this.charset = new Set(fonts.regular.getCharacterSet());
     this.newPage();
-  }
-
-  /** Map text to the WinAnsi subset the standard fonts can encode. */
-  clean(s: string): string {
-    let out = "";
-    for (const ch of s.replace(/\r\n?/g, "\n")) {
-      if (ch === "\n") {
-        out += " ";
-        continue;
-      }
-      if (ch in REPLACEMENTS) {
-        out += REPLACEMENTS[ch];
-        continue;
-      }
-      out += this.charset.has(ch.codePointAt(0)!) ? ch : "?";
-    }
-    return out;
   }
 
   newPage() {
@@ -112,67 +88,106 @@ class Writer {
     this.y -= h;
   }
 
+  /** Whitespace-separated tokens, each split into single-font runs. */
+  tokens(text: string, font: PDFFont): Run[] {
+    const out: Run[] = [];
+    for (const part of text.split(/(\s+)/)) {
+      if (!part) continue;
+      if (/^\s+$/.test(part)) out.push({ text: " ", font });
+      else out.push(...this.fonts.split(part, font));
+    }
+    return out;
+  }
+
+  width(t: Run, size: number) {
+    return t.font.widthOfTextAtSize(t.text, size);
+  }
+
+  /** Greedy wrap; tokens longer than a line (hashes, CJK without spaces) are broken by code point. */
+  lines(toks: Run[], size: number, maxW: number): Run[][] {
+    const lines: Run[][] = [];
+    let line: Run[] = [];
+    let w = 0;
+    const flush = () => {
+      while (line.length && isSpace(line[line.length - 1])) line.pop();
+      lines.push(line);
+      line = [];
+      w = 0;
+    };
+    const push = (t: Run, tw: number) => {
+      line.push(t);
+      w += tw;
+    };
+    for (const t of toks) {
+      const tw = this.width(t, size);
+      if (isSpace(t)) {
+        if (line.length) push(t, tw);
+        continue;
+      }
+      if (w + tw <= maxW) {
+        push(t, tw);
+        continue;
+      }
+      if (line.length && tw <= maxW) {
+        flush();
+        push(t, tw);
+        continue;
+      }
+      // Longer than the remaining space and than a whole line: break by code point.
+      const chars = Array.from(t.text);
+      let i = 0;
+      while (i < chars.length) {
+        const wOf = (end: number) => t.font.widthOfTextAtSize(chars.slice(i, end).join(""), size);
+        let cut = chars.length;
+        while (cut > i + 1 && w + wOf(cut) > maxW) cut--;
+        if (cut === i + 1 && line.length && w + wOf(cut) > maxW) {
+          flush();
+          continue;
+        }
+        push({ text: chars.slice(i, cut).join(""), font: t.font }, wOf(cut));
+        i = cut;
+        if (i < chars.length) flush();
+      }
+    }
+    if (line.length) flush();
+    if (!lines.length) lines.push([]);
+    return lines;
+  }
+
+  drawLine(line: Run[], x: number, size: number, color: Color) {
+    for (const t of line) {
+      this.page.drawText(t.text, { x, y: this.y - size, size, font: t.font, color });
+      x += this.width(t, size);
+    }
+  }
+
   /** Word-wrapped rich text (mixed bold/italic runs). */
-  rich(runs: Inline[], opts: { size?: number; indent?: number; color?: ReturnType<typeof rgb>; lineGap?: number; baseBold?: boolean; prefix?: string } = {}) {
+  rich(runs: Inline[], opts: { size?: number; indent?: number; color?: Color; lineGap?: number; baseBold?: boolean; prefix?: string } = {}) {
     const size = opts.size ?? 10;
     const lh = size * (opts.lineGap ?? 1.4);
     const indent = opts.indent ?? 0;
-    const maxW = CONTENT_W - indent;
-    type Tok = { text: string; font: PDFFont };
-    const toks: Tok[] = [];
+    const f = this.fonts;
+    const toks: Run[] = [];
     for (const r of runs) {
       const bold = r.bold || opts.baseBold;
-      const font = bold && r.italic ? this.fonts.boldItalic : bold ? this.fonts.bold : r.italic ? this.fonts.italic : this.fonts.regular;
-      for (const part of this.clean(r.text).split(/(\s+)/)) if (part) toks.push({ text: part, font });
+      const font = bold && r.italic ? f.boldItalic : bold ? f.bold : r.italic ? f.italic : f.regular;
+      toks.push(...this.tokens(r.text, font));
     }
-    const lines: Tok[][] = [];
-    let line: Tok[] = [];
-    let w = 0;
-    const width = (t: Tok) => t.font.widthOfTextAtSize(t.text, size);
-    for (const t of toks) {
-      const isSpace = /^\s+$/.test(t.text);
-      if (isSpace && line.length === 0) continue;
-      let tw = width(t);
-      if (!isSpace && w + tw > maxW && line.length) {
-        while (line.length && /^\s+$/.test(line[line.length - 1].text)) line.pop();
-        lines.push(line);
-        line = [];
-        w = 0;
-      }
-      // Hard-break words longer than a full line (hashes, URLs).
-      let tok = t;
-      while (!isSpace && tw > maxW) {
-        let cut = tok.text.length;
-        while (cut > 1 && tok.font.widthOfTextAtSize(tok.text.slice(0, cut), size) > maxW) cut--;
-        lines.push([{ text: tok.text.slice(0, cut), font: tok.font }]);
-        tok = { text: tok.text.slice(cut), font: tok.font };
-        tw = width(tok);
-      }
-      line.push(tok);
-      w += tw;
-    }
-    if (line.length) lines.push(line);
-    if (!lines.length) lines.push([]);
-    lines.forEach((ln, i) => {
+    this.lines(toks, size, CONTENT_W - indent).forEach((ln, i) => {
       this.ensure(lh);
-      let x = MARGIN + indent;
-      if (i === 0 && opts.prefix) {
-        this.page.drawText(opts.prefix, { x: x - 12, y: this.y - size, size, font: this.fonts.regular, color: opts.color ?? INK });
-      }
-      for (const t of ln) {
-        this.page.drawText(t.text, { x, y: this.y - size, size, font: t.font, color: opts.color ?? INK });
-        x += width(t);
-      }
+      if (i === 0 && opts.prefix) this.drawLine(this.fonts.split(opts.prefix, f.regular), MARGIN + indent - 12, size, opts.color ?? INK);
+      this.drawLine(ln, MARGIN + indent, size, opts.color ?? INK);
       this.y -= lh;
     });
   }
 
-  text(s: string, opts: { size?: number; bold?: boolean; color?: ReturnType<typeof rgb>; indent?: number; mono?: boolean } = {}) {
-    if (opts.mono) {
+  text(s: string, opts: { size?: number; bold?: boolean; color?: Color; indent?: number; mono?: boolean } = {}) {
+    // Courier (WinAnsi) only for plain ASCII such as hashes; anything else uses the Unicode fonts.
+    if (opts.mono && /^[\x20-\x7e]*$/.test(s)) {
       const size = opts.size ?? 8;
       const font = this.fonts.mono;
       const maxW = CONTENT_W - (opts.indent ?? 0);
-      let rest = this.clean(s);
+      let rest = s;
       while (rest.length) {
         let cut = rest.length;
         while (cut > 1 && font.widthOfTextAtSize(rest.slice(0, cut), size) > maxW) cut--;
@@ -192,43 +207,20 @@ class Writer {
     this.y -= 12;
   }
 
-  /** Two-column key/value row, wrapping the value. */
-  kv(label: string, value: string, opts: { labelW?: number; size?: number; mono?: boolean } = {}) {
+  /** Two-column key/value row, wrapping both columns. */
+  kv(label: string, value: string, opts: { labelW?: number; size?: number } = {}) {
     const size = opts.size ?? 9;
     const labelW = opts.labelW ?? 150;
     const lh = size * 1.4;
-    const font = opts.mono ? this.fonts.mono : this.fonts.regular;
-    const valueLines = this.wrap(this.clean(value || "—"), font, size, CONTENT_W - labelW);
-    const labelLines = this.wrap(this.clean(label), this.fonts.bold, size, labelW - 10);
+    const valueLines = this.lines(this.tokens(value || "—", this.fonts.regular), size, CONTENT_W - labelW);
+    const labelLines = this.lines(this.tokens(label, this.fonts.bold), size, labelW - 10);
     const n = Math.max(valueLines.length, labelLines.length);
     for (let i = 0; i < n; i++) {
       this.ensure(lh);
-      if (labelLines[i]) this.page.drawText(labelLines[i], { x: MARGIN, y: this.y - size, size, font: this.fonts.bold, color: MUTED });
-      if (valueLines[i]) this.page.drawText(valueLines[i], { x: MARGIN + labelW, y: this.y - size, size, font, color: INK });
+      if (labelLines[i]) this.drawLine(labelLines[i], MARGIN, size, MUTED);
+      if (valueLines[i]) this.drawLine(valueLines[i], MARGIN + labelW, size, INK);
       this.y -= lh;
     }
-  }
-
-  /** Greedy word wrap with hard breaks for over-long tokens. */
-  wrap(text: string, font: PDFFont, size: number, maxW: number): string[] {
-    const words = text.split(/(\s+)/).filter(Boolean);
-    const lines: string[] = [];
-    let cur = "";
-    for (const wd of words) {
-      const next = cur + wd;
-      if (font.widthOfTextAtSize(next.trimEnd(), size) > maxW && cur.trim()) {
-        lines.push(cur.trimEnd());
-        cur = /^\s+$/.test(wd) ? "" : wd;
-      } else cur = next;
-      while (font.widthOfTextAtSize(cur, size) > maxW) {
-        let cut = cur.length;
-        while (cut > 1 && font.widthOfTextAtSize(cur.slice(0, cut), size) > maxW) cut--;
-        lines.push(cur.slice(0, cut));
-        cur = cur.slice(cut);
-      }
-    }
-    if (cur.trim() || !lines.length) lines.push(cur.trimEnd());
-    return lines;
   }
 }
 
@@ -247,13 +239,8 @@ export async function renderCompletedFormPdf(input: CompletedFormPdfInput): Prom
   doc.setCreationDate(input.completedAt);
   doc.setModificationDate(input.completedAt);
 
-  const fonts: Fonts = {
-    regular: await doc.embedFont(StandardFonts.Helvetica),
-    bold: await doc.embedFont(StandardFonts.HelveticaBold),
-    italic: await doc.embedFont(StandardFonts.HelveticaOblique),
-    boldItalic: await doc.embedFont(StandardFonts.HelveticaBoldOblique),
-    mono: await doc.embedFont(StandardFonts.Courier),
-  };
+  // Every drawn string, so CJK fallbacks are embedded only when needed.
+  const fonts = await PdfFonts.embed(doc, JSON.stringify(input));
   const w = new Writer(doc, fonts);
 
   // Header
@@ -296,17 +283,21 @@ export async function renderCompletedFormPdf(input: CompletedFormPdfInput): Prom
   // Signature evidence
   w.rule();
   w.text("Signature evidence", { size: 12, bold: true });
-  w.text("Each signer typed their full legal name and checked the consent statement below. Times are shown in the facility timezone.", { size: 8.5, color: MUTED });
+  w.text(
+    "Each signer typed their full legal name and checked the consent statement below. Identity verification shows how the signer's identity was checked before the signature was accepted. Times are shown in the facility timezone.",
+    { size: 8.5, color: MUTED },
+  );
   w.gap(4);
   for (const s of input.signatures) {
-    w.ensure(110);
+    w.ensure(130);
     w.text(`${s.roleLabel}: ${s.signerName}`, { size: 10.5, bold: true });
     w.kv("Typed legal name", s.typedName);
     w.kv("Relationship", s.relationship ?? "—");
     w.kv("Signed at", zoned(s.signedAt, input.timezone));
     w.kv("Signed at (UTC)", s.signedAt.toISOString());
     w.kv("IP address", s.ip ?? "not recorded");
-    w.kv("Authentication method", s.authMethod);
+    w.kv("Identity verification", s.authMethodLabel);
+    w.kv("auth_method (evidence)", s.authMethod, { size: 8 });
     w.kv("User agent", s.userAgent ?? "not recorded", { size: 8 });
     w.kv("Consent statement", s.consentText, { size: 8 });
     w.gap(6);
@@ -315,23 +306,23 @@ export async function renderCompletedFormPdf(input: CompletedFormPdfInput): Prom
   w.rule();
   w.text("Integrity", { size: 12, bold: true });
   w.text(
-    "The integrity hash is SHA-256 over the template content hash, the submitted data, and every signature's evidence. Teamwork staff can recompute it in Teamwork Hub (Documents → request → Verify) to detect any change.",
+    "The integrity hash is SHA-256 over the template content hash, the submitted data, and every signature's evidence (including its auth_method). Teamwork staff can recompute it in Teamwork Hub (Documents → request → Verify) to detect any change.",
     { size: 8.5, color: MUTED },
   );
   w.text(`Integrity SHA-256: ${input.integrityHash}`, { size: 8, mono: true });
   w.gap(4);
-  w.text(
-    "Pilot notice: typed-name e-signature pilot. This is not a complete production e-signature system and no claim is made about legal enforceability.",
-    { size: 8, color: MUTED },
-  );
+  w.text(PDF_PILOT_NOTICE, { size: 8, color: MUTED });
 
   // Footer on every page.
   const total = w.pages.length;
   w.pages.forEach((p, i) => {
     p.drawLine({ start: { x: MARGIN, y: MARGIN + 22 }, end: { x: PAGE_W - MARGIN, y: MARGIN + 22 }, thickness: 0.5, color: LINE });
     p.drawText(`Integrity SHA-256 ${input.integrityHash}`, { x: MARGIN, y: MARGIN + 10, size: 6.5, font: fonts.mono, color: MUTED });
-    const label = `${input.orgName.replace(/[^\x20-\x7e]/g, "")} · Page ${i + 1} of ${total}`;
-    p.drawText(label, { x: MARGIN, y: MARGIN, size: 7, font: fonts.regular, color: MUTED });
+    let x = MARGIN;
+    for (const r of fonts.split(`${input.orgName} · Page ${i + 1} of ${total}`, fonts.regular)) {
+      p.drawText(r.text, { x, y: MARGIN, size: 7, font: r.font, color: MUTED });
+      x += r.font.widthOfTextAtSize(r.text, 7);
+    }
   });
 
   return doc.save({ useObjectStreams: false });

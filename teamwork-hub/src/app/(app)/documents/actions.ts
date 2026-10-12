@@ -13,6 +13,7 @@ import { assertCan } from "@/lib/authz/policy";
 import { createDraftVersion, createTemplate, discardDraft, publishVersion, saveDraft, setApprovedText, updateTemplate, TEMPLATE_KINDS } from "@/lib/forms/templates";
 import { issueRequests, processRenewals, remindOverdue, sendReminder, voidRequest, type IssueTarget } from "@/lib/forms/requests";
 import { signRequest } from "@/lib/forms/signing";
+import { sendStepUpCode, updateStepUpSettings, verifyStepUpCode, type StepUpSettings } from "@/lib/forms/step-up";
 
 const refresh = () => revalidatePath("/documents", "layout");
 const uuid = z.string().uuid();
@@ -169,21 +170,30 @@ export const signAction = safeAction(async (_prev: ActionState, fd: FormData) =>
     authMethod: u?.mfaEnabled && v.mfaVerified ? "session_password_mfa" : "session_password",
   };
   const values = formToObject(fd);
+  const requestId = uuid.parse(values.requestId);
   // In-person signing posts "personId|role" from a single picker.
   const pick = typeof values.inPersonPick === "string" ? values.inPersonPick.split("|") : null;
   const inPerson = pick ? pick[0] : null;
   if (pick) values.role = pick[1] ?? "";
+  // Identity step-up code: checked (and the attempt counted) in its own committed
+  // transaction; signRequest then consumes the verified code with the signature.
+  const code = typeof values.stepUpCode === "string" ? values.stepUpCode.trim() : "";
+  if (!inPerson && code) {
+    const check = await db.transaction((tx) => verifyStepUpCode(tx, v, requestId, code));
+    if (!check.ok) throw new UserError(check.error, { stepUpCode: check.error });
+  }
   const res = await db.transaction((tx) =>
     signRequest(
       tx,
       v,
       {
-        requestId: uuid.parse(values.requestId),
+        requestId,
         role: String(values.role ?? ""),
         typedName: String(values.typedName ?? ""),
         consent: values.consent === "on",
         values,
         inPersonSignerPersonId: inPerson,
+        identityAttested: values.identityAttested === "on",
       },
       evidence,
     ),
@@ -191,4 +201,36 @@ export const signAction = safeAction(async (_prev: ActionState, fd: FormData) =>
   refresh();
   // The signing card disappears once this signer is done, so confirm on the page itself.
   redirect(`/documents/requests/${values.requestId}?signed=${res.status === "completed" ? "complete" : "partial"}#top`);
+});
+
+export const sendStepUpCodeAction = safeAction(async (_prev: ActionState, fd: FormData) => {
+  const v = await requireViewer();
+  const res = await sendStepUpCode(db, v, uuid.parse(fd.get("requestId")));
+  refresh();
+  if (res.status === "sent") return { ok: true, message: `We emailed a 6-digit code to ${res.to}. It expires in 10 minutes.` };
+  if (res.status === "test_redirected") {
+    return { ok: true, message: `Delivery is in test mode: the code for ${res.to} was redirected to the configured test recipient. It expires in 10 minutes.` };
+  }
+  if (res.status === "not_configured") {
+    return {
+      ok: false,
+      error: `No code was sent: email delivery is not configured (${res.reason ?? "not configured"}). Ask Teamwork staff to verify your identity in person and record your signature.`,
+    };
+  }
+  return { ok: false, error: `The email provider could not send the code (${res.reason ?? "delivery failed"}). Try again in a minute, or ask Teamwork staff to verify you in person.` };
+});
+
+const KIND_SET = new Set<string>(TEMPLATE_KINDS);
+
+export const stepUpSettingsAction = safeAction(async (_prev: ActionState, fd: FormData) => {
+  const v = await requireViewer();
+  const kinds = fd.getAll("requireForKinds").map(String).filter((k) => KIND_SET.has(k)) as StepUpSettings["requireForKinds"];
+  const next = await db.transaction((tx) => updateStepUpSettings(tx, v, { requireForKinds: kinds, allowSessionMfa: fd.get("allowSessionMfa") === "on" }));
+  refresh();
+  return {
+    ok: true,
+    message: next.requireForKinds.length
+      ? `Identity verification is required for: ${next.requireForKinds.map((k) => k.replace("_", " ")).join(", ")}.`
+      : "Identity verification is off for every form kind.",
+  };
 });

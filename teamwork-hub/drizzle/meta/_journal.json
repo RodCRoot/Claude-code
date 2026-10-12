@@ -50,6 +50,20 @@
       "when": 1791780733239,
       "tag": "0006_bill_provider_billing_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791780884596,
+      "tag": "0007_docs_signer_step_up",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791780885830,
+      "tag": "0008_docs_form_version_status_guard",
+      "breakpoints": true
     }
   ]
 }
