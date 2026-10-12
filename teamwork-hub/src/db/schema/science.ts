@@ -351,7 +351,8 @@ export const activitySessions = pgTable(
       .notNull()
       .references(() => athletes.id),
     activityDate: date("activity_date").notNull(),
-    kind: text("kind").$type<"training" | "practice" | "game" | "conditioning" | "other">().notNull(),
+    /** "rest" = athlete explicitly recorded no activity that day (the only way a gap counts as 0 load). */
+    kind: text("kind").$type<"training" | "practice" | "game" | "conditioning" | "other" | "rest">().notNull(),
     durationMinutes: integer("duration_minutes"),
     sessionRpe: integer("session_rpe"),
     workoutId: uuid("workout_id").references(() => workouts.id),
