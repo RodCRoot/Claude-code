@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { createContext, useActionState, useContext, useEffect, useRef, startTransition } from "react";
 import { useFormStatus } from "react-dom";
 import { buttonClass, type ButtonSize, type ButtonVariant } from "./ui";
 import { cn } from "@/lib/cn";
@@ -14,6 +14,8 @@ export type ActionState = {
 };
 
 type ServerAction = (prev: ActionState, fd: FormData) => Promise<ActionState>;
+
+const PendingContext = createContext(false);
 
 /**
  * Form bound to a server action. Shows pending state, success message, and errors
@@ -34,7 +36,7 @@ export function ActionForm({
   successMessage?: string;
   id?: string;
 }) {
-  const [state, formAction] = useActionState(action, {} as ActionState);
+  const [state, formAction, pending] = useActionState(action, {} as ActionState);
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => {
     if (state.ok && resetOnSuccess) ref.current?.reset();
@@ -47,8 +49,20 @@ export function ActionForm({
     }
   }, [state, resetOnSuccess]);
   return (
-    <form ref={ref} action={formAction} className={className} id={id} noValidate={false}>
-      {children}
+    // Submit through a transition instead of the form `action` prop so React does not
+    // reset the user's input when the server returns a validation error.
+    <form
+      ref={ref}
+      className={className}
+      id={id}
+      aria-busy={pending}
+      onSubmit={(e) => {
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
+        startTransition(() => formAction(fd));
+      }}
+    >
+      <PendingContext.Provider value={pending}>{children}</PendingContext.Provider>
       <FormMessage state={state} successMessage={successMessage} />
     </form>
   );
@@ -100,7 +114,9 @@ export function SubmitButton({
   value?: string;
   confirm?: string;
 }) {
-  const { pending } = useFormStatus();
+  const status = useFormStatus();
+  const ctxPending = useContext(PendingContext);
+  const pending = status.pending || ctxPending;
   return (
     <button
       type="submit"
