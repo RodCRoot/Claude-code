@@ -20,11 +20,11 @@ export function ItemForm({ programId, dayId, item, exercises }: { programId: str
   const p = item ? `it-${item.id.slice(0, 8)}` : `new-${dayId.slice(0, 8)}`;
   const prog = item?.progression;
   return (
-    <ActionForm action={item ? updateItemAction : addItemAction} resetOnSuccess={!item} className="space-y-3">
+    <ActionForm action={item ? updateItemAction : addItemAction} resetOnSuccess={!item} className="@container space-y-3">
       <input type="hidden" name="programId" value={programId} />
       <input type="hidden" name="dayId" value={dayId} />
       {item ? <input type="hidden" name="itemId" value={item.id} /> : null}
-      <div className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr]">
+      <div className="grid gap-3 @xl:grid-cols-[2fr_1fr_1fr]">
         <Field label="Exercise" htmlFor={`${p}-ex`} required>
           <Select id={`${p}-ex`} name="exerciseId" defaultValue={item?.exerciseId} required>
             {exercises.map((e) => (
@@ -52,7 +52,7 @@ export function ItemForm({ programId, dayId, item, exercises }: { programId: str
             const g = item?.prescription[i];
             const r = `${p}-g${i}`;
             return (
-              <div key={i} className="grid grid-cols-2 gap-2 border-b border-edge/60 pb-2 last:border-0 sm:grid-cols-6 lg:grid-cols-12">
+              <div key={i} className="grid grid-cols-2 gap-2 border-b border-edge/60 pb-2 last:border-0 @xl:grid-cols-6 @4xl:grid-cols-12">
                 <Field label="Sets" htmlFor={`${r}-sets`}>
                   <Input id={`${r}-sets`} name={`g${i}_sets`} type="number" min={1} max={20} defaultValue={g?.sets ?? (i === 0 && !item ? 3 : "")} />
                 </Field>
@@ -93,7 +93,7 @@ export function ItemForm({ programId, dayId, item, exercises }: { programId: str
                 <Field label="Rest (s)" htmlFor={`${r}-r`}>
                   <Input id={`${r}-r`} name={`g${i}_restS`} type="number" min={0} max={3600} defaultValue={g?.restS ?? ""} />
                 </Field>
-                <label className="col-span-2 flex min-h-11 items-end gap-2 pb-2 text-sm sm:col-span-2">
+                <label className="col-span-2 flex min-h-11 items-end gap-2 pb-2 text-sm @xl:col-span-2">
                   <input type="checkbox" name={`g${i}_warmup`} defaultChecked={!!g?.isWarmup} className="size-5" /> Warm-up
                 </label>
               </div>
@@ -101,7 +101,7 @@ export function ItemForm({ programId, dayId, item, exercises }: { programId: str
           })}
         </div>
       </fieldset>
-      <div className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_2fr]">
+      <div className="grid gap-3 @xl:grid-cols-[1fr_1fr_1fr_2fr]">
         <Field label="Progression" htmlFor={`${p}-pk`} hint="Applied per week within the phase at assignment">
           <Select id={`${p}-pk`} name="progKind" defaultValue={prog?.kind ?? "none"}>
             <option value="none">None</option>

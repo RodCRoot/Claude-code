@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { ChartFigure } from "@/components/charts/chart-figure";
 import { TrendChart } from "@/components/charts/trend-chart";
-import { Badge, ButtonLink, Card, CardBody, CardHeader, EmptyState, Input, PageHeader, Select, Table, Td, Th } from "@/components/ui";
+import { ButtonLink, Card, CardBody, CardHeader, EmptyState, Input, PageHeader, Select } from "@/components/ui";
 import { db } from "@/db";
 import { requireViewer } from "@/lib/auth/viewer";
 import { can, isStaff } from "@/lib/authz/policy";
@@ -10,7 +9,9 @@ import { FORMULAS, mean } from "@/lib/science/formulas";
 import { completionGrid, listQuestionnaires, questionnairesForAthlete, versionHistory, wellnessTrend } from "@/lib/science/wellness";
 import { addDaysYmd, fmt, todayLocal } from "@/lib/time";
 import { CheckinForm } from "../_components/checkin-form";
-import { AthletePicker, FormulaTag, HealthOnly, NoResponse, fmtN, isYmd, pickAthlete, sp1, type SP } from "../_components/shared";
+import { AthletePicker, FormulaTag, HealthOnly, fmtN, isYmd, pickAthlete, sp1, type SP } from "../_components/shared";
+import { HeatLegend, ReadinessHeatTable } from "../_components/ams";
+import { ModuleHero } from "../../training/_components/tb";
 
 export const metadata = { title: "Wellness" };
 
@@ -59,10 +60,10 @@ export default async function WellnessPage({ searchParams }: { searchParams: SP 
   const history = q ? await versionHistory(db, v, q.id) : [];
   return (
     <>
-      <PageHeader
-        kicker="Sports science"
-        title="Wellness questionnaires"
-        description="Completion grid, flags, and per-item trends. 'No response' is its own state and is never treated as a favorable answer."
+      <ModuleHero
+        kicker="Sports science · AMS"
+        title="Wellness & readiness"
+        description="Athletes × questionnaire items, flags, and per-item trends. 'No response' is its own state and is never treated as a favorable answer."
         actions={can(v, "science.manage") ? <ButtonLink href="/science/wellness/builder">New questionnaire</ButtonLink> : undefined}
       />
       {qs.length === 0 ? (
@@ -70,7 +71,7 @@ export default async function WellnessPage({ searchParams }: { searchParams: SP 
           Build a questionnaire with scale, number, text, and yes/no items.
         </EmptyState>
       ) : (
-        <form method="get" className="mb-4 flex flex-wrap items-end gap-2">
+        <form method="get" className="mb-4 flex flex-wrap items-end gap-2 rounded-lg border border-edge bg-surface p-3">
           <div>
             <label htmlFor="wq" className="block text-xs font-medium text-ink-3">
               Questionnaire
@@ -109,48 +110,10 @@ export default async function WellnessPage({ searchParams }: { searchParams: SP 
               {grid.rows.length === 0 ? (
                 <p className="text-sm text-ink-3">None of your athletes are targeted by this questionnaire.</p>
               ) : (
-                <Table caption="Wellness completion grid">
-                  <thead>
-                    <tr>
-                      <Th>Athlete</Th>
-                      <Th>Status</Th>
-                      <Th align="right">Readiness (0–100)</Th>
-                      <Th>Flags</Th>
-                      <Th>Submitted</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {grid.rows.map((r) => (
-                      <tr key={r.athleteId} className={r.status === "no_response" ? "bg-surface-2/60" : undefined}>
-                        <Td>
-                          <Link href={`/science/wellness?q=${q.id}&date=${date}&athlete=${r.athleteId}#trend`} className="font-medium hover:underline">
-                            {r.name}
-                          </Link>
-                        </Td>
-                        <Td>
-                          {r.status === "no_response" ? <NoResponse /> : r.status === "answered" ? <Badge variant="green">Answered</Badge> : r.status === "partial" ? <Badge variant="yellow">Partial</Badge> : <Badge>Not scheduled</Badge>}
-                        </Td>
-                        <Td align="right">{r.readiness.score === null ? <span className="text-xs text-ink-3">{r.readiness.reason ?? "—"}</span> : Math.round(r.readiness.score)}</Td>
-                        <Td>
-                          {r.flags.length ? (
-                            <span className="flex flex-wrap gap-1">
-                              {r.flags.map((f) => (
-                                <Badge key={f.key} variant="red" title={`Rule ${f.rule}`}>
-                                  ⚑ {f.label}: {String(f.value)}
-                                </Badge>
-                              ))}
-                            </span>
-                          ) : r.status === "no_response" ? (
-                            <span className="text-xs text-ink-3">Unknown — no answers</span>
-                          ) : (
-                            <span className="text-xs text-ink-3">None</span>
-                          )}
-                        </Td>
-                        <Td className="text-xs text-ink-3">{r.submittedAt ? `${fmt(r.submittedAt, "h:mm a")}${r.version ? ` · v${r.version}` : ""}` : "—"}</Td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </Table>
+                <>
+                  <ReadinessHeatTable rows={grid.rows} questions={grid.q.questions} caption="Wellness completion grid" hrefFor={(id) => `/science/wellness?q=${q.id}&date=${date}&athlete=${id}#trend`} />
+                  <HeatLegend className="mt-2" />
+                </>
               )}
               <p className="mt-2 text-xs text-ink-3">
                 Flag rules:{" "}

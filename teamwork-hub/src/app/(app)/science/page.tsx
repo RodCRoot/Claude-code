@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ActionForm, SubmitButton } from "@/components/forms";
-import { ButtonLink, Callout, Card, CardBody, CardHeader, EmptyState, Field, Input, PageHeader, Stat, StatusBadge } from "@/components/ui";
+import { ButtonLink, Callout, Card, CardBody, CardHeader, EmptyState, Field, Input, PageHeader, StatusBadge } from "@/components/ui";
 import { db } from "@/db";
 import { requireViewer } from "@/lib/auth/viewer";
 import { can, canOnAthlete, isStaff } from "@/lib/authz/policy";
@@ -9,11 +9,13 @@ import { regionLabel } from "@/lib/science/body-regions";
 import { reviewQueue, reviewQueueCount } from "@/lib/science/bodymap";
 import { habitSummaries } from "@/lib/science/habits";
 import { loadAlerts } from "@/lib/science/load";
-import { questionnairesForAthlete, wellnessCompletionSummary } from "@/lib/science/wellness";
+import { completionGrid, listQuestionnaires, questionnairesForAthlete, wellnessCompletionSummary } from "@/lib/science/wellness";
 import { fmt, todayLocal } from "@/lib/time";
 import { updateSettingsAction } from "./actions";
 import { CheckinForm, HabitCheckinForm } from "./_components/checkin-form";
-import { FormulaTag, fmtN } from "./_components/shared";
+import { FormulaTag } from "./_components/shared";
+import { AcwrChip, HeatLegend, ReadinessHeatTable } from "./_components/ams";
+import { HeroStat, ModuleHero } from "../training/_components/tb";
 
 export const metadata = { title: "Sports Science" };
 
@@ -35,24 +37,52 @@ export default async function SciencePage() {
   }
   const today = todayLocal();
   const health = (await scopedAthletes(db, v, "health.read")).length > 0;
-  const [summary, queueCount, queue, alerts, settings] = await Promise.all([
+  const [summary, queueCount, queue, alerts, settings, activeQs] = await Promise.all([
     health ? wellnessCompletionSummary(db, v, today) : null,
     reviewQueueCount(db, v),
     reviewQueue(db, v),
     loadAlerts(db, v, today),
     scienceSettings(db, v.orgId),
+    health ? listQuestionnaires(db, v, { activeOnly: true }) : [],
   ]);
+  // Readiness board: today's grid for the first active questionnaire (health-scoped in completionGrid).
+  const boardQ = activeQs[0] ?? null;
+  const board = boardQ ? await completionGrid(db, v, boardQ.id, today) : null;
   return (
     <>
-      <PageHeader kicker="Sports science" title="Coach hub" description={`Today (${today}, facility time). Every derived number is a documented Teamwork calculation with a version key; vendor values are badged as vendor.`} />
-      {summary ? (
-        <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Stat label="Wellness answered" value={`${summary.answered}/${summary.expected}`} hint={summary.partial ? `${summary.partial} partial` : "complete responses"} />
-          <Stat label="No response yet" value={summary.noResponse} tone={summary.noResponse ? "warn" : undefined} hint="Not answered ≠ fine" />
-          <Stat label="Flagged answers" value={summary.flagged} tone={summary.flagged ? "bad" : undefined} hint="Per questionnaire thresholds" />
-          <Stat label="Body map review" value={queueCount} tone={queueCount ? "warn" : undefined} hint="New + follow-up" />
+      <ModuleHero kicker="Sports science · AMS" title="Readiness dashboard" description={`Today (${today}, facility time). Every derived number is a documented Teamwork calculation with a version key; vendor values are badged as vendor.`}>
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          {summary ? (
+            <>
+              <HeroStat label="Wellness answered" value={`${summary.answered}/${summary.expected}`} hint={summary.partial ? `${summary.partial} partial` : "complete responses"} />
+              <HeroStat label="No response yet" value={summary.noResponse} hint="Not answered ≠ fine" />
+              <HeroStat label="Flagged answers" value={summary.flagged} hint="Per questionnaire thresholds" />
+            </>
+          ) : null}
+          <HeroStat label="Body map review" value={queueCount} hint="New + follow-up" />
+          {!summary ? <HeroStat label="Load alerts" value={alerts.filter((a) => a.kind !== "insufficient_data").length} hint="ACWR outside range" /> : null}
         </div>
-      ) : (
+      </ModuleHero>
+      {board && boardQ ? (
+        <Card className="mb-6">
+          <CardHeader
+            title="Today's readiness"
+            kicker={`${boardQ.name} · v${boardQ.version} · tw_readiness_v1`}
+            action={<ButtonLink href={`/science/wellness?q=${boardQ.id}`} variant="outline" size="sm">Open wellness</ButtonLink>}
+          />
+          <CardBody className="space-y-2">
+            {board.rows.length === 0 ? (
+              <p className="text-sm text-ink-3">None of your athletes are targeted by this questionnaire.</p>
+            ) : (
+              <>
+                <ReadinessHeatTable rows={board.rows} questions={board.q.questions} caption="Today's readiness by athlete" hrefFor={(id) => `/science/wellness?q=${boardQ.id}&athlete=${id}#trend`} />
+                <HeatLegend />
+              </>
+            )}
+          </CardBody>
+        </Card>
+      ) : null}
+      {summary ? null : (
         <Callout className="mb-6" title="No health data in your role">
           Wellness, body-map, and wearable data are limited to coaches/admins assigned to the athlete. Training load, KPIs, and volume remain available.
         </Callout>
@@ -97,8 +127,9 @@ export default async function SciencePage() {
                     {a.kind === "insufficient_data" ? (
                       <span className="text-xs text-ink-3">Insufficient data · chronic coverage {Math.round(a.acwr.chronicCoverage * 100)}%</span>
                     ) : (
-                      <span className={`text-xs font-semibold ${a.kind === "acwr_high" ? "text-bad" : "text-warn"}`}>
-                        {a.kind === "acwr_high" ? "▲ High" : "▼ Low"} ACWR {fmtN(a.acwr.ratio)}
+                      <span className="flex items-center gap-2 text-xs font-semibold">
+                        <span aria-hidden>{a.kind === "acwr_high" ? "▲" : "▼"}</span>
+                        ACWR <AcwrChip ratio={a.acwr.ratio} high={settings.acwrAlertHigh} low={settings.acwrAlertLow} />
                       </span>
                     )}
                   </li>

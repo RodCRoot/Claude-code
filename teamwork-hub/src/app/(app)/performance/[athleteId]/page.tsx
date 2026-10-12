@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { ChartFigure } from "@/components/charts/chart-figure";
 import { TrendChart } from "@/components/charts/trend-chart";
-import { Badge, Callout, Card, CardBody, CardHeader, EmptyState, PageHeader, Stat, Table, Td, Th } from "@/components/ui";
+import { Avatar, Callout, Card, CardBody, CardHeader, EmptyState, Table, Td, Th } from "@/components/ui";
+import { HeroStat, ModuleHero, PrBadge, ProgressBar, TrendArrow } from "../../training/_components/tb";
 import { db } from "@/db";
 import { requireViewer } from "@/lib/auth/viewer";
 import { canOnAthlete } from "@/lib/authz/policy";
@@ -27,13 +28,23 @@ export default async function AthletePerformancePage({ params }: { params: Promi
   const canSeeHealth = s.health !== null;
   return (
     <>
-      <PageHeader kicker="Performance" title={athlete.name} description="Coach-recorded results and shared progress reports." />
-      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Attendance (90 days)" value={s.attendance.ratePct === null ? "—" : `${n(s.attendance.ratePct, 0)}%`} hint={`${s.attendance.attended} attended · ${s.attendance.noShow} no-show`} />
-        <Stat label="Tests tracked" value={s.kpis.length} hint="Metrics with results (12 months)" />
-        <Stat label="Strength maxes" value={s.strength.length} hint={`${s.strength.filter((x) => x.prInPeriod).length} new PR(s) in 90 days`} />
-        <Stat label="Shared reports" value={s.reports.length} />
-      </div>
+      <ModuleHero
+        kicker="Performance · Athlete profile"
+        title={
+          <span className="flex items-center gap-3">
+            <Avatar name={athlete.name} className="size-11! bg-white/15! text-base! text-white!" />
+            {athlete.name}
+          </span>
+        }
+        description="Coach-recorded results and shared progress reports."
+      >
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          <HeroStat label="Attendance (90 days)" value={s.attendance.ratePct === null ? "—" : `${n(s.attendance.ratePct, 0)}%`} hint={`${s.attendance.attended} attended · ${s.attendance.noShow} no-show`} />
+          <HeroStat label="Tests tracked" value={s.kpis.length} hint="Metrics with results (12 months)" />
+          <HeroStat label="Strength maxes" value={s.strength.length} hint={`${s.strength.filter((x) => x.prInPeriod).length} new PR(s) in 90 days`} />
+          <HeroStat label="Shared reports" value={s.reports.length} />
+        </div>
+      </ModuleHero>
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="lg:col-span-2">
           <CardHeader title="Testing results" kicker="Latest vs baseline vs target" />
@@ -45,8 +56,18 @@ export default async function AthletePerformancePage({ params }: { params: Promi
                 {s.kpis.map((k) => {
                   const d = k.metric.precision;
                   return (
+                    <div key={k.metric.id} className="min-w-0 rounded-lg border border-edge p-3">
+                      <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                        <span className="text-3xl leading-none font-extrabold tabular">{n(k.latest?.value, d)}</span>
+                        <span className="text-xs font-semibold text-ink-2">{k.metric.unit} latest</span>
+                        <TrendArrow
+                          delta={k.changePct}
+                          unit="% vs baseline"
+                          digits={1}
+                          good={k.changePct === null || k.metric.higherIsBetter === null ? null : k.metric.higherIsBetter ? k.changePct > 0 : k.changePct < 0}
+                        />
+                      </div>
                     <ChartFigure
-                      key={k.metric.id}
                       title={`${k.metric.name} (${VENDOR_LABEL[k.metric.definedBy] ?? k.metric.definedBy})`}
                       unit={k.metric.unit}
                       range="last 12 months"
@@ -56,6 +77,7 @@ export default async function AthletePerformancePage({ params }: { params: Promi
                     >
                       <TrendChart data={k.points.map((p) => ({ x: p.date, value: p.value }))} series={[{ key: "value", label: k.metric.name }]} unit={k.metric.unit} digits={d} height={170} refLines={k.target ? [{ y: k.target.value, label: "Target" }] : []} />
                     </ChartFigure>
+                    </div>
                   );
                 })}
               </div>
@@ -80,10 +102,10 @@ export default async function AthletePerformancePage({ params }: { params: Promi
                   {s.strength.map((x) => (
                     <tr key={x.exercise}>
                       <Td>
-                        {x.exercise} {x.prInPeriod ? <Badge variant="green">PR</Badge> : null}
+                        <span className="font-semibold">{x.exercise}</span> {x.prInPeriod ? <PrBadge className="ml-1" /> : null}
                       </Td>
                       <Td align="right">
-                        {x.best.value} {x.best.unit}
+                        <strong className="text-lg">{x.best.value}</strong> <span className="text-xs">{x.best.unit}</span>
                         <div className="text-[11px] text-ink-3">{x.best.method}</div>
                       </Td>
                       <Td>{x.best.date}</Td>
@@ -104,6 +126,7 @@ export default async function AthletePerformancePage({ params }: { params: Promi
                 {s.habits.map((h) => (
                   <li key={h.habit.id}>
                     <span className="font-medium">{h.habit.name}</span>: {h.adherence.adherencePct === null ? "—" : `${n(h.adherence.adherencePct, 0)}%`} adherence · streak {h.streak}
+                    {h.adherence.adherencePct !== null ? <ProgressBar done={h.adherence.adherencePct} total={100} size="sm" className="my-1" /> : null}
                     <div className="text-xs text-ink-3">
                       {h.adherence.done} done · {h.adherence.partial} partial · {h.adherence.missed} missed · {h.adherence.noCheckin} no check-in
                     </div>

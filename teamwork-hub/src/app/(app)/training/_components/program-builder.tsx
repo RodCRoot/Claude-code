@@ -155,7 +155,8 @@ export function ProgramWeekBuilder({
       <p role="status" aria-live="polite" className={cn("mb-3 min-h-5 text-sm", status ? (status.ok ? "text-ink-2" : "text-bad") : "text-ink-3")} data-testid="builder-status">
         {status?.text ?? "Drag exercises by the ⠿ handle, or use the buttons on each exercise to reorder with the keyboard. Changes save immediately."}
       </p>
-      <div className="space-y-4">
+      {/* Day columns (side by side on wide screens, scrolling sideways when a week has many days). */}
+      <div className="space-y-4 lg:flex lg:items-start lg:gap-3 lg:space-y-0 lg:overflow-x-auto lg:pb-3" tabIndex={0} role="region" aria-label="Days this week">
         {layout.map((dl) => {
           const day = dayById.get(dl.dayId);
           if (!day) return null;
@@ -163,15 +164,24 @@ export function ProgramWeekBuilder({
           const blocks = blocksOf(dl.items);
           const otherDays = layout.filter((x) => x.dayId !== dl.dayId);
           return (
-            <section key={dl.dayId} className="rounded-xl border border-edge p-3" aria-labelledby={`day-${dl.dayId}`} data-testid={`builder-day-${day.dayIndex}`}>
-              <header className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <h3 id={`day-${dl.dayId}`} className="font-semibold">
-                  W{day.week} · Day {day.dayIndex}: {day.title}
-                  {day.phaseName ? <span className="ml-2 rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-ink-2">{day.phaseName}</span> : null}
+            <section
+              key={dl.dayId}
+              className="overflow-hidden rounded-xl border border-edge bg-surface-2 lg:min-w-[19rem] lg:flex-1 lg:basis-0"
+              aria-labelledby={`day-${dl.dayId}`}
+              data-testid={`builder-day-${day.dayIndex}`}
+            >
+              <header className="mb-2 flex flex-wrap items-center justify-between gap-2 border-t-4 border-t-brand bg-surface px-3 pt-2 pb-1">
+                <h3 id={`day-${dl.dayId}`} className="min-w-0">
+                  <span className="block text-[11px] font-bold uppercase tracking-wider text-ink-3">
+                    Week {day.week} · Day {day.dayIndex}
+                    <span className="sr-only">:</span>
+                  </span>
+                  <span className="block text-base leading-tight font-extrabold">{day.title}</span>
+                  {day.phaseName ? <span className="mt-0.5 inline-block rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-ink-2">{day.phaseName}</span> : null}
                 </h3>
-                {dayTools[dl.dayId]}
+                <div className="w-full">{dayTools[dl.dayId]}</div>
               </header>
-              <ol className="space-y-2" aria-label={`Exercises, ${dayName(dl.dayId)}`}>
+              <ol className="space-y-2 px-2" aria-label={`Exercises, ${dayName(dl.dayId)}`}>
                 {dl.items.map((it, idx) => {
                   const meta = info.get(it.id);
                   const n = normalized.get(it.id)!;
@@ -186,8 +196,8 @@ export function ProgramWeekBuilder({
                       data-testid={`builder-item-${n.blockLabel}`}
                       data-item-id={it.id}
                       className={cn(
-                        "rounded-lg border border-edge/70 bg-surface-2/40 p-2",
-                        multi && "border-l-4 border-l-brand/50",
+                        "rounded-lg border border-edge border-l-4 bg-surface p-2 shadow-[0_1px_2px_rgb(16_24_40/0.06)]",
+                        multi ? "border-l-brand" : "border-l-ink-3/40",
                         over === "before" && "border-t-4 border-t-brand",
                         over === "after" && "border-b-4 border-b-brand",
                         drag?.id === it.id && "opacity-50",
@@ -212,21 +222,21 @@ export function ProgramWeekBuilder({
                           setDrag({ id: it.id, over: null });
                         }}
                         onDragEnd={() => setDrag(null)}
-                        className="flex cursor-grab flex-wrap items-baseline justify-between gap-2 active:cursor-grabbing"
+                        className="flex cursor-grab flex-col gap-0.5 active:cursor-grabbing"
                         data-focus-key={`${it.id}:drag`}
                         tabIndex={-1}
                       >
-                        <span className="font-medium">
-                          <span aria-hidden className="mr-2 select-none text-ink-3" title="Drag to move">
+                        <span className="flex items-center font-bold">
+                          <span aria-hidden className="mr-1.5 select-none text-lg leading-none text-ink-3" title="Drag to move">
                             ⠿
                           </span>
-                          <span className="mr-2 rounded bg-brand/10 px-1.5 py-0.5 text-xs font-bold text-brand">{n.blockLabel}</span>
-                          {ename}
-                          <span className="ml-2 text-xs text-ink-3">{n.blockType}</span>
+                          <span className="mr-2 inline-flex min-w-8 justify-center rounded-md bg-ink px-1.5 py-0.5 text-xs font-extrabold text-surface">{n.blockLabel}</span>
+                          <span className="min-w-0 flex-1">{ename}</span>
+                          <span className="ml-2 shrink-0 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-2">{n.blockType}</span>
                         </span>
-                        <span className="text-xs text-ink-2">{meta?.summary}</span>
+                        <span className="pl-6 text-xs font-medium text-ink-2 tabular">{meta?.summary}</span>
                       </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                      <div className="mt-1 flex flex-wrap items-center gap-0.5 border-t border-edge/70 pt-1">
                         <label className="mr-1 flex min-h-11 items-center gap-1.5 text-xs text-ink-2">
                           <input
                             type="checkbox"
@@ -330,7 +340,7 @@ export function ProgramWeekBuilder({
               </ol>
               <div
                 className={cn(
-                  "mt-2 rounded-lg border-2 border-dashed px-3 py-2 text-xs text-ink-3",
+                  "mx-2 mt-2 rounded-lg border-2 border-dashed px-3 py-2 text-xs text-ink-3",
                   drag ? "border-brand/50" : "border-transparent",
                   drag?.over && "dayId" in drag.over && drag.over.dayId === dl.dayId && "border-brand bg-brand/5",
                   !drag && "sr-only",
@@ -345,13 +355,13 @@ export function ProgramWeekBuilder({
               >
                 Drop here to put it at the end of {dayName(dl.dayId)}
               </div>
-              {dayFooters[dl.dayId]}
+              <div className="px-3 pb-2">{dayFooters[dl.dayId]}</div>
             </section>
           );
         })}
       </div>
 
-      <section className="mt-6 rounded-xl border border-edge p-3" aria-labelledby="bulk-h">
+      <section className="mt-6 rounded-xl border border-edge bg-surface-2 p-3" aria-labelledby="bulk-h">
         <h3 id="bulk-h" className="font-semibold">
           Bulk edit set scheme <span className="text-sm font-normal text-ink-3">({selectedHere.length} selected)</span>
         </h3>

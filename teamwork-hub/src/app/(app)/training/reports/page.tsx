@@ -7,8 +7,9 @@ import { groupsForViewer } from "@/lib/training/assignments";
 import { listExercises } from "@/lib/training/exercises";
 import { groupReport, leaderboard } from "@/lib/training/reports";
 import { ActionForm, SubmitButton } from "@/components/forms";
-import { Button, buttonClass, Card, CardBody, CardHeader, EmptyState, Field, Input, PageHeader, Select, Table, Td, Th } from "@/components/ui";
+import { Button, buttonClass, Card, CardBody, CardHeader, EmptyState, Field, Input, Select, Table, Td, Th } from "@/components/ui";
 import { TrainingNav } from "../_components/training-nav";
+import { ModuleHero, ProgressBar, RankBadge } from "../_components/tb";
 import { importVbtAction } from "../actions";
 import { guarded, isYmd, sp } from "../_lib/helpers";
 
@@ -30,7 +31,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
   return (
     <div>
-      <PageHeader kicker="Training" title="Reports" description="Group adherence and top lifts, opt-in leaderboard, CSV exports, and VBT file import." />
+      <ModuleHero kicker="Training" title="Reports & leaderboards" description="Group adherence and top lifts, opt-in leaderboard, CSV exports, and VBT file import." />
       <TrainingNav viewer={viewer} current="reports" />
       {!groupList.length ? (
         <EmptyState title="No groups in your scope" />
@@ -99,11 +100,28 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                             {r.name}
                           </Link>
                         </Td>
-                        <Td align="right">{r.pct != null ? `${r.pct}% (${r.completed}/${r.scheduled})` : "—"}</Td>
+                        <Td align="right">
+                          {r.pct != null ? (
+                            <span className="inline-flex min-w-28 flex-col items-end gap-1">
+                              <span>
+                                <strong className="text-base">{r.pct}%</strong> <span className="text-xs text-ink-3">({r.completed}/{r.scheduled})</span>
+                              </span>
+                              <ProgressBar done={r.completed} total={r.scheduled} size="sm" className="w-24" />
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </Td>
                         <Td align="right">{r.sessionLoad || "—"}</Td>
                         {report.topLifts.map((l) => (
                           <Td key={l.id} align="right">
-                            {r.best[l.id] ? `${r.best[l.id]!.value} ${r.best[l.id]!.unit}` : "—"}
+                            {r.best[l.id] ? (
+                              <>
+                                <strong className="text-base">{r.best[l.id]!.value}</strong> <span className="text-xs text-ink-3">{r.best[l.id]!.unit}</span>
+                              </>
+                            ) : (
+                              "—"
+                            )}
                           </Td>
                         ))}
                       </tr>
@@ -142,20 +160,19 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               {!board || board.rows.length === 0 ? (
                 <p className="text-sm text-ink-3">No opted-in results for this lift and range. Athletes (or guardians) opt in from their training history page.</p>
               ) : (
-                <ol className="divide-y divide-edge">
+                <ol className="space-y-2">
                   {board.rows.map((r, i) => (
-                    <li key={r.athleteId} className="flex items-center justify-between py-2 text-sm">
-                      <span>
-                        <span className="mr-2 inline-block w-6 text-right font-bold tabular">{i + 1}.</span>
-                        {r.name}
-                      </span>
-                      <span className="tabular">
-                        <strong>
-                          {r.e1rm} {r.unit}
-                        </strong>{" "}
-                        <span className="text-xs text-ink-3">
-                          ({r.detail}, {r.date})
+                    <li key={r.athleteId} className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 ${i === 0 ? "border-[#e0b100] bg-[#fff8db] dark:bg-surface-2" : "border-edge bg-surface"}`}>
+                      <span className="sr-only">Rank {i + 1}:</span>
+                      <RankBadge rank={i + 1} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-base font-bold">{r.name}</span>
+                        <span className="block text-xs text-ink-3">
+                          {r.detail} · {r.date}
                         </span>
+                      </span>
+                      <span className="shrink-0 text-right tabular">
+                        <span className="text-2xl leading-none font-extrabold">{r.e1rm}</span> <span className="text-xs font-semibold text-ink-2">{r.unit} e1RM</span>
                       </span>
                     </li>
                   ))}

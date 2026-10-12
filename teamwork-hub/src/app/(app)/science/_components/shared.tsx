@@ -53,7 +53,7 @@ export function SourceBadge({ source }: { source: string }) {
 
 export function NoResponse() {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-ink-3 px-2 py-0.5 text-[11px] font-semibold text-ink-2">
+    <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-ink-3 px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-ink-2">
       <span aria-hidden>○</span> No response
     </span>
   );
