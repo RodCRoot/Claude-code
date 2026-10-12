@@ -4,8 +4,6 @@ import type { DB, Tx } from "@/db";
 import {
   disputes,
   invoices,
-  membershipEvents,
-  memberships,
   paymentAttempts,
   payouts,
   refunds,
@@ -18,7 +16,9 @@ import { audit } from "@/lib/audit";
 import { enqueue } from "@/lib/jobs";
 import { getProvider } from "@/lib/payments";
 import type { NormalizedEvent, ParsedWebhook } from "@/lib/payments/provider";
-import { applyInvoiceEntitlements, createInvoiceRecord, settleInvoiceIfCovered } from "./invoices";
+import { DeferError } from "./errors";
+import { applyInvoiceEntitlements, settleInvoiceIfCovered } from "./invoices";
+import { applySubscriptionInvoice, applySubscriptionStatus } from "./subscriptions";
 import { billingTask } from "./tasks";
 import { billingSettings, int } from "./util";
 
@@ -29,13 +29,7 @@ type WebhookProvider = "stripe" | "paypal";
 /** Which local providers a webhook endpoint speaks for (Venmo settles through PayPal). */
 const PROVIDER_GROUP: Record<WebhookProvider, PaymentProvider[]> = { stripe: ["stripe"], paypal: ["paypal", "venmo"] };
 
-/** Thrown when an event references something not recorded yet (e.g. refund before charge). Retried later. */
-export class DeferError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "DeferError";
-  }
-}
+export { DeferError };
 
 export type IngestResult = { httpStatus: number; body: Record<string, unknown> };
 
@@ -119,7 +113,7 @@ export async function processStoredEvent(db: DB, webhookEventId: string): Promis
       if (!ev.signatureVerified || ev.status === "rejected") return { outcome: "ignored", detail: "unverified" } as ProcessOutcome;
       const adapter = getProvider(ev.provider as WebhookProvider);
       const parsed = adapter.parseEvent(JSON.stringify(ev.payload));
-      const result = await applyEvent(tx, ev.provider as WebhookProvider, parsed.event);
+      const result = await applyEvent(tx, ev.provider as WebhookProvider, parsed.event, parsed.createdAt ?? ev.receivedAt);
       await tx
         .update(webhookEvents)
         .set({ status: result.outcome === "ignored" ? "ignored" : "processed", processedAt: new Date(), error: result.detail ?? null, attempts: ev.attempts + 1 })
@@ -171,7 +165,16 @@ export function canTransition(from: AttemptStatus, to: AttemptStatus) {
 
 const SYSTEM = (orgId: string | null) => ({ orgId, actorUserId: null, actorRole: "webhook" });
 
-async function applyEvent(tx: Tx, provider: WebhookProvider, ev: NormalizedEvent): Promise<ProcessOutcome> {
+/**
+ * Apply a payment result that did not arrive as a webhook but came back from PayPal over our own
+ * authenticated server-to-server call (Orders v2 capture). It runs through the exact same idempotent,
+ * amount-checked settlement path, so a later webhook for the same capture is a no-op.
+ */
+export async function applyVerifiedPayment(db: DB, provider: WebhookProvider, ev: Extract<NormalizedEvent, { kind: "payment" }>): Promise<ProcessOutcome> {
+  return db.transaction((tx) => applyPayment(tx, provider, ev));
+}
+
+async function applyEvent(tx: Tx, provider: WebhookProvider, ev: NormalizedEvent, eventAt: Date): Promise<ProcessOutcome> {
   switch (ev.kind) {
     case "payment":
       return applyPayment(tx, provider, ev);
@@ -182,7 +185,9 @@ async function applyEvent(tx: Tx, provider: WebhookProvider, ev: NormalizedEvent
     case "payout":
       return applyPayout(tx, provider, ev);
     case "subscription_invoice":
-      return applySubscriptionInvoice(tx, provider, ev);
+      return applySubscriptionInvoice(tx, provider, ev, eventAt);
+    case "subscription_status":
+      return applySubscriptionStatus(tx, provider, ev, eventAt);
     case "ignored":
       return { outcome: "ignored", detail: ev.reason };
   }
@@ -475,46 +480,3 @@ async function applyPayout(tx: Tx, provider: WebhookProvider, ev: Extract<Normal
   return { outcome: "processed", detail: "payout recorded" };
 }
 
-async function applySubscriptionInvoice(tx: Tx, provider: WebhookProvider, ev: Extract<NormalizedEvent, { kind: "subscription_invoice" }>): Promise<ProcessOutcome> {
-  if (!ev.providerSubscriptionId) return { outcome: "ignored", detail: "invoice without subscription" };
-  const [m] = await tx.select().from(memberships).where(eq(memberships.providerSubscriptionId, ev.providerSubscriptionId)).for("update");
-  if (!m) return { outcome: "ignored", detail: "unmatched: no membership for subscription" };
-  if (m.billingProvider === "external_zenplanner") return { outcome: "ignored", detail: "external membership — not billed here" };
-  const actor = SYSTEM(m.orgId);
-  if (ev.status === "payment_failed") {
-    if (m.status !== "cancelled") await tx.update(memberships).set({ status: "past_due", updatedAt: new Date() }).where(eq(memberships.id, m.id));
-    await tx.insert(membershipEvents).values({ membershipId: m.id, type: "payment_failed", details: { providerInvoiceId: ev.providerInvoiceId } });
-    return { outcome: "processed", detail: "membership past_due" };
-  }
-  const { invoice } = await createInvoiceRecord(tx, actor, {
-    orgId: m.orgId,
-    payerAccountId: m.payerAccountId!,
-    membershipId: m.id,
-    periodStart: ev.periodStart,
-    periodEnd: ev.periodEnd,
-    source: "membership_renewal",
-    idempotencyKey: `${provider}-invoice:${ev.providerInvoiceId}`,
-    currency: ev.currency,
-    isDemo: m.isDemo,
-    lines: [{ description: `Subscription invoice ${ev.providerInvoiceId}`, unitAmountMinor: ev.amountMinor, athleteId: m.athleteId, productVersionId: m.productVersionId, entitlement: { activateMembershipId: m.id } }],
-  });
-  await tx
-    .insert(transactions)
-    .values({
-      orgId: m.orgId,
-      payerAccountId: m.payerAccountId,
-      invoiceId: invoice.id,
-      kind: "charge",
-      status: "settled",
-      amountMinor: ev.amountMinor,
-      currency: ev.currency,
-      provider,
-      providerTxnId: ev.providerTxnId ?? ev.providerInvoiceId,
-      settledAt: new Date(),
-      verification: "provider_verified",
-      isDemo: m.isDemo,
-    })
-    .onConflictDoNothing();
-  await settleInvoiceIfCovered(tx, invoice.id, actor);
-  return { outcome: "processed", detail: "subscription invoice paid" };
-}

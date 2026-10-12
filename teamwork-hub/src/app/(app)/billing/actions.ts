@@ -16,9 +16,10 @@ import { addHold, cancelMembership, changePlan, createMembership, cutoverMembers
 import { adjustStock, quickSale } from "@/lib/billing/pos";
 import { requestRefund } from "@/lib/billing/refunds";
 import { generateRenewals } from "@/lib/billing/renewals";
+import { cancelProviderSubscription, startProviderSubscription, switchToTeamworkBilling } from "@/lib/billing/subscriptions";
 import { env } from "@/lib/env";
 import { parseMoneyToMinor } from "@/lib/money";
-import type { ProviderName } from "@/lib/payments";
+import type { ProviderName, SubscriptionProviderName } from "@/lib/payments";
 import { todayLocal } from "@/lib/time";
 
 /** Runs a billing mutation: translates domain errors into form state, revalidates billing pages. */
@@ -164,6 +165,33 @@ export async function cancelMembershipAction(_p: ActionState, fd: FormData) {
   });
 }
 
+export async function startSubscriptionAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const v = await requireViewer();
+    const provider = s(fd, "provider") as SubscriptionProviderName;
+    const r = await startProviderSubscription(db, v, { membershipId: s(fd, "membershipId"), provider, appUrl: env().APP_URL });
+    if (!r.ok) return { ok: false, error: r.error, data: r.notConfigured ? { notConfigured: r.notConfigured } : undefined };
+    return { ok: true, message: r.reused ? "A request is already open — share the same approval link below." : "Approval link created. Share it with the payer; nothing changes here until the provider confirms the subscription.", data: { approvalUrl: r.approvalUrl } };
+  });
+}
+
+export async function switchToTeamworkAction(_p: ActionState, fd: FormData) {
+  return run(async () => {
+    const v = await requireViewer();
+    const r = await switchToTeamworkBilling(db, v, { membershipId: s(fd, "membershipId"), reason: s(fd, "reason") });
+    if (r.withdrawn) return { ok: true, message: "Subscription request withdrawn. The membership stays on Teamwork invoices." };
+    return { ok: true, message: `The provider subscription will stop at the end of its paid period. Teamwork invoices resume from ${r.firstTeamworkBillDate}.` };
+  });
+}
+
+export async function cancelSubscriptionAction(_p: ActionState, fd: FormData) {
+  return run(async () => {
+    const v = await requireViewer();
+    const r = await cancelProviderSubscription(db, v, { membershipId: s(fd, "membershipId"), reason: s(fd, "reason"), requestedOn: s(fd, "requestedOn") || todayLocal(), overrideReason: opt(fd, "overrideReason") });
+    return { ok: true, message: r.immediate ? `Cancelled effective ${r.cancelAt}.` : `Subscription cancelled at period end; membership ends ${r.cancelAt}.` };
+  });
+}
+
 export async function cutoverAction(_p: ActionState, fd: FormData) {
   return run(async () => {
     const v = await requireViewer();
@@ -178,7 +206,7 @@ export async function runRenewalsAction(_p: ActionState, _fd: FormData) {
     const v = await requireViewer();
     assertCan(v, "billing.manage");
     const r = await db.transaction((tx) => generateRenewals(tx, v.orgId, todayLocal()));
-    return { ok: true, message: `Renewals run: ${r.invoicesCreated} invoice(s) created, ${r.deferredForHold} deferred for holds, ${r.skippedExternal} Zen Planner membership(s) skipped, ${r.cancelled} ended.` };
+    return { ok: true, message: `Renewals run: ${r.invoicesCreated} invoice(s) created, ${r.deferredForHold} deferred for holds, ${r.skippedExternal} Zen Planner and ${r.skippedProviderBilled} provider-subscription membership(s) skipped, ${r.cancelled} ended.` };
   });
 }
 

@@ -16,6 +16,8 @@ export type RenewalSummary = {
   cancelled: number;
   planChangesApplied: number;
   skippedExternal: number;
+  /** Memberships billed by a Stripe/PayPal subscription: never renewed by Teamwork (no double billing). */
+  skippedProviderBilled: number;
   statusChanges: number;
 };
 
@@ -30,11 +32,15 @@ const SYSTEM = (orgId: string) => ({ orgId, actorUserId: null, actorRole: "syste
  * - Cancelled memberships / periods on or after cancel_at are not billed.
  */
 export async function generateRenewals(tx: Tx, orgId: string, today: string): Promise<RenewalSummary> {
-  const s: RenewalSummary = { invoicesCreated: 0, alreadyBilled: 0, deferredForHold: 0, cancelled: 0, planChangesApplied: 0, skippedExternal: 0, statusChanges: 0 };
+  const s: RenewalSummary = { invoicesCreated: 0, alreadyBilled: 0, deferredForHold: 0, cancelled: 0, planChangesApplied: 0, skippedExternal: 0, skippedProviderBilled: 0, statusChanges: 0 };
   const ext = await tx.execute(sql`
     select count(*)::int as n from memberships where org_id = ${orgId} and billing_provider = 'external_zenplanner'
       and status in ('active','trialing','past_due','pending','on_hold') and next_bill_date <= ${today}`);
   s.skippedExternal = Number((ext.rows[0] as { n: number }).n);
+  const prov = await tx.execute(sql`
+    select count(*)::int as n from memberships where org_id = ${orgId} and billing_provider in ('stripe','paypal')
+      and status in ('active','trialing','past_due','pending','on_hold')`);
+  s.skippedProviderBilled = Number((prov.rows[0] as { n: number }).n);
 
   const due = await tx
     .select()

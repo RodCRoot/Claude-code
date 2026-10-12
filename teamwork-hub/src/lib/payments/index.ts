@@ -1,11 +1,21 @@
-import { paypalAdapter, venmoAdapter } from "./paypal";
+import { paypalAdapter, paypalSubscriptions, venmoAdapter } from "./paypal";
 import {
   ProviderUnsupportedError,
   type PaymentProviderAdapter,
   type ProviderCapabilities,
   type ProviderName,
+  type SubscriptionProviderAdapter,
 } from "./provider";
-import { stripeAdapter } from "./stripe";
+import { stripeAdapter, stripeSubscriptions } from "./stripe";
+
+export type SubscriptionProviderName = "stripe" | "paypal";
+export const SUBSCRIPTION_PROVIDERS: SubscriptionProviderName[] = ["stripe", "paypal"];
+
+export function getSubscriptionProvider(name: SubscriptionProviderName): SubscriptionProviderAdapter {
+  if (name === "stripe") return stripeSubscriptions;
+  if (name === "paypal") return paypalSubscriptions;
+  throw new ProviderUnsupportedError(`No subscription adapter for ${String(name)}`);
+}
 
 /** Offline payments (cash, check, personal Venmo/Zelle). Always staff_attested; never provider_verified. */
 export const manualAdapter: PaymentProviderAdapter = {

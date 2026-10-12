@@ -52,6 +52,8 @@ export type CreateInvoiceInput = {
   idempotencyKey?: string | null;
   currency?: string;
   isDemo?: boolean;
+  /** Only the verified provider-subscription ingest sets this: it records what the provider already charged. */
+  providerBilled?: boolean;
 };
 
 /**
@@ -72,6 +74,9 @@ export async function createInvoiceRecord(tx: Tx, actor: AuditActor, input: Crea
     if (!m || m.orgId !== input.orgId) throw new UserError("Membership not found.");
     if (m.billingProvider === "external_zenplanner") {
       throw new UserError("This membership is billed by Zen Planner until cutover. Teamwork Hub will not invoice it (prevents double billing).");
+    }
+    if ((m.billingProvider === "stripe" || m.billingProvider === "paypal") && !input.providerBilled) {
+      throw new UserError(`This membership is billed by its ${m.billingProvider === "stripe" ? "Stripe" : "PayPal"} subscription. Teamwork Hub will not invoice it as well (prevents double billing).`);
     }
   }
   const [org] = await tx.select({ currency: organizations.currency }).from(organizations).where(eq(organizations.id, input.orgId));

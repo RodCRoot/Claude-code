@@ -11,3 +11,11 @@ export class UserError extends Error {
     this.name = "BillingUserError";
   }
 }
+
+/** Thrown when an event references something not recorded yet (e.g. refund before charge). Retried later. */
+export class DeferError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DeferError";
+  }
+}

@@ -8,6 +8,8 @@
  * - Only a verified webhook can move money state. Browser redirects never do.
  */
 
+import { localYmd } from "@/lib/time";
+
 export type ProviderName = "stripe" | "paypal" | "venmo" | "manual";
 
 export type Evidence = "verified_docs" | "partially_verified" | "unverified" | "not_supported";
@@ -101,7 +103,7 @@ export type NormalizedEvent =
   | { kind: "payout"; providerPayoutId: string; amountMinor: number; currency: string; status: string; arrivalDate: string | null }
   | {
       kind: "subscription_invoice";
-      status: "paid" | "payment_failed";
+      status: "paid" | "payment_failed" | "action_required";
       providerInvoiceId: string;
       providerSubscriptionId: string | null;
       providerTxnId: string | null;
@@ -109,8 +111,118 @@ export type NormalizedEvent =
       currency: string;
       periodStart: string | null;
       periodEnd: string | null;
+      /** Our own ids echoed back by the provider (Stripe subscription metadata / PayPal custom_id). */
+      hint?: SubscriptionHint | null;
+      billingReason?: string | null;
+    }
+  | {
+      kind: "subscription_status";
+      providerSubscriptionId: string;
+      hint: SubscriptionHint | null;
+      /** null = the event only links the subscription (e.g. Checkout completion) and carries no status. */
+      status: LocalSubscriptionStatus | null;
+      rawStatus: string | null;
+      cancelAtPeriodEnd: boolean | null;
+      /** Local calendar date the provider will stop billing (cancel at period end), if scheduled. */
+      cancelAt: string | null;
+      currentPeriodEnd: string | null;
     }
   | { kind: "ignored"; reason: string };
+
+/** Ids we attach to a provider subscription so its webhooks can be matched back to a membership request. */
+export type SubscriptionHint = { membershipId: string; requestId: string | null };
+
+/**
+ * Provider subscription status mapped to what it means locally.
+ * - pending: approval/first payment not completed yet (Stripe incomplete, PayPal APPROVAL_PENDING/APPROVED)
+ * - setup_expired: never activated and will not bill (Stripe incomplete_expired) → revert to Teamwork billing
+ * - paused: provider is not invoicing (Stripe paused)
+ */
+export type LocalSubscriptionStatus = "pending" | "trialing" | "active" | "past_due" | "paused" | "cancelled" | "setup_expired";
+
+// ---------------------------------------------------------------------------
+// Provider subscriptions (Stripe Billing / PayPal Subscriptions)
+// ---------------------------------------------------------------------------
+
+export type RecurringPlanRequest = {
+  orgId: string;
+  productVersionId: string;
+  productName: string;
+  versionNumber: number;
+  amountMinor: number;
+  currency: string;
+  interval: "week" | "month" | "year";
+  intervalCount: number;
+  idempotencyKey: string;
+};
+
+export type RecurringPlan = { providerProductId: string; providerPlanId: string; created: boolean };
+
+export type SubscriptionStartRequest = {
+  membershipId: string;
+  requestId: string;
+  providerPlanId: string;
+  description: string;
+  customerEmail: string | null;
+  /** First date the provider should charge (YYYY-MM-DD, facility time). Null = charge on approval. */
+  firstChargeDate: string | null;
+  successUrl: string;
+  cancelUrl: string;
+  idempotencyKey: string;
+};
+
+export type SubscriptionStartResult = {
+  /** Stripe Checkout Session id or PayPal subscription id. */
+  providerRef: string;
+  /** Hosted approval page for the payer. */
+  approvalUrl: string;
+  /** Known immediately for PayPal (subscription created before approval); null for Stripe Checkout. */
+  providerSubscriptionId: string | null;
+};
+
+export type SubscriptionCancelResult = {
+  /** Last local date covered by what the payer already paid, when the provider tells us. */
+  paidThrough: string | null;
+  immediate: boolean;
+};
+
+export interface SubscriptionProviderAdapter {
+  name: "stripe" | "paypal";
+  label: string;
+  isConfigured(): boolean;
+  missingEnv(): string[];
+  /** Find or create the provider product + recurring price/plan for a product version at an amount. */
+  ensurePlan(req: RecurringPlanRequest): Promise<RecurringPlan>;
+  /** Create the hosted approval step (Stripe Checkout subscription mode / PayPal subscription approve link). */
+  startSubscription(req: SubscriptionStartRequest): Promise<SubscriptionStartResult>;
+  /** Stop future billing. Stripe: cancel_at_period_end. PayPal: cancel (no further cycles are billed). */
+  cancelAtPeriodEnd(req: { providerSubscriptionId: string; reason: string; idempotencyKey: string }): Promise<SubscriptionCancelResult>;
+}
+
+/** Encode/decode the PayPal custom_id (max 127 chars) that carries our membership + request ids. */
+export function encodeHint(h: SubscriptionHint): string {
+  return h.requestId ? `${h.membershipId}.${h.requestId}` : h.membershipId;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function decodeHint(membershipId: unknown, requestId?: unknown): SubscriptionHint | null {
+  if (typeof membershipId !== "string") return null;
+  let m = membershipId;
+  let r = typeof requestId === "string" ? requestId : null;
+  if (r == null && m.includes(".")) [m, r] = m.split(".", 2) as [string, string];
+  if (!UUID_RE.test(m)) return null;
+  return { membershipId: m, requestId: r && UUID_RE.test(r) ? r : null };
+}
+
+/** Facility-local YYYY-MM-DD for a provider timestamp (unix seconds or ISO string). */
+export function providerLocalYmd(v: unknown): string | null {
+  let d: Date | null = null;
+  if (typeof v === "number") d = new Date(v * 1000);
+  else if (typeof v === "string" && v) d = new Date(v);
+  if (!d || Number.isNaN(d.getTime())) return null;
+  return localYmd(d);
+}
 
 export type ParsedWebhook = {
   providerEventId: string;

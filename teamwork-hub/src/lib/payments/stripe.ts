@@ -1,15 +1,25 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { addDaysYmd, localToUtc, todayLocal } from "@/lib/time";
 import {
   assertNotLiveOutsideProduction,
+  decodeHint,
+  providerLocalYmd,
   ProviderNotConfiguredError,
   type CheckoutRequest,
   type CheckoutResult,
+  type LocalSubscriptionStatus,
   type NormalizedEvent,
   type ParsedWebhook,
   type PaymentProviderAdapter,
   type ProviderCapabilities,
+  type RecurringPlan,
+  type RecurringPlanRequest,
   type RefundRequest,
   type RefundResult,
+  type SubscriptionCancelResult,
+  type SubscriptionProviderAdapter,
+  type SubscriptionStartRequest,
+  type SubscriptionStartResult,
   type VerifyResult,
 } from "./provider";
 
@@ -84,9 +94,20 @@ export function normalizeStripeEvent(type: string, o: Obj): NormalizedEvent {
     case "checkout.session.async_payment_succeeded":
     case "checkout.session.async_payment_failed":
     case "checkout.session.expired": {
-      if (o.mode === "subscription" && type === "checkout.session.completed") {
-        // Subscription mode: money state arrives via invoice.paid; the session only links the subscription.
-        return { kind: "ignored", reason: "subscription checkout completion is tracked via invoice.paid" };
+      if (o.mode === "subscription") {
+        // Subscription mode: money state arrives via invoice.paid; the completed session only links the subscription.
+        const subId = idOf(o.subscription);
+        if (type !== "checkout.session.completed" || !subId) return { kind: "ignored", reason: `subscription-mode ${type} carries no money state` };
+        return {
+          kind: "subscription_status",
+          providerSubscriptionId: subId,
+          hint: decodeHint(meta(o).membership_id ?? o.client_reference_id, meta(o).request_id),
+          status: null,
+          rawStatus: null,
+          cancelAtPeriodEnd: null,
+          cancelAt: null,
+          currentPeriodEnd: null,
+        };
       }
       const paymentStatus = str(o.payment_status);
       let status: "processing" | "succeeded" | "failed" | "expired";
@@ -141,25 +162,79 @@ export function normalizeStripeEvent(type: string, o: Obj): NormalizedEvent {
         arrivalDate: ymdFromUnix(o.arrival_date),
       };
     case "invoice.paid":
-    case "invoice.payment_failed": {
+    case "invoice.payment_failed":
+    case "invoice.payment_action_required": {
       const lines = ((o.lines as Obj | undefined)?.data ?? []) as Obj[];
-      const period = (lines[0]?.period ?? {}) as Obj;
+      // Prefer the subscription item line (prorations are listed first); fall back to the first line.
+      const subLine = lines.find((l) => ((l.parent ?? {}) as Obj).type === "subscription_item_details") ?? lines[0];
+      const period = (subLine?.period ?? {}) as Obj;
       const parent = (o.parent ?? {}) as Obj;
       const subDetails = (parent.subscription_details ?? {}) as Obj;
+      const subMeta = (subDetails.metadata ?? {}) as Obj;
+      // Line periods are [start, end) instants; the local service period ends the day before `end`.
+      const endYmd = providerLocalYmd(period.end);
       return {
         kind: "subscription_invoice",
-        status: type === "invoice.paid" ? "paid" : "payment_failed",
+        status: type === "invoice.paid" ? "paid" : type === "invoice.payment_failed" ? "payment_failed" : "action_required",
         providerInvoiceId: str(o.id) ?? "unknown",
-        providerSubscriptionId: idOf(o.subscription) ?? idOf(subDetails.subscription),
+        // `invoice.subscription` / `invoice.payment_intent` exist only on API versions before 2025-03-31.basil.
+        providerSubscriptionId: idOf(subDetails.subscription) ?? idOf(o.subscription),
         providerTxnId: idOf(o.payment_intent) ?? str(o.id),
         amountMinor: num(type === "invoice.paid" ? o.amount_paid : o.amount_due) ?? 0,
         currency: cur(o.currency) ?? "USD",
-        periodStart: ymdFromUnix(period.start),
-        periodEnd: ymdFromUnix(period.end),
+        periodStart: providerLocalYmd(period.start),
+        periodEnd: endYmd ? addDaysYmd(endYmd, -1) : null,
+        hint: decodeHint(subMeta.membership_id, subMeta.request_id),
+        billingReason: str(o.billing_reason),
+      };
+    }
+    case "customer.subscription.created":
+    case "customer.subscription.updated":
+    case "customer.subscription.deleted":
+    case "customer.subscription.paused":
+    case "customer.subscription.resumed": {
+      const items = ((o.items as Obj | undefined)?.data ?? []) as Obj[];
+      const periodEnd = providerLocalYmd(items[0]?.current_period_end ?? o.current_period_end);
+      const raw = str(o.status);
+      const cancelAtPeriodEnd = typeof o.cancel_at_period_end === "boolean" ? o.cancel_at_period_end : null;
+      const cancelAt = providerLocalYmd(o.cancel_at) ?? (cancelAtPeriodEnd && periodEnd ? periodEnd : null);
+      return {
+        kind: "subscription_status",
+        providerSubscriptionId: str(o.id) ?? "unknown",
+        hint: decodeHint(meta(o).membership_id, meta(o).request_id),
+        status: type === "customer.subscription.deleted" ? "cancelled" : mapStripeSubscriptionStatus(raw),
+        rawStatus: raw,
+        cancelAtPeriodEnd,
+        // Same meaning as memberships.cancel_at: the first local day no longer covered.
+        cancelAt,
+        currentPeriodEnd: periodEnd ? addDaysYmd(periodEnd, -1) : null,
       };
     }
     default:
       return { kind: "ignored", reason: `unhandled event type ${type}` };
+  }
+}
+
+/** https://docs.stripe.com/api/subscriptions/object (status enum) → local meaning. */
+export function mapStripeSubscriptionStatus(raw: string | null): LocalSubscriptionStatus | null {
+  switch (raw) {
+    case "active":
+      return "active";
+    case "trialing":
+      return "trialing";
+    case "past_due":
+    case "unpaid":
+      return "past_due";
+    case "canceled":
+      return "cancelled";
+    case "incomplete":
+      return "pending";
+    case "incomplete_expired":
+      return "setup_expired";
+    case "paused":
+      return "paused";
+    default:
+      return null;
   }
 }
 
@@ -244,7 +319,7 @@ export function stripeCapabilities(): ProviderCapabilities {
   return {
     label: "Stripe",
     oneTimeCheckout: { supported: true, evidence: "verified_docs", note: "Checkout Sessions (mode=payment), hosted page; fulfilment must be webhook-driven.", source: "https://docs.stripe.com/checkout/fulfillment" },
-    recurring: { supported: true, evidence: "verified_docs", note: "Stripe Billing subscriptions (card or ACH Direct Debit); invoice.paid / invoice.payment_failed drive state.", source: "https://docs.stripe.com/billing/subscriptions/overview" },
+    recurring: { supported: true, evidence: "verified_docs", note: "Stripe Billing: recurring Price per product version (lookup_key), Checkout Session mode=subscription with subscription_data.metadata + billing_cycle_anchor; invoice.paid / invoice.payment_failed / customer.subscription.* drive local state. Contract-tested with signed fixtures only; never exercised against a sandbox.", source: "https://docs.stripe.com/billing/subscriptions/webhooks" },
     savedMethods: { supported: true, evidence: "verified_docs", note: "Customer + PaymentMethod tokens; we store references only.", source: "https://docs.stripe.com/payments/ach-direct-debit" },
     bankDebit: { supported: true, evidence: "verified_docs", note: "ACH Direct Debit: delayed notification, up to 4 business days; can fail after initial success (arrives as a dispute). Disputes up to 60 days.", source: "https://docs.stripe.com/payments/ach-direct-debit" },
     refundsViaApi: { supported: true, evidence: "verified_docs", note: "Refunds API with Idempotency-Key (keys ≥24h old may be pruned). ACH: full refunds only, async up to 3 business days.", source: "https://docs.stripe.com/api/idempotent_requests" },
@@ -255,3 +330,118 @@ export function stripeCapabilities(): ProviderCapabilities {
     envVars: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PUBLISHABLE_KEY"],
   };
 }
+
+// ---------------------------------------------------------------------------
+// Stripe Billing subscriptions (Checkout Session in subscription mode)
+// ---------------------------------------------------------------------------
+
+function stripeSecret(): string {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key || !process.env.STRIPE_WEBHOOK_SECRET) throw new ProviderNotConfiguredError("stripe", ENV.filter((n) => !process.env[n]));
+  assertNotLiveOutsideProduction("stripe", key.startsWith("sk_live_") || key.startsWith("rk_live_"));
+  return key;
+}
+
+async function stripeCall(method: "GET" | "POST", path: string, params: Record<string, string | number | undefined | null>, idempotencyKey?: string): Promise<Obj> {
+  const key = stripeSecret();
+  const body = form(params);
+  const url = method === "GET" ? `https://api.stripe.com${path}${body ? `?${body}` : ""}` : `https://api.stripe.com${path}`;
+  const headers: Record<string, string> = { Authorization: `Bearer ${key}` };
+  if (method === "POST") {
+    headers["Content-Type"] = "application/x-www-form-urlencoded";
+    if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
+  }
+  const res = await fetch(url, { method, headers, body: method === "POST" ? body : undefined });
+  const json = (await res.json().catch(() => ({}))) as Obj;
+  if (!res.ok) throw new Error(`Stripe ${method} ${path} failed (${res.status}): ${str((json.error as Obj | undefined)?.message) ?? "unknown error"}`);
+  return json;
+}
+
+/**
+ * Deterministic lookup key for the recurring price of one immutable product version at one net amount.
+ * https://docs.stripe.com/api/prices/create (lookup_key ≤ 200 chars) and /api/prices/list (lookup_keys filter).
+ */
+export function stripeLookupKey(req: Pick<RecurringPlanRequest, "orgId" | "productVersionId" | "amountMinor" | "currency">) {
+  return `twhub:${req.orgId}:${req.productVersionId}:${req.amountMinor}:${req.currency.toLowerCase()}`;
+}
+
+/** Unix seconds for local midnight of a facility date (Stripe timestamps are UTC instants). */
+export function unixAtLocalMidnight(ymd: string): number {
+  return Math.floor(localToUtc(ymd, "00:00").getTime() / 1000);
+}
+
+export const stripeSubscriptions: SubscriptionProviderAdapter = {
+  name: "stripe",
+  label: "Stripe subscription",
+  isConfigured: () => ENV.every((n) => !!process.env[n]),
+  missingEnv: () => ENV.filter((n) => !process.env[n]),
+
+  async ensurePlan(req: RecurringPlanRequest): Promise<RecurringPlan> {
+    const lookupKey = stripeLookupKey(req);
+    const found = await stripeCall("GET", "/v1/prices", { "lookup_keys[0]": lookupKey, limit: 1 });
+    const existing = Array.isArray(found.data) ? (found.data as Obj[])[0] : undefined;
+    if (existing && str(existing.id)) {
+      if (num(existing.unit_amount) !== req.amountMinor || cur(existing.currency) !== req.currency.toUpperCase()) {
+        throw new Error(`Stripe price ${String(existing.id)} for ${lookupKey} does not match ${req.amountMinor} ${req.currency}; refusing to reuse it.`);
+      }
+      return { providerProductId: idOf(existing.product) ?? "", providerPlanId: String(existing.id), created: false };
+    }
+    const price = await stripeCall(
+      "POST",
+      "/v1/prices",
+      {
+        currency: req.currency.toLowerCase(),
+        unit_amount: req.amountMinor,
+        "recurring[interval]": req.interval,
+        "recurring[interval_count]": req.intervalCount,
+        lookup_key: lookupKey,
+        "product_data[name]": `${req.productName} (v${req.versionNumber})`,
+        "metadata[product_version_id]": req.productVersionId,
+        "metadata[org_id]": req.orgId,
+      },
+      req.idempotencyKey,
+    );
+    return { providerProductId: idOf(price.product) ?? "", providerPlanId: String(price.id), created: true };
+  },
+
+  async startSubscription(req: SubscriptionStartRequest): Promise<SubscriptionStartResult> {
+    // A future billing_cycle_anchor with proration_behavior=none defers the first charge to the date
+    // Teamwork would otherwise have billed next (https://docs.stripe.com/api/checkout/sessions/create, subscription_data).
+    const anchor = req.firstChargeDate && req.firstChargeDate > todayLocal() ? unixAtLocalMidnight(req.firstChargeDate) : null;
+    const session = await stripeCall(
+      "POST",
+      "/v1/checkout/sessions",
+      {
+        mode: "subscription",
+        "line_items[0][price]": req.providerPlanId,
+        "line_items[0][quantity]": 1,
+        success_url: req.successUrl,
+        cancel_url: req.cancelUrl,
+        customer_email: req.customerEmail ?? undefined,
+        client_reference_id: req.membershipId,
+        "metadata[membership_id]": req.membershipId,
+        "metadata[request_id]": req.requestId,
+        "subscription_data[metadata][membership_id]": req.membershipId,
+        "subscription_data[metadata][request_id]": req.requestId,
+        "subscription_data[description]": req.description.slice(0, 500),
+        "subscription_data[billing_cycle_anchor]": anchor ?? undefined,
+        "subscription_data[proration_behavior]": anchor ? "none" : undefined,
+      },
+      req.idempotencyKey,
+    );
+    if (!str(session.url)) throw new Error("Stripe did not return a Checkout URL");
+    return { providerRef: String(session.id), approvalUrl: String(session.url), providerSubscriptionId: idOf(session.subscription) };
+  },
+
+  async cancelAtPeriodEnd(req): Promise<SubscriptionCancelResult> {
+    const sub = await stripeCall(
+      "POST",
+      `/v1/subscriptions/${encodeURIComponent(req.providerSubscriptionId)}`,
+      { cancel_at_period_end: "true", "metadata[teamwork_cancel_reason]": req.reason.slice(0, 500) },
+      req.idempotencyKey,
+    );
+    const items = ((sub.items as Obj | undefined)?.data ?? []) as Obj[];
+    const end = providerLocalYmd(items[0]?.current_period_end ?? sub.current_period_end);
+    return { paidThrough: end ? addDaysYmd(end, -1) : null, immediate: false };
+  },
+};
