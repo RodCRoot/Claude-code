@@ -7,11 +7,15 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: { default: "Teamwork Hub", template: "%s · Teamwork Hub" },
   description: "Teamwork Bloomington — scheduling, training, sports science, and family portal.",
+  // Home-screen install (manifest from app/manifest.ts; iOS uses these).
+  appleWebApp: { capable: true, title: "Teamwork", statusBarStyle: "default" },
+  icons: { apple: "/icons/apple-touch-icon.png" },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  themeColor: "#1d4ed8",
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

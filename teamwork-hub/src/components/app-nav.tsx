@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { purgeTrainingOffline } from "./training-offline";
 
 export type NavLink = { href: string; label: string; key: string };
 
@@ -50,7 +51,8 @@ export function AppNav({
     <div className="border-t border-edge pt-3 text-sm">
       <div className="truncate font-semibold">{userName}</div>
       <div className="text-xs text-ink-3">{roleLabel}</div>
-      <form action={logoutAction} className="mt-2">
+      {/* Signing out removes the offline training copy from this device (also re-done on /login). */}
+      <form action={logoutAction} onSubmit={() => void purgeTrainingOffline()} className="mt-2">
         <button type="submit" className="min-h-11 text-sm font-medium text-ink-3 underline-offset-2 hover:text-ink hover:underline">
           Sign out
         </button>

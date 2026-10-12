@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { buttonClass } from "@/components/ui";
 import type { WorkoutDetail } from "@/lib/training/logging";
+import { purgeTrainingOffline } from "@/components/training-offline";
 import { clearQueue, flush, pendingCount, setQueueVia } from "./set-queue";
 import { ItemCard, SyncBanner, useRefreshOnSync } from "./workout-logger";
 
@@ -23,6 +24,9 @@ export function WeightRoom({ athletes, groupName, date }: { athletes: RosterAthl
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Shared tablet: never keep workout data in service-worker caches (none is written here;
+    // this also clears anything an athlete may have left on the device).
+    void purgeTrainingOffline();
     setQueueVia("weight_room");
     return () => setQueueVia("athlete_app");
   }, []);
@@ -56,6 +60,7 @@ export function WeightRoom({ athletes, groupName, date }: { athletes: RosterAthl
     const left = pendingCount();
     if (left && !window.confirm(`${left} entries have not synced yet. Exit anyway and discard them from this tablet?`)) return;
     clearQueue();
+    await purgeTrainingOffline();
     setSelected(null);
     setWorkout(null);
     router.push("/training");

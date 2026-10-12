@@ -17,7 +17,7 @@ pnpm dev               # then: PW_CHROMIUM=<chromium path> npx playwright test
 4. **Email/SMS provider (needs keys):** enables family self-signing (email codes), automations, invites by email; then inbound/bounce/STOP webhooks.
 5. **Staging deploy (needs Rod's Render + bucket):** follow `docs/DEPLOY.md`; rehearse managed-Postgres and S3 restores.
 6. **Open decisions:** see "Open decisions for Rod" in DECISIONS.md.
-7. **Product depth (unblocked):** series "edit all future", multi-athlete family booking, kiosk PIN/QR, training service worker + drag-and-drop builder, broadcast campaigns/segments, custom-field definitions UI, report charts, accessibility (axe) audit.
+7. **Product depth (unblocked):** series "edit all future", multi-athlete family booking, kiosk PIN/QR, broadcast campaigns/segments, custom-field definitions UI, report charts, accessibility (axe) audit.
 
 ## Resume prompt
 "Continue Teamwork Hub from `teamwork-hub/NEXT_STEPS.md`, `PROGRESS.md`, `FEATURE_MATRIX.md`, and `BLOCKERS.md` on branch `claude/teamwork-hub`. Run `pnpm install && pnpm db:fresh && pnpm test` first, then take the top unblocked item."

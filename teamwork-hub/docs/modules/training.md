@@ -1,7 +1,8 @@
 # Training module (strength programming, logging, weight room, maxes, progress)
 
 Owner paths: `src/app/(app)/training/**`, `src/app/api/training/**`, `src/lib/training/**`,
-`scripts/seed/training.ts`, `tests/training*.{test,e2e}.ts`, `tests/training.playwright.config.ts`.
+`scripts/seed/training.ts`, `tests/training*.{test,e2e}.ts`, `tests/training.playwright.config.ts`,
+`public/training-sw.js`, `src/components/training-offline.tsx`, `src/app/manifest.ts`, `public/icons/*`.
 
 ## Research notes — public documentation only
 
@@ -28,11 +29,13 @@ media here are original; no licensed videos are copied):
 | --- | --- | --- |
 | Exercise library | `/training/exercises`, `lib/training/exercises.ts` | category, pattern, equipment, tracking type, unit, unilateral, bodyweight factor, authorized video **link**, notes, substitutions, `max_source_exercise_id`. Staff read; `training.manage` edits. 42 seeded. |
 | Programs | `/training/programs/[id]`, `lib/training/programs.ts` | phases (goal, weeks) → weeks × days → items with block labels (A1/A2 superset, C1–C3 circuit) and set groups (sets, reps/rep text, load absolute/%/RPE/RIR/bodyweight/none, time, distance, tempo, rest, warm-up), linear progression per week. Copy week, duplicate program. Every structural edit bumps `current_version`. |
+| Builder (week view) | `_components/program-builder.tsx`, `lib/training/program-layout.ts` | reorder within a day, move between days, build/split supersets by native HTML drag-and-drop **or** per-item buttons (↑/↓, Join block above, Separate, Move to day); copy day (new slot or append); bulk-edit a set scheme across selected items. See "Builder ordering" below. |
 | Annual plan | `/training/plan` | `training_plan_blocks` per group/athlete on a 12-month timeline. |
 | Assignment | `lib/training/assignments.ts` | assign program version to athlete or group with start date + weekdays → frozen `workouts` + `workout_items` with resolved loads. Unique (assignment, athlete, program_day) ⇒ idempotent re-runs. "Add new members" (sync), "Apply to unstarted workouts" (rebuild scheduled, no-log, today-or-later workouts from the current version), cancel. |
 | Maxes & loading | `lib/training/formulas.ts`, `loads.ts`, `maxes.ts` | see below |
 | Athlete logging | `/training/today` | mobile-first; prescribed vs actual per set, "Done as prescribed", edit reps/load/RPE, substitutions/modifications, skip/reopen, complete with session RPE + duration. |
-| Offline tolerance | `_components/set-queue.ts`, `POST /api/training/sets` | see below |
+| Offline tolerance | `_components/set-queue.ts`, `POST /api/training/sets`, `public/training-sw.js` | see below |
+| Home-screen install | `app/manifest.ts`, `public/icons/` | web app manifest (start URL `/training/today`, standalone), Apple touch icon/meta. |
 | Weight room | `/training/weight-room` | group/date → athlete grid (names + workout progress only) → per-exercise quick entry. Coaches: their groups/athletes; owner/admin: all; operations: view only. "Exit weight room" flushes, then wipes client state. |
 | Coach review | `/training/review`, `/training/workouts/[id]` | feed with group/status/date filters, mark reviewed, feedback, PR alerts. |
 | Progress & reports | `/training/athletes/[id]`, `/training/reports` | adherence, workout history, max/PR history, e1RM chart per lift (unit + date range labelled, data table), group report, opt-in leaderboard, CSV exports, VBT CSV import. |
@@ -65,8 +68,48 @@ media here are original; no licensed videos are copied):
   (workout_item, set_index, side) and only overwrite if the incoming client time is ≥ the stored
   one (late retries of older edits return `stale`). Authorization (`training.log` on the athlete) is
   checked for every mutation; out-of-scope entries are `rejected` and shown to the user.
-- Reloading while offline-but-served (or with the API unreachable) keeps pending entries; a reload with
-  no network at all needs the page itself, which is not service-worker cached (see gaps).
+- Reloading keeps pending entries. Entries the server confirmed show "saved" immediately (memory-only
+  `confirmed` list) rather than waiting for the follow-up page refresh.
+- Fixed: a flush that failed *synchronously* (navigator offline) used to leave the queue's in-flight
+  promise set forever, so it never retried until a reload; the in-flight marker is now cleared asynchronously.
+
+### Service worker (athlete logger)
+- `public/training-sw.js`, registered by `TrainingOfflineSetup` on `/training/today` with **scope
+  `/training/today`**, only for `role = athlete` and only in production builds. It handles:
+  navigations to `/training/today` and `/training/today/offline` (network first; offline → cached shell),
+  `GET /api/training/today` (network first; offline → cached copy, header `X-Training-Offline: cache`),
+  and `GET /_next/static/*` (cache first). Everything else (other pages, RSC/prefetch, all POSTs incl.
+  `/api/training/sets` and server actions) passes through and is never cached.
+- Offline shell: `/training/today/offline` — its HTML holds no workout data; `OfflineToday` renders the
+  logger from `/api/training/today` and logs through the same localStorage queue. Cached together with
+  the build assets it references; served with the CSP header (and nonce) it was fetched with.
+- Data minimization (`lib/training/offline.ts`): the athlete's own workouts for today only — ids, titles,
+  exercise names, prescriptions/resolved loads, logged sets, own completion fields. No athlete names, no
+  coach feedback, no substitution catalogue, no other athletes. Tagged with an opaque owner key
+  (HMAC of org + user id).
+- Purging: sign-out button + `/login` page (`TrainingOfflinePurge`) delete all `tw-training-*` caches and
+  unregister the worker; `TrainingOfflineGuard` (every signed-in page) purges another user's copy and
+  removes everything for non-athlete sessions; the worker purges itself on an owner mismatch or a 401/403
+  from the data endpoint, and stops caching static assets once purged.
+- Shared tablet: the weight room is outside the worker's scope, is only for staff (guard removes the
+  worker), and purges training caches on open and on "Exit weight room".
+- CSP: pages `worker-src 'self'` (blob: removed), `manifest-src 'self'`; the worker script gets its own
+  policy (`default-src 'self'; script-src 'self'; connect-src 'self'`, no nonce) and `Cache-Control: no-cache`.
+
+### Builder ordering
+- `program-layout.ts` (pure, shared by client preview and server): a day is an ordered list; consecutive
+  items with the same opaque `group` form a block. `normalizeDay` letters blocks A, B, C… in order and
+  numbers members 1..n ("A1" for a single item); single = `straight`, multi = `superset` (or `circuit`
+  if any member was one). Keyboard moves are block-aware (a single item jumps over a whole superset;
+  inside a superset it swaps; at the edge it steps out). Drag onto the outer edge of a block = own block
+  next to it; between members = joins it; onto a day's end zone = own block at the end.
+- `saveProgramLayout(tx, v, programId, { expectedVersion, days })` (`training.manage`): locks the
+  program row (`FOR UPDATE`), rejects a stale `expectedVersion`, requires the listed days to belong to
+  the program and to list exactly their current items (moves only among listed days), recomputes labels
+  server-side, writes all changes in one transaction and bumps the version once (no-op saves don't bump).
+- `copyDay` (empty slot → new day with the target week's phase; existing day → appended, re-lettered),
+  `bulkEditScheme` (sets/reps/rep text/load/rest/tempo on working or all set groups; validated; one bump).
+- Assignments stay snapshots: none of these touch `workouts`/`workout_items` or assignment versions.
 
 ### Permissions
 All checks go through `policy.ts`: reads need `training.read` on the athlete (guardians only when
@@ -94,13 +137,26 @@ with session RPE and duration, for the Sports Science module's sRPE load calcula
   template edit isolation + apply-to-unstarted, idempotent set retries incl. stale/concurrent, coach
   scope in weight room and logging, guardian `can_view_training`, substitutions, single activity
   session on completion, adherence, leaderboard opt-in, PR scope, CSV scope, VBT import provenance).
-- `pnpm exec playwright test -c tests/training.playwright.config.ts` — offline → log → reload →
-  lost response → synced with no duplicate rows (requires `pnpm db:fresh`; starts dev on :3105).
+  `tests/training-builder.test.ts` (pure ordering rules; atomic layout saves incl. cross-day moves,
+  stale-version / foreign / missing / duplicate items, permissions, concurrent saves, assignment snapshots
+  untouched; copy day; bulk set scheme). `tests/training-offline.test.ts` (offline payload minimization,
+  owner keys, worker CSP/headers, worker scope).
+- `pnpm build && pnpm exec playwright test -c tests/training.playwright.config.ts` (production server on
+  :3105, `pnpm db:fresh` first; `TRAINING_E2E_BASE_URL` reuses a running one):
+  service worker — offline full reload shows today's saved workout, log, reload again, reconnect →
+  synced, one row per slot, saved copy refreshed; queue protocol with the worker blocked (lost response
+  → retry → no duplicates); sign-out purges caches/worker and the weight-room tablet keeps no workout
+  data in SW caches; builder — keyboard-only reorder (Enter/Space on ↑/↓, join/separate, Tab to "Move"
+  to another day) with focus kept, plus native drag-and-drop, each save bumping the version.
+  The config sets `PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS=1` so the test can cut the worker's
+  own network (Playwright's `setOffline` only affects pages).
 
 ## Known gaps vs. TeamBuildr Strength (public feature list)
-- No native mobile app or push notifications; no service worker, so a cold reload with zero network
-  fails (queued entries remain and sync once the page loads again).
-- No drag-and-drop calendar builder or day-stacking; editing is form-based per week.
+- No native mobile app or push notifications. Offline covers only *today's* workout for an athlete who
+  opened it online on that device; other dates, completing a workout, substitutions and skip/reopen need
+  the network. No background sync (the queue flushes while a page is open).
+- The builder works one week at a time (drag/move between days of that week; copy day/week for others);
+  no calendar-wide drag-and-drop or day-stacking across weeks.
 - No athlete video upload, questionnaires/readiness surveys, whiteboard/TV timer, or payments marketplace.
 - Leaderboards are per-lift e1RM only (no custom metrics/tests); reports are a focused subset.
 - VBT data comes from CSV file import only; no live device integration.

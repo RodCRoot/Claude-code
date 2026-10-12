@@ -93,10 +93,10 @@ Security review: see `docs/SECURITY-REVIEW.md` (10 findings fixed with regressio
 | Feature | Status | Test evidence | Gaps |
 |---|---|---|---|
 | Exercise library (categories, equipment, units, video links, substitutions) | verified locally | `training.test.ts` | Licensed video library not copied (by design) |
-| Programs: phases, weeks/days, supersets/circuits, full prescriptions, progression; annual plan blocks | verified locally | `training.test.ts` | Form-based builder (no drag-and-drop calendar) |
+| Programs: phases, weeks/days, supersets/circuits, full prescriptions, progression; annual plan blocks | verified locally | `training.test.ts` | Week-view builder with drag-and-drop + keyboard reorder, copy day, bulk set scheme (`training-builder.test.ts`, builder Playwright test); no calendar-wide drag |
 | Versioned assignment snapshots (template edits never rewrite completed workouts) | verified locally | `training.test.ts` | — |
 | Maxes (tested/estimated; Epley/Brzycki v1), dated-max % loading with rounding | verified locally | `training.test.ts` | — |
-| Mobile logging with offline queue + idempotent retry | verified locally | `training.test.ts` + offline Playwright test | No service worker (reload without network fails; queue survives) |
+| Mobile logging with offline queue + idempotent retry | verified locally | `training.test.ts` + offline Playwright test | Scoped service worker for today's workout (athletes only; offline Playwright test); no background sync |
 | Weight-room tablet view (coach-scoped) | verified locally | `training.test.ts`, browser | — |
 | Coach review, PR alerts, adherence, progress charts, scoped opt-in leaderboard, CSV export | verified locally | `training.test.ts` | Fewer report types than TeamBuildr |
 | VBT data | implemented (CSV import only) | `training.test.ts` | No device connectivity (by design) |
