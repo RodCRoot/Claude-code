@@ -5,15 +5,25 @@
  * (Settings → Branding) and injected as --brand on <body>.
  */
 :root {
-  --brand: #1d4ed8;
+  --brand: #1565c0;
   --brand-ink: #ffffff;
-  --bg: #f5f6f8;
+  --bg: #eef1f5;
   --surface: #ffffff;
-  --surface-2: #f0f2f5;
-  --edge: #dfe3ea;
-  --ink: #0f172a;
-  --ink-2: #3b4658;
-  --ink-3: #5d6779;
+  --surface-2: #f4f6f9;
+  --edge: #d8dee7;
+  --ink: #1a2332;
+  --ink-2: #3a4657;
+  --ink-3: #596579;
+  /* Sidebar (studio-software style): deep navy rail with a bright accent; same in light and dark. */
+  --nav-bg: #13203a;
+  --nav-hover: #1c2c4c;
+  --nav-active: #23365c;
+  --nav-ink: #d3dbe8;
+  --nav-ink-3: #93a3bd;
+  --nav-accent: #4fc3f7;
+  /* Table header band and zebra rows. */
+  --th-bg: #f1f4f8;
+  --zebra: #fafbfd;
   /* ok/warn are one step darker than Tailwind 700 so status text stays >= 4.5:1 on its own tinted badge background. */
   --ok: #166534;
   --warn: #92400e;
@@ -27,6 +37,9 @@
     --surface: #121826;
     --surface-2: #1a2232;
     --edge: #2a3447;
+    --th-bg: #172033;
+    --zebra: #141b2a;
+    --nav-bg: #0a1222;
     --ink: #eef2f8;
     --ink-2: #c3cad6;
     --ink-3: #9aa4b5;
@@ -41,6 +54,9 @@
   --surface: #121826;
   --surface-2: #1a2232;
   --edge: #2a3447;
+  --th-bg: #172033;
+  --zebra: #141b2a;
+  --nav-bg: #0a1222;
   --ink: #eef2f8;
   --ink-2: #c3cad6;
   --ink-3: #9aa4b5;
@@ -64,6 +80,14 @@
   --color-warn: var(--warn);
   --color-bad: var(--bad);
   --color-info: var(--info);
+  --color-nav-bg: var(--nav-bg);
+  --color-nav-hover: var(--nav-hover);
+  --color-nav-active: var(--nav-active);
+  --color-nav-ink: var(--nav-ink);
+  --color-nav-ink-3: var(--nav-ink-3);
+  --color-nav-accent: var(--nav-accent);
+  --color-th: var(--th-bg);
+  --color-zebra: var(--zebra);
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
@@ -76,13 +100,14 @@ body {
 
 body {
   font-family: var(--font-sans);
+  font-size: 14px;
   -webkit-font-smoothing: antialiased;
 }
 
 .kicker {
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--ink-3);
 }

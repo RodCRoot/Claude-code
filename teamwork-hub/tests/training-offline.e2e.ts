@@ -226,8 +226,8 @@ test("sign-out purges the offline copy; the shared weight-room tablet keeps no w
   await expect(page.getByTestId("offline-ready")).toHaveAttribute("data-state", "ready", { timeout: 30_000 });
   expect(Object.keys((await swState(page)).caches).length).toBeGreaterThan(0);
 
-  // Sign out from the (mobile) menu: caches and the worker are gone.
-  await page.getByRole("button", { name: "Menu" }).click();
+  // Sign out from the account menu (top bar): caches and the worker are gone.
+  await page.locator('summary[aria-label^="Account menu"]').click();
   await page.getByRole("button", { name: "Sign out" }).click();
   await page.waitForURL(/\/login/);
   await expect.poll(async () => { const s = await swState(page); return { caches: s.caches, regs: s.regs }; }).toEqual({ caches: {}, regs: [] });

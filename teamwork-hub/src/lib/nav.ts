@@ -1,6 +1,17 @@
 import type { Role } from "@/db/schema";
 
-export type NavItem = { href: string; label: string; key: string; roles: Role[] };
+import type { IconName } from "@/components/icons";
+
+export type NavGroup = "front" | "members" | "coaching" | "business";
+export type NavItem = { href: string; label: string; key: string; roles: Role[]; icon: IconName; group: NavGroup };
+
+/** Sidebar section headings (staff only; families see a flat list). */
+export const NAV_GROUP_LABEL: Record<NavGroup, string> = {
+  front: "Front desk",
+  members: "Members",
+  coaching: "Coaching",
+  business: "Business",
+};
 
 const STAFF: Role[] = ["owner", "admin", "operations", "coach"];
 const FAMILY: Role[] = ["guardian", "athlete"];
@@ -8,17 +19,19 @@ const ALL: Role[] = [...STAFF, ...FAMILY];
 
 /** Single navigation definition. Each module page also enforces access server-side. */
 export const NAV: NavItem[] = [
-  { key: "today", href: "/today", label: "Today", roles: ALL },
-  { key: "people", href: "/people", label: "People", roles: ["owner", "admin", "operations", "coach"] },
-  { key: "schedule", href: "/schedule", label: "Schedule", roles: ALL },
-  { key: "billing", href: "/billing", label: "Memberships & Billing", roles: ["owner", "admin", "operations", "guardian", "athlete"] },
-  { key: "training", href: "/training", label: "Training", roles: ALL },
-  { key: "science", href: "/science", label: "Sports Science", roles: ALL },
-  { key: "performance", href: "/performance", label: "Performance", roles: ALL },
-  { key: "messages", href: "/messages", label: "Messages", roles: ALL },
-  { key: "documents", href: "/documents", label: "Documents", roles: ALL },
-  { key: "reports", href: "/reports", label: "Reports", roles: ["owner", "admin", "operations", "coach"] },
-  { key: "settings", href: "/settings", label: "Settings", roles: ["owner", "admin"] },
+  { key: "today", href: "/today", label: "Dashboard", roles: ALL, icon: "today", group: "front" },
+  { key: "schedule", href: "/schedule", label: "Calendar", roles: ALL, icon: "schedule", group: "front" },
+  { key: "messages", href: "/messages", label: "Messages", roles: ALL, icon: "messages", group: "front" },
+  { key: "people", href: "/people", label: "People", roles: ["owner", "admin", "operations", "coach"], icon: "people", group: "members" },
+  { key: "billing", href: "/billing", label: "Memberships & Billing", roles: ["owner", "admin", "operations", "guardian", "athlete"], icon: "billing", group: "members" },
+  { key: "documents", href: "/documents", label: "Documents", roles: ALL, icon: "documents", group: "members" },
+  { key: "training", href: "/training", label: "Training", roles: ALL, icon: "training", group: "coaching" },
+  { key: "science", href: "/science", label: "Sports Science", roles: ALL, icon: "science", group: "coaching" },
+  { key: "performance", href: "/performance", label: "Performance", roles: ALL, icon: "performance", group: "coaching" },
+  { key: "reports", href: "/reports", label: "Reports", roles: ["owner", "admin", "operations", "coach"], icon: "reports", group: "business" },
+  { key: "payroll", href: "/payroll", label: "Payroll", roles: ["owner", "admin"], icon: "payroll", group: "business" },
+  { key: "imports", href: "/imports", label: "Imports", roles: ["owner", "admin"], icon: "imports", group: "business" },
+  { key: "settings", href: "/settings", label: "Settings", roles: ["owner", "admin"], icon: "settings", group: "business" },
 ];
 
 export function navFor(role: Role) {
