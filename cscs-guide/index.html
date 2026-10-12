@@ -1,0 +1,1416 @@
+<title>CSCS Retake Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+:root{
+  --bg:#e7eae8;
+  --surface:#ffffff;
+  --surface-2:#f1f3f1;
+  --line:#ccd4d1;
+  --line-strong:#a8b3b0;
+  --text:#15191b;
+  --text-2:#4d5659;
+  --text-3:#727d80;
+  --blue:#1d5fa4;
+  --red:#a72330;
+  --yellow:#b8860a;
+  --green:#2b7a4b;
+  --blue-wash:#e3ecf6;
+  --red-wash:#f7e5e6;
+  --yellow-wash:#f8efd9;
+  --green-wash:#e2f0e7;
+  --shadow:0 1px 2px rgba(21,25,27,.06),0 8px 24px -12px rgba(21,25,27,.18);
+  --radius:3px;
+  --display:'Archivo','Helvetica Neue',Arial,sans-serif;
+  --body:'Source Serif 4',Georgia,'Times New Roman',serif;
+  --mono:'IBM Plex Mono','SFMono-Regular',Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#13171a;
+    --surface:#1a2024;
+    --surface-2:#222a2e;
+    --line:#2f393e;
+    --line-strong:#46545a;
+    --text:#e7ecea;
+    --text-2:#a6b1b3;
+    --text-3:#7f8b8e;
+    --blue:#6ba7e6;
+    --red:#e8737e;
+    --yellow:#e0b44a;
+    --green:#5fb582;
+    --blue-wash:#182835;
+    --red-wash:#33202333;
+    --red-wash:#301d20;
+    --yellow-wash:#2e2717;
+    --green-wash:#182c22;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#13171a;
+  --surface:#1a2024;
+  --surface-2:#222a2e;
+  --line:#2f393e;
+  --line-strong:#46545a;
+  --text:#e7ecea;
+  --text-2:#a6b1b3;
+  --text-3:#7f8b8e;
+  --blue:#6ba7e6;
+  --red:#e8737e;
+  --yellow:#e0b44a;
+  --green:#5fb582;
+  --blue-wash:#182835;
+  --red-wash:#301d20;
+  --yellow-wash:#2e2717;
+  --green-wash:#182c22;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--body);
+  font-size:17px;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{font-family:var(--display);font-weight:700;line-height:1.15;text-wrap:balance;margin:0}
+p{margin:0}
+a{color:var(--blue)}
+button{font-family:inherit;font-size:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+
+/* ---------- masthead ---------- */
+.masthead{
+  border-bottom:1px solid var(--line);
+  background:var(--surface);
+}
+.mast-inner{
+  max-width:1080px;margin:0 auto;padding:26px 22px 20px;
+  display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end;justify-content:space-between;
+}
+.wordmark{display:flex;flex-direction:column;gap:6px}
+.eyebrow{
+  font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--text-3);
+}
+.wordmark h1{font-size:clamp(28px,5vw,40px);font-weight:800;letter-spacing:-.02em}
+.wordmark .sub{font-size:15px;color:var(--text-2);max-width:46ch}
+.mast-meter{display:flex;gap:0;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--surface-2)}
+.meter-cell{padding:9px 14px;display:flex;flex-direction:column;gap:1px;min-width:88px;border-right:1px solid var(--line)}
+.meter-cell:last-child{border-right:none}
+.meter-cell .n{font-family:var(--mono);font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.2}
+.meter-cell .l{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--text-3)}
+
+/* ---------- nav ---------- */
+.navbar{
+  position:sticky;top:0;z-index:40;
+  background:var(--surface);border-bottom:1px solid var(--line);
+}
+.nav-scroll{max-width:1080px;margin:0 auto;padding:0 22px;display:flex;gap:2px;overflow-x:auto;scrollbar-width:thin}
+.nav-scroll button{
+  flex:0 0 auto;background:none;border:none;cursor:pointer;
+  padding:12px 12px 10px;border-bottom:2px solid transparent;
+  font-family:var(--display);font-weight:600;font-size:13.5px;letter-spacing:.01em;color:var(--text-2);
+  white-space:nowrap;
+}
+.nav-scroll button:hover{color:var(--text)}
+.nav-scroll button[aria-selected="true"]{color:var(--text);border-bottom-color:var(--blue)}
+.nav-scroll button .w{font-family:var(--mono);font-size:10px;color:var(--text-3);margin-left:5px}
+
+/* ---------- layout ---------- */
+main{max-width:1080px;margin:0 auto;padding:34px 22px 90px}
+.panel{display:none;flex-direction:column;gap:34px}
+.panel.active{display:flex}
+.col{max-width:70ch}
+section.block{display:flex;flex-direction:column;gap:14px}
+.block-head{display:flex;flex-direction:column;gap:5px;border-top:2px solid var(--text);padding-top:9px}
+.block-head h2{font-size:23px;letter-spacing:-.01em}
+.block-head h3{font-size:18px}
+.block-head .kicker{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-3)}
+.lede{font-size:17.5px;color:var(--text-2)}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums}
+caption{
+  text-align:left;padding:11px 14px 10px;border-bottom:1px solid var(--line);
+  font-family:var(--display);font-weight:700;font-size:14px;letter-spacing:.01em;
+}
+caption span{display:block;font-family:var(--mono);font-weight:400;font-size:11px;color:var(--text-3);letter-spacing:.04em;margin-top:3px}
+th,td{padding:8px 14px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+thead th{
+  font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);font-weight:600;
+  background:var(--surface-2);position:sticky;top:0;
+}
+tbody tr:last-child td,tbody tr:last-child th{border-bottom:none}
+tbody th{font-weight:600;white-space:nowrap}
+td.num{font-weight:500}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:3px solid var(--line-strong);background:var(--surface);
+  padding:12px 16px;border-radius:0 var(--radius) var(--radius) 0;
+  display:flex;flex-direction:column;gap:5px;font-size:16px;
+}
+.note .tag{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--text-3)}
+.note.trap{border-left-color:var(--red);background:var(--red-wash)}
+.note.trap .tag{color:var(--red)}
+.note.cue{border-left-color:var(--yellow);background:var(--yellow-wash)}
+.note.cue .tag{color:var(--yellow)}
+.note.key{border-left-color:var(--blue);background:var(--blue-wash)}
+.note.key .tag{color:var(--blue)}
+ul.tight{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+ul.tight li::marker{color:var(--text-3)}
+code{font-family:var(--mono);font-size:.88em;background:var(--surface-2);padding:1px 5px;border-radius:2px}
+.formula{
+  font-family:var(--mono);font-size:14px;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--radius);padding:12px 16px;display:flex;flex-direction:column;gap:4px;
+}
+.formula b{font-weight:600}
+.formula .why{font-family:var(--body);font-size:14px;color:var(--text-2)}
+
+/* ---------- quiz ---------- */
+.quizbar{
+  display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
+  border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);padding:12px 14px;
+}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{
+  font-family:var(--mono);font-size:11px;letter-spacing:.04em;padding:5px 10px;cursor:pointer;
+  border:1px solid var(--line);background:var(--surface-2);border-radius:99px;color:var(--text-2);
+}
+.chip[aria-pressed="true"]{background:var(--text);color:var(--surface);border-color:var(--text)}
+.btn{
+  font-family:var(--display);font-weight:600;font-size:13px;padding:8px 14px;cursor:pointer;
+  border:1px solid var(--line-strong);background:var(--surface);border-radius:var(--radius);
+}
+.btn:hover{border-color:var(--text)}
+.btn.primary{background:var(--text);color:var(--surface);border-color:var(--text)}
+.btn.primary:hover{opacity:.88}
+.qcard{
+  border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);
+  padding:18px 20px;display:flex;flex-direction:column;gap:14px;box-shadow:var(--shadow);
+}
+.qhead{display:flex;gap:10px;align-items:baseline;justify-content:space-between;flex-wrap:wrap}
+.qmeta{font-family:var(--mono);font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--text-3)}
+.qstem{font-size:18px;line-height:1.5}
+.opts{display:flex;flex-direction:column;gap:8px}
+.opt{
+  display:flex;gap:11px;align-items:flex-start;text-align:left;width:100%;cursor:pointer;
+  border:1px solid var(--line);background:var(--surface);border-radius:var(--radius);
+  padding:11px 13px;font-family:var(--body);font-size:16px;line-height:1.45;
+}
+.opt:hover:not(:disabled){border-color:var(--line-strong);background:var(--surface-2)}
+.opt:disabled{cursor:default}
+.opt .ltr{
+  font-family:var(--mono);font-size:12px;font-weight:600;color:var(--text-3);
+  border:1px solid var(--line);border-radius:2px;width:22px;height:22px;flex:0 0 22px;
+  display:flex;align-items:center;justify-content:center;margin-top:1px;
+}
+.opt.correct{border-color:var(--green);background:var(--green-wash)}
+.opt.correct .ltr{border-color:var(--green);color:var(--green)}
+.opt.wrong{border-color:var(--red);background:var(--red-wash)}
+.opt.wrong .ltr{border-color:var(--red);color:var(--red)}
+.opt.picked{border-color:var(--blue);background:var(--blue-wash)}
+.opt.picked .ltr{border-color:var(--blue);color:var(--blue)}
+.expl{
+  border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px;font-size:16px;
+}
+.verdict{font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase}
+.verdict.hit{color:var(--green)}
+.verdict.miss{color:var(--red)}
+.qfoot{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.progress{font-family:var(--mono);font-size:11px;color:var(--text-3);letter-spacing:.06em}
+.rail{height:3px;background:var(--surface-2);border-radius:99px;overflow:hidden;border:1px solid var(--line)}
+.rail i{display:block;height:100%;background:var(--blue);width:0}
+.scoregrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:1px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.scorecell{background:var(--surface);padding:12px 14px;display:flex;flex-direction:column;gap:3px;box-shadow:0 0 0 1px var(--line)}
+.scorecell .n{font-family:var(--mono);font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.scorecell .l{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3)}
+.scorecell .bar{height:4px;background:var(--surface-2);margin-top:5px;border-radius:99px;overflow:hidden}
+.scorecell .bar i{display:block;height:100%;background:var(--green)}
+.scorecell.low .bar i{background:var(--red)}
+.scorecell.mid .bar i{background:var(--yellow)}
+.empty{font-size:16px;color:var(--text-2);padding:22px;border:1px dashed var(--line-strong);border-radius:var(--radius);text-align:center}
+.plan{display:flex;flex-direction:column;gap:0;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);overflow:hidden}
+.week{display:grid;grid-template-columns:82px 1fr;gap:16px;padding:13px 16px;border-bottom:1px solid var(--line)}
+.week:last-child{border-bottom:none}
+.week .wk{font-family:var(--mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--text-3);padding-top:3px}
+.week .what{display:flex;flex-direction:column;gap:4px;font-size:16px}
+.week .what b{font-family:var(--display);font-size:15px}
+.foot{max-width:70ch;font-size:14px;color:var(--text-3);border-top:1px solid var(--line);padding-top:14px;display:flex;flex-direction:column;gap:8px}
+.themebtn{
+  font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;
+  background:none;border:1px solid var(--line);border-radius:99px;padding:5px 11px;color:var(--text-3);
+  align-self:flex-start;
+}
+@media (max-width:640px){
+  body{font-size:16px}
+  .mast-meter{width:100%}
+  .meter-cell{flex:1;min-width:0}
+  .week{grid-template-columns:1fr;gap:5px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+<header class="masthead">
+  <div class="mast-inner">
+    <div class="wordmark">
+      <span class="eyebrow">NSCA · Certified Strength and Conditioning Specialist</span>
+      <h1>CSCS Retake Room</h1>
+      <p class="sub">Blueprint-weighted review and 103 practice items for a second sitting — built to find the gaps, not re-teach the book.</p>
+    </div>
+    <div class="mast-meter">
+      <div class="meter-cell"><span class="n">190</span><span class="l">Scored items</span></div>
+      <div class="meter-cell"><span class="n">4.0</span><span class="l">Hours total</span></div>
+      <div class="meter-cell"><span class="n">70</span><span class="l">Scaled to pass</span></div>
+      <div class="meter-cell"><span class="n" id="bankCount">103</span><span class="l">Items here</span></div>
+    </div>
+  </div>
+</header>
+
+<nav class="navbar">
+  <div class="nav-scroll" role="tablist" id="nav">
+    <button role="tab" data-panel="plan" aria-selected="true">Blueprint &amp; Plan</button>
+    <button role="tab" data-panel="es">Exercise Science<span class="w">55%</span></button>
+    <button role="tab" data-panel="psy">Sport Psychology<span class="w">24%</span></button>
+    <button role="tab" data-panel="nut">Nutrition<span class="w">21%</span></button>
+    <button role="tab" data-panel="tech">Exercise Technique<span class="w">36%</span></button>
+    <button role="tab" data-panel="prog">Program Design<span class="w">35%</span></button>
+    <button role="tab" data-panel="test">Testing &amp; Evaluation<span class="w">18%</span></button>
+    <button role="tab" data-panel="org">Organization &amp; Admin<span class="w">11%</span></button>
+    <button role="tab" data-panel="quiz">Question Bank</button>
+  </div>
+</nav>
+
+<main>
+
+<!-- ============ PLAN ============ -->
+<div class="panel active" id="panel-plan">
+  <section class="block col">
+    <div class="block-head"><span class="kicker">Start here</span><h2>What the exam actually is</h2></div>
+    <p class="lede">Two independently scored sections. You can pass one and retake only the other — and you have one year from your first attempt to clear both. That single rule should shape everything about how you study this time.</p>
+  </section>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Exam structure<span>Scored + unscored items, time, and domain weights</span></caption>
+      <thead><tr><th>Section</th><th>Items</th><th>Time</th><th>Domain</th><th>Weight</th><th>≈ Scored items</th></tr></thead>
+      <tbody>
+        <tr><th rowspan="3">1 · Scientific Foundations</th><td rowspan="3" class="num">80 scored<br>+15 unscored</td><td rowspan="3" class="num">1.5 h</td><td>Exercise Science</td><td class="num">55%</td><td class="num">44</td></tr>
+        <tr><td>Sport Psychology</td><td class="num">24%</td><td class="num">19</td></tr>
+        <tr><td>Nutrition</td><td class="num">21%</td><td class="num">17</td></tr>
+        <tr><th rowspan="4">2 · Practical / Applied</th><td rowspan="4" class="num">110 scored<br>+15 unscored</td><td rowspan="4" class="num">2.5 h</td><td>Exercise Technique</td><td class="num">36%</td><td class="num">40</td></tr>
+        <tr><td>Program Design</td><td class="num">35%</td><td class="num">38</td></tr>
+        <tr><td>Testing &amp; Evaluation</td><td class="num">18%</td><td class="num">20</td></tr>
+        <tr><td>Organization &amp; Administration</td><td class="num">11%</td><td class="num">12</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <section class="block col">
+    <ul class="tight">
+      <li><b>Scaled score of 70 or higher</b> passes a section. Scaled — not "70% correct." Raw-to-scaled conversion accounts for form difficulty, so don't try to reverse-engineer a raw target.</li>
+      <li><b>30–40 items in Section 2 are video or image based.</b> They show a lift, a drill, or a piece of equipment and ask what is wrong, what to cue, or what comes next. This is where retakers most often lose Section 2.</li>
+      <li><b>Unscored items are unmarked.</b> Treat every question as live; never spend extra time deciding whether something "counts."</li>
+      <li><b>~57 s per item in Section 1, ~72 s in Section 2.</b> Flag and move. A 3-minute question costs you two easy ones.</li>
+    </ul>
+  </section>
+
+  <section class="block col">
+    <div class="block-head"><span class="kicker">Retaker strategy</span><h2>What is different the second time</h2></div>
+    <p>You already own the content once. The failure mode for a retaker is not ignorance — it is <i>recognition without recall</i>: the material feels familiar when you read it, so you never test whether you can produce it cold. Reading the chapter again reinforces the illusion.</p>
+    <div class="note key"><span class="tag">Method</span><p>Answer questions <b>before</b> reviewing the section. Miss it, then read. The failed retrieval attempt is what makes the reading stick — and it tells you which of the seven domains is actually costing you the section.</p></div>
+    <div class="note trap"><span class="tag">Highest-yield fix</span><p>If you failed <b>Section 2</b>: drill Exercise Technique and Program Design only — together they are 71% of that section. Testing and Org/Admin can be salvaged in a weekend; technique cannot.</p></div>
+    <div class="note trap"><span class="tag">Highest-yield fix</span><p>If you failed <b>Section 1</b>: Exercise Science is 55%, and inside it bioenergetics, endocrine response, and neuromuscular adaptation carry most of the items. Sport Psychology at 24% is the cheapest section on the whole exam to raise — it is definitions, and it is 19 items.</p></div>
+  </section>
+
+  <section class="block col">
+    <div class="block-head"><span class="kicker">Six weeks</span><h3>A retake schedule</h3></div>
+  </section>
+  <div class="plan">
+    <div class="week"><span class="wk">Week 1</span><span class="what"><b>Diagnose</b>Run all 103 items here in Exam mode, cold, no review. The per-domain scorecard is your syllabus. Anything under 70% gets double time.</span></div>
+    <div class="week"><span class="wk">Week 2</span><span class="what"><b>Bioenergetics + endocrine</b>Energy systems, substrates, work-to-rest, hormonal response to loading schemes. Rebuild the tables from memory on blank paper — that is the test, not re-reading them.</span></div>
+    <div class="week"><span class="wk">Week 3</span><span class="what"><b>Technique + spotting</b>Watch lifts on video with the sound off and call the fault out loud before the coach does. Olympic lift phases, spotting rules, five-point contact, grip types.</span></div>
+    <div class="week"><span class="wk">Week 4</span><span class="what"><b>Program design</b>Write four real programs: in-season team sport, off-season power athlete, aerobic endurance athlete, and a return-from-injury block. Load, reps, sets, rest, order, progression.</span></div>
+    <div class="week"><span class="wk">Week 5</span><span class="what"><b>Testing, org, admin, psych, nutrition</b>The four lighter domains together. Straight memorization: test order, validity types, facility specs, negligence elements, macronutrient numbers, arousal theories.</span></div>
+    <div class="week"><span class="wk">Week 6</span><span class="what"><b>Mixed retrieval + timing</b>Re-run the bank in Exam mode under the clock. Then re-run <i>missed only</i> until it empties twice. Taper the studying in the last 48 hours — sleep beats one more chapter.</span></div>
+  </div>
+
+  <section class="block col">
+    <div class="note cue"><span class="tag">Accuracy note</span><p>Everything here is written to the NSCA framework in <i>Essentials of Strength Training and Conditioning</i> (4th ed.). Numbers that vary between editions — facility square footage, plyometric volumes, ATP yields — are flagged where they appear. Confirm the current domain weights and eligibility rules on <a href="https://www.nsca.com/certification/cscs/">nsca.com</a> before your test date; NSCA revises the exam description periodically.</p></div>
+  </section>
+</div>
+
+<!-- ============ EXERCISE SCIENCE ============ -->
+<div class="panel" id="panel-es">
+  <section class="block col">
+    <div class="block-head"><span class="kicker">Section 1 · 55% · ≈44 items</span><h2>Exercise Science</h2></div>
+    <p class="lede">The largest single domain on the exam. Bioenergetics, endocrine response, and neuromuscular adaptation produce more items than anatomy does — know the mechanisms and the numbers, not just the structures.</p>
+  </section>
+
+  <div class="tablewrap">
+    <table>
+      <caption>The three energy systems<span>Rate and capacity are inversely related — this is the whole concept</span></caption>
+      <thead><tr><th>System</th><th>Duration</th><th>Intensity</th><th>Fuel</th><th>Rate-limiting enzyme</th><th>ATP yield</th></tr></thead>
+      <tbody>
+        <tr><th>Phosphagen</th><td>0–6 s</td><td>Very high</td><td>ATP, creatine phosphate</td><td>Creatine kinase</td><td>1 ATP per CP</td></tr>
+        <tr><th>Fast glycolysis</th><td>6 s–2 min</td><td>High</td><td>Muscle glycogen, glucose</td><td>Phosphofructokinase</td><td>2 (glucose) / 3 (glycogen)</td></tr>
+        <tr><th>Slow glycolysis</th><td>2–3 min</td><td>Moderate</td><td>Glycogen, glucose</td><td>Phosphofructokinase</td><td>Pyruvate → mitochondria</td></tr>
+        <tr><th>Oxidative</th><td>&gt;3 min</td><td>Low</td><td>Glycogen, fat, protein</td><td>Isocitrate dehydrogenase</td><td>≈38 ATP / glucose, 39 / glycogen</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note cue col"><span class="tag">Distinction that gets tested</span><p>Fast vs. slow glycolysis is decided by the <b>fate of pyruvate</b>, not by speed of movement. Pyruvate → lactate = fast glycolysis. Pyruvate → acetyl-CoA into the Krebs cycle = slow (oxidative) glycolysis. Lactate is not a waste product; it is shuttled and reconverted to glucose in the liver via the <b>Cori cycle</b>.</p></div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Work-to-rest ratios by primary system<span>Memorize these — they appear in Section 1 and again in conditioning program design</span></caption>
+      <thead><tr><th>Primary system</th><th>Work duration</th><th>Work : rest</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><th>Phosphagen</th><td>5–10 s</td><td class="num">1:12 – 1:20</td><td>Shot put, 40 yd sprint, 1RM attempt</td></tr>
+        <tr><th>Fast glycolysis</th><td>15–30 s</td><td class="num">1:3 – 1:5</td><td>200 m sprint, wrestling scramble</td></tr>
+        <tr><th>Fast glycolysis + oxidative</th><td>1–3 min</td><td class="num">1:3 – 1:4</td><td>800 m, 200 m swim</td></tr>
+        <tr><th>Oxidative</th><td>&gt;3 min</td><td class="num">1:1 – 1:3</td><td>Distance running, soccer shift work</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Substrate depletion and repletion<span>Recovery-timing items come straight from this row set</span></caption>
+      <thead><tr><th>Store</th><th>Depleted by</th><th>Restored in</th></tr></thead>
+      <tbody>
+        <tr><th>ATP</th><td>Maximal effort &lt;10 s</td><td>Largely within 3–5 min (ATP + CP ≈ 8 min for near-full)</td></tr>
+        <tr><th>Creatine phosphate</th><td>Repeated maximal bouts</td><td>≈50% in 30 s; ≈100% in 3–5 min</td></tr>
+        <tr><th>Muscle glycogen</th><td>High-intensity or long-duration work</td><td>5–24 h with adequate carbohydrate; 24 h+ after eccentric/damaging work</td></tr>
+        <tr><th>EPOC</th><td>Any bout — magnitude scales with intensity</td><td>Fast component minutes; slow component hours</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <section class="block col">
+    <div class="block-head"><h3>Neuromuscular essentials</h3></div>
+    <ul class="tight">
+      <li><b>Motor unit</b> = one alpha motor neuron + all fibers it innervates. All fibers in a unit are the same type; the unit fires <b>all-or-none</b>. Force is graded by recruitment and by <b>rate coding</b> (firing frequency).</li>
+      <li><b>Size principle:</b> motor units are recruited from smallest (Type I) to largest (Type IIx) as force demand rises. The practical consequence — to train high-threshold units you need <b>high force or high velocity intent</b>, not just fatigue.</li>
+      <li><b>Muscle spindle:</b> parallel to fibers, senses <b>rate and magnitude of stretch</b>, triggers the stretch reflex (excitatory). <b>Golgi tendon organ:</b> in series at the musculotendinous junction, senses <b>tension</b>, causes autogenic inhibition (inhibitory).</li>
+      <li><b>Stretch-shortening cycle:</b> eccentric (energy stored in series elastic component, spindles stimulated) → <b>amortization</b> (the pause; shorter = more power, this is the trainable link) → concentric (stored energy + reflex contribution released).</li>
+      <li><b>Excitation–contraction coupling:</b> action potential → T-tubule → SR releases Ca²⁺ → Ca²⁺ binds troponin → tropomyosin shifts → cross-bridge → ATP hydrolysis powers the power stroke; <b>ATP is also required to detach</b> the cross-bridge (why rigor occurs without it).</li>
+    </ul>
+  </section>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Muscle fiber types<span>Type IIx converts toward IIa with training; I ↔ II conversion does not meaningfully occur</span></caption>
+      <thead><tr><th>Characteristic</th><th>Type I</th><th>Type IIa</th><th>Type IIx</th></tr></thead>
+      <tbody>
+        <tr><th>Contraction speed</th><td>Slow</td><td>Fast</td><td>Fastest</td></tr>
+        <tr><th>Force per unit area</th><td>Low</td><td>High</td><td>Highest</td></tr>
+        <tr><th>Fatigue resistance</th><td>Highest</td><td>Moderate</td><td>Lowest</td></tr>
+        <tr><th>Mitochondrial / capillary density</th><td>High</td><td>Moderate</td><td>Low</td></tr>
+        <tr><th>Primary energy system</th><td>Oxidative</td><td>Fast glycolysis + oxidative</td><td>Phosphagen, fast glycolysis</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Hormonal response to resistance training<span>Know which protocol drives which hormone — this is the classic Section 1 item</span></caption>
+      <thead><tr><th>Hormone</th><th>Source</th><th>Primary action</th><th>Protocol that maximizes acute response</th></tr></thead>
+      <tbody>
+        <tr><th>Testosterone</th><td>Leydig cells (adrenal in women)</td><td>Anabolic; also acts on nervous system</td><td>Large-muscle multijoint exercises, heavy load (85–95% 1RM), moderate-to-high volume, ≥2 years training</td></tr>
+        <tr><th>Growth hormone</th><td>Anterior pituitary</td><td>Lipolysis, IGF-1 release, tissue anabolism</td><td>High volume, moderate-to-high intensity (≈10RM), <b>short rest (≈1 min)</b>, large muscle mass — lactate/H⁺ driven</td></tr>
+        <tr><th>IGF-1</th><td>Liver (and local muscle)</td><td>Mediates much of GH's anabolic effect</td><td>Follows GH; delayed response</td></tr>
+        <tr><th>Cortisol</th><td>Adrenal cortex</td><td>Catabolic; protein degradation, gluconeogenesis</td><td>Rises with high-volume, short-rest work; chronically elevated with overtraining</td></tr>
+        <tr><th>Catecholamines</th><td>Adrenal medulla</td><td>↑ force, ↑ HR/BP, ↑ energy availability</td><td>Immediate; heaviest with maximal effort and psyching-up</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="formula col">
+    <b>Q̇ = HR × SV</b>
+    <b>V̇O₂ = Q̇ × (a-v̄O₂ difference)</b>
+    <span class="why">The Fick equation. Central adaptation (stroke volume) and peripheral adaptation (extraction) both raise V̇O₂max — an exam item that asks "why did V̇O₂max improve" is usually asking which of the two changed.</span>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Chronic adaptations<span>Resistance vs. aerobic — the contrasts are the items</span></caption>
+      <thead><tr><th>Variable</th><th>Resistance training</th><th>Aerobic endurance training</th></tr></thead>
+      <tbody>
+        <tr><th>Muscle fiber size</th><td>↑ (hypertrophy, esp. Type II)</td><td>↔ or ↓ slightly</td></tr>
+        <tr><th>Capillary density</th><td>↔ or ↓ (with marked hypertrophy)</td><td>↑</td></tr>
+        <tr><th>Mitochondrial density</th><td>↔ or ↓</td><td>↑↑</td></tr>
+        <tr><th>Resting heart rate</th><td>↔ or ↓ slightly</td><td>↓↓</td></tr>
+        <tr><th>Stroke volume (rest &amp; max)</th><td>↔ or ↑ slightly</td><td>↑↑</td></tr>
+        <tr><th>Left ventricle</th><td>Wall thickening (pressure load)</td><td>Chamber volume ↑ (volume load)</td></tr>
+        <tr><th>Bone mineral density</th><td>↑ (with axial, progressive loading)</td><td>↑ modestly (weight-bearing only)</td></tr>
+        <tr><th>Anaerobic enzymes (CK, myokinase)</th><td>↑</td><td>↔</td></tr>
+        <tr><th>Aerobic enzymes (SDH, citrate synthase)</th><td>↔ or ↓</td><td>↑↑</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <section class="block col">
+    <div class="block-head"><h3>Bone, connective tissue, and the specificity of loading</h3></div>
+    <ul class="tight">
+      <li><b>Wolff's law / minimal essential strain (MES):</b> bone remodels in response to loads above a threshold. Below MES, no osteogenic stimulus. New bone forms at the region of the strain, so the exercise must load the target site.</li>
+      <li><b>Osteoblasts</b> build, <b>osteoclasts</b> resorb. Bone modeling responds to magnitude, rate, and direction of load — <b>structural exercises that load the axial skeleton</b> (squat, deadlift, power clean) are the strongest stimulus.</li>
+      <li>Tendon, ligament, and cartilage adapt more slowly than muscle. This is the physiological reason for the conservative progression rules you will see again in Program Design.</li>
+    </ul>
+  </section>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Overtraining: two presentations<span>Anaerobic athletes and endurance athletes fail differently</span></caption>
+      <thead><tr><th></th><th>Sympathetic overtraining</th><th>Parasympathetic overtraining</th></tr></thead>
+      <tbody>
+        <tr><th>Typical athlete</th><td>Anaerobic / power</td><td>Aerobic endurance</td></tr>
+        <tr><th>Resting heart rate</th><td>↑</td><td>↓</td></tr>
+        <tr><th>Resting blood pressure</th><td>↑</td><td>↓</td></tr>
+        <tr><th>Presentation</th><td>Restless, hyper-excitable, poor sleep, ↓ appetite, ↓ body mass</td><td>Early fatigue, flatness, depression, ↓ motivation</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note key col"><span class="tag">Sequence to know</span><p><b>Overreaching</b> (short-term, planned, supercompensates after rest) → <b>nonfunctional overreaching</b> (weeks to months to recover) → <b>overtraining syndrome</b> (months+, requires medical management). A planned overreach followed by a taper is a training tool; the same load without the taper is a problem.</p></div>
+
+  <section class="block col">
+    <div class="block-head"><h3>Populations and environment</h3></div>
+    <ul class="tight">
+      <li><b>Youth:</b> resistance training is safe and effective when supervised and technique-first. The classic injury risk is to the <b>epiphyseal (growth) plate</b>, almost always from unsupervised maximal lifting or poor technique — not from properly programmed training. Preadolescents gain strength primarily through <b>neural</b> adaptation with little hypertrophy.</li>
+      <li><b>Female athletes:</b> greater <b>Q angle</b> and landing mechanics contribute to elevated non-contact ACL injury rates; neuromuscular and plyometric training reduce that risk. Relative strength differences are largely explained by lean mass and distribution, not by trainability.</li>
+      <li><b>Older adults:</b> sarcopenia hits Type II fibers first; power declines faster than strength. Train power (moderate load, intentional concentric velocity) as well as strength.</li>
+      <li><b>Altitude:</b> lower partial pressure of O₂ → ↓ V̇O₂max and endurance performance; anaerobic and sprint performance is largely preserved (and throwing/jumping may improve with less air resistance). Acclimatization takes about <b>two weeks</b> at moderate altitude, with erythropoietin-driven ↑ red cell mass over weeks.</li>
+      <li><b>Heat:</b> exertional heat illness progresses cramps → heat exhaustion → <b>heat stroke</b> (medical emergency: CNS dysfunction, core temp ≥40 °C/104 °F). Treatment for suspected heat stroke is <b>cool first, transport second</b> — cold-water immersion.</li>
+    </ul>
+  </section>
+
+  <div class="note trap col"><span class="tag">Traps in this domain</span><ul class="tight">
+    <li><b>Hyperplasia vs. hypertrophy:</b> the exam expects hypertrophy (fiber size) as the mechanism in humans; hyperplasia (fiber number) is unproven.</li>
+    <li><b>Lactate is not the cause of DOMS</b>, and lactate does not cause the burn by itself — H⁺ accumulation does. Lactate clears within about an hour.</li>
+    <li><b>Neural before structural:</b> early strength gains (first ~4–8 weeks) are predominantly neural; measurable hypertrophy comes later.</li>
+    <li><b>Concentric–eccentric force:</b> eccentric force capacity exceeds isometric, which exceeds concentric. Force–velocity relationship: as concentric velocity ↑, force ↓.</li>
+  </ul></div>
+
+  <div class="quizbar"><span class="progress">Test yourself on this domain before you re-read it.</span><button class="btn primary" data-drill="Exercise Science">Drill Exercise Science →</button></div>
+</div>
+<!-- ============ SPORT PSYCHOLOGY ============ -->
+<div class="panel" id="panel-psy">
+  <section class="block col">
+    <div class="block-head"><span class="kicker">Section 1 · 24% · ≈19 items</span><h2>Sport Psychology</h2></div>
+    <p class="lede">The cheapest points on the exam. It is almost entirely definitions and matched examples — nineteen items you can bank in a week of flashcards.</p>
+  </section>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Arousal–performance theories<span>Items give you a scenario and ask which theory explains it</span></caption>
+      <thead><tr><th>Theory</th><th>Claim</th><th>Scenario that signals it</th></tr></thead>
+      <tbody>
+        <tr><th>Drive theory</th><td>Performance rises linearly with arousal, <i>if</i> the skill is well learned. Arousal amplifies the dominant response.</td><td>A veteran executes better when hyped; a novice falls apart</td></tr>
+        <tr><th>Inverted-U</th><td>Performance peaks at a moderate arousal level and falls off at both ends.</td><td>"Too flat" and "too amped" both hurt the same athlete</td></tr>
+        <tr><th>IZOF</th><td>Each athlete has an individual zone of optimal functioning — the ideal level differs by person, not just by task.</td><td>Two teammates need opposite pre-game routines</td></tr>
+        <tr><th>Catastrophe theory</th><td>With high <b>cognitive anxiety</b>, rising arousal produces a sudden, sharp collapse rather than a gradual decline.</td><td>An athlete unravels all at once, not gradually</td></tr>
+        <tr><th>Cue utilization</th><td>Rising arousal narrows the attentional field: first irrelevant cues are cut (good), then relevant ones (bad).</td><td>Quarterback stops seeing the open secondary receiver</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Attentional focus (Nideffer)<span>Two axes, four styles</span></caption>
+      <thead><tr><th></th><th>External</th><th>Internal</th></tr></thead>
+      <tbody>
+        <tr><th>Broad</th><td>Assess — read the whole field/defense</td><td>Analyze — plan strategy, recall the game plan</td></tr>
+        <tr><th>Narrow</th><td>Perform — the rim, the ball, the bar path</td><td>Rehearse — mental imagery, cue words, arousal control</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <section class="block col">
+    <div class="block-head"><h3>Motivation, goals, confidence</h3></div>
+    <ul class="tight">
+      <li><b>Intrinsic vs. extrinsic:</b> intrinsic motivation comes from the activity itself. Extrinsic rewards that are <i>informational</i> (recognizing competence) support intrinsic motivation; rewards that are <i>controlling</i> ("do it or lose your spot") undermine it.</li>
+      <li><b>Achievement goal theory:</b> a <b>task</b> (mastery) orientation judges success against one's own improvement and is associated with persistence; an <b>ego</b> (outcome) orientation judges success against others and is fragile when losing.</li>
+      <li><b>Goal setting:</b> specific, measurable, difficult-but-attainable, and written down. Use <b>process</b> and <b>performance</b> goals (under the athlete's control) rather than outcome goals (dependent on opponents). Combine short-term goals that ladder to long-term ones.</li>
+      <li><b>Self-efficacy — Bandura's four sources</b>, in order of strength: <b>past performance accomplishments</b> → vicarious experience (modeling) → verbal persuasion → physiological/emotional state interpretation.</li>
+      <li><b>Ideal performance state / flow:</b> absence of self-doubt and fear of failure, narrowed and effortless attention, sense of control, distorted time, no conscious effort. Note it is characterized by <b>low</b> anxiety, not high arousal.</li>
+    </ul>
+  </section>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Psychological techniques<span>Match the tool to the problem</span></caption>
+      <thead><tr><th>Technique</th><th>What it does</th><th>Use when</th></tr></thead>
+      <tbody>
+        <tr><th>Imagery / mental rehearsal</th><td>Rehearses skills in the mind; internal (own eyes, kinesthetic) vs. external (watching yourself). Needs vividness and controllability.</td><td>Skill refinement, pre-competition preparation, rehab</td></tr>
+        <tr><th>Progressive muscle relaxation</th><td>Tense-then-release cycles teach recognition of tension</td><td>Arousal is too high</td></tr>
+        <tr><th>Diaphragmatic breathing</th><td>Immediate parasympathetic down-regulation</td><td>Between plays, at the line, on deck</td></tr>
+        <tr><th>Systematic desensitization</th><td>Pairs relaxation with a graded hierarchy of feared cues</td><td>Specific performance anxiety or post-injury fear</td></tr>
+        <tr><th>Self-talk</th><td>Instructional (technique cue) or motivational (effort/confidence); replaces negative statements</td><td>Confidence gaps, attention drift</td></tr>
+        <tr><th>Psyching-up</th><td>Raises arousal deliberately</td><td>Under-aroused athlete on a gross-motor, high-force task</td></tr>
+        <tr><th>Goal setting</th><td>Directs attention, mobilizes effort, sustains persistence</td><td>Nearly always — it is the base technique</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note key col"><span class="tag">Coaching cue rule</span><p>An <b>external</b> attentional focus (the outcome or the implement — "drive the floor away," "explode the bar off the chest") consistently outperforms an <b>internal</b> focus ("contract your quads") for motor performance and learning. Expect at least one item on this.</p></div>
+
+  <div class="note trap col"><span class="tag">Traps in this domain</span><ul class="tight">
+    <li><b>Arousal ≠ anxiety.</b> Arousal is physiological activation and is value-neutral. Anxiety is the negative emotional state, with <b>cognitive</b> (worry) and <b>somatic</b> (physical) components. Somatic anxiety peaks at the start of competition and drops; cognitive anxiety can stay elevated throughout.</li>
+    <li><b>State vs. trait:</b> trait anxiety is the stable personality disposition; state anxiety is right now.</li>
+    <li>The right amount of arousal depends on the task: <b>gross-motor, high-force tasks</b> (deadlift, block) tolerate high arousal; <b>fine-motor, complex tasks</b> (free throw, putt, pitching accuracy) require lower arousal.</li>
+    <li><b>Injury response</b> follows a grief-like sequence — denial, anger, bargaining, depression, acceptance — and the coach's job is social support and involvement, not psychotherapy. Refer when the response is prolonged or severe.</li>
+  </ul></div>
+
+  <div class="quizbar"><span class="progress">19 items on Section 1 come from this material.</span><button class="btn primary" data-drill="Sport Psychology">Drill Sport Psychology →</button></div>
+</div>
+
+<!-- ============ NUTRITION ============ -->
+<div class="panel" id="panel-nut">
+  <section class="block col">
+    <div class="block-head"><span class="kicker">Section 1 · 21% · ≈17 items</span><h2>Nutrition</h2></div>
+    <p class="lede">Numbers-heavy and highly memorizable. Know the per-kilogram recommendations, the timing windows, and the scope-of-practice line between a strength coach and a registered dietitian.</p>
+  </section>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Macronutrient targets for athletes<span>Per kilogram of body mass unless noted</span></caption>
+      <thead><tr><th>Nutrient</th><th>Energy</th><th>General athlete</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><th>Carbohydrate</th><td class="num">4 kcal/g</td><td>5–10 g/kg/day (up to 8–12 for heavy endurance loads)</td><td>Primary fuel for high-intensity work; drives glycogen restoration</td></tr>
+        <tr><th>Protein</th><td class="num">4 kcal/g</td><td>1.2–1.7 g/kg/day (≈1.5–2.0 for strength/power)</td><td>Exceeding needs does not add further benefit; distribute across the day</td></tr>
+        <tr><th>Fat</th><td class="num">9 kcal/g</td><td>20–35% of total energy</td><td>Do not drop below ≈20% — hormone and vitamin consequences</td></tr>
+        <tr><th>Alcohol</th><td class="num">7 kcal/g</td><td>—</td><td>Impairs recovery, glycogen resynthesis, protein synthesis, hydration</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Nutrient timing<span>Before, during, after</span></caption>
+      <thead><tr><th>Window</th><th>Carbohydrate</th><th>Protein</th><th>Fluid</th></tr></thead>
+      <tbody>
+        <tr><th>1–4 h pre</th><td>1–4 g/kg; lower fat and fiber the closer to the session</td><td>Small amount acceptable</td><td>5–7 mL/kg about 4 h before</td></tr>
+        <tr><th>During (&gt;60 min)</th><td>30–60 g/h (6–8% solution)</td><td>Generally not required</td><td>0.4–0.8 L/h, individualized by sweat rate</td></tr>
+        <tr><th>Post</th><td>1.0–1.5 g/kg within 30 min, repeat every 2 h for 4–6 h</td><td>≈20–25 g high-quality protein (leucine-rich)</td><td>1.25–1.5 L per kg of body mass lost</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="formula col">
+    <b>Sweat rate = (pre-exercise body mass − post-exercise body mass) + fluid consumed − urine output ÷ exercise time</b>
+    <span class="why">A 2% loss of body mass impairs performance. Urine specific gravity ≥1.020 (or dark, concentrated urine) indicates hypohydration. Overdrinking plain water in long events risks <b>hyponatremia</b> — the athlete presents with weight <i>gain</i> and confusion, and the answer is not more water.</span>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Ergogenic aids with real evidence<span>Doses appear on the exam</span></caption>
+      <thead><tr><th>Substance</th><th>Dose</th><th>Effect</th><th>Caveat</th></tr></thead>
+      <tbody>
+        <tr><th>Creatine monohydrate</th><td>Load 20 g/day (4 × 5 g) for 5–7 days, then 3–5 g/day; or 3–5 g/day with no load</td><td>↑ PCr stores, repeated high-intensity work, lean mass</td><td>Initial weight gain is largely water; non-responders exist</td></tr>
+        <tr><th>Caffeine</th><td>3–6 mg/kg, ≈60 min pre</td><td>↓ perceived exertion, ↑ endurance and alertness</td><td>Diminishing returns and side effects at higher doses</td></tr>
+        <tr><th>Beta-alanine</th><td>3–6 g/day for 4+ weeks</td><td>↑ muscle carnosine, buffers H⁺ in 1–4 min efforts</td><td>Paresthesia; requires chronic loading, not acute</td></tr>
+        <tr><th>Sodium bicarbonate</th><td>0.3 g/kg, 60–90 min pre</td><td>Extracellular buffering for 1–7 min efforts</td><td>GI distress is common and can outweigh the benefit</td></tr>
+        <tr><th>Protein / EAA</th><td>20–25 g post, or 0.3 g/kg</td><td>Stimulates muscle protein synthesis</td><td>Total daily intake matters more than any single dose</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <section class="block col">
+    <div class="block-head"><h3>Body composition change</h3></div>
+    <ul class="tight">
+      <li><b>Gain:</b> ≈+350–700 kcal/day above maintenance supports about <b>0.25–0.5 kg (0.5–1 lb) per week</b> of lean gain alongside resistance training. Faster than that is mostly fat.</li>
+      <li><b>Loss:</b> a deficit of <b>500–1000 kcal/day</b> yields roughly 0.5–1 kg/week; keep loss at or under about <b>1% of body mass per week</b> to protect lean tissue, and keep protein at the high end while in deficit.</li>
+      <li><b>Female athlete triad / RED-S:</b> low energy availability → menstrual dysfunction → low bone mineral density. Low energy availability is the driver, and it does not require disordered eating to occur. Refer to a physician and RD.</li>
+    </ul>
+  </section>
+
+  <div class="note trap col"><span class="tag">Scope of practice — expect an item</span><p>A CSCS may provide <b>general nutrition information</b> (public dietary guidelines, hydration, general timing). Assessing nutritional status, prescribing individualized diets, or treating a clinical condition or eating disorder is the <b>registered dietitian's</b> or physician's role. When an item describes an athlete with suspected disordered eating, the correct action is always <b>refer</b> — not counsel, not weigh more often.</p></div>
+  <div class="note cue col"><span class="tag">Supplement regulation</span><p>Under <b>DSHEA (1994)</b>, supplements are not approved by the FDA before sale and the burden is on the FDA to prove a product unsafe. Manufacturers must not claim to treat or cure disease. Recommend only third-party-certified products — <b>NSF Certified for Sport</b>, Informed Sport — because contamination, not the label ingredient, is what causes failed drug tests.</p></div>
+
+  <div class="quizbar"><span class="progress">Memorize the per-kg numbers; they are free points.</span><button class="btn primary" data-drill="Nutrition">Drill Nutrition →</button></div>
+</div>
+<!-- ============ TECHNIQUE ============ -->
+<div class="panel" id="panel-tech">
+  <section class="block col">
+    <div class="block-head"><span class="kicker">Section 2 · 36% · ≈40 items</span><h2>Exercise Technique</h2></div>
+    <p class="lede">The single largest domain on the exam and the home of most video items. You are being asked to watch a lift and name the fault, the cue, or the spotting decision — practice describing errors out loud, not just recognizing correct form.</p>
+  </section>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Grips and body position<span>Fundamentals that appear as standalone items</span></caption>
+      <thead><tr><th>Term</th><th>Definition</th><th>Where used</th></tr></thead>
+      <tbody>
+        <tr><th>Pronated (overhand)</th><td>Palms down / knuckles up</td><td>Bench press, bent-over row, snatch</td></tr>
+        <tr><th>Supinated (underhand)</th><td>Palms up / knuckles down</td><td>Biceps curl, chin-up</td></tr>
+        <tr><th>Alternated</th><td>One pronated, one supinated</td><td>Heavy deadlift — resists bar roll</td></tr>
+        <tr><th>Hook</th><td>Thumb under the first two fingers</td><td>Olympic lifts — most secure, initially painful</td></tr>
+        <tr><th>Closed vs. open</th><td>Thumb wrapped vs. thumb alongside fingers</td><td>Always closed. An open ("false") grip on bench press is the classic unsafe answer</td></tr>
+        <tr><th>Five-point body contact</th><td>Head, upper back/shoulders, buttocks on the bench; both feet flat on the floor</td><td>All supine and seated bench work</td></tr>
+        <tr><th>Neutral spine</th><td>Natural lordotic curve maintained, chest up, eyes ahead</td><td>Every structural lift</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note key col"><span class="tag">Breathing rule</span><p><b>Exhale through the sticking point</b> (the hardest part of the concentric), inhale during the eccentric. The <b>Valsalva maneuver</b> raises intra-abdominal pressure and stabilizes the spine, but it also spikes blood pressure — reserve it for experienced athletes on maximal or near-maximal structural lifts, and hold it only for the few seconds through the sticking point. It is contraindicated for anyone with cardiovascular or blood pressure concerns.</p></div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Spotting decisions<span>The most commonly missed technique items on the exam</span></caption>
+      <thead><tr><th>Situation</th><th>Correct action</th></tr></thead>
+      <tbody>
+        <tr><th>Bar passes over the face or head</th><td>Spot it — bench press, incline, lying triceps extension, pullover</td></tr>
+        <tr><th>Bar on the back / shoulders (squat, front squat)</th><td>Spot it, from behind, moving with the athlete; use one spotter behind or two at the ends of the bar for heavy loads</td></tr>
+        <tr><th>Overhead exercises (standing press, jerk)</th><td>Best performed inside a power rack. Spotting overhead is difficult and limited — do not spot standing overhead lifts from a bad position</td></tr>
+        <tr><th>Olympic lifts and their variations (power clean, snatch, push jerk, hang pull)</th><td><b>Never spot.</b> Teach the athlete to miss — push the bar away and step back, drop the bar. Use bumper plates and a lifting platform</td></tr>
+        <tr><th>Dumbbell exercises</th><td>Spot as close to the dumbbells as practical — at the <b>wrists or forearms</b>, not the elbows and not the dumbbells themselves</td></tr>
+        <tr><th>Power exercises done over the head or with the bar dropping</th><td>Clear the area; the spotter's job is the space, not the bar</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Phases of the clean and the snatch<span>Video items ask which phase a still frame shows</span></caption>
+      <thead><tr><th>Phase</th><th>What happens</th><th>Common fault</th></tr></thead>
+      <tbody>
+        <tr><th>Starting position</th><td>Feet hip-width, bar over the balls of the feet and against the shins, back flat, shoulders over or slightly ahead of the bar, hook grip</td><td>Hips too low (squatting the start), rounded back, bar away from the shins</td></tr>
+        <tr><th>First pull</th><td>Bar breaks the floor by extending the knees; the <b>back angle stays constant</b>; hips and shoulders rise together</td><td>Hips shooting up first, turning it into a stiff-legged pull</td></tr>
+        <tr><th>Transition (scoop / double-knee bend)</th><td>Knees move back under the bar, torso becomes more upright, re-bending the knees to load the power position</td><td>Skipping the scoop; letting the bar drift forward off the thighs</td></tr>
+        <tr><th>Second pull</th><td>Explosive triple extension of hips, knees, and ankles; shrug; elbows high and to the sides</td><td>Early arm bend (pulling with the arms), heels down, no shrug</td></tr>
+        <tr><th>Catch</th><td>Pull under the bar, rotate elbows around and up, receive on the front deltoids/clavicles in a quarter squat (power) or full squat</td><td>Slow elbows, catching on the wrists, feet not resetting to a receiving stance</td></tr>
+        <tr><th>Recovery / downward movement</th><td>Stand fully; lower under control to the thighs then the platform (bumper plates)</td><td>Lowering all the way to the floor with straight arms and a rounded back</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <section class="block col">
+    <div class="block-head"><h3>Faults and the cue that fixes them</h3></div>
+    <ul class="tight">
+      <li><b>Back squat, knees caving (valgus):</b> cue "knees out over the toes," check ankle mobility and stance width, reduce load. This is also the ACL-risk pattern in landing.</li>
+      <li><b>Back squat, heels rising / excessive forward lean:</b> ankle dorsiflexion limitation or bar too far forward. Do not solve it by putting plates under the heels as a permanent fix.</li>
+      <li><b>Deadlift, hips rising first:</b> the athlete is not maintaining the back angle; cue "chest up, push the floor away," lower the load.</li>
+      <li><b>Bench press, bouncing the bar off the chest or lifting the buttocks:</b> both break the five-point contact rule and both mean the load is too heavy.</li>
+      <li><b>Power clean, arm pull:</b> "arms are straps until the shrug" — the bar is moved by triple extension, not the elbows.</li>
+      <li><b>Landing in plyometrics, stiff or noisy:</b> cue a quiet landing, hips back, knees tracking, "spend as little time on the ground as possible" only after the landing is sound.</li>
+    </ul>
+  </section>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Plyometric prerequisites and dosing<span>Verify volumes against the current edition — they vary slightly by source</span></caption>
+      <thead><tr><th>Variable</th><th>Guideline</th></tr></thead>
+      <tbody>
+        <tr><th>Strength prerequisite</th><td>Lower body: back squat ≈1.5 × body mass. Upper body: bench press ≈1.0 × body mass (larger athletes) or ≈0.7 × body mass; alternatively 5 clap push-ups</td></tr>
+        <tr><th>Balance prerequisite</th><td>Hold a single-leg half squat for 30 s (advanced); static single-leg stance 30 s (beginner)</td></tr>
+        <tr><th>Frequency</th><td>2–3 sessions per week with <b>48–72 h</b> between sessions of the same type</td></tr>
+        <tr><th>Volume (lower body foot contacts)</th><td>Beginner 80–100 · Intermediate 100–120 · Advanced 120–140 per session</td></tr>
+        <tr><th>Recovery within a session</th><td>Work-to-rest of roughly <b>1:5 to 1:10</b> — plyometrics are power training, not conditioning</td></tr>
+        <tr><th>Depth jump box height</th><td>16–42 in (40–107 cm); start at 16–18 in. Athletes over ≈220 lb (100 kg) should generally not drop from above 18 in</td></tr>
+        <tr><th>Surface and space</th><td>Grass, rubber mat, or suspended wood floor — never concrete. Adequate ceiling height for jumps; 100 m straightaway for bounding</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Speed, agility, and flexibility technique<span>Applied items pull from here</span></caption>
+      <thead><tr><th>Topic</th><th>Key points</th></tr></thead>
+      <tbody>
+        <tr><th>Sprint phases</th><td><b>Acceleration</b> (forward lean, longer ground contact, pushing) → <b>transition</b> → <b>maximum velocity</b> (upright posture, brief ground contact, pulling/cycling action). Speed = stride length × stride frequency</td></tr>
+        <tr><th>Resisted sprinting</th><td>Load must not degrade sprint mechanics — a common ceiling is a load that slows sprint velocity no more than ≈10%</td></tr>
+        <tr><th>Assisted (overspeed) sprinting</th><td>Should not exceed ≈10% faster than the athlete's maximum velocity, or mechanics break down</td></tr>
+        <tr><th>Agility</th><td>Deceleration and change of direction under control; lower the center of mass, plant with the outside foot, eyes and hips to the new direction. Reactive drills should be added after closed drills are clean</td></tr>
+        <tr><th>Static stretching</th><td>Hold 15–30 s, 2–4 reps. Best <b>after</b> training or in a separate session — acute static stretching before power output can reduce force</td></tr>
+        <tr><th>Dynamic stretching</th><td>Sport-specific movement through a range of motion; the appropriate pre-training choice, after a 5–10 min general warm-up</td></tr>
+        <tr><th>PNF</th><td>Hold-relax, contract-relax, hold-relax with agonist contraction. Uses autogenic inhibition (GTO) and reciprocal inhibition; requires a partner; most effective for ROM gains</td></tr>
+        <tr><th>Ballistic stretching</th><td>Bouncing; triggers the stretch reflex, highest injury risk, generally not recommended</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note trap col"><span class="tag">Traps in this domain</span><ul class="tight">
+    <li><b>Belts:</b> appropriate for maximal or near-maximal sets of <b>structural</b> exercises that load the spine. Not for every set, and not for exercises that do not load the trunk.</li>
+    <li><b>Warm-up order:</b> general (5–10 min low-intensity aerobic to raise tissue temperature) → specific (dynamic, movement-matched). Never static-stretch a cold muscle as the warm-up.</li>
+    <li><b>Machine vs. free weight:</b> machines fix the movement path and are easier to learn and to spot; free weights load stabilizers and allow sport-specific, multi-planar movement. Neither is universally "better" — the item is about the athlete and the goal.</li>
+    <li><b>Bar placement:</b> high-bar back squat (on the trapezius above the posterior deltoids) vs. low-bar (across the posterior deltoids/spine of the scapula) changes the torso angle and the hip/knee contribution.</li>
+  </ul></div>
+
+  <div class="quizbar"><span class="progress">36% of Section 2 — the biggest single block of points.</span><button class="btn primary" data-drill="Exercise Technique">Drill Exercise Technique →</button></div>
+</div>
+
+<!-- ============ PROGRAM DESIGN ============ -->
+<div class="panel" id="panel-prog">
+  <section class="block col">
+    <div class="block-head"><span class="kicker">Section 2 · 35% · ≈38 items</span><h2>Program Design</h2></div>
+    <p class="lede">Items give you an athlete, a season, and a goal, then ask for load, reps, sets, rest, exercise order, or the next block. Every answer traces back to a needs analysis.</p>
+  </section>
+
+  <section class="block col">
+    <div class="block-head"><h3>The needs analysis — step one, always</h3></div>
+    <ul class="tight">
+      <li><b>Movement analysis:</b> body and limb movement patterns, muscular involvement, planes of motion.</li>
+      <li><b>Physiological analysis:</b> strength, power, hypertrophy, and endurance priorities; which energy systems the sport actually uses.</li>
+      <li><b>Injury analysis:</b> common sites of injury for the sport and prior injury history for this athlete.</li>
+      <li><b>Athlete evaluation:</b> training status, testing results, training age, and the season.</li>
+    </ul>
+  </section>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Resistance training goal → prescription<span>The single most-tested table on the exam. Rebuild it from memory.</span></caption>
+      <thead><tr><th>Goal</th><th>Load (%1RM)</th><th>Reps</th><th>Sets</th><th>Rest between sets</th></tr></thead>
+      <tbody>
+        <tr><th>Strength</th><td class="num">≥85%</td><td class="num">≤6</td><td class="num">2–6</td><td class="num">2–5 min</td></tr>
+        <tr><th>Power — single-effort</th><td class="num">80–90%</td><td class="num">1–2</td><td class="num">3–5</td><td class="num">2–5 min</td></tr>
+        <tr><th>Power — multiple-effort</th><td class="num">75–85%</td><td class="num">3–5</td><td class="num">3–5</td><td class="num">2–5 min</td></tr>
+        <tr><th>Hypertrophy</th><td class="num">67–85%</td><td class="num">6–12</td><td class="num">3–6</td><td class="num">30 s–1.5 min</td></tr>
+        <tr><th>Muscular endurance</th><td class="num">≤67%</td><td class="num">≥12</td><td class="num">2–3</td><td class="num">≤30 s</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>%1RM to repetitions<span>Used to assign load from a 1RM, or estimate a 1RM from a rep max</span></caption>
+      <thead><tr><th>%1RM</th><th>100</th><th>95</th><th>93</th><th>90</th><th>87</th><th>85</th><th>83</th><th>80</th><th>77</th><th>75</th><th>70</th><th>67</th></tr></thead>
+      <tbody><tr><th>Reps</th><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td><td>9</td><td>10</td><td>11</td><td>12</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="formula col">
+    <b>Estimated 1RM = weight lifted ÷ (%1RM as a decimal for that rep count)</b>
+    <span class="why">Example: 10 reps at 185 lb. Ten reps ≈ 75% of 1RM, so 185 ÷ 0.75 ≈ 247 lb. Going the other way, a hypertrophy set at 75% of a 300 lb 1RM = 225 lb for about 10 reps. Practice both directions until it is automatic — you will do this arithmetic under time pressure.</span>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Exercise order and progression<span>Rules that generate several items</span></caption>
+      <thead><tr><th>Rule</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr><th>Order</th><td><b>Power exercises first</b> (technique- and CNS-demanding), then other core/multijoint exercises, then assistance/single-joint exercises. Large muscle before small; multijoint before single-joint; high intensity before low</td></tr>
+        <tr><th>Core vs. assistance</th><td><b>Core</b> exercises use one or more large muscle groups and two or more primary joints. <b>Structural</b> exercises are core exercises that load the spine directly (squat, deadlift, power clean). <b>Assistance</b> exercises use small muscle groups and one primary joint</td></tr>
+        <tr><th>Supersets vs. compound sets</th><td><b>Superset:</b> two exercises for <i>opposing</i> muscle groups back to back. <b>Compound set:</b> two exercises for the <i>same</i> muscle group</td></tr>
+        <tr><th>2-for-2 rule</th><td>If the athlete completes <b>two or more reps above the goal</b> on the <b>last set</b> in <b>two consecutive sessions</b>, increase the load</td></tr>
+        <tr><th>Load increment</th><td>Upper body small muscle 2.5–5% (≈1–5 lb) · upper body large muscle 5–10% (≈5–10 lb) · lower body 10–15% (≈10–15 lb) for trained athletes; smaller for untrained</td></tr>
+        <tr><th>Frequency</th><td>Untrained 2–3 ×/wk · intermediate 3–4 · advanced 4–7 (split routines). Allow ≥48 h between sessions loading the same muscle group; reduce resistance frequency as sport practice volume rises in-season</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Periodization — the classic model<span>Volume falls and intensity rises as the season approaches</span></caption>
+      <thead><tr><th>Phase</th><th>Season</th><th>Sets × reps</th><th>Intensity</th><th>Volume</th></tr></thead>
+      <tbody>
+        <tr><th>Hypertrophy / endurance</th><td>Off-season (preparatory)</td><td>3–6 × 8–20</td><td class="num">50–75% 1RM</td><td>High</td></tr>
+        <tr><th>Basic strength</th><td>Off-season</td><td>3–5 × 2–6</td><td class="num">80–95%</td><td>Moderate–high</td></tr>
+        <tr><th>Strength / power</th><td>Preseason</td><td>3–5 × 2–5</td><td class="num">75–95%</td><td>Moderate</td></tr>
+        <tr><th>Peaking / maintenance</th><td>In-season (competition)</td><td>1–3 × 1–3 (peaking) or 2–3 × 6–8 (maintenance)</td><td class="num">≥93% peaking</td><td>Low</td></tr>
+        <tr><th>Active rest</th><td>Postseason (transition)</td><td>Recreational activity, no resistance program</td><td>—</td><td>Very low</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note key col"><span class="tag">Vocabulary</span><p><b>Macrocycle</b> = a full training year (or a full competitive cycle). <b>Mesocycle</b> = several weeks to months, one training emphasis. <b>Microcycle</b> = about a week. <b>Linear</b> periodization moves gradually from high volume/low intensity toward low volume/high intensity; <b>undulating (nonlinear)</b> periodization varies volume and intensity within the week.</p></div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Aerobic endurance program design<span>Five training types</span></caption>
+      <thead><tr><th>Type</th><th>Duration / structure</th><th>Intensity</th><th>Adaptation targeted</th></tr></thead>
+      <tbody>
+        <tr><th>Long, slow distance</th><td>Longer than race distance, 30 min–2 h</td><td>≈70% V̇O₂max</td><td>Aerobic base, capillary and mitochondrial density, fat oxidation</td></tr>
+        <tr><th>Pace / tempo</th><td>20–30 min continuous, or intermittent intervals with short rest</td><td>At or slightly above <b>lactate threshold</b></td><td>Raises lactate threshold, race-pace economy</td></tr>
+        <tr><th>Interval</th><td>3–5 min work bouts, work-to-rest ≈1:1</td><td>Close to V̇O₂max</td><td>↑ V̇O₂max</td></tr>
+        <tr><th>Repetition</th><td>30–90 s bouts, work-to-rest ≈1:5</td><td>Greater than V̇O₂max</td><td>Running economy, anaerobic capacity, speed</td></tr>
+        <tr><th>Fartlek</th><td>Continuous run with unstructured speed variation</td><td>Mixed</td><td>Both aerobic and lactate threshold; variety</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="formula col">
+    <b>HR<sub>max</sub> ≈ 220 − age</b><br>
+    <b>Karvonen: target HR = [(HR<sub>max</sub> − HR<sub>rest</sub>) × %intensity] + HR<sub>rest</sub></b>
+    <span class="why">The Karvonen (heart rate reserve) method gives a higher and more accurate target than a straight percentage of HR<sub>max</sub>, because %HRR corresponds closely to %V̇O₂ reserve. Expect to compute one on the exam — and read carefully which method the stem asks for.</span>
+  </div>
+
+  <section class="block col">
+    <div class="block-head"><h3>Concurrent training, tapering, detraining</h3></div>
+    <ul class="tight">
+      <li><b>Interference:</b> high-volume aerobic endurance training can blunt strength and especially <b>power</b> adaptations. Mitigate by separating sessions (ideally by hours or days), keeping endurance volume appropriate, and prioritizing the quality that matters most to the sport. Strength training does <i>not</i> similarly impair endurance performance — it usually improves economy.</li>
+      <li><b>Sequencing on the same day:</b> put the quality you care about most first, when the athlete is fresh.</li>
+      <li><b>Tapering:</b> reduce <b>volume</b> substantially while maintaining <b>intensity</b>, typically over 7–14 days before competition. Cutting intensity is what makes a taper fail.</li>
+      <li><b>Detraining:</b> aerobic markers (V̇O₂max, mitochondrial enzymes) fall within about two weeks of inactivity. Strength is retained longer, but power and short-term endurance decay faster than maximal strength.</li>
+    </ul>
+  </section>
+
+  <div class="note trap col"><span class="tag">Traps in this domain</span><ul class="tight">
+    <li><b>In-season means maintenance.</b> Reduce volume and frequency, keep intensity high enough to maintain — do not run an off-season hypertrophy block during the competitive season.</li>
+    <li><b>Power exercises before everything.</b> If a stem lists a workout with power cleans placed after squats, that ordering is the error.</li>
+    <li><b>Specificity beats variety.</b> Exercise selection follows the movement analysis; "more variety" is rarely the correct answer.</li>
+    <li><b>Rest period is the giveaway.</b> If an item describes 30 s rest and 10 reps, the goal is hypertrophy, not strength — the rest interval alone often identifies the intended answer.</li>
+  </ul></div>
+
+  <div class="quizbar"><span class="progress">35% of Section 2 — write real programs, don't just read tables.</span><button class="btn primary" data-drill="Program Design">Drill Program Design →</button></div>
+</div>
+<!-- ============ TESTING ============ -->
+<div class="panel" id="panel-test">
+  <section class="block col">
+    <div class="block-head"><span class="kicker">Section 2 · 18% · ≈20 items</span><h2>Testing and Evaluation</h2></div>
+    <p class="lede">Two halves: the measurement concepts (validity, reliability) and the protocols (which test, in what order, scored how). Both are pure recall.</p>
+  </section>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Measurement concepts<span>Reliability is necessary but not sufficient for validity</span></caption>
+      <thead><tr><th>Term</th><th>Meaning</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><th>Reliability</th><td>Consistency — the same result on repeated administration</td><td>Test–retest on consecutive days gives the same vertical jump</td></tr>
+        <tr><th>Objectivity (interrater reliability)</th><td>Different testers get the same result</td><td>Two coaches score the same T-test identically</td></tr>
+        <tr><th>Validity</th><td>The test measures what it claims to measure <i>for this purpose</i></td><td>—</td></tr>
+        <tr><th> · Face validity</th><td>It appears relevant to the athlete and coach</td><td>A sprint test for a sprinter</td></tr>
+        <tr><th> · Content validity</th><td>Experts judge that it covers the construct</td><td>A panel confirms a battery covers all sport demands</td></tr>
+        <tr><th> · Construct validity</th><td>It distinguishes groups that should differ</td><td>The test separates starters from reserves</td></tr>
+        <tr><th> · Criterion-referenced</th><td>Correlates with a gold standard — <b>concurrent</b> (measured now) or <b>predictive</b> (predicts future performance)</td><td>Skinfolds vs. hydrostatic weighing (concurrent); combine testing predicting draft performance (predictive)</td></tr>
+        <tr><th>Difference score</th><td>The change from pre- to post-test; interpreting it requires knowing the test's reliability</td><td>A 1 in vertical jump change may be within measurement error</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Test administration order<span>Least fatiguing to most — a guaranteed exam item</span></caption>
+      <thead><tr><th>#</th><th>Category</th><th>Examples</th></tr></thead>
+      <tbody>
+        <tr><td class="num">1</td><th>Non-fatiguing</th><td>Height, weight, body composition, flexibility, vertical jump</td></tr>
+        <tr><td class="num">2</td><th>Agility</th><td>T-test, pro agility (5-10-5), hexagon</td></tr>
+        <tr><td class="num">3</td><th>Maximum power and strength</th><td>1RM power clean, 1RM squat or bench press</td></tr>
+        <tr><td class="num">4</td><th>Sprint</th><td>40 yd, 100 m</td></tr>
+        <tr><td class="num">5</td><th>Local muscular endurance</th><td>Push-up, partial curl-up, 1 min sit-up</td></tr>
+        <tr><td class="num">6</td><th>Fatiguing anaerobic capacity</th><td>300 yd shuttle, 400 m</td></tr>
+        <tr><td class="num">7</td><th>Aerobic capacity</th><td>1.5 mile run, 12 min run, Yo-Yo, graded treadmill</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note key col"><span class="tag">Why this order</span><p>Anything that produces fatigue contaminates every test that follows it. If only one testing day is available, this order preserves the validity of the maximal power and strength measures — which are the ones most sensitive to prior fatigue. Allow full recovery (often 2–3 min or more) between maximal trials, and if possible split the battery across days.</p></div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Common field tests<span>What each one actually measures</span></caption>
+      <thead><tr><th>Test</th><th>Measures</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><th>1RM (squat, bench, power clean)</th><td>Maximal muscular strength / power</td><td>Warm-up set of 5–10 reps at light load, then progressive increases; find the 1RM within about <b>five attempts</b>, resting 2–4 min between</td></tr>
+        <tr><th>Vertical jump</th><td>Lower-body power (jump height → power via a formula such as Sayers)</td><td>Jump-and-reach; the difference between standing reach and jump touch</td></tr>
+        <tr><th>Margaria-Kalamen stair climb</th><td>Anaerobic (phosphagen) power</td><td>Power = (mass × distance) ÷ time</td></tr>
+        <tr><th>T-test / pro agility / hexagon</th><td>Agility, change of direction, body control</td><td>Agility, not speed — they are timed but include deceleration and direction change</td></tr>
+        <tr><th>40 yd sprint</th><td>Acceleration and speed</td><td>Largely phosphagen; full recovery between trials</td></tr>
+        <tr><th>300 yd shuttle</th><td>Anaerobic capacity (glycolytic)</td><td>Highly fatiguing — near the end of any battery</td></tr>
+        <tr><th>Wingate</th><td>Anaerobic peak and mean power, fatigue index</td><td>30 s all-out cycle test, laboratory</td></tr>
+        <tr><th>1.5 mile run / 12 min run / Yo-Yo</th><td>Aerobic capacity (estimated V̇O₂max)</td><td>Always last</td></tr>
+        <tr><th>Sit-and-reach</th><td>Low back and hamstring flexibility</td><td>Non-fatiguing — early in the battery</td></tr>
+        <tr><th>Skinfold / BIA / hydrostatic / DXA</th><td>Body composition</td><td>Hydrostatic weighing and DXA are the criterion references; skinfolds and BIA are field estimates validated against them</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <section class="block col">
+    <div class="block-head"><h3>Basic statistics you need</h3></div>
+    <ul class="tight">
+      <li><b>Mean, median, mode</b> — and know that a skewed distribution (a few very strong athletes) pulls the mean but not the median.</li>
+      <li><b>Standard deviation</b> — spread around the mean. In a normal distribution, ≈68% falls within ±1 SD, ≈95% within ±2 SD.</li>
+      <li><b>Percentile rank</b> — the percentage of the group scoring below this athlete. A 90th percentile bench press means 90% of the reference group lifted less.</li>
+      <li><b>Correlation (r)</b> — strength and direction of a relationship, from −1 to +1. Correlation is not causation, and a validity coefficient is a correlation.</li>
+    </ul>
+  </section>
+
+  <div class="note trap col"><span class="tag">Traps in this domain</span><ul class="tight">
+    <li><b>Reliable but not valid</b> is possible (a consistently mis-calibrated scale); <b>valid but not reliable</b> is not.</li>
+    <li>A test's validity is tied to its <b>purpose and population</b> — a valid test for collegiate football linemen is not automatically valid for adolescent swimmers.</li>
+    <li><b>Test specificity:</b> pick the test that matches the sport's energy system and movement pattern. A 1.5 mile run is a poor test for a lineman regardless of how well it is administered.</li>
+    <li><b>Standardize everything</b> — same time of day, same equipment, same instructions, same order, same rest, same tester. Any change invalidates the comparison to previous results.</li>
+  </ul></div>
+
+  <div class="quizbar"><span class="progress">Cheap points if you memorize the order and the validity types.</span><button class="btn primary" data-drill="Testing and Evaluation">Drill Testing &amp; Evaluation →</button></div>
+</div>
+
+<!-- ============ ORG & ADMIN ============ -->
+<div class="panel" id="panel-org">
+  <section class="block col">
+    <div class="block-head"><span class="kicker">Section 2 · 11% · ≈12 items</span><h2>Organization and Administration</h2></div>
+    <p class="lede">Only twelve items, and the least interesting material on the exam — which is exactly why people skip it and lose a section by four points. It is a weekend of memorization.</p>
+  </section>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Facility design specifications<span>Confirm against the current edition — these figures are revised between editions</span></caption>
+      <thead><tr><th>Element</th><th>Specification</th></tr></thead>
+      <tbody>
+        <tr><th>Ceiling height</th><td>12–14 ft (3.7–4.3 m), clear of pipes and fixtures</td></tr>
+        <tr><th>Space per athlete, resistance area</th><td>≈100 ft² per athlete for free-weight/platform training</td></tr>
+        <tr><th>Walkways / traffic flow</th><td>Minimum ≈3 ft (36 in) between equipment and around stations</td></tr>
+        <tr><th>Lifting platforms</th><td>8 × 8 ft or 10 × 10 ft, with bumper plates for Olympic lifting</td></tr>
+        <tr><th>Mirrors</th><td>Mounted at least ≈20 in off the floor and at least 6 in from any equipment</td></tr>
+        <tr><th>Flooring</th><td>Rubber or interlocking mats in free-weight areas; wood for platforms; antifungal/antibacterial and non-slip surfaces throughout</td></tr>
+        <tr><th>Environment</th><td>Temperature ≈72–78 °F, humidity under ≈60%, 8–12 air exchanges per hour, ≥50 foot-candles of lighting</td></tr>
+        <tr><th>Layout logic</th><td>Heaviest equipment against walls; supervision sightlines to every station; racks and dumbbells positioned so the coach can see the whole floor</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Negligence — the four elements<span>All four must be present for liability</span></caption>
+      <thead><tr><th>Element</th><th>Question it answers</th></tr></thead>
+      <tbody>
+        <tr><th>Duty</th><td>Did the professional owe this person a duty of care? (Yes, for any athlete under supervision)</td></tr>
+        <tr><th>Breach of duty</th><td>Did the conduct fall below the accepted <b>standard of care</b> — what a reasonably prudent CSCS would have done?</td></tr>
+        <tr><th>Causation (proximate cause)</th><td>Did the breach actually cause the harm?</td></tr>
+        <tr><th>Damage / harm</th><td>Was there actual injury or loss?</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <section class="block col">
+    <div class="block-head"><h3>Legal and administrative duties</h3></div>
+    <ul class="tight">
+      <li><b>Informed consent vs. waiver:</b> informed consent documents that the participant understands the risks and procedures — it does <b>not</b> release liability for negligence. A waiver attempts to release liability, and its enforceability varies by jurisdiction; neither excuses negligent supervision.</li>
+      <li><b>Pre-participation screening</b> and medical clearance before training; know when to refer to a physician.</li>
+      <li><b>Emergency Action Plan (EAP):</b> written, posted, rehearsed. Includes personnel roles, emergency equipment location (AED), the exact facility address and entrance for EMS, and communication procedure. All staff maintain current <b>CPR/AED certification</b>.</li>
+      <li><b>Supervision:</b> the professional must be present, credentialed, and positioned to see the floor. Athlete-to-coach ratio should reflect the athletes' training age and the exercises being performed — novice athletes doing complex lifts need the tightest ratio.</li>
+      <li><b>Records:</b> maintain training logs, injury reports, maintenance and cleaning logs, and screening forms. Injury reports are completed immediately and retained. Health information is confidential (HIPAA/FERPA considerations).</li>
+      <li><b>Maintenance and cleaning:</b> daily inspection and cleaning of contact surfaces; scheduled preventive maintenance (cables, belts, upholstery, bar knurling, collars, platform integrity); remove and tag defective equipment immediately rather than posting a note on it.</li>
+      <li><b>Product liability:</b> use equipment only for its intended purpose, follow manufacturer instructions, keep warning labels intact, and never modify equipment.</li>
+    </ul>
+  </section>
+
+  <div class="note trap col"><span class="tag">Answer pattern to recognize</span><p>When an Org/Admin item describes something going wrong, the correct answer is almost always the one that reflects <b>documented policy, direct supervision, and a written plan already in place before the incident</b> — not the reactive fix. "Have the athlete sign a waiver" is rarely the right answer; "remove the equipment from service and document it" usually is.</p></div>
+
+  <div class="quizbar"><span class="progress">12 items. Do not donate them.</span><button class="btn primary" data-drill="Organization and Administration">Drill Organization &amp; Admin →</button></div>
+</div>
+
+<!-- ============ QUIZ ============ -->
+<div class="panel" id="panel-quiz">
+  <section class="block col">
+    <div class="block-head"><span class="kicker">103 items · blueprint-weighted</span><h2>Question Bank</h2></div>
+    <p class="lede">Study mode gives you the explanation the moment you answer. Exam mode withholds everything until you finish, which is the honest simulation. Your answers are saved in this browser.</p>
+  </section>
+
+  <div class="quizbar">
+    <div class="chips" id="domainChips"></div>
+  </div>
+  <div class="quizbar">
+    <div class="chips">
+      <button class="chip" id="modeStudy" aria-pressed="true">Study mode</button>
+      <button class="chip" id="modeExam" aria-pressed="false">Exam mode</button>
+      <button class="chip" id="missedOnly" aria-pressed="false">Missed only</button>
+      <button class="chip" id="shuffleBtn" aria-pressed="false">Shuffle</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span class="progress" id="counter">—</span>
+      <button class="btn" id="resetBtn">Reset progress</button>
+    </div>
+  </div>
+  <div class="rail"><i id="railFill"></i></div>
+
+  <div id="quizArea"></div>
+
+  <div class="quizbar" id="navBtns">
+    <button class="btn" id="prevBtn">← Previous</button>
+    <span class="progress" id="scoreLine">—</span>
+    <button class="btn primary" id="nextBtn">Next →</button>
+  </div>
+
+  <section class="block">
+    <div class="block-head"><span class="kicker">Where you stand</span><h3>Domain scorecard</h3></div>
+    <div class="scoregrid" id="scoreGrid"></div>
+  </section>
+
+  <div class="foot">
+    <p>Practice items are written to the NSCA framework in <i>Essentials of Strength Training and Conditioning</i> (4th ed.). They are not actual NSCA exam questions and are not affiliated with or endorsed by the NSCA.</p>
+    <button class="themebtn" id="themeBtn">Toggle theme</button>
+  </div>
+</div>
+
+</main>
+<script>
+const BANK = [
+{"d":"Exercise Science","q":"A 400 m sprinter finishes in 48 seconds. Which energy system contributes the greatest percentage of ATP over that bout?","o":["Oxidative system","Slow glycolysis and beta-oxidation equally","Phosphagen system","Fast glycolysis"],"a":3,"e":"Efforts lasting roughly 30 seconds to 2 minutes are dominated by fast glycolysis. The phosphagen system supplies the first several seconds, and the oxidative system does not become the primary contributor until beyond about 3 minutes."},
+{"d":"Exercise Science","q":"Which enzyme is rate limiting for glycolysis?","o":["Phosphofructokinase","Creatine kinase","Myokinase","Isocitrate dehydrogenase"],"a":0,"e":"Phosphofructokinase (PFK) is the rate-limiting enzyme of glycolysis. Creatine kinase governs the phosphagen system, isocitrate dehydrogenase the Krebs cycle, and myokinase catalyzes the conversion of two ADP into ATP and AMP."},
+{"d":"Exercise Science","q":"The Golgi tendon organ responds primarily to which stimulus, and with what effect?","o":["Joint angle; excites the antagonist","Rate of stretch; excites the muscle being stretched","Muscle length; inhibits the antagonist","Muscle tension; inhibits the muscle developing the tension"],"a":3,"e":"The GTO lies in series at the musculotendinous junction, senses tension, and produces autogenic inhibition of the contracting muscle. The muscle spindle lies in parallel, senses rate and magnitude of stretch, and is excitatory (the stretch reflex)."},
+{"d":"Exercise Science","q":"According to the size principle, motor units are recruited","o":["In random order determined by the exercise selected","From largest to smallest as force requirements increase","From smallest to largest as force requirements increase","Simultaneously once a threshold of 60% of maximal force is exceeded"],"a":2,"e":"Recruitment proceeds from low-threshold Type I units to high-threshold Type II units as force demand rises. The practical implication is that high-threshold units require high force or high-velocity intent to be recruited."},
+{"d":"Exercise Science","q":"An athlete performs 8-second maximal sled pushes. To allow near-complete restoration of the primary energy substrate, the work-to-rest ratio should be approximately","o":["1:30 to 1:40","1:3 to 1:5","1:1 to 1:3","1:12 to 1:20"],"a":3,"e":"Efforts of 5 to 10 seconds rely on the phosphagen system, which requires a long relative recovery: a work-to-rest ratio of 1:12 to 1:20. Eight seconds of work therefore calls for roughly 1.5 to 2.5 minutes of rest."},
+{"d":"Exercise Science","q":"During the stretch-shortening cycle, which phase most directly determines how much stored elastic energy is converted into concentric force?","o":["The amortization phase, because a longer pause dissipates stored energy as heat","The eccentric phase, because it stores the energy","The concentric phase, because it produces the movement","The recovery phase between repetitions"],"a":0,"e":"Energy is stored eccentrically, but it is dissipated as heat if the amortization (transition) phase is prolonged. Shortening amortization is the trainable element of plyometric performance."},
+{"d":"Exercise Science","q":"Which resistance training protocol produces the greatest acute growth hormone response?","o":["3 sets of 15 repetitions at 50% of 1RM with 3 minutes of rest","3 sets of 2 repetitions at 95% of 1RM with 5 minutes of rest","5 sets of 1 repetition at 100% of 1RM with 5 minutes of rest","3 sets of 10 repetitions at 75% of 1RM with 1 minute of rest"],"a":3,"e":"Growth hormone response is driven by high total work with moderate-to-heavy loads and short rest intervals, which produces the lactate and hydrogen ion accumulation associated with GH release. Heavy, low-volume, long-rest protocols favor testosterone and neural adaptation rather than GH."},
+{"d":"Exercise Science","q":"An athlete's V̇O₂max improves after 12 weeks of endurance training with no change in maximal heart rate. Which change most likely explains the improvement?","o":["Decreased mitochondrial density with increased glycolytic enzyme activity","Increased maximal stroke volume and increased a-v̄O₂ difference","Decreased capillary density with increased fiber size","Increased resting heart rate"],"a":1,"e":"By the Fick equation, V̇O₂ = Q̇ × a-v̄O₂ difference, and Q̇ = HR × SV. With maximal HR unchanged, the improvement must come from a larger maximal stroke volume (central) and greater peripheral oxygen extraction (peripheral)."},
+{"d":"Exercise Science","q":"Lactate produced during high-intensity exercise is primarily","o":["Converted to glucose in the liver through the Cori cycle and used as fuel","The direct cause of the burning sensation during exercise","A metabolic waste product that causes delayed-onset muscle soreness","Permanently trapped in the muscle until it is broken down by oxygen debt"],"a":0,"e":"Lactate is shuttled to the liver and reconverted to glucose (Cori cycle) or oxidized directly by other tissues. It is a fuel, not a waste product. The burning sensation is attributable to hydrogen ion accumulation, and DOMS is associated with eccentric-induced microtrauma, not lactate."},
+{"d":"Exercise Science","q":"A collegiate thrower reports restlessness, poor sleep, decreased appetite, and elevated resting heart rate and blood pressure. This pattern is most consistent with","o":["Functional overreaching","Parasympathetic overtraining","Detraining","Sympathetic overtraining"],"a":3,"e":"Sympathetic overtraining is more common in anaerobic and power athletes and presents with elevated resting heart rate and blood pressure, restlessness, and appetite and body-mass loss. Parasympathetic overtraining, more common in endurance athletes, shows the opposite cardiovascular pattern along with flatness and early fatigue."},
+{"d":"Exercise Science","q":"Compared with Type I fibers, Type IIx fibers have","o":["Greater force production per cross-sectional area and lower fatigue resistance","Slower contraction velocity and higher capillary density","Higher mitochondrial density and greater fatigue resistance","Equal force output but faster recovery between bouts"],"a":0,"e":"Type IIx fibers contract fastest, produce the most force per unit area, and fatigue soonest, with low mitochondrial and capillary density. With training, IIx fibers tend to convert toward IIa characteristics."},
+{"d":"Exercise Science","q":"ATP is required for cross-bridge detachment. This explains why","o":["Rigor develops when ATP is unavailable","Eccentric contractions require more ATP than concentric","Calcium binds to tropomyosin rather than troponin","Muscles can contract indefinitely without fatigue"],"a":0,"e":"ATP binding to the myosin head is required to release it from actin. Without ATP, cross-bridges remain attached, which is the basis of rigor. Note also that calcium binds troponin, which then moves tropomyosin off the binding sites."},
+{"d":"Exercise Science","q":"Which exercise provides the strongest osteogenic stimulus for the lumbar spine and hip?","o":["Stationary cycling","Lat pulldown","Back squat","Seated leg extension"],"a":2,"e":"Bone remodels above a minimal essential strain, and new bone forms at the loaded site. Structural exercises that load the axial skeleton directly — squats, deadlifts, and power cleans — are the strongest stimulus. Non-weight-bearing and single-joint machine work does not load the spine and hip in this way."},
+{"d":"Exercise Science","q":"An untrained athlete gains 20% in back squat strength during the first six weeks of training with minimal change in limb circumference. The most likely explanation is","o":["Increased tendon cross-sectional area","Neural adaptation, including improved recruitment and rate coding","Fiber hyperplasia","Rapid conversion of Type I fibers to Type II"],"a":1,"e":"Early strength gains are predominantly neural — improved recruitment, rate coding, synchronization, and reduced co-contraction of antagonists. Measurable hypertrophy generally follows after several weeks. Hyperplasia is not an accepted mechanism in humans."},
+{"d":"Exercise Science","q":"An athlete travels to compete at 2,500 m (8,200 ft) of elevation. Which performance change should be expected on arrival?","o":["Improved V̇O₂max due to increased red blood cell mass","Equal decrement in both aerobic and anaerobic performance","Decreased aerobic endurance performance with largely preserved short sprint performance","Improved lactate threshold within 48 hours"],"a":2,"e":"The reduced partial pressure of oxygen lowers arterial oxygen saturation and V̇O₂max, impairing endurance performance immediately. Short, phosphagen-based efforts are largely unaffected and jumping and throwing may even benefit from lower air resistance. Erythropoietin-driven increases in red cell mass require weeks, not hours."},
+{"d":"Exercise Science","q":"A lineman collapses during an August practice with a core temperature above 104 °F (40 °C) and is confused and disoriented. The correct immediate action is","o":["Move him to shade and apply ice packs to the neck only","Give fluids orally and monitor for 15 minutes","Begin cold-water immersion on site while activating EMS","Transport to the emergency department immediately without cooling"],"a":2,"e":"Exertional heat stroke is a medical emergency in which survival is determined by how quickly core temperature is lowered. The standard is cool first, transport second — cold-water immersion on site while EMS is activated. Delaying cooling for transport increases mortality risk."},
+{"d":"Exercise Science","q":"The greatest resistance training injury risk unique to preadolescent athletes involves","o":["Epiphyseal (growth) plate injury, generally from unsupervised maximal lifting or poor technique","Vertebral compression fractures from any axial loading","Rotator cuff tears from overhead pressing","Ligament laxity caused by resistance training itself"],"a":0,"e":"Properly supervised, technique-first resistance training is safe and effective for youth. Growth plate injuries are associated with unsupervised maximal lifting and poor technique, not with well-programmed training. Preadolescents gain strength largely through neural adaptation."},
+{"d":"Exercise Science","q":"Excess post-exercise oxygen consumption (EPOC) is primarily attributable to","o":["Restoration of ATP and creatine phosphate, elevated body temperature, and hormonal and ventilatory recovery","Increased protein synthesis during the first 24 hours","Continued lactate production after exercise","Replenishment of glycogen alone"],"a":0,"e":"EPOC reflects the oxygen cost of returning the body to resting conditions: resynthesizing ATP and creatine phosphate, restoring oxygen stores, clearing lactate, and supporting elevated temperature, ventilation, circulation, and hormone levels. Its magnitude scales with exercise intensity."},
+{"d":"Exercise Science","q":"Approximately how many ATP are produced from the complete oxidation of one molecule of blood glucose?","o":["4","38","2","129"],"a":1,"e":"Anaerobic (fast) glycolysis nets 2 ATP from blood glucose (3 from muscle glycogen, which skips one ATP investment). Complete oxidation of blood glucose yields approximately 38 ATP in the NSCA framework — 39 when starting from muscle glycogen. Fatty acid oxidation yields far more ATP per molecule but at a slower rate."},
+{"d":"Exercise Science","q":"Which is a documented chronic adaptation to high-volume aerobic endurance training but NOT to resistance training?","o":["Increased Type II fiber cross-sectional area","Increased creatine kinase and myokinase activity","Increased mitochondrial density and increased capillary density","Increased bone mineral density"],"a":2,"e":"Aerobic training increases mitochondrial density, capillary density, and oxidative enzyme activity. Resistance training increases fiber cross-sectional area and anaerobic enzyme activity, and marked hypertrophy can actually dilute capillary density. Both can improve bone mineral density with weight bearing."},
+{"d":"Exercise Science","q":"As the velocity of a concentric muscle action increases, the force the muscle can generate","o":["Remains constant","Increases proportionally","Increases to a peak at maximal velocity","Decreases"],"a":3,"e":"The force-velocity relationship: concentric force capability falls as shortening velocity rises. Force capacity is highest eccentrically, next isometrically, and lowest concentrically — which is why eccentric loads can exceed a concentric 1RM."},
+{"d":"Exercise Science","q":"Which statement about muscular hypertrophy is consistent with the NSCA position?","o":["It results primarily from an increase in the number of muscle fibers","It occurs only in Type I fibers","It results from an increase in the cross-sectional area of existing fibers","It precedes neural adaptation in untrained individuals"],"a":2,"e":"Hypertrophy is an increase in the size (cross-sectional area) of existing fibers, with a greater response typically in Type II fibers. Hyperplasia — an increase in fiber number — has not been established in humans, and neural adaptations precede hypertrophy."},
+{"d":"Exercise Science","q":"Creatine phosphate stores are restored to approximately what level after 3 to 5 minutes of passive recovery?","o":["Nearly 100%","About 20%","They require 24 hours for meaningful restoration","About 50%"],"a":0,"e":"Creatine phosphate is roughly half restored within about 30 seconds and near-completely restored in 3 to 5 minutes. This is the physiological basis for the 2 to 5 minute rest intervals prescribed for maximal strength and power training."},
+{"d":"Sport Psychology","q":"A quarterback with high cognitive anxiety performs adequately as arousal builds, then suddenly falls apart completely rather than declining gradually. This is best explained by","o":["Inverted-U hypothesis","Catastrophe theory","Individual zones of optimal functioning","Drive theory"],"a":1,"e":"Catastrophe theory predicts that when cognitive anxiety is high, increasing physiological arousal produces a sudden and dramatic performance collapse rather than the smooth decline of the inverted-U. The word that signals it in an item stem is the abruptness of the drop."},
+{"d":"Sport Psychology","q":"Which is the strongest source of self-efficacy according to Bandura?","o":["Vicarious experience from watching a teammate succeed","Interpretation of physiological arousal","Verbal persuasion from a respected coach","Past performance accomplishments"],"a":3,"e":"Past performance accomplishments are the most powerful source, followed by vicarious experience, verbal persuasion, and physiological state interpretation. This is why programming early success into a novice athlete's training is a confidence intervention, not just a training one."},
+{"d":"Sport Psychology","q":"A golfer needs to sink a 6-foot putt to win. From an arousal-performance standpoint, the coach should aim to","o":["Maximize arousal with an aggressive psyching-up routine","Ignore arousal because it only affects gross-motor tasks","Increase cognitive anxiety to sharpen focus","Keep arousal relatively low, because the task is fine-motor and precision based"],"a":3,"e":"Optimal arousal is task dependent: gross-motor, high-force tasks such as a deadlift or a block tolerate high arousal, while fine-motor, precision, and complex-decision tasks require lower arousal. Cognitive anxiety is never the target of an intervention to raise."},
+{"d":"Sport Psychology","q":"Which set of goals is most likely to sustain motivation and remain under the athlete's control?","o":["Place in the top three at every meet","Beat the returning school record holder","Add 20 lb to the squat and complete every scheduled session this block","Win the conference championship this season"],"a":2,"e":"Process and performance goals are within the athlete's control; outcome goals depend on opponents and circumstances. Effective goals are specific, measurable, difficult but attainable, and written, with short-term goals laddering into long-term ones."},
+{"d":"Sport Psychology","q":"As arousal increases, an athlete first stops attending to irrelevant cues and then begins to miss relevant ones. This describes","o":["Attribution theory","Cue utilization theory","Social facilitation","Reversal theory"],"a":1,"e":"Easterbrook's cue utilization theory describes the progressive narrowing of the attentional field with rising arousal. Moderate narrowing helps by filtering distraction; excessive narrowing causes the athlete to miss task-relevant information, such as an open receiver."},
+{"d":"Sport Psychology","q":"Which cue is most likely to improve a novice athlete's vertical jump performance?","o":["Contract your quadriceps forcefully","Focus on extending your hips and knees","Explode and reach as high as you can toward the target","Think about the sequence of joint actions in order"],"a":2,"e":"An external attentional focus — directed at the outcome or an implement — consistently outperforms an internal focus on body parts for motor performance and learning. The other three options all direct attention internally to the movement itself."},
+{"d":"Sport Psychology","q":"An athlete describes total absorption, effortless attention, no fear of failure, and a distorted sense of time during her best performance. This is","o":["Ego orientation","The ideal performance state (flow)","Learned helplessness","Somatic anxiety"],"a":1,"e":"The ideal performance state, or flow, is characterized by absence of fear of failure and self-doubt, narrowed but effortless attention, a sense of control and effortlessness, and time distortion. Note that it involves low anxiety rather than high arousal."},
+{"d":"Sport Psychology","q":"Which best distinguishes state anxiety from trait anxiety?","o":["They are interchangeable terms","State anxiety is the current situational response; trait anxiety is a stable personality disposition","State anxiety is cognitive; trait anxiety is somatic","State anxiety is genetic; trait anxiety is learned"],"a":1,"e":"Trait anxiety is a general disposition to perceive situations as threatening; state anxiety is the moment-to-moment emotional response. Independently of that, anxiety has cognitive (worry) and somatic (physical) components — somatic anxiety typically peaks at the start of competition and falls, while cognitive anxiety can persist."},
+{"d":"Sport Psychology","q":"A coach offers a scholarship-athlete bonus that is framed as punishment for missing lifts. According to research on motivation, this reward is likely to","o":["Increase intrinsic motivation because it provides feedback","Undermine intrinsic motivation because it is perceived as controlling","Convert an ego orientation into a task orientation","Have no effect on intrinsic motivation"],"a":1,"e":"Extrinsic rewards perceived as informational (acknowledging competence) can support intrinsic motivation; rewards perceived as controlling undermine it by shifting the athlete's perceived locus of causality externally."},
+{"d":"Sport Psychology","q":"An athlete two months into ACL rehabilitation is withdrawn, missing sessions, and expressing hopelessness. The strength and conditioning professional should","o":["Provide counseling for depression during training sessions","Increase training intensity to restore confidence","Provide social support, maintain involvement with the team, and refer to a qualified mental health professional","Suspend the athlete from the facility until the mood improves"],"a":2,"e":"Psychological response to injury follows a grief-like sequence, and the professional's role is social support, realistic goal setting, and keeping the athlete connected to the team. Prolonged or severe responses require referral — providing counseling is outside the scope of practice."},
+{"d":"Nutrition","q":"A 90 kg strength athlete asks how much protein to consume daily. The most appropriate general recommendation is","o":["250 to 300 g","45 to 70 g","Whatever exceeds 3.0 g per kilogram","110 to 180 g"],"a":3,"e":"Athlete protein recommendations run about 1.2 to 1.7 g/kg/day, with strength and power athletes toward 1.5 to 2.0 g/kg. For a 90 kg athlete that is roughly 110 to 180 g per day. Intakes well beyond this range confer no additional benefit."},
+{"d":"Nutrition","q":"An athlete weighs 80.0 kg before practice and 77.6 kg after, having consumed no fluid. The appropriate rehydration volume is approximately","o":["4.8 L","1.2 L","2.4 L","3.0 to 3.6 L"],"a":3,"e":"The recommendation is 1.25 to 1.5 L of fluid per kilogram of body mass lost. A 2.4 kg loss therefore calls for roughly 3.0 to 3.6 L. Note that a 2.4 kg loss on an 80 kg athlete is 3% of body mass — beyond the 2% threshold where performance is impaired."},
+{"d":"Nutrition","q":"Which post-exercise strategy best supports glycogen resynthesis after a glycogen-depleting session?","o":["0.3 g/kg of protein alone within 30 minutes","Fasting for 3 hours to enhance insulin sensitivity","1.0 to 1.5 g/kg of carbohydrate within 30 minutes, repeated every 2 hours","A high-fat meal within 2 hours"],"a":2,"e":"Glycogen resynthesis is fastest in the first 30 minutes to 2 hours after exercise. The recommendation is roughly 1.0 to 1.5 g/kg of carbohydrate as soon as possible, repeated at about 2 hour intervals, with protein co-ingestion supporting muscle protein synthesis."},
+{"d":"Nutrition","q":"A marathoner finishes confused, with weight GAIN, after drinking large volumes of plain water throughout the race. The most likely condition is","o":["Hypoglycemia","Hyponatremia","Heat exhaustion","Dehydration"],"a":1,"e":"Weight gain during an endurance event combined with confusion points to hyponatremia from excessive plain-water intake diluting serum sodium. Giving more water worsens it. This is a medical emergency requiring immediate referral."},
+{"d":"Nutrition","q":"The standard creatine monohydrate loading protocol is","o":["20 g per day in four divided doses for 5 to 7 days, then 3 to 5 g per day","0.3 g per kilogram taken 60 minutes before competition","10 g taken only on training days","3 to 5 g per day with no loading phase, indefinitely"],"a":0,"e":"A loading phase of about 20 g/day split into four 5 g doses for 5 to 7 days saturates muscle creatine quickly, followed by a 3 to 5 g/day maintenance dose. A 3 to 5 g/day protocol without loading reaches the same saturation more slowly. The 0.3 g/kg acute dose describes sodium bicarbonate."},
+{"d":"Nutrition","q":"A CSCS working with a swimmer suspects an eating disorder based on weight loss, secretive eating, and menstrual dysfunction. The appropriate action is","o":["Design a corrective meal plan and monitor weight weekly","Report the concern to her teammates so they can support her","Express concern privately and refer to a physician and registered dietitian","Reduce her training volume until she gains weight"],"a":2,"e":"Assessment and treatment of disordered eating are outside the CSCS scope of practice. The correct action is to approach the athlete privately, express concern about specific observed behaviors, and refer to qualified professionals. The pattern described also suggests low energy availability and the female athlete triad."},
+{"d":"Nutrition","q":"Under the Dietary Supplement Health and Education Act (DSHEA), dietary supplements","o":["May legally claim to cure specific diseases if evidence exists","Are not pre-approved by the FDA; the burden is on the FDA to prove a marketed product unsafe","Are subject to the same manufacturing verification as pharmaceuticals","Must be approved by the FDA for safety and efficacy before sale"],"a":1,"e":"DSHEA (1994) places supplements outside pre-market FDA approval. Because label accuracy and contamination are real risks, recommend only products with third-party certification such as NSF Certified for Sport or Informed Sport."},
+{"d":"Nutrition","q":"A 70 kg athlete needs to gain lean body mass. The most appropriate energy recommendation is","o":["A 500 kcal deficit with high protein","An additional 1,500 kcal per day, targeting 1.5 kg of gain per week","Maintenance calories with 4 g/kg of protein","An additional 350 to 700 kcal per day, targeting about 0.25 to 0.5 kg of gain per week"],"a":3,"e":"A surplus of roughly 350 to 700 kcal per day alongside resistance training supports about 0.25 to 0.5 kg (0.5 to 1 lb) of gain per week. Larger surpluses accelerate fat gain rather than lean tissue gain."},
+{"d":"Nutrition","q":"Which pre-competition meal is most appropriate 3 hours before a soccer match for a 75 kg player?","o":["Approximately 150 to 300 g of carbohydrate with moderate protein and low fat and fiber","A high-fat, high-fiber meal to slow digestion","Protein only, to avoid a blood sugar crash","Nothing, to keep the stomach empty"],"a":0,"e":"Pre-exercise carbohydrate recommendations are 1 to 4 g/kg, taken 1 to 4 hours before, which is roughly 75 to 300 g for a 75 kg athlete; closer to the event, both the amount and the fat and fiber content should be lower to avoid gastrointestinal distress."},
+{"d":"Nutrition","q":"Caffeine's established ergogenic dose and primary mechanism are best described as","o":["0.3 g/kg, acting by increasing intramuscular creatine","3 to 6 mg/kg, acting as a central nervous system stimulant that lowers perceived exertion","9 to 12 mg/kg, acting by buffering hydrogen ions","1 to 2 mg/kg, acting by increasing muscle glycogen storage"],"a":1,"e":"3 to 6 mg/kg taken about an hour before exercise improves endurance performance and reduces perceived exertion through central nervous system stimulation. Higher doses increase side effects without further benefit. The 0.3 g/kg dose belongs to sodium bicarbonate, which is the buffering agent."},
+{"d":"Exercise Technique","q":"Which exercise should NOT be spotted with hands on the bar?","o":["Power clean","Back squat","Bench press","Lying triceps extension"],"a":0,"e":"Olympic lifts and their variations are never spotted. The bar moves too fast and the athlete may need to drop it; the correct approach is to teach the athlete how to miss safely — push the bar away and step back — and to use bumper plates on a platform with the area clear."},
+{"d":"Exercise Technique","q":"A spotter assisting with dumbbell bench press should position the hands","o":["Near the athlete's wrists or forearms","On the dumbbells themselves","On the athlete's upper arms near the shoulders","Under the athlete's elbows"],"a":0,"e":"Dumbbells are spotted as close to them as practical without touching them — at the wrists or forearms. Spotting at the elbows offers poor control of the load, and grabbing the dumbbells can destabilize the lift."},
+{"d":"Exercise Technique","q":"The five-point body contact position during the barbell bench press requires","o":["Shoulders and buttocks on the bench, with feet on the bench frame","Head, upper back, and both feet on the bench, with hips elevated","Head, shoulders, and buttocks on the bench, with both feet flat on the floor","Head and buttocks on the bench, with heels raised for leg drive"],"a":2,"e":"The five points are the head, the upper back and shoulders, the buttocks (all on the bench), and both feet flat on the floor. Lifting the buttocks or placing the feet on the bench compromises stability and spinal position."},
+{"d":"Exercise Technique","q":"During the first pull of the power clean, the athlete's hips rise faster than the shoulders. The correct correction is","o":["Maintain a constant back angle by keeping the chest up and driving with the legs","Widen the grip","Begin the arm pull earlier","Start with the hips lower than the knees"],"a":0,"e":"The back angle should remain essentially constant during the first pull, with hips and shoulders rising together. Hips shooting up converts the lift into a stiff-legged pull, moves the bar away from the body, and eliminates the power position."},
+{"d":"Exercise Technique","q":"In the second pull of the clean, the athlete should","o":["Lean back to bring the bar closer","Keep the heels flat on the floor throughout","Perform explosive triple extension of the hips, knees, and ankles with a shrug, keeping the arms straight until the shrug","Bend the elbows early to accelerate the bar"],"a":2,"e":"The second pull is the most explosive phase: triple extension of hips, knees, and ankles with a shrug, elbows high and to the sides afterward. Bending the arms early is the classic fault — the arms act as straps until the shrug is complete."},
+{"d":"Exercise Technique","q":"Which grip is most appropriate for a maximal conventional deadlift?","o":["Supinated grip on both hands","Open pronated grip","Closed pronated grip with the thumbs alongside the fingers","Alternated grip"],"a":3,"e":"The alternated grip (one pronated, one supinated) resists the bar rolling out of the hands under heavy loads. A hook grip is the other secure option. Any open grip — thumb not wrapped — is unsafe, and a double supinated grip risks biceps tendon injury."},
+{"d":"Exercise Technique","q":"An athlete performs a back squat and the knees collapse inward as she rises out of the bottom. The most appropriate immediate response is","o":["Add load to force better bracing","Switch her to leg press for the remainder of the block","Instruct her to place plates under her heels permanently","Reduce the load and cue the knees to track out over the toes"],"a":3,"e":"Knee valgus under load should be corrected first by reducing the load and cueing knee tracking, alongside addressing hip abductor strength and ankle mobility. It is the same movement pattern implicated in non-contact ACL injury during landing, so it is corrected rather than worked around."},
+{"d":"Exercise Technique","q":"Proper breathing technique during a submaximal set of squats is to","o":["Breathe rapidly and shallowly throughout","Inhale during the descent and exhale through the sticking point of the ascent","Exhale during the descent and inhale during the ascent","Hold the breath for the entire set to maximize intra-abdominal pressure"],"a":1,"e":"Inhale during the eccentric phase and exhale through the sticking point of the concentric phase. The Valsalva maneuver is reserved for experienced athletes on maximal or near-maximal structural lifts and is held only briefly, because it produces a sharp rise in blood pressure."},
+{"d":"Exercise Technique","q":"A weight belt is most appropriately used during","o":["Maximal or near-maximal sets of structural exercises that load the spine","Aerobic conditioning sessions","Isolation exercises for the arms and shoulders","Every exercise in every session"],"a":0,"e":"Belts are indicated for near-maximal sets of structural exercises such as squats, deadlifts, and overhead presses that directly load the trunk. Routine use for all exercises and all loads is not recommended and may limit trunk musculature development."},
+{"d":"Exercise Technique","q":"Before beginning a lower-body plyometric program, the commonly cited strength prerequisite is a back squat of at least","o":["1.0 times body mass","No strength prerequisite is required","2.0 times body mass","1.5 times body mass"],"a":3,"e":"The commonly cited guideline is a 1RM back squat of approximately 1.5 times body mass for lower-body plyometrics, with a bench press of roughly 1.0 times body mass (or 0.7 for smaller athletes) for upper-body plyometrics. Balance prerequisites also apply."},
+{"d":"Exercise Technique","q":"An advanced athlete's lower-body plyometric session should include approximately how many foot contacts?","o":["80 to 100","40 to 60","200 to 250","120 to 140"],"a":3,"e":"Foot-contact guidelines run roughly 80 to 100 for beginners, 100 to 120 for intermediate athletes, and 120 to 140 for advanced athletes per session, with 48 to 72 hours between plyometric sessions. Confirm the exact figures against the current edition, as they are revised."},
+{"d":"Exercise Technique","q":"A 240 lb (109 kg) athlete is beginning depth jumps. The most appropriate box height is","o":["36 to 42 in","12 to 18 in","Above 42 in to maximize the stretch","24 to 30 in"],"a":1,"e":"Depth jump heights range from about 16 to 42 in, but heavier athletes — generally those above about 220 lb (100 kg) — should not drop from heights above roughly 18 in because of the landing forces involved. Beginners of any size start at the low end."},
+{"d":"Exercise Technique","q":"Which is the most appropriate pre-practice warm-up sequence?","o":["5 to 10 minutes of low-intensity aerobic activity, then dynamic movement-specific drills","Static stretching, then sport practice","Ballistic stretching only","Maximal sprinting, then static stretching"],"a":0,"e":"A general warm-up (5 to 10 minutes of low-intensity activity to raise tissue temperature) precedes a specific warm-up of dynamic, movement-matched drills. Prolonged static stretching immediately before power or speed work can acutely reduce force output, and ballistic stretching carries higher injury risk."},
+{"d":"Exercise Technique","q":"The PNF stretching technique that uses a maximal isometric contraction of the muscle being stretched, followed by a passive stretch, relies primarily on","o":["Reciprocal inhibition via the antagonist","Increased sarcomere number","Autogenic inhibition via the Golgi tendon organ","The stretch reflex"],"a":2,"e":"Hold-relax and contract-relax techniques use autogenic inhibition — GTO-mediated relaxation of the contracted muscle — to permit greater range of motion. Hold-relax with agonist contraction adds reciprocal inhibition by contracting the opposing muscle."},
+{"d":"Exercise Technique","q":"During the maximum velocity phase of sprinting, compared with acceleration, the athlete should show","o":["A greater forward body lean and longer ground contact","A more upright posture and shorter ground contact time","A heel-first foot strike with longer contact","Shorter stride length and greater forward lean"],"a":1,"e":"Acceleration is characterized by forward lean, longer ground contact, and a pushing action. Maximum velocity shows an upright posture with brief ground contact and a pulling or cycling action. Speed is the product of stride length and stride frequency."},
+{"d":"Exercise Technique","q":"When using resisted sprint training with a sled, the load should be selected so that","o":["Sprint velocity is reduced by at least 30% to maximize overload","The athlete cannot complete more than 5 yards","Stride length is deliberately shortened","Sprint velocity is reduced by no more than about 10%"],"a":3,"e":"Resistance heavy enough to substantially alter sprint mechanics defeats the purpose of the drill. A commonly used ceiling is a load that slows sprint velocity by no more than about 10%. Assisted (overspeed) work is similarly capped at about 10% faster than maximum velocity."},
+{"d":"Exercise Technique","q":"Which describes a compound set?","o":["Two exercises for opposing muscle groups performed back to back","A set taken past failure with spotter assistance","Two exercises for the same muscle group performed back to back","Three sets of the same exercise with decreasing load"],"a":2,"e":"A compound set pairs two exercises for the same muscle group; a superset pairs exercises for opposing muscle groups (agonist-antagonist), such as a biceps curl followed by a triceps pushdown."},
+{"d":"Exercise Technique","q":"An athlete is performing the incline bench press. Regarding spotting, this exercise","o":["Should be spotted from behind at the athlete's hips","Should never be spotted","Requires a spotter because the bar travels over the head and face","Does not require a spotter because the bar does not travel over the face"],"a":2,"e":"Any exercise in which the bar passes over the face or head — flat and incline bench press, lying triceps extension, pullover — requires a spotter positioned at the head of the bench, ready to guide the bar back to the supports."},
+{"d":"Exercise Technique","q":"In the catch position of the power clean, the bar is received","o":["On the wrists with the elbows pointed down","In the hands with the arms fully extended overhead","Across the anterior deltoids and clavicles with the elbows rotated up and forward","Behind the neck on the trapezius"],"a":2,"e":"The bar is received across the front deltoids and clavicles with the elbows rotated around and up, in a quarter squat for a power clean or a full front squat for a clean. Receiving on the wrists with low elbows is a common and injurious fault."},
+{"d":"Exercise Technique","q":"The primary technique difference between a high-bar and low-bar back squat is that the low-bar position","o":["Eliminates the need for a spotter","Produces a greater forward torso lean and more hip contribution","Produces a more upright torso and greater knee flexion","Requires a supinated grip"],"a":1,"e":"Placing the bar lower, across the posterior deltoids and the spine of the scapula, moves the system's center of mass back and requires a greater forward torso lean, shifting contribution toward the hips. The high-bar position on the upper trapezius allows a more upright torso and greater knee involvement."},
+{"d":"Program Design","q":"An athlete has a 1RM back squat of 400 lb. What load should be assigned for a set of 10 repetitions?","o":["300 lb","340 lb","360 lb","240 lb"],"a":0,"e":"Ten repetitions corresponds to approximately 75% of 1RM. 400 × 0.75 = 300 lb. Reading the percentage-repetition relationship in both directions — assigning load from a 1RM, and estimating a 1RM from a rep max — is a recurring exam task."},
+{"d":"Program Design","q":"An athlete completes 6 repetitions at 225 lb on the bench press. Her estimated 1RM is approximately","o":["265 lb","240 lb","320 lb","300 lb"],"a":0,"e":"Six repetitions corresponds to about 85% of 1RM, so 225 ÷ 0.85 ≈ 265 lb. Note that the estimate becomes less accurate as the repetition count rises above about 10."},
+{"d":"Program Design","q":"A shot putter is in the preseason and needs maximal power. Which prescription is most appropriate for the power clean?","o":["5 sets of 8 at 75% of 1RM with 1 minute of rest","4 sets of 3 at 80% of 1RM with 3 minutes of rest","3 sets of 12 at 65% of 1RM with 45 seconds of rest","2 sets of 20 at 50% of 1RM with 30 seconds of rest"],"a":1,"e":"Multiple-effort power training calls for 75 to 85% of 1RM for 3 to 5 repetitions, 3 to 5 sets, with 2 to 5 minutes of rest. Long rest intervals are essential — power training is limited by the phosphagen system, and short rest converts the session into conditioning."},
+{"d":"Program Design","q":"Which exercise order is correct for a session containing hang clean, back squat, seated row, and biceps curl?","o":["Hang clean, back squat, seated row, biceps curl","Biceps curl, seated row, back squat, hang clean","Back squat, hang clean, biceps curl, seated row","Seated row, hang clean, back squat, biceps curl"],"a":0,"e":"Power exercises come first while the athlete is fresh and technique is sharp, followed by other core multijoint exercises, then assistance and single-joint exercises. Large muscle before small, multijoint before single-joint, high intensity before low."},
+{"d":"Program Design","q":"According to the 2-for-2 rule, load should be increased when the athlete","o":["Completes two or more repetitions over the goal on the last set in two consecutive workouts","Reports a rating of perceived exertion below 2","Completes two extra repetitions on any set in a single workout","Trains for two consecutive weeks without missing a session"],"a":0,"e":"The 2-for-2 rule: if the athlete can perform two or more repetitions above the assigned goal in the last set for two consecutive training sessions, the load should be increased. Typical increments are 2.5 to 5% for upper-body small-muscle exercises and 10 to 15% for lower-body exercises in trained athletes."},
+{"d":"Program Design","q":"A basketball team is in the middle of its competitive season. The resistance training program should","o":["Emphasize high-volume hypertrophy work to build reserve","Match off-season volume to prevent detraining","Be discontinued until the postseason","Reduce volume and frequency while maintaining intensity"],"a":3,"e":"In-season training is maintenance: volume and frequency drop to accommodate practice and competition demands, while intensity is kept high enough to preserve strength and power. Discontinuing training entirely leads to detraining across the season."},
+{"d":"Program Design","q":"Which sequence correctly orders a traditional periodized macrocycle?","o":["Basic strength → hypertrophy → peaking → strength/power","Peaking → basic strength → hypertrophy → active rest","Active rest → peaking → strength/power → hypertrophy","Hypertrophy/endurance → basic strength → strength/power → peaking → active rest"],"a":3,"e":"The classic model moves from high volume and low intensity toward low volume and high intensity: hypertrophy/endurance (off-season), basic strength (off-season), strength/power (preseason), peaking or maintenance (in-season), then active rest (postseason)."},
+{"d":"Program Design","q":"An athlete's V̇O₂max is limited by aerobic power, and the coach wants to increase it directly. The most appropriate training type is","o":["Interval training of 3 to 5 minute bouts near V̇O₂max at a 1:1 work-to-rest ratio","Long, slow distance at 70% of V̇O₂max","Repetition training of 30 second bouts at a 1:5 work-to-rest ratio","Pace/tempo work at lactate threshold"],"a":0,"e":"Interval training with 3 to 5 minute bouts at intensities close to V̇O₂max, with roughly equal recovery, is the type specifically targeted at raising V̇O₂max. Pace/tempo work raises the lactate threshold, LSD develops the aerobic base, and repetition training targets speed and economy."},
+{"d":"Program Design","q":"An athlete has a resting heart rate of 60 and is 25 years old. Using the Karvonen method, the target heart rate at 70% intensity is approximately","o":["137 beats/min","165 beats/min","152 beats/min","145 beats/min"],"a":2,"e":"HRmax = 220 − 25 = 195. Heart rate reserve = 195 − 60 = 135. (135 × 0.70) + 60 = 94.5 + 60 ≈ 154, closest to 152. Note that a straight 70% of HRmax would give only 136 — the exam expects you to notice which method the stem specifies."},
+{"d":"Program Design","q":"A collegiate distance runner also lifts. To minimize the interference effect, the coach should","o":["Perform both at maximal intensity in the same session","Perform resistance training immediately after every long run","Eliminate resistance training entirely during the season","Separate resistance and endurance sessions by several hours or perform them on different days"],"a":3,"e":"High-volume concurrent endurance training can blunt strength and especially power adaptations. Separating the sessions in time, managing endurance volume, and prioritizing the target quality first when they must be combined reduces the interference. Strength training generally improves running economy and should not be eliminated."},
+{"d":"Program Design","q":"During a taper before a championship, the coach should","o":["Increase volume in the final week to build reserve","Reduce volume substantially and maintain intensity","Reduce both volume and intensity to near zero","Reduce intensity and maintain volume"],"a":1,"e":"Effective tapers cut volume markedly — often 40 to 60% or more over 7 to 14 days — while preserving training intensity. Dropping intensity is the most common way to blunt the benefits of a taper and lose sharpness."},
+{"d":"Program Design","q":"An untrained 45-year-old beginning resistance training should train each muscle group approximately","o":["2 to 3 days per week","5 to 6 days per week","1 day per week","Daily, using a split routine"],"a":0,"e":"Untrained individuals progress well on 2 to 3 total-body sessions per week, intermediate athletes on 3 to 4, and advanced athletes on 4 to 7 using split routines. At least 48 hours should separate sessions that load the same muscle group."},
+{"d":"Program Design","q":"Which describes the correct application of specificity in exercise selection for a volleyball middle blocker?","o":["Emphasize seated machine work to isolate each muscle safely","Emphasize unilateral upper-body isolation work","Emphasize long-duration aerobic training to build a base","Emphasize multijoint, triple-extension, and vertically oriented movements plus landing mechanics"],"a":3,"e":"Exercise selection follows from the movement analysis. Repeated jumping and landing means triple-extension power exercises, squats, and eccentric landing work — including plyometrics, given the sport's demands and the associated ACL injury risk profile."},
+{"d":"Program Design","q":"A program prescribes 4 sets of 10 repetitions at 70% of 1RM with 45 seconds of rest. The primary training goal is","o":["Maximal aerobic capacity","Maximal strength","Hypertrophy","Power"],"a":2,"e":"The combination of moderate load (67 to 85%), 6 to 12 repetitions, 3 to 6 sets, and short rest (30 seconds to 1.5 minutes) defines hypertrophy training. The rest interval alone often identifies the intended goal in these items."},
+{"d":"Program Design","q":"Which best defines a structural exercise?","o":["Any exercise using more than one joint","An exercise used only during the hypertrophy phase","An exercise performed on a machine with a fixed movement path","An exercise that loads the spine directly, such as the back squat or power clean"],"a":3,"e":"Structural exercises are core exercises that load the vertebral column directly. Core exercises involve one or more large muscle groups and two or more primary joints; assistance exercises involve smaller muscle groups and a single primary joint."},
+{"d":"Program Design","q":"An athlete returning from a hamstring strain has been cleared for progressive loading. The most appropriate initial approach is","o":["Avoid all hamstring loading until the athlete is pain free at maximal sprint speed","Begin with submaximal, controlled loading and progress volume before intensity, respecting tissue healing timelines","Immediately resume the previous training loads to avoid detraining","Begin with maximal eccentric loading to remodel scar tissue quickly"],"a":1,"e":"Reconditioning follows tissue healing — inflammatory response, then fibroblastic repair, then maturation and remodeling — with progressive, submaximal loading that generally advances volume before intensity, in coordination with the sports medicine staff. Connective tissue adapts more slowly than muscle."},
+{"d":"Program Design","q":"Which is the correct definition of a mesocycle?","o":["A period of several weeks to months with a single training emphasis","One week of training","A single training session","An entire training year"],"a":0,"e":"A macrocycle is the full training year or competitive cycle; a mesocycle spans several weeks to a few months with one emphasis; a microcycle is roughly a week. Undulating models vary volume and intensity within the microcycle rather than across mesocycles."},
+{"d":"Program Design","q":"A wrestler needs to improve his ability to repeat 30 second high-intensity scrambles. The most appropriate conditioning prescription is","o":["30 second work bouts with a work-to-rest ratio of 1:3 to 1:5","5 minute work bouts with a work-to-rest ratio of 1:1","Continuous running at 70% of V̇O₂max for 40 minutes","10 second work bouts with a work-to-rest ratio of 1:20"],"a":0,"e":"Thirty-second maximal efforts are dominated by fast glycolysis, which calls for a work-to-rest ratio of about 1:3 to 1:5. Matching the conditioning interval structure to the sport's actual work bouts is the central principle of anaerobic program design."},
+{"d":"Program Design","q":"A high school athlete with no training history is starting a program. The most important initial priority is","o":["Maximal-effort power cleans to develop explosiveness immediately","Establishing a 1RM in all major lifts on day one","Teaching technique with light loads and building a base of general preparation","High-volume plyometrics to exploit the trainable window"],"a":2,"e":"For untrained athletes, technique instruction with submaximal loads precedes maximal testing and high-intensity work. Plyometrics in particular require an established strength base, and 1RM testing of an athlete who cannot yet perform the movement correctly is both invalid and unsafe."},
+{"d":"Program Design","q":"Which change most directly increases training volume load in a resistance training session?","o":["Reordering the exercises","Increasing rest intervals from 1 to 3 minutes","Increasing sets from 3 to 5 at the same load and repetitions","Changing from a pronated to an alternated grip"],"a":2,"e":"Volume load is the product of sets × repetitions × load. Adding sets at the same load and repetition count raises it directly. Rest intervals, grip, and exercise order affect the training stimulus but not the volume load calculation."},
+{"d":"Testing and Evaluation","q":"A coach must administer vertical jump, 1RM squat, T-test, and 1.5 mile run in a single session. The correct order is","o":["T-test, 1.5 mile run, vertical jump, 1RM squat","Vertical jump, T-test, 1RM squat, 1.5 mile run","1RM squat, vertical jump, 1.5 mile run, T-test","1.5 mile run, 1RM squat, T-test, vertical jump"],"a":1,"e":"Order runs from least to most fatiguing: non-fatiguing tests (including vertical jump) first, then agility, then maximal power and strength, then sprints, then local muscular endurance, then anaerobic capacity, and aerobic capacity last. Any fatiguing test placed early invalidates everything after it."},
+{"d":"Testing and Evaluation","q":"A skinfold-based body fat estimate is compared against hydrostatic weighing and correlates strongly. This demonstrates","o":["Concurrent criterion-referenced validity","Face validity","Construct validity","Test-retest reliability"],"a":0,"e":"Comparing a field test against an accepted gold standard measured at the same time demonstrates concurrent validity, a form of criterion-referenced validity. If it predicted a future outcome instead, it would be predictive validity."},
+{"d":"Testing and Evaluation","q":"Two coaches time the same athlete's pro agility test and record markedly different results. The test lacks","o":["Validity","Specificity","Face validity","Objectivity (interrater reliability)"],"a":3,"e":"Objectivity, also called interrater reliability, is the degree to which different testers obtain the same result. It is usually addressed through standardized procedures, training the testers, and using electronic timing rather than handheld stopwatches."},
+{"d":"Testing and Evaluation","q":"Which statement about the relationship between reliability and validity is correct?","o":["Reliability and validity are the same property","A test can be reliable without being valid","A test can be valid without being reliable","Validity guarantees objectivity"],"a":1,"e":"Reliability is necessary but not sufficient for validity. A consistently mis-calibrated instrument is perfectly reliable and completely invalid. A test that produces inconsistent results, however, cannot be valid."},
+{"d":"Testing and Evaluation","q":"The 300 yard shuttle primarily assesses","o":["Aerobic capacity","Phosphagen power","Anaerobic (glycolytic) capacity","Agility"],"a":2,"e":"The 300 yard shuttle is a maximal effort lasting roughly a minute, dominated by fast glycolysis, and it is severely fatiguing — it belongs near the end of a testing battery, before only aerobic capacity testing."},
+{"d":"Testing and Evaluation","q":"When testing a 1RM back squat, the athlete should reach the true 1RM within approximately","o":["As many attempts as needed, with 30 seconds of rest between","1 to 2 attempts","8 to 10 attempts","3 to 5 attempts"],"a":3,"e":"After a warm-up progression, the 1RM should be found within about five attempts, with 2 to 4 minutes of rest between them. Excessive attempts introduce fatigue and produce an artificially low result."},
+{"d":"Testing and Evaluation","q":"An athlete scores at the 85th percentile for vertical jump within her reference group. This means","o":["Her score was 85% of the group mean","85% of the reference group scored below her","She jumped 85% as high as the best athlete","She scored 85 out of 100 possible points"],"a":1,"e":"Percentile rank expresses the percentage of the reference group scoring below a given value. It says nothing about the absolute difference between scores, only about relative position."},
+{"d":"Testing and Evaluation","q":"Which test is the most appropriate primary assessment for an American football lineman?","o":["1RM power clean and 40 yard sprint","Yo-Yo intermittent recovery test","1.5 mile run","12 minute Cooper run"],"a":0,"e":"Test selection follows the sport's energy system and movement demands. Line play is a series of short, maximal, phosphagen-dominant efforts, so maximal power and short sprint measures are specific. Aerobic capacity tests are valid tests, but not valid measures of this athlete's performance capacity."},
+{"d":"Testing and Evaluation","q":"In a normally distributed set of test scores, approximately what percentage falls within one standard deviation of the mean?","o":["68%","50%","99%","95%"],"a":0,"e":"About 68% falls within ±1 SD and about 95% within ±2 SD in a normal distribution. Standard deviation describes spread around the mean and is what allows a coach to say whether a given result is unusual for the group."},
+{"d":"Testing and Evaluation","q":"An athlete improves her vertical jump by 0.5 in on a retest. Before reporting this as an improvement, the coach should consider","o":["Whether the athlete was motivated","Whether the athlete's teammates also improved","Whether the change exceeds the measurement error of the test","Whether the test has face validity"],"a":2,"e":"Interpreting a difference score requires knowing the test's reliability and typical measurement error. A change smaller than the error of measurement cannot be distinguished from noise, however real it looks on paper."},
+{"d":"Testing and Evaluation","q":"The Margaria-Kalamen stair climb test measures","o":["Aerobic power","Agility and body control","Anaerobic capacity via fast glycolysis","Anaerobic power via the phosphagen system"],"a":3,"e":"The stair climb is a brief maximal effort, and power is calculated as (body mass × vertical distance) ÷ time. Its very short duration makes it a phosphagen-system power test, comparable in purpose to the vertical jump."},
+{"d":"Testing and Evaluation","q":"To maximize the reliability of a testing battery repeated at the end of a training block, the coach should","o":["Use different testers to reduce bias","Standardize time of day, equipment, instructions, order, and rest between tests","Allow athletes to choose which tests to perform first","Change the order to prevent the athletes from anticipating the tests"],"a":1,"e":"Every condition that changes between administrations adds error. Standardizing time of day, warm-up, equipment, instructions, test order, rest intervals, and ideally the tester is what makes a pre-to-post comparison interpretable."},
+{"d":"Organization and Administration","q":"Which four elements must all be present to establish negligence?","o":["Intent, negligence, damage, and a signed waiver","Duty, breach of duty, causation, and harm","Duty, warning, waiver, and injury","Supervision, instruction, certification, and insurance"],"a":1,"e":"All four elements must be present: a duty of care was owed, the conduct fell below the standard of care (breach), the breach was the proximate cause, and actual harm resulted. Missing any one defeats the claim."},
+{"d":"Organization and Administration","q":"An athlete signs a document acknowledging that she understands the risks and procedures of a testing session. This document","o":["Eliminates the need for supervision during testing","Is legally equivalent to a waiver in all jurisdictions","Is an informed consent, which documents understanding but does not release liability for negligence","Releases the facility from liability for negligence"],"a":2,"e":"Informed consent documents that the participant understands the procedures and risks. It does not release the professional from liability for negligent conduct. A waiver attempts to do so, and its enforceability varies by jurisdiction — neither substitutes for competent supervision."},
+{"d":"Organization and Administration","q":"Recommended ceiling height for a strength and conditioning facility that includes Olympic lifting is","o":["8 to 10 ft","12 to 14 ft","16 to 20 ft","There is no recommendation"],"a":1,"e":"A clear ceiling height of roughly 12 to 14 ft accommodates overhead lifting and jumping, with pipes and fixtures clear of the training area. Related specifications include about 100 ft² per athlete in the resistance training area and roughly 3 ft walkways between stations."},
+{"d":"Organization and Administration","q":"A cable on a lat pulldown machine is visibly frayed during the daily inspection. The correct action is","o":["Reduce the maximum weight setting and continue use","Remove the machine from service, tag it, and document the finding until it is repaired","Post a note asking athletes to be careful with it","Continue using it under direct supervision until the replacement part arrives"],"a":1,"e":"Defective equipment is removed from service immediately, tagged so it cannot be used, and documented in the maintenance log. Continuing to allow use of known-defective equipment is a straightforward breach of the standard of care."},
+{"d":"Organization and Administration","q":"An emergency action plan should include all of the following EXCEPT","o":["Assigned roles for each staff member","The specific facility address and the entrance EMS should use","A liability waiver signed by every athlete","The location of the AED and emergency equipment"],"a":2,"e":"The EAP is an operational document: personnel roles, emergency equipment location, the exact address and access route for EMS, and communication procedures — written, posted, and rehearsed. Waivers are a separate risk management document and are not part of the emergency response plan."},
+{"d":"Organization and Administration","q":"The appropriate athlete-to-professional ratio in a strength and conditioning facility is primarily determined by","o":["The number of platforms available","Institutional budget","The square footage of the facility only","The athletes' training age and the complexity and risk of the exercises being performed"],"a":3,"e":"Supervision requirements scale with risk: novice athletes performing complex or maximal lifts require the tightest ratio and direct visual supervision. Facility size and budget constrain the program but do not define an acceptable standard of care."},
+{"d":"Organization and Administration","q":"Which layout decision best supports supervision in a strength and conditioning facility?","o":["Placing tall equipment in the center of the room to divide the space","Grouping all machines in a separate closed room","Arranging equipment so the professional has an unobstructed line of sight to every station","Placing all mirrors on a single wall"],"a":2,"e":"Unobstructed sightlines to every station are a supervision requirement, not an aesthetic one. Taller and heavier equipment goes against walls, and enclosed or visually separated areas create unsupervised training space."},
+{"d":"Organization and Administration","q":"When an injury occurs in the weight room, the strength and conditioning professional should","o":["Wait to document until the athlete reports whether the injury is serious","Complete an injury report immediately and retain it in the athlete's confidential records","Document only injuries requiring EMS transport","Record the incident only if the athlete misses practice"],"a":1,"e":"An injury report is completed immediately, while details are accurate, and retained confidentially regardless of apparent severity. Contemporaneous documentation is both a risk management practice and the record that establishes what care was actually provided."}
+];
+</script>
+<script>
+(function(){
+  "use strict";
+  const DOMAINS = ["Exercise Science","Sport Psychology","Nutrition","Exercise Technique","Program Design","Testing and Evaluation","Organization and Administration"];
+  const SHORT = {"Exercise Science":"Ex Science","Sport Psychology":"Sport Psych","Nutrition":"Nutrition","Exercise Technique":"Technique","Program Design":"Prog Design","Testing and Evaluation":"Testing","Organization and Administration":"Org & Admin"};
+  const KEY = "cscs-retake-v1";
+  const LTR = ["A","B","C","D","E"];
+
+  const store = {answers:{}, mode:"study", revealed:false, filter:"All", missed:false, shuffled:false, idx:0, theme:null};
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(raw) Object.assign(store, JSON.parse(raw));
+  }catch(e){}
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){} }
+
+  BANK.forEach((q,i)=>q.id=i);
+  const el = id => document.getElementById(id);
+  el("bankCount").textContent = BANK.length;
+
+  /* ---------- theme ---------- */
+  if(store.theme) document.documentElement.setAttribute("data-theme", store.theme);
+  el("themeBtn").addEventListener("click", ()=>{
+    const cur = document.documentElement.getAttribute("data-theme");
+    const isDark = cur ? cur === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    store.theme = isDark ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", store.theme);
+    save();
+  });
+
+  /* ---------- tabs ---------- */
+  const tabs = Array.from(document.querySelectorAll("#nav button"));
+  function showPanel(name){
+    tabs.forEach(t=>t.setAttribute("aria-selected", String(t.dataset.panel===name)));
+    document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("active", p.id==="panel-"+name));
+    window.scrollTo({top:0,behavior:"instant"});
+  }
+  tabs.forEach(t=>t.addEventListener("click", ()=>showPanel(t.dataset.panel)));
+  document.querySelectorAll("[data-drill]").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      store.filter = b.dataset.drill; store.missed=false; store.idx=0; save();
+      buildChips(); showPanel("quiz"); render();
+    });
+  });
+
+  /* ---------- filter chips ---------- */
+  function buildChips(){
+    const wrap = el("domainChips");
+    wrap.innerHTML = "";
+    const opts = ["All"].concat(DOMAINS);
+    opts.forEach(name=>{
+      const n = name==="All" ? BANK.length : BANK.filter(q=>q.d===name).length;
+      const b = document.createElement("button");
+      b.className="chip";
+      b.textContent = (name==="All" ? "All domains" : SHORT[name]) + " " + n;
+      b.setAttribute("aria-pressed", String(store.filter===name));
+      b.addEventListener("click", ()=>{ store.filter=name; store.idx=0; save(); buildChips(); render(); });
+      wrap.appendChild(b);
+    });
+  }
+
+  /* ---------- active question list ---------- */
+  let order = null;
+  function activeList(){
+    let list = BANK.filter(q=> store.filter==="All" || q.d===store.filter);
+    if(store.missed){
+      list = list.filter(q=> store.answers[q.id]!==undefined && store.answers[q.id]!==q.a);
+    }
+    if(store.shuffled){
+      if(!order || order.length!==list.length) order = list.map((_,i)=>i).sort(()=>Math.random()-0.5);
+      list = order.map(i=>list[i]).filter(Boolean);
+    }
+    return list;
+  }
+
+  /* ---------- timer ---------- */
+  let t0 = null, timerHandle = null;
+  function fmt(ms){
+    const s = Math.floor(ms/1000);
+    return String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0");
+  }
+  function tickTimer(){
+    if(store.mode!=="exam" || t0===null) return;
+    const list = activeList();
+    el("counter").textContent = "Item " + (Math.min(store.idx+1, list.length)) + " of " + list.length + " · " + fmt(Date.now()-t0) + " elapsed · " + fmt(list.length*72000) + " budget";
+  }
+
+  /* ---------- render ---------- */
+  function render(){
+    const list = activeList();
+    const area = el("quizArea");
+    area.innerHTML = "";
+
+    if(!list.length){
+      area.innerHTML = '<div class="empty">'+(store.missed
+        ? "Nothing missed in this filter — either you have not answered these yet, or you got them all right. Turn off <b>Missed only</b> to keep going."
+        : "No items match this filter.")+"</div>";
+      el("counter").textContent = "0 items";
+      el("railFill").style.width = "0%";
+      updateScores();
+      return;
+    }
+    if(store.idx >= list.length) store.idx = list.length-1;
+    if(store.idx < 0) store.idx = 0;
+
+    const q = list[store.idx];
+    const picked = store.answers[q.id];
+    const answered = picked !== undefined;
+    const show = answered && (store.mode==="study" || store.revealed);
+
+    const card = document.createElement("div");
+    card.className = "qcard";
+
+    const head = document.createElement("div");
+    head.className = "qhead";
+    head.innerHTML = '<span class="qmeta">'+q.d+'</span><span class="qmeta">Item '+(store.idx+1)+' / '+list.length+'</span>';
+    card.appendChild(head);
+
+    const stem = document.createElement("p");
+    stem.className = "qstem";
+    stem.textContent = q.q;
+    card.appendChild(stem);
+
+    const opts = document.createElement("div");
+    opts.className = "opts";
+    q.o.forEach((text,i)=>{
+      const b = document.createElement("button");
+      b.className = "opt";
+      b.innerHTML = '<span class="ltr">'+LTR[i]+'</span><span></span>';
+      b.lastChild.textContent = text;
+      if(show){
+        if(i===q.a) b.classList.add("correct");
+        else if(i===picked) b.classList.add("wrong");
+        b.disabled = true;
+      }else if(answered && i===picked){
+        b.classList.add("picked");
+      }
+      b.addEventListener("click", ()=>{
+        if(show) return;
+        store.answers[q.id] = i;
+        save();
+        render();
+        if(store.mode==="exam") setTimeout(()=>go(1), 140);
+      });
+      opts.appendChild(b);
+    });
+    card.appendChild(opts);
+
+    if(show){
+      const ex = document.createElement("div");
+      ex.className = "expl";
+      const v = document.createElement("span");
+      const hit = picked===q.a;
+      v.className = "verdict " + (hit?"hit":"miss");
+      v.textContent = hit ? "Correct — " + LTR[q.a] : "Missed — correct answer is " + LTR[q.a];
+      const p = document.createElement("p");
+      p.textContent = q.e;
+      ex.appendChild(v); ex.appendChild(p);
+      card.appendChild(ex);
+    }else if(answered && store.mode==="exam"){
+      const ex = document.createElement("div");
+      ex.className = "expl";
+      ex.innerHTML = '<span class="qmeta">Answer recorded. Explanations are withheld until you reveal them.</span>';
+      card.appendChild(ex);
+    }
+    area.appendChild(card);
+
+    const answeredCount = list.filter(x=>store.answers[x.id]!==undefined).length;
+    el("railFill").style.width = (100*answeredCount/list.length)+"%";
+    if(store.mode==="exam" && t0!==null){ tickTimer(); }
+    else el("counter").textContent = "Item "+(store.idx+1)+" of "+list.length+" · "+answeredCount+" answered";
+
+    const correct = list.filter(x=>store.answers[x.id]===x.a).length;
+    el("scoreLine").textContent = (store.mode==="exam" && !store.revealed)
+      ? answeredCount+" of "+list.length+" answered"
+      : (answeredCount ? correct+" correct of "+answeredCount+" answered ("+Math.round(100*correct/answeredCount)+"%)" : "No items answered yet");
+
+    updateScores();
+  }
+
+  function go(step){
+    const list = activeList();
+    store.idx = Math.max(0, Math.min(list.length-1, store.idx+step));
+    save(); render();
+    document.getElementById("quizArea").scrollIntoView({block:"nearest", behavior:"smooth"});
+  }
+
+  /* ---------- scorecard ---------- */
+  function updateScores(){
+    const grid = el("scoreGrid");
+    grid.innerHTML = "";
+    const hide = store.mode==="exam" && !store.revealed;
+    DOMAINS.forEach(d=>{
+      const items = BANK.filter(q=>q.d===d);
+      const ans = items.filter(q=>store.answers[q.id]!==undefined);
+      const cor = items.filter(q=>store.answers[q.id]===q.a);
+      const pct = ans.length ? Math.round(100*cor.length/ans.length) : null;
+      const cell = document.createElement("div");
+      cell.className = "scorecell" + (pct===null?"":(pct<60?" low":(pct<80?" mid":"")));
+      const n = document.createElement("span"); n.className="n";
+      n.textContent = hide ? ans.length+" / "+items.length : (pct===null ? "—" : pct+"%");
+      const l = document.createElement("span"); l.className="l"; l.textContent = SHORT[d];
+      const sub = document.createElement("span"); sub.className="l";
+      sub.textContent = hide ? "answered" : (ans.length? cor.length+" of "+ans.length : items.length+" items");
+      const bar = document.createElement("span"); bar.className="bar";
+      const fill = document.createElement("i");
+      fill.style.width = hide ? (100*ans.length/items.length)+"%" : ((pct===null?0:pct)+"%");
+      bar.appendChild(fill);
+      cell.appendChild(n); cell.appendChild(l); cell.appendChild(sub); cell.appendChild(bar);
+      grid.appendChild(cell);
+    });
+  }
+
+  /* ---------- controls ---------- */
+  function setMode(m){
+    store.mode = m;
+    store.revealed = false;
+    el("modeStudy").setAttribute("aria-pressed", String(m==="study"));
+    el("modeExam").setAttribute("aria-pressed", String(m==="exam"));
+    el("revealBtn").hidden = (m!=="exam");
+    if(m==="exam"){ t0 = Date.now(); if(timerHandle) clearInterval(timerHandle); timerHandle = setInterval(tickTimer, 1000); }
+    else { t0=null; if(timerHandle){ clearInterval(timerHandle); timerHandle=null; } }
+    save(); render();
+  }
+  el("modeStudy").addEventListener("click", ()=>setMode("study"));
+  el("modeExam").addEventListener("click", ()=>setMode("exam"));
+
+  const reveal = document.createElement("button");
+  reveal.className = "chip"; reveal.id = "revealBtn"; reveal.textContent = "Reveal answers";
+  reveal.hidden = true;
+  reveal.addEventListener("click", ()=>{ store.revealed = !store.revealed; reveal.textContent = store.revealed?"Hide answers":"Reveal answers"; save(); render(); });
+  el("missedOnly").parentNode.insertBefore(reveal, el("missedOnly"));
+
+  el("missedOnly").addEventListener("click", ()=>{
+    store.missed = !store.missed; store.idx = 0; order = null;
+    el("missedOnly").setAttribute("aria-pressed", String(store.missed));
+    save(); render();
+  });
+  el("shuffleBtn").addEventListener("click", ()=>{
+    store.shuffled = !store.shuffled; order = null; store.idx = 0;
+    el("shuffleBtn").setAttribute("aria-pressed", String(store.shuffled));
+    save(); render();
+  });
+  el("prevBtn").addEventListener("click", ()=>go(-1));
+  el("nextBtn").addEventListener("click", ()=>go(1));
+  el("resetBtn").addEventListener("click", ()=>{
+    if(!confirm("Clear every recorded answer and start the bank over?")) return;
+    store.answers = {}; store.idx = 0; store.revealed=false; save(); render();
+  });
+
+  document.addEventListener("keydown", e=>{
+    if(!document.getElementById("panel-quiz").classList.contains("active")) return;
+    if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA") return;
+    if(e.key==="ArrowRight"){ go(1); }
+    else if(e.key==="ArrowLeft"){ go(-1); }
+    else if(["1","2","3","4"].includes(e.key)){
+      const btns = document.querySelectorAll("#quizArea .opt");
+      const b = btns[Number(e.key)-1];
+      if(b && !b.disabled) b.click();
+    }
+  });
+
+  /* ---------- init ---------- */
+  buildChips();
+  el("missedOnly").setAttribute("aria-pressed", String(store.missed));
+  el("shuffleBtn").setAttribute("aria-pressed", String(store.shuffled));
+  setMode(store.mode || "study");
+  render();
+})();
+</script>
