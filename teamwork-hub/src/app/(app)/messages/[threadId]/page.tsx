@@ -68,6 +68,8 @@ export default async function ThreadPage({ params }: { params: Promise<{ threadI
                     {m.isInternalNote ? "Internal note · " : ""}
                     {m.senderName}
                     {m.automationRuleId ? " · automated" : ""}
+                    {m.campaignId ? " · announcement" : ""}
+                    {m.inboundChannel ? ` · replied by ${m.inboundChannel === "sms" ? "text" : "email"}` : ""}
                   </span>
                   <time dateTime={m.createdAt.toISOString()}>{fmt(m.createdAt, "EEE MMM d, h:mm a")}</time>
                 </div>

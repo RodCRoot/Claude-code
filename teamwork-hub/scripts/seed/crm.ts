@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
-import { automationRules, commPreferences, leads, messageTemplates, organizations, users } from "../../src/db/schema";
+import { automationRules, campaigns, inboundMessages, leads, messageTemplates, organizations, segments, users } from "../../src/db/schema";
+import { recordConsent } from "../../src/lib/messaging/preferences";
 import type { Viewer } from "../../src/lib/authz/policy";
 import { convertLead } from "../../src/lib/crm/convert";
 import { createLeadFromInquiry, type InquiryInput } from "../../src/lib/crm/intake";
@@ -43,7 +44,8 @@ export async function seedCrm(ctx: SeedCtx) {
     ["chris_parker", "email", "opted_out", "family portal settings (sample)"],
   ];
   for (const [p, channel, c, source] of consent) {
-    await tx.insert(commPreferences).values({ orgId, personId: ctx.people[p], channel, consent: c, consentSource: source, capturedAt: new Date() }).onConflictDoNothing();
+    // Through recordConsent so every row has history (source + timestamp) like real changes.
+    await recordConsent(tx, { orgId, personId: ctx.people[p], channel, consent: c, source: "seed", detail: source });
   }
 
   // --- Leads -------------------------------------------------------------------------
@@ -151,4 +153,41 @@ export async function seedCrm(ctx: SeedCtx) {
       enabled: false,
     });
   }
+
+  // --- Broadcasts: a SAMPLE announcement template, two segments, one DRAFT campaign ----------
+  const [announce] = await tx
+    .insert(messageTemplates)
+    .values({
+      orgId,
+      key: "announcement",
+      name: "Facility announcement (SAMPLE)",
+      channel: "email",
+      subject: "News from {{org_name}}",
+      body: "SAMPLE TEXT — Hi {{recipient_first_name}}, a quick update for {{athlete_first_name}}'s family: … — {{org_name}}",
+      isSample: true,
+    })
+    .returning();
+  const [activeMembers] = await tx
+    .insert(segments)
+    .values({ orgId, name: "Active members (families)", description: "Athletes with an active membership → their guardians, or adult athletes themselves. (sample)", filters: { audience: "athletes", athleteActive: "active", membershipStatus: "active" }, createdByUserId: erin.userId, isDemo: true })
+    .returning();
+  await tx.insert(segments).values({ orgId, name: "Open leads — new", description: "Lead contacts still in the New stage. (sample)", filters: { audience: "leads", leadStage: "new" }, createdByUserId: erin.userId, isDemo: true });
+  const [draft] = await tx
+    .insert(campaigns)
+    .values({ orgId, name: "Holiday hours (sample draft)", templateId: announce.id, segmentId: activeMembers.id, channels: ["in_app", "email"], status: "draft", createdByUserId: erin.userId, isDemo: true })
+    .returning();
+  ctx.extra.crm.campaign_draft = draft.id;
+  ctx.extra.crm.segment_active = activeMembers.id;
+
+  // An inbound text from an unknown number, waiting in the staff-only unmatched queue.
+  await tx.insert(inboundMessages).values({
+    orgId,
+    channel: "sms",
+    provider: "twilio",
+    providerMessageId: `demo-${orgId}`,
+    fromAddress: "+1 812 555 0142",
+    body: "Hi, is the Saturday speed clinic still on? (sample)",
+    status: "unmatched",
+    reason: "Sender not recognized",
+  });
 }

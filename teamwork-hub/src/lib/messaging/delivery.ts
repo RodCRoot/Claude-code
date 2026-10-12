@@ -2,9 +2,11 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Tx } from "@/db";
 import { commPreferences, messageDeliveries, messages, threads, type DeliveryStatus } from "@/db/schema";
 import { enqueue } from "@/lib/jobs";
+import { undeliverableKey, undeliverableSet } from "./addresses";
 import { sendEmail } from "./channels/email";
 import { sendSms } from "./channels/sms";
 import { parseQuietHours, quietHoursEnd } from "./quiet-hours";
+import { replyToForThread } from "./reply-token";
 import { messagingSettings, type MessagingSettings, type Recipient } from "./routing";
 
 export type Channel = "in_app" | "email" | "sms";
@@ -31,6 +33,8 @@ export async function preferencesFor(tx: Tx, orgId: string, personIds: string[])
  * - in_app: always delivered (visible in the portal; requires no consent).
  * - email: suppressed when opted out or no address; "unknown" consent is allowed (transactional).
  * - sms: requires explicit opt-in (TCPA-style); suppressed otherwise.
+ * - broadcast campaigns (`requireEmailOptIn`): email also requires explicit opt-in.
+ * - addresses a provider reported undeliverable (hard bounce / complaint) are suppressed.
  * - quiet hours: per-person window (on that channel's preference row) overrides the org window;
  *   delivery is deferred to the end of the window in the facility timezone.
  */
@@ -41,6 +45,7 @@ export function planChannel(
   settings: Pick<MessagingSettings, "quietHours" | "timezone">,
   now: Date,
   delayMinutes = 0,
+  opts: { undeliverable?: Set<string>; requireEmailOptIn?: boolean } = {},
 ): ChannelPlan {
   if (channel === "in_app") return { channel, status: "delivered", address: null, reason: null, runAt: null };
   const pref = prefs.find((p) => p.personId === recipient.personId && p.channel === channel);
@@ -48,7 +53,10 @@ export function planChannel(
   const address = channel === "email" ? recipient.email : recipient.phone;
   if (consent === "opted_out") return { channel, status: "suppressed", address, reason: `Recipient opted out of ${channel}${pref?.consentSource ? ` (${pref.consentSource})` : ""}`, runAt: null };
   if (channel === "sms" && consent !== "opted_in") return { channel, status: "suppressed", address, reason: "SMS requires explicit opt-in; none on file", runAt: null };
+  if (channel === "email" && opts.requireEmailOptIn && consent !== "opted_in") return { channel, status: "suppressed", address, reason: "Broadcasts require email opt-in; none on file", runAt: null };
   if (!address) return { channel, status: "suppressed", address: null, reason: `No ${channel === "email" ? "email address" : "mobile number"} on file`, runAt: null };
+  const key = undeliverableKey(channel, address);
+  if (key && opts.undeliverable?.has(key)) return { channel, status: "suppressed", address, reason: "Address marked undeliverable by the provider (bounce or complaint)", runAt: null };
 
   const personal = pref?.quietStartLocal && pref?.quietEndLocal ? parseQuietHours({ start: pref.quietStartLocal, end: pref.quietEndLocal }) : null;
   const window = personal ?? settings.quietHours;
@@ -70,7 +78,7 @@ export function planChannel(
  */
 export async function createDeliveries(
   tx: Tx,
-  input: { orgId: string; messageId: string; recipients: Recipient[]; channels: Channel[]; now?: Date; delayMinutes?: number; settings?: MessagingSettings },
+  input: { orgId: string; messageId: string; recipients: Recipient[]; channels: Channel[]; now?: Date; delayMinutes?: number; settings?: MessagingSettings; requireEmailOptIn?: boolean },
 ) {
   const now = input.now ?? new Date();
   const settings = input.settings ?? (await messagingSettings(tx, input.orgId));
@@ -78,10 +86,18 @@ export async function createDeliveries(
   const seen = new Set<string>();
   const recipients = input.recipients.filter((r) => (seen.has(r.personId) ? false : (seen.add(r.personId), true)));
   const prefs = await preferencesFor(tx, input.orgId, recipients.map((r) => r.personId));
+  const undeliverable = await undeliverableSet(
+    tx,
+    input.orgId,
+    recipients.flatMap((r) => [
+      { channel: "email" as const, address: r.email },
+      { channel: "sms" as const, address: r.phone },
+    ]),
+  );
   const created: (typeof messageDeliveries.$inferSelect)[] = [];
   for (const r of recipients) {
     for (const ch of channels) {
-      const plan = planChannel(r, ch, prefs, settings, now, input.delayMinutes ?? 0);
+      const plan = planChannel(r, ch, prefs, settings, now, input.delayMinutes ?? 0, { undeliverable, requireEmailOptIn: input.requireEmailOptIn });
       const [d] = await tx
         .insert(messageDeliveries)
         .values({ messageId: input.messageId, recipientPersonId: r.personId, channel: ch, address: plan.address, status: plan.status, statusReason: plan.reason })
@@ -111,7 +127,7 @@ export async function deliverOne(
   job: { attempts: number; maxAttempts: number },
 ): Promise<{ status?: string; skipped?: string; error?: string }> {
   const [row] = await tx
-    .select({ d: messageDeliveries, m: messages, orgId: threads.orgId, subject: threads.subject })
+    .select({ d: messageDeliveries, m: messages, orgId: threads.orgId, subject: threads.subject, threadId: threads.id })
     .from(messageDeliveries)
     .innerJoin(messages, eq(messages.id, messageDeliveries.messageId))
     .innerJoin(threads, eq(threads.id, messages.threadId))
@@ -134,19 +150,31 @@ export async function deliverOne(
       .from(commPreferences)
       .where(and(eq(commPreferences.personId, d.recipientPersonId), eq(commPreferences.channel, d.channel)));
     const consent = pref?.consent ?? "unknown";
-    if (consent === "opted_out" || (d.channel === "sms" && consent !== "opted_in")) {
+    const needsOptIn = d.channel === "sms" || (d.channel === "email" && !!m.campaignId);
+    if (consent === "opted_out" || (needsOptIn && consent !== "opted_in")) {
       await tx
         .update(messageDeliveries)
-        .set({ status: "suppressed", statusReason: consent === "opted_out" ? `Recipient opted out of ${d.channel} before sending` : "SMS opt-in no longer on file", updatedAt: new Date() })
+        .set({
+          status: "suppressed",
+          statusReason: consent === "opted_out" ? `Recipient opted out of ${d.channel} before sending` : `${d.channel === "sms" ? "SMS" : "Email"} opt-in no longer on file`,
+          updatedAt: new Date(),
+        })
         .where(eq(messageDeliveries.id, d.id));
       return { status: "suppressed" };
     }
+  }
+  if (d.address && (await undeliverableSet(tx, row.orgId, [{ channel: d.channel, address: d.address }])).size) {
+    await tx
+      .update(messageDeliveries)
+      .set({ status: "suppressed", statusReason: "Address marked undeliverable by the provider before sending", updatedAt: new Date() })
+      .where(eq(messageDeliveries.id, d.id));
+    return { status: "suppressed" };
   }
   if (!d.address) {
     await tx.update(messageDeliveries).set({ status: "suppressed", statusReason: "No address", updatedAt: new Date() }).where(eq(messageDeliveries.id, d.id));
     return { status: "suppressed" };
   }
-  const out = { to: d.address, subject: row.subject, body: m.body };
+  const out = { to: d.address, subject: row.subject, body: m.body, replyTo: d.channel === "email" ? replyToForThread(row.threadId) : null };
   const res = d.channel === "email" ? await sendEmail(out) : await sendSms(out);
   const attempts = d.attempts + 1;
   if (res.status === "failed") {

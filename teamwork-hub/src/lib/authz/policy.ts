@@ -114,6 +114,15 @@ const STAFF_ATHLETE_CAPS: Record<"owner" | "admin" | "operations" | "coach", Cap
   coach: ["profile.read", "training.read", "training.write", "training.log", "health.read", "health.write", "health.review", "booking.create", "messages.send", "notes.read"],
 };
 
+/**
+ * Whether a staff role may use health data at all (e.g. target a broadcast by a missing medical
+ * form). Operations has no health access; coaches only for assigned athletes (they cannot build
+ * org-wide segments anyway).
+ */
+export function staffHasHealthAccess(v: Viewer): boolean {
+  return isStaff(v) && STAFF_ATHLETE_CAPS[v.role as keyof typeof STAFF_ATHLETE_CAPS].includes("health.read");
+}
+
 const today = () => new Date().toISOString().slice(0, 10);
 
 /** Athlete ids a coach is assigned to, directly or through a group, on the current date. */

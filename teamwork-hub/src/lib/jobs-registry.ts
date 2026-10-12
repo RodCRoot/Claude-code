@@ -17,6 +17,7 @@ import type { AutomationTrigger } from "@/db/schema";
 import type { JobHandler } from "@/lib/jobs";
 import { dispatch, evaluate, notifySession, type EvaluatePayload } from "@/lib/automation/engine";
 import { onLeadConverted } from "@/lib/crm/handlers";
+import { CAMPAIGN_SEND_JOB, sendCampaign } from "@/lib/messaging/campaigns";
 import { deliverOne } from "@/lib/messaging/delivery";
 import { billingJobHandlers } from "@/lib/billing/jobs";
 import { calendarJobHandlers } from "@/lib/calendar/sync";
@@ -40,6 +41,8 @@ export const JOB_TYPES = {
   MESSAGING_DELIVER: "messaging.deliver",
   /** payload: { orgId, leadId, athleteId, … } — enqueued by CRM lead conversion. */
   CRM_LEAD_CONVERTED: "crm.lead_converted",
+  /** payload: { orgId, campaignId } — enqueued when an owner/admin approves a broadcast (runAt = schedule). */
+  CAMPAIGN_SEND: CAMPAIGN_SEND_JOB,
 } as const;
 
 export const jobHandlers: Record<string, JobHandler> = {
@@ -79,6 +82,8 @@ export const jobHandlers: Record<string, JobHandler> = {
     if (res.error) throw new Error(res.error);
     return res;
   },
+
+  [JOB_TYPES.CAMPAIGN_SEND]: (p) => db.transaction((tx) => sendCampaign(tx, { orgId: str(p.orgId, "orgId"), campaignId: str(p.campaignId, "campaignId") })),
 
   [JOB_TYPES.CRM_LEAD_CONVERTED]: (p) =>
     db.transaction((tx) => onLeadConverted(tx, { orgId: str(p.orgId, "orgId"), leadId: str(p.leadId, "leadId"), athleteId: str(p.athleteId, "athleteId") })),

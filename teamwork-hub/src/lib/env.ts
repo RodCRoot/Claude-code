@@ -54,6 +54,12 @@ const schema = z.object({
   DELIVERY_TEST_RECIPIENTS: z.string().optional(),
   /** Must be explicitly "true" for any real external delivery. */
   DELIVERY_ENABLED: z.enum(["true", "false"]).default("false"),
+  /** HTTP Basic password providers send to Postmark webhooks and SendGrid Inbound Parse. */
+  EMAIL_WEBHOOK_SECRET: z.string().min(16, "EMAIL_WEBHOOK_SECRET must be at least 16 characters").optional(),
+  /** SendGrid Signed Event Webhook verification key (base64 DER or PEM). */
+  SENDGRID_WEBHOOK_PUBLIC_KEY: z.string().optional(),
+  /** Domain whose `reply+<token>@` addresses route to the inbound email webhook. */
+  EMAIL_INBOUND_DOMAIN: z.string().optional(),
 
   /** Optional site-wide HTTP Basic Auth gate for a private staging deployment (src/proxy.ts). */
   STAGING_BASIC_AUTH_USER: z.string().optional(),

@@ -22,7 +22,7 @@ const httpTransport: Transport = async (msg) => {
     const res = await fetch("https://api.postmarkapp.com/email", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json", "X-Postmark-Server-Token": key },
-      body: JSON.stringify({ From: from, To: msg.to, Subject: msg.subject, TextBody: msg.body, MessageStream: "outbound" }),
+      body: JSON.stringify({ From: from, To: msg.to, Subject: msg.subject, TextBody: msg.body, MessageStream: "outbound", ...(msg.replyTo ? { ReplyTo: msg.replyTo } : {}) }),
     });
     if (!res.ok) throw new Error(`Postmark responded ${res.status}`);
     const json = (await res.json()) as { MessageID?: string };
@@ -35,6 +35,7 @@ const httpTransport: Transport = async (msg) => {
       body: JSON.stringify({
         personalizations: [{ to: [{ email: msg.to }] }],
         from: { email: from },
+        ...(msg.replyTo ? { reply_to: { email: msg.replyTo } } : {}),
         subject: msg.subject,
         content: [{ type: "text/plain", value: msg.body }],
       }),

@@ -18,6 +18,7 @@ import { audit } from "@/lib/audit";
 import { assertCan, type Viewer } from "@/lib/authz/policy";
 import { enqueue } from "@/lib/jobs";
 import { DomainError } from "@/lib/messaging/errors";
+import { logConsentEvent } from "@/lib/messaging/preferences";
 import { ageOn } from "@/lib/messaging/routing";
 import { todayLocal } from "@/lib/time";
 import { findPossibleDuplicates } from "./intake";
@@ -178,10 +179,15 @@ export async function convertLead(tx: Tx, v: Viewer, input: z.input<typeof conve
     // Carry consent over only where the existing person has no preference recorded (never overrides an opt-out).
     const prefs = await tx.select().from(commPreferences).where(eq(commPreferences.personId, ownId));
     for (const pr of prefs) {
-      await tx
+      const consentSource = `${pr.consentSource ?? "lead"} (via lead conversion)`;
+      const inserted = await tx
         .insert(commPreferences)
-        .values({ orgId: v.orgId, personId: linkedTo, channel: pr.channel, consent: pr.consent, consentSource: `${pr.consentSource ?? "lead"} (via lead conversion)`, capturedAt: pr.capturedAt })
-        .onConflictDoNothing();
+        .values({ orgId: v.orgId, personId: linkedTo, channel: pr.channel, consent: pr.consent, consentSource, capturedAt: pr.capturedAt })
+        .onConflictDoNothing()
+        .returning({ id: commPreferences.id });
+      if (inserted.length) {
+        await logConsentEvent(tx, { orgId: v.orgId, personId: linkedTo, channel: pr.channel, consent: pr.consent, source: "lead_conversion", detail: consentSource, actorUserId: v.userId, now });
+      }
     }
   };
   if (ath.linked) await archiveLinked(lead.personId, ath.personId);

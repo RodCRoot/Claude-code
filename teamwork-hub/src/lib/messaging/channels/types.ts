@@ -1,6 +1,6 @@
 import type { DeliveryStatus } from "@/db/schema";
 
-export type OutboundMessage = { to: string; subject: string; body: string };
+export type OutboundMessage = { to: string; subject: string; body: string; replyTo?: string | null };
 
 /** What an adapter reports. Adapters never claim success they did not get from a provider. */
 export type ChannelResult = {
