@@ -39,6 +39,7 @@ import {
   updatePersonAction,
 } from "../actions";
 import { AddGuardianForm, GuardianEditor } from "./guardian-forms";
+import { CommunicationCard } from "../../messages/_components/staff-consent";
 import { attendanceHistory } from "@/lib/scheduling";
 import { AttendanceHistoryPanel } from "@/lib/scheduling/components/attendance-history";
 
@@ -212,6 +213,8 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
                 )}
               </CardBody>
             </Card>
+
+            {can(v, "crm.manage") ? <CommunicationCard v={v} personId={personId} /> : null}
 
             {athlete ? (
               <Card>

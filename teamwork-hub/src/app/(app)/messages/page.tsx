@@ -24,7 +24,14 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
         <PageHeader
           title="Messages"
           description="Conversations with the Teamwork staff about your athletes."
-          actions={athletes.length ? <ButtonLink href="/messages/new">Message the team</ButtonLink> : null}
+          actions={
+            <>
+              <ButtonLink href="/messages/preferences" variant="outline">
+                Email &amp; text preferences
+              </ButtonLink>
+              {athletes.length ? <ButtonLink href="/messages/new">Message the team</ButtonLink> : null}
+            </>
+          }
         />
         {!athletes.length ? (
           <Callout tone="info" className="mb-4">

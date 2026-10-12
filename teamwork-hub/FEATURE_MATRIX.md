@@ -73,8 +73,11 @@ Security review: see `docs/SECURITY-REVIEW.md` (10 findings fixed with regressio
 | Pipeline (configurable stages, owner, tags, tasks, assessment scheduling, conversion with explicit link/create) | verified locally | `crm.test.ts` | Scheduling an assessment links a session but doesn't create a booking |
 | Shared inbox, internal notes, assignment, athlete context, per-guardian threads | verified locally | `messaging.test.ts` | Attachments not supported |
 | Delivery records; consent/opt-out, quiet hours (DST-safe), guardian routing, test-recipient redirect | verified locally | `messaging.test.ts` | — |
-| Email (Postmark/SendGrid) & SMS (Twilio) adapters | implemented, configuration required | `not_configured` path tested | No inbound replies, bounce, or STOP handling (needs provider webhooks) |
-| Templates, automations (8 triggers), preview, dedupe, retry, dead-letter outbox | verified locally | `messaging.test.ts` | No broadcast campaigns/drip sequences |
+| Email (Postmark/SendGrid) & SMS (Twilio) adapters | implemented, configuration required | `not_configured` path tested | No delivery-receipt webhooks |
+| Templates, automations (8 triggers), preview, dedupe, retry, dead-letter outbox | verified locally | `messaging.test.ts` | No drip sequences |
+| Family communication preferences (per-channel consent, quiet hours) + append-only consent history; staff history view | verified locally | `messaging-preferences.test.ts` | — |
+| Segments (live counts) + broadcast campaigns (preview after routing/consent/quiet hours, owner/admin approval, outbox send, per-recipient dedupe, report); health-filter restriction | verified locally | `messaging-campaigns.test.ts` | No A/B, link tracking |
+| Provider webhooks: bounces/complaints → undeliverable, Twilio STOP/START/HELP → consent, inbound email/SMS threading + unmatched queue | verified locally (mocked providers, signatures verified) | `messaging-webhooks.test.ts` | Needs provider setup (docs/modules/crm-messaging.md); not sandbox-verified |
 
 ## Forms & signatures
 

@@ -6,6 +6,7 @@ import { commPreferences, leads, organizations, people, tasks, users } from "@/d
 import { audit } from "@/lib/audit";
 import { enqueue } from "@/lib/jobs";
 import { DomainError } from "@/lib/messaging/errors";
+import { logConsentEvent } from "@/lib/messaging/preferences";
 import { ensureStages } from "./stages";
 
 export const PREFERRED_TIMES = ["Weekday mornings", "Weekday afternoons", "Weekday evenings", "Weekends"] as const;
@@ -170,10 +171,13 @@ export async function createLeadFromInquiry(tx: Tx, orgId: string, input: Inquir
 
   // Consent is recorded on the contact person with source + timestamp. Unchecked = no consent.
   for (const [channel, given] of [["email", d.consentEmail], ["sms", d.consentSms]] as const) {
-    await tx
+    const consentSource = `${source} form${given ? " checkbox" : " (not checked)"}`;
+    const inserted = await tx
       .insert(commPreferences)
-      .values({ orgId, personId: contact.id, channel, consent: given ? "opted_in" : "unknown", consentSource: `${source} form${given ? " checkbox" : " (not checked)"}`, capturedAt: now })
-      .onConflictDoNothing();
+      .values({ orgId, personId: contact.id, channel, consent: given ? "opted_in" : "unknown", consentSource, capturedAt: now })
+      .onConflictDoNothing()
+      .returning({ id: commPreferences.id });
+    if (inserted.length) await logConsentEvent(tx, { orgId, personId: contact.id, channel, consent: given ? "opted_in" : "unknown", source: "inquiry_form", detail: consentSource, now });
   }
 
   const name = `${d.inquiringFor === "child" ? d.athleteFirstName : d.contactFirstName} ${d.inquiringFor === "child" ? d.athleteLastName : d.contactLastName}`;

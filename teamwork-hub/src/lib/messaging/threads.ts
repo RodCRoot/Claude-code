@@ -268,7 +268,7 @@ export async function loadThread(tx: Tx, v: Viewer, threadId: string) {
     participants: staff ? participants : participants.map((p) => ({ ...p, lastReadAt: null })),
     messages: msgRows.map((r) => ({
       ...r.m,
-      senderName: r.senderName ?? (r.m.automationRuleId ? "Automated message" : "Teamwork"),
+      senderName: r.senderName ?? (r.m.automationRuleId ? "Automated message" : r.m.campaignId ? "Teamwork (announcement)" : "Teamwork"),
       fromStaff: !!r.senderRole && ["owner", "admin", "operations", "coach"].includes(r.senderRole),
       mine: r.m.senderUserId === v.userId,
       deliveries: visibleDeliveries.filter((x) => x.d.messageId === r.m.id).map((x) => ({ ...x.d, recipientName: x.recipientName })),
@@ -568,6 +568,8 @@ export async function systemSend(
     athleteId?: string | null;
     leadId?: string | null;
     automationRuleId?: string | null;
+    /** Broadcast campaign: email then requires explicit opt-in (re-checked at send time). */
+    campaignId?: string | null;
     dedupeKey: string;
     now?: Date;
   },
@@ -583,12 +585,61 @@ export async function systemSend(
   await addParticipant(tx, t.id, { personId: input.recipient.personId, userId: input.recipient.userId, role: input.recipient.role });
   const [m] = await tx
     .insert(messages)
-    .values({ threadId: t.id, body: input.body, automationRuleId: input.automationRuleId ?? null, clientMutationId: input.dedupeKey, createdAt: now })
+    .values({ threadId: t.id, body: input.body, automationRuleId: input.automationRuleId ?? null, campaignId: input.campaignId ?? null, clientMutationId: input.dedupeKey, createdAt: now })
     .onConflictDoNothing({ target: messages.clientMutationId })
     .returning();
   if (!m) throw new Error("dedupe race"); // caller's transaction rolls back the empty thread
-  await createDeliveries(tx, { orgId: input.orgId, messageId: m.id, recipients: [input.recipient], channels: input.channels, now });
+  await createDeliveries(tx, { orgId: input.orgId, messageId: m.id, recipients: [input.recipient], channels: input.channels, now, requireEmailOptIn: !!input.campaignId });
   return { messageId: m.id, threadId: t.id, duplicate: false };
+}
+
+/**
+ * May this (non-staff) person still take part in the thread? They must be a participant and,
+ * for athlete threads, still be routed for that athlete (active link that allows messaging).
+ */
+export async function familyParticipantEligible(tx: Tx, t: Thread, personId: string): Promise<boolean> {
+  if (t.kind === "staff") return false;
+  const [p] = await tx
+    .select()
+    .from(threadParticipants)
+    .where(and(eq(threadParticipants.threadId, t.id), eq(threadParticipants.personId, personId), sql`${threadParticipants.role} <> 'staff'`));
+  if (!p) return false;
+  return stillEligible(tx, t.orgId, t, p, new Map());
+}
+
+/**
+ * Records a reply that arrived by email/SMS (provider webhook or staff attaching an unmatched
+ * inbound message). Staff participants get an in-app copy; nothing is sent externally.
+ */
+export async function postInboundMessage(
+  tx: Tx,
+  input: { thread: Thread; senderPersonId: string | null; body: string; channel: "email" | "sms"; now?: Date; actor?: { userId: string; role: string } },
+) {
+  const now = input.now ?? new Date();
+  const t = input.thread;
+  let senderUserId: string | null = null;
+  if (input.senderPersonId) {
+    const [u] = await tx.select({ id: users.id }).from(users).where(and(eq(users.personId, input.senderPersonId), eq(users.orgId, t.orgId)));
+    senderUserId = u?.id ?? null;
+  }
+  const [m] = await tx
+    .insert(messages)
+    .values({ threadId: t.id, senderUserId, senderPersonId: input.senderPersonId, body: input.body.slice(0, 5000), inboundChannel: input.channel, createdAt: now })
+    .returning();
+  const parts = await tx.select().from(threadParticipants).where(eq(threadParticipants.threadId, t.id));
+  const recipients: Recipient[] = [];
+  for (const p of parts) {
+    if (p.role !== "staff" || !p.personId) continue;
+    const r = await recipientForPerson(tx, t.orgId, p.personId, "staff");
+    if (r) recipients.push(r);
+  }
+  await createDeliveries(tx, { orgId: t.orgId, messageId: m.id, recipients, channels: [], now });
+  await tx.update(threads).set({ lastMessageAt: now, status: t.status === "closed" ? "open" : t.status }).where(eq(threads.id, t.id));
+  await audit(tx, { orgId: t.orgId, actorUserId: input.actor?.userId ?? null, actorRole: input.actor?.role ?? "webhook" }, "messaging.inbound_threaded", "thread", t.id, {
+    summary: `${input.channel === "sms" ? "Text" : "Email"} reply added to the conversation${input.actor ? " by staff" : ""}`,
+    after: { messageId: m.id },
+  });
+  return m;
 }
 
 /** Athletes the family viewer may start a conversation about. */

@@ -4,9 +4,18 @@ import { emailConfig } from "@/lib/messaging/channels/email";
 import { smsConfig } from "@/lib/messaging/channels/sms";
 import { testRecipients } from "@/lib/messaging/channels/types";
 
-export function StaffTabs({ v, current }: { v: Viewer; current: "inbox" | "templates" | "automations" | "outbox" }) {
+export function StaffTabs({
+  v,
+  current,
+}: {
+  v: Viewer;
+  current: "inbox" | "unmatched" | "campaigns" | "segments" | "templates" | "automations" | "outbox";
+}) {
   const tabs = [{ key: "inbox", label: "Inbox", href: "/messages" }];
   if (can(v, "crm.manage")) {
+    tabs.push({ key: "unmatched", label: "Unmatched replies", href: "/messages/unmatched" });
+    tabs.push({ key: "campaigns", label: "Campaigns", href: "/messages/campaigns" });
+    tabs.push({ key: "segments", label: "Segments", href: "/messages/segments" });
     tabs.push({ key: "templates", label: "Templates", href: "/messages/templates" });
     tabs.push({ key: "automations", label: "Automations", href: "/messages/automations" });
   }
@@ -25,6 +34,15 @@ const DELIVERY: Record<string, { label: string; variant: BadgeVariant }> = {
 };
 
 const CHANNEL: Record<string, string> = { in_app: "In-app", email: "Email", sms: "SMS" };
+
+export const CAMPAIGN_BADGE: Record<string, BadgeVariant> = {
+  draft: "neutral",
+  pending_approval: "yellow",
+  approved: "blue",
+  sending: "blue",
+  sent: "green",
+  cancelled: "neutral",
+};
 
 export function DeliveryBadge({ channel, status, reason }: { channel: string; status: string; reason?: string | null }) {
   const d = DELIVERY[status] ?? { label: status, variant: "neutral" as const };
