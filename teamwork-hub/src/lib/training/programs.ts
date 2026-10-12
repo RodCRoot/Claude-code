@@ -5,6 +5,7 @@ import { exercises, programAssignments, programDays, programItems, programPhases
 import { assertCan, AuthzError, isStaff, type Viewer } from "@/lib/authz/policy";
 import { audit } from "@/lib/audit";
 import { actor, TrainingError } from "./common";
+import { groupsFromLabels, normalizeDay } from "./program-layout";
 
 export type Program = typeof programs.$inferSelect;
 export type ProgramPhase = typeof programPhases.$inferSelect;
@@ -308,4 +309,194 @@ export async function duplicateProgram(tx: Tx, v: Viewer, programId: string, nam
   }
   await audit(tx, actor(v), "training.program.duplicate", "program", p.id, { summary: `Duplicated from ${src.name}`, after: { sourceProgramId: programId } });
   return p;
+}
+
+// --- Builder: layout (drag-and-drop / keyboard reorder), copy day, bulk set-scheme edit ----------
+
+/** Lock the program row and check the client's version (optimistic concurrency for the builder). */
+async function lockProgramVersion(tx: Tx, programId: string, expectedVersion: number | undefined) {
+  const [row] = await tx.select({ v: programs.currentVersion }).from(programs).where(eq(programs.id, programId)).for("update");
+  const current = row?.v ?? 0;
+  if (expectedVersion != null && current !== expectedVersion) {
+    throw new TrainingError(`This program changed since you loaded it (now v${current}). Reload to see the latest version, then try again.`);
+  }
+  return current;
+}
+
+const layoutInput = z.object({
+  expectedVersion: z.number().int().min(1).optional(),
+  days: z
+    .array(
+      z.object({
+        dayId: z.string().uuid(),
+        items: z.array(z.object({ id: z.string().uuid(), group: z.string().min(1).max(100) })).max(60),
+      }),
+    )
+    .min(1)
+    .max(14),
+});
+export type LayoutInput = z.input<typeof layoutInput>;
+
+/**
+ * Persist item order / day / block membership for one or more days atomically.
+ * - The listed days must belong to the program, and together list exactly the items they hold now
+ *   (an item may move between listed days; nothing may be dropped, duplicated or pulled in from
+ *   elsewhere).
+ * - Labels and block types are recomputed server-side (`normalizeDay`); client labels are ignored.
+ * - The program row is locked and the version checked; one successful save bumps the version once.
+ * Assigned workouts are frozen snapshots and are never touched.
+ */
+export async function saveProgramLayout(tx: Tx, v: Viewer, programId: string, raw: LayoutInput) {
+  await programFor(tx, v, programId);
+  const input = layoutInput.parse(raw);
+  const current = await lockProgramVersion(tx, programId, input.expectedVersion);
+  const dayIds = input.days.map((d) => d.dayId);
+  if (new Set(dayIds).size !== dayIds.length) throw new TrainingError("A day is listed twice.");
+  const days = await tx.select().from(programDays).where(and(eq(programDays.programId, programId), inArray(programDays.id, dayIds)));
+  if (days.length !== dayIds.length) throw new TrainingError("Day not found.");
+  const existing = await tx.select().from(programItems).where(inArray(programItems.dayId, dayIds));
+  const byId = new Map(existing.map((i) => [i.id, i]));
+  const sent = input.days.flatMap((d) => d.items.map((i) => i.id));
+  if (new Set(sent).size !== sent.length) throw new TrainingError("An exercise is listed twice.");
+  if (sent.length !== existing.length || sent.some((id) => !byId.has(id))) {
+    throw new TrainingError("The days changed since you loaded them (an exercise was added or removed). Reload and try again.");
+  }
+
+  const updates: { id: string; dayId: string; sortOrder: number; blockLabel: string; blockType: "straight" | "superset" | "circuit" }[] = [];
+  for (const d of input.days) {
+    for (const n of normalizeOrFail(d.items.map((i) => ({ id: i.id, group: i.group, blockType: byId.get(i.id)!.blockType })))) {
+      const cur = byId.get(n.id)!;
+      if (cur.dayId !== d.dayId || cur.sortOrder !== n.sortOrder || cur.blockLabel !== n.blockLabel || cur.blockType !== n.blockType) {
+        updates.push({ ...n, dayId: d.dayId });
+      }
+    }
+  }
+  if (!updates.length) return { version: current, changed: 0 };
+  for (const u of updates) {
+    await tx.update(programItems).set({ dayId: u.dayId, sortOrder: u.sortOrder, blockLabel: u.blockLabel, blockType: u.blockType }).where(eq(programItems.id, u.id));
+  }
+  const ver = await bump(tx, programId);
+  const dayName = (id: string) => {
+    const d = days.find((x) => x.id === id)!;
+    return `W${d.week}D${d.dayIndex}`;
+  };
+  const moved = updates.filter((u) => byId.get(u.id)!.dayId !== u.dayId).length;
+  await audit(tx, actor(v), "training.program.layout", "program", programId, {
+    summary: `Reordered ${dayIds.map(dayName).join(", ")}${moved ? ` (${moved} moved between days)` : ""} (v${ver})`,
+    before: { items: updates.map((u) => ({ id: u.id, dayId: byId.get(u.id)!.dayId, sortOrder: byId.get(u.id)!.sortOrder, blockLabel: byId.get(u.id)!.blockLabel })) },
+    after: { items: updates.map((u) => ({ id: u.id, dayId: u.dayId, sortOrder: u.sortOrder, blockLabel: u.blockLabel })) },
+  });
+  return { version: ver, changed: updates.length };
+}
+
+function normalizeOrFail(items: Parameters<typeof normalizeDay>[0]) {
+  try {
+    return normalizeDay(items);
+  } catch (e) {
+    throw new TrainingError((e as Error).message);
+  }
+}
+
+const copyDayInput = z.object({
+  week: z.number().int().min(1).max(104),
+  dayIndex: z.number().int().min(1).max(7),
+  title: z.string().trim().max(80).nullable().optional(),
+});
+
+/**
+ * Copy one day's items into another slot. An empty slot gets a new day (phase follows the target
+ * week); an existing day gets the copies appended as new blocks after its own.
+ */
+export async function copyDay(tx: Tx, v: Viewer, programId: string, dayId: string, raw: z.input<typeof copyDayInput>) {
+  await programFor(tx, v, programId);
+  const input = copyDayInput.parse(raw);
+  await lockProgramVersion(tx, programId, undefined);
+  const src = await dayOf(tx, programId, dayId);
+  if (src.week === input.week && src.dayIndex === input.dayIndex) throw new TrainingError("Pick a different week or day to copy into.");
+  const srcItems = await tx.select().from(programItems).where(eq(programItems.dayId, src.id)).orderBy(asc(programItems.sortOrder));
+  if (!srcItems.length) throw new TrainingError("That day has no exercises to copy.");
+  let [targetDay] = await tx.select().from(programDays).where(and(eq(programDays.programId, programId), eq(programDays.week, input.week), eq(programDays.dayIndex, input.dayIndex)));
+  const created = !targetDay;
+  if (!targetDay) {
+    const phases = await tx.select().from(programPhases).where(eq(programPhases.programId, programId));
+    const starts = phaseStartWeeks(phases);
+    const phase = phases.find((p) => input.week >= starts.get(p.id)! && input.week < starts.get(p.id)! + p.weeks);
+    [targetDay] = await tx
+      .insert(programDays)
+      .values({ programId, week: input.week, dayIndex: input.dayIndex, title: input.title || src.title, phaseId: phase?.id ?? src.phaseId })
+      .returning();
+  }
+  const existing = created ? [] : await tx.select().from(programItems).where(eq(programItems.dayId, targetDay.id)).orderBy(asc(programItems.sortOrder));
+  const inserted = await tx
+    .insert(programItems)
+    .values(srcItems.map((i, k) => ({ dayId: targetDay.id, sortOrder: existing.length + k, exerciseId: i.exerciseId, blockLabel: i.blockLabel, blockType: i.blockType, prescription: i.prescription, progression: i.progression, notes: i.notes })))
+    .returning();
+  // Re-letter the target day: its own blocks first, then the copied blocks.
+  for (const n of normalizeOrFail([...groupsFromLabels("existing", existing), ...groupsFromLabels("copied", inserted)])) {
+    await tx.update(programItems).set({ sortOrder: n.sortOrder, blockLabel: n.blockLabel, blockType: n.blockType }).where(eq(programItems.id, n.id));
+  }
+  const ver = await bump(tx, programId);
+  await audit(tx, actor(v), "training.program.copy_day", "program", programId, {
+    summary: `Copied W${src.week}D${src.dayIndex} ${created ? "to new day" : "into"} W${input.week}D${input.dayIndex} (${srcItems.length} exercises, v${ver})`,
+  });
+  return { dayId: targetDay.id, created, copied: srcItems.length, version: ver };
+}
+
+const schemePatch = z
+  .object({
+    sets: z.number().int().min(1).max(20).optional(),
+    reps: z.number().int().min(1).max(200).optional(),
+    repsText: z.string().trim().max(40).optional(),
+    load: loadSchema.optional(),
+    restS: z.number().int().min(0).max(3600).optional(),
+    tempo: z.string().trim().max(20).optional(),
+    /** "working" leaves warm-up set groups untouched. */
+    applyTo: z.enum(["working", "all"]).default("working"),
+  })
+  .refine((p) => p.sets != null || p.reps != null || !!p.repsText || p.load != null || p.restS != null || !!p.tempo, "Enter at least one value to change.");
+export type SchemePatch = z.input<typeof schemePatch>;
+
+/** Apply one set-scheme change (sets / reps / load / rest / tempo) to many items at once; one version bump. */
+export async function bulkEditScheme(tx: Tx, v: Viewer, programId: string, itemIds: string[], raw: SchemePatch) {
+  await programFor(tx, v, programId);
+  const patch = schemePatch.parse(raw);
+  const ids = [...new Set(itemIds)];
+  if (!ids.length) throw new TrainingError("Select at least one exercise.");
+  if (ids.length > 200) throw new TrainingError("Too many exercises selected.");
+  if (ids.some((id) => !z.string().uuid().safeParse(id).success)) throw new TrainingError("Exercise not found.");
+  await lockProgramVersion(tx, programId, undefined);
+  const rows = await tx
+    .select({ item: programItems })
+    .from(programItems)
+    .innerJoin(programDays, eq(programDays.id, programItems.dayId))
+    .where(and(eq(programDays.programId, programId), inArray(programItems.id, ids)));
+  if (rows.length !== ids.length) throw new TrainingError("Exercise not found.");
+  if (patch.load?.type === "percent_max" && patch.load.maxExerciseId) await checkExercise(tx, v.orgId, [patch.load.maxExerciseId]);
+  for (const { item } of rows) {
+    const prescription = item.prescription.map((g) => {
+      if (patch.applyTo === "working" && g.isWarmup) return g;
+      const n: SetPrescription = { ...g };
+      if (patch.sets != null) n.sets = patch.sets;
+      if (patch.reps != null) {
+        n.reps = patch.reps;
+        if (!patch.repsText) delete n.repsText;
+      }
+      if (patch.repsText) n.repsText = patch.repsText;
+      if (patch.load) n.load = patch.load;
+      if (patch.restS != null) n.restS = patch.restS;
+      if (patch.tempo) n.tempo = patch.tempo;
+      return n;
+    });
+    const checked = z.array(setPrescriptionSchema).min(1).max(8).safeParse(prescription);
+    if (!checked.success) throw new TrainingError(`${item.blockLabel}: ${checked.error.issues[0]?.message ?? "invalid set scheme"}`);
+    await tx.update(programItems).set({ prescription: checked.data as SetPrescription[] }).where(eq(programItems.id, item.id));
+  }
+  const ver = await bump(tx, programId);
+  const { applyTo, ...changes } = patch;
+  await audit(tx, actor(v), "training.program.bulk_scheme", "program", programId, {
+    summary: `Bulk-edited set scheme on ${rows.length} exercises (${applyTo === "all" ? "all" : "working"} sets, v${ver})`,
+    before: { items: rows.map((r) => ({ id: r.item.id, prescription: r.item.prescription })) },
+    after: { itemIds: ids, changes },
+  });
+  return { updated: rows.length, version: ver };
 }

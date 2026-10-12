@@ -12,12 +12,14 @@ import { ActionForm, SubmitButton } from "@/components/forms";
 import { Badge, Callout, Card, CardBody, CardHeader, Field, Input, PageHeader, Select, StatusBadge, Textarea } from "@/components/ui";
 import { TrainingNav } from "../../_components/training-nav";
 import { ItemForm } from "../../_components/item-form";
+import { ProgramWeekBuilder } from "../../_components/program-builder";
 import {
   addDayAction,
   addPhaseAction,
   applyTemplateAction,
   assignProgramAction,
   cancelAssignmentAction,
+  copyDayAction,
   copyWeekAction,
   deleteDayAction,
   deleteItemAction,
@@ -184,57 +186,89 @@ export default async function ProgramBuilder({ params, searchParams }: { params:
             ))}
           </nav>
           {weekDays.length === 0 ? <p className="mb-4 text-sm text-ink-3">Week {week} has no days yet. Add one below or copy another week into it.</p> : null}
-          <div className="space-y-4">
-            {weekDays.map((d) => (
-              <section key={d.id} className="rounded-xl border border-edge p-3" aria-labelledby={`day-${d.id}`}>
-                <header className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <h3 id={`day-${d.id}`} className="font-semibold">
-                    W{d.week} · Day {d.dayIndex}: {d.title}
-                    {phaseOf(d.phaseId) ? <Badge className="ml-2">{phaseOf(d.phaseId)!.name}</Badge> : null}
-                  </h3>
-                  <ActionForm action={deleteDayAction}>
-                    <input type="hidden" name="programId" value={program.id} />
-                    <input type="hidden" name="dayId" value={d.id} />
-                    <SubmitButton size="sm" variant="ghost" confirm={`Delete W${d.week} Day ${d.dayIndex} from the template? Existing workouts are not affected.`}>
-                      Delete day
-                    </SubmitButton>
-                  </ActionForm>
-                </header>
-                <ul className="space-y-2">
-                  {d.items.map((it) => (
-                    <li key={it.id} className="rounded-lg border border-edge/70 bg-surface-2/40 p-2">
-                      <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <span className="font-medium">
-                          <span className="mr-2 rounded bg-brand/10 px-1.5 py-0.5 text-xs font-bold text-brand">{it.blockLabel}</span>
-                          {it.exercise.name}
-                          <span className="ml-2 text-xs text-ink-3">{it.blockType}</span>
-                        </span>
-                        <span className="text-xs text-ink-2">
-                          {it.prescription.map(templateText).join(" · ")}
-                          {it.progression.kind === "linear_load" ? ` · +${it.progression.perWeek}${it.progression.unit === "percent" ? "%" : ` ${it.progression.unit}`}/wk` : ""}
-                        </span>
-                      </div>
-                      <details className="mt-1">
-                        <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium text-brand">Edit</summary>
-                        <ItemForm programId={program.id} dayId={d.id} item={it} exercises={exercises} />
-                        <ActionForm action={deleteItemAction} className="mt-2">
-                          <input type="hidden" name="programId" value={program.id} />
-                          <input type="hidden" name="itemId" value={it.id} />
-                          <SubmitButton size="sm" variant="danger" confirm="Remove this exercise from the template?">
-                            Remove exercise
-                          </SubmitButton>
-                        </ActionForm>
-                      </details>
-                    </li>
-                  ))}
-                </ul>
-                <details className="mt-2">
-                  <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium text-brand">+ Add exercise</summary>
-                  <ItemForm programId={program.id} dayId={d.id} exercises={exercises} />
-                </details>
-              </section>
-            ))}
-          </div>
+          {weekDays.length ? (
+            <ProgramWeekBuilder
+              programId={program.id}
+              version={program.currentVersion}
+              days={weekDays.map((d) => ({
+                id: d.id,
+                week: d.week,
+                dayIndex: d.dayIndex,
+                title: d.title,
+                phaseName: phaseOf(d.phaseId)?.name ?? null,
+                items: d.items.map((it) => ({
+                  id: it.id,
+                  blockLabel: it.blockLabel,
+                  blockType: it.blockType,
+                  exerciseName: it.exercise.name,
+                  summary:
+                    it.prescription.map(templateText).join(" · ") +
+                    (it.progression.kind === "linear_load" ? ` · +${it.progression.perWeek}${it.progression.unit === "percent" ? "%" : ` ${it.progression.unit}`}/wk` : ""),
+                })),
+              }))}
+              itemEditors={Object.fromEntries(
+                weekDays.flatMap((d) =>
+                  d.items.map((it) => [
+                    it.id,
+                    <details key={it.id} className="mt-1">
+                      <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium text-brand">Edit</summary>
+                      <ItemForm programId={program.id} dayId={d.id} item={it} exercises={exercises} />
+                      <ActionForm action={deleteItemAction} className="mt-2">
+                        <input type="hidden" name="programId" value={program.id} />
+                        <input type="hidden" name="itemId" value={it.id} />
+                        <SubmitButton size="sm" variant="danger" confirm="Remove this exercise from the template?">
+                          Remove exercise
+                        </SubmitButton>
+                      </ActionForm>
+                    </details>,
+                  ]),
+                ),
+              )}
+              dayTools={Object.fromEntries(
+                weekDays.map((d) => [
+                  d.id,
+                  <div key={d.id} className="flex flex-wrap items-start gap-2">
+                    <details>
+                      <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium text-brand">Copy day</summary>
+                      <ActionForm action={copyDayAction} className="mt-1 grid grid-cols-2 gap-2 rounded-lg border border-edge p-2 sm:grid-cols-[5rem_5rem_1fr_auto] sm:items-end">
+                        <input type="hidden" name="programId" value={program.id} />
+                        <input type="hidden" name="dayId" value={d.id} />
+                        <Field label="To week" htmlFor={`cd-w-${d.id}`}>
+                          <Input id={`cd-w-${d.id}`} name="week" type="number" min={1} max={104} defaultValue={Math.min(d.week + 1, 104)} required />
+                        </Field>
+                        <Field label="Day #" htmlFor={`cd-d-${d.id}`}>
+                          <Input id={`cd-d-${d.id}`} name="dayIndex" type="number" min={1} max={7} defaultValue={d.dayIndex} required />
+                        </Field>
+                        <Field label="Title (new day)" htmlFor={`cd-t-${d.id}`}>
+                          <Input id={`cd-t-${d.id}`} name="title" placeholder={d.title} />
+                        </Field>
+                        <SubmitButton size="sm" variant="secondary">
+                          Copy
+                        </SubmitButton>
+                        <p className="col-span-full text-xs text-ink-3">An empty slot gets a new day; an existing day gets these exercises appended.</p>
+                      </ActionForm>
+                    </details>
+                    <ActionForm action={deleteDayAction}>
+                      <input type="hidden" name="programId" value={program.id} />
+                      <input type="hidden" name="dayId" value={d.id} />
+                      <SubmitButton size="sm" variant="ghost" confirm={`Delete W${d.week} Day ${d.dayIndex} from the template? Existing workouts are not affected.`}>
+                        Delete day
+                      </SubmitButton>
+                    </ActionForm>
+                  </div>,
+                ]),
+              )}
+              dayFooters={Object.fromEntries(
+                weekDays.map((d) => [
+                  d.id,
+                  <details key={d.id} className="mt-2">
+                    <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium text-brand">+ Add exercise</summary>
+                    <ItemForm programId={program.id} dayId={d.id} exercises={exercises} />
+                  </details>,
+                ]),
+              )}
+            />
+          ) : null}
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
             <ActionForm action={addDayAction} resetOnSuccess className="grid grid-cols-2 gap-2 rounded-lg border border-edge p-3 sm:grid-cols-4 sm:items-end">
               <input type="hidden" name="programId" value={program.id} />

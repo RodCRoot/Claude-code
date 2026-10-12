@@ -9,7 +9,12 @@ import type { WorkoutDetail } from "@/lib/training/logging";
 import { describePrescription, type ExpandedSet } from "@/lib/training/formulas";
 import { enqueue, flush, retryNow, useSetQueue, type QueuedSet } from "./set-queue";
 
-type Item = WorkoutDetail["items"][number];
+type FullItem = WorkoutDetail["items"][number];
+/** What the logger needs from an item (the offline copy carries only this). */
+export type LoggerItem = Pick<FullItem, "id" | "blockLabel" | "notes" | "athleteModification" | "performed" | "substituted" | "groups" | "sets" | "logs"> & {
+  exercise: Pick<FullItem["exercise"], "name" | "videoUrl" | "coachingNotes">;
+};
+type Item = LoggerItem;
 type Side = "both" | "left" | "right";
 const slotKey = (itemId: string, setIndex: number, side: Side) => `${itemId}:${setIndex}:${side}`;
 const toNum = (s: string) => (s.trim() === "" ? null : Number.isFinite(Number(s)) ? Number(s) : null);
@@ -75,8 +80,9 @@ function SetRow({
   item,
   s,
   side,
-  logged,
+  logged: serverLogged,
   pending,
+  confirmed,
   canLog,
   big,
 }: {
@@ -85,9 +91,12 @@ function SetRow({
   side: Side;
   logged: Item["logs"][number] | undefined;
   pending: QueuedSet | undefined;
+  confirmed: QueuedSet | undefined;
   canLog: boolean;
   big: boolean;
 }) {
+  // A server-confirmed entry from this session wins over older page data (until the refresh lands).
+  const logged = confirmed && (!serverLogged || confirmed.loggedAt >= Date.parse(serverLogged.loggedAt)) ? confirmed : serverLogged;
   const src = pending ?? logged;
   const tracking = item.performed.trackingType;
   const showLoad = tracking === "weight_reps";
@@ -184,8 +193,16 @@ export function ItemCard({ item, canLog, big = false, workoutId, showLinks = tru
   const q = useSetQueue();
   const sides: Side[] = item.performed.isUnilateral ? ["left", "right"] : ["both"];
   const pendingMap = useMemo(() => new Map(q.items.filter((p) => p.workoutItemId === item.id).map((p) => [slotKey(p.workoutItemId, p.setIndex, p.side), p])), [q.items, item.id]);
+  const confirmedMap = useMemo(() => new Map(q.confirmed.filter((p) => p.workoutItemId === item.id).map((p) => [slotKey(p.workoutItemId, p.setIndex, p.side), p])), [q.confirmed, item.id]);
   const loggedMap = useMemo(() => new Map(item.logs.map((l) => [slotKey(item.id, l.setIndex, l.side as Side), l])), [item.logs, item.id]);
-  const open = item.sets.flatMap((s) => sides.filter((side) => !pendingMap.has(slotKey(item.id, s.setIndex, side)) && !loggedMap.has(slotKey(item.id, s.setIndex, side))).map((side) => ({ s, side })));
+  const open = item.sets.flatMap((s) =>
+    sides
+      .filter((side) => {
+        const k = slotKey(item.id, s.setIndex, side);
+        return !pendingMap.has(k) && !loggedMap.has(k) && !confirmedMap.has(k);
+      })
+      .map((side) => ({ s, side })),
+  );
 
   function doneAsPrescribed() {
     for (const { s, side } of open) {
@@ -259,6 +276,7 @@ export function ItemCard({ item, canLog, big = false, workoutId, showLinks = tru
               side={side}
               logged={loggedMap.get(slotKey(item.id, s.setIndex, side))}
               pending={pendingMap.get(slotKey(item.id, s.setIndex, side))}
+              confirmed={confirmedMap.get(slotKey(item.id, s.setIndex, side))}
               canLog={canLog}
               big={big}
             />
@@ -350,6 +368,11 @@ export function WorkoutLogger({ workout, canLog }: { workout: WorkoutDetail; can
   return <WorkoutItems workout={workout} canLog={canLog} />;
 }
 
+/** Items only, without server refresh (the offline copy reloads its own data after a sync). */
+export function WorkoutItemsList({ workout, canLog, showLinks = true }: { workout: { id: string; status: string; items: LoggerItem[] }; canLog: boolean; showLinks?: boolean }) {
+  return <WorkoutItems workout={workout} canLog={canLog} showLinks={showLinks} />;
+}
+
 /** Re-render server data after the queue confirms entries, so "saved" reflects the database. */
 export function useRefreshOnSync(onSynced?: () => void) {
   const router = useRouter();
@@ -365,11 +388,11 @@ export function useRefreshOnSync(onSynced?: () => void) {
   }, [lastSyncedAt]);
 }
 
-function WorkoutItems({ workout, canLog }: { workout: WorkoutDetail; canLog: boolean }) {
+function WorkoutItems({ workout, canLog, showLinks = true }: { workout: { id: string; status: string; items: LoggerItem[] }; canLog: boolean; showLinks?: boolean }) {
   return (
     <div className="space-y-3">
       {workout.items.map((it) => (
-        <ItemCard key={it.id} item={it} canLog={canLog && workout.status !== "skipped"} big workoutId={workout.id} />
+        <ItemCard key={it.id} item={it} canLog={canLog && workout.status !== "skipped"} big workoutId={workout.id} showLinks={showLinks} />
       ))}
       {workout.items.length === 0 ? <p className="text-sm text-ink-3">This workout has no exercises.</p> : null}
     </div>

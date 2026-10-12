@@ -5,6 +5,7 @@ import { Field, Input } from "@/components/ui";
 import { loginAction } from "@/lib/auth/actions";
 import { getViewer } from "@/lib/auth/viewer";
 import { isDemoMode } from "@/lib/env";
+import { TrainingOfflinePurge } from "@/components/training-offline";
 
 export const metadata = { title: "Sign in" };
 
@@ -13,6 +14,8 @@ export default async function LoginPage() {
   const demo = isDemoMode() && process.env.NODE_ENV !== "production";
   return (
     <main id="main" className="flex min-h-screen items-center justify-center px-4 py-10">
+      {/* Signed out: no saved training data or training service worker may remain on this device. */}
+      <TrainingOfflinePurge />
       <div className="w-full max-w-sm">
         <Link href="/" className="mb-6 block text-center text-2xl font-bold tracking-tight">
           Teamwork <span className="text-brand">Hub</span>

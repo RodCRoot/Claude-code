@@ -162,7 +162,7 @@ describe("Zen Planner family links, memberships, attendance, documents", () => {
   });
 
   it("memberships are external_zenplanner with no invoices, subscriptions or jobs", async () => {
-    const jobsBefore = (await db().select({ n: sql<number>`count(*)::int` }).from(jobs))[0].n;
+    const jobsBefore = (await db().select({ n: sql<number>`count(*)::int` }).from(jobs).where(eq(jobs.orgId, ctx.orgId)))[0].n;
     const r = await uploadAndValidate(rod, "zenplanner.memberships", "memberships.csv", fixture("zenplanner/memberships.csv"));
     expect(r.stats.status_invalid).toBe(1); // "Frozen-ish"
     await confirmAndCommit(rod, r.batchId);
@@ -174,7 +174,8 @@ describe("Zen Planner family links, memberships, attendance, documents", () => {
     expect(inv).toHaveLength(0);
     const prods = await db().select().from(products).where(and(eq(products.orgId, ctx.orgId), eq(products.category, "imported")));
     expect(prods.every((p) => !p.active && !p.publiclyListed)).toBe(true);
-    const jobsAfter = (await db().select({ n: sql<number>`count(*)::int` }).from(jobs))[0].n;
+    // Scoped to this test's org: other test files share the database and enqueue their own jobs.
+    const jobsAfter = (await db().select({ n: sql<number>`count(*)::int` }).from(jobs).where(eq(jobs.orgId, ctx.orgId)))[0].n;
     expect(jobsAfter).toBe(jobsBefore);
   });
 

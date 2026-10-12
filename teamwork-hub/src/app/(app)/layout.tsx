@@ -6,6 +6,8 @@ import { isDemoMode } from "@/lib/env";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { STAFF_ROLES } from "@/lib/auth/session";
+import { offlineOwnerKey } from "@/lib/training/offline";
+import { TrainingOfflineGuard } from "@/components/training-offline";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const viewer = await requireViewer();
@@ -27,6 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         demo={isDemoMode() || !!org?.isDemo}
         logoutAction={logoutAction}
       />
+      <TrainingOfflineGuard owner={offlineOwnerKey(viewer)} />
       <main id="main" className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">{children}</div>
       </main>

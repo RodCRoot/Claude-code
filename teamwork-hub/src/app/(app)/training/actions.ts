@@ -15,7 +15,12 @@ import {
   addDay,
   addItem,
   addPhase,
+  bulkEditScheme,
+  copyDay,
   copyWeek,
+  saveProgramLayout,
+  type LayoutInput,
+  type SchemePatch,
   createProgram,
   deleteDay,
   deleteItem,
@@ -176,6 +181,65 @@ export const deleteItemAction = safeAction(async (_p: ActionState, fd: FormData)
   await run((tx, v) => deleteItem(tx, v, id, str(fd, "itemId")));
   revalidatePath(`/training/programs/${id}`);
   return { ok: true, message: "Exercise removed from template." };
+});
+
+// --- Builder: drag-and-drop layout, copy day, bulk set scheme ------------------------------------
+
+/** Called by the builder (not a form): persists order/day/blocks for the touched days. */
+export const saveProgramLayoutAction = safeAction(async (programId: string, input: LayoutInput) => {
+  if (typeof programId !== "string") throw new UserError("Program not found.");
+  const r = await run((tx, v) => saveProgramLayout(tx, v, programId, input));
+  revalidatePath(`/training/programs/${programId}`);
+  return { ok: true, message: r.changed ? `Saved order (v${r.version}).` : "No changes.", data: { version: r.version } };
+});
+
+export const copyDayAction = safeAction(async (_p: ActionState, fd: FormData) => {
+  const id = str(fd, "programId");
+  const r = await run((tx, v) => copyDay(tx, v, id, str(fd, "dayId"), { week: Number(str(fd, "week")), dayIndex: Number(str(fd, "dayIndex")), title: str(fd, "title") || null }));
+  revalidatePath(`/training/programs/${id}`);
+  return { ok: true, message: `${r.created ? "Created" : "Appended to"} week ${str(fd, "week")} day ${str(fd, "dayIndex")} (${r.copied} exercises).` };
+});
+
+export const bulkEditSchemeAction = safeAction(async (_p: ActionState, fd: FormData) => {
+  const id = str(fd, "programId");
+  const intOrUndef = (k: string) => (str(fd, k) === "" ? undefined : Number(str(fd, k)));
+  const loadType = str(fd, "bulk_loadType");
+  const val = Number(str(fd, "bulk_loadValue"));
+  let load: SchemePatch["load"];
+  switch (loadType) {
+    case "absolute":
+      load = { type: "absolute", value: val, unit: str(fd, "bulk_loadUnit") === "kg" ? "kg" : "lb" };
+      break;
+    case "percent_max":
+      load = { type: "percent_max", percent: val };
+      break;
+    case "rpe":
+      load = { type: "rpe", rpe: val };
+      break;
+    case "rir":
+      load = { type: "rir", rir: val };
+      break;
+    case "bodyweight":
+    case "none":
+      load = { type: loadType };
+      break;
+    default:
+      load = undefined;
+  }
+  const itemIds = fd.getAll("itemIds").map(String).filter(Boolean);
+  const r = await run((tx, v) =>
+    bulkEditScheme(tx, v, id, itemIds, {
+      sets: intOrUndef("bulk_sets"),
+      reps: intOrUndef("bulk_reps"),
+      repsText: str(fd, "bulk_repsText") || undefined,
+      load,
+      restS: intOrUndef("bulk_restS"),
+      tempo: str(fd, "bulk_tempo") || undefined,
+      applyTo: str(fd, "bulk_applyTo") === "all" ? "all" : "working",
+    }),
+  );
+  revalidatePath(`/training/programs/${id}`);
+  return { ok: true, message: `Updated the set scheme on ${r.updated} exercise${r.updated === 1 ? "" : "s"} (v${r.version}).` };
 });
 
 // --- Assignments ----------------------------------------------------------------------------

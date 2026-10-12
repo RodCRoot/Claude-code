@@ -15,6 +15,10 @@ const APP_PREFIXES = ["/today", "/people", "/schedule", "/billing", "/training",
 const CHECKOUT_FORM_TARGETS = ["https://checkout.stripe.com", "https://www.paypal.com", "https://www.sandbox.paypal.com"];
 const PAYMENT_PAGE = /^\/billing\/invoices\/[^/]+$/;
 
+/** Athlete logger service worker (public/training-sw.js), registered with scope /training/today. */
+export const TRAINING_SW_PATH = "/training-sw.js";
+export const WORKER_CSP = "default-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
+
 export function buildCsp(opts: { nonce: string; pathname: string; isDev: boolean; https: boolean }): string {
   const { nonce, pathname, isDev, https } = opts;
   const formAction = ["'self'", ...(PAYMENT_PAGE.test(pathname) ? CHECKOUT_FORM_TARGETS : [])];
@@ -30,7 +34,8 @@ export function buildCsp(opts: { nonce: string; pathname: string; isDev: boolean
     `font-src 'self'`,
     `connect-src 'self'${isDev ? " ws: wss:" : ""}`,
     `media-src 'self'`,
-    `worker-src 'self' blob:`,
+    // Only the same-origin training service worker (public/training-sw.js); no blob: workers.
+    `worker-src 'self'`,
     `manifest-src 'self'`,
     `frame-src 'none'`,
     `object-src 'none'`,
@@ -104,8 +109,13 @@ export function proxy(request: NextRequest) {
 
   // API route handlers return JSON/files and set their own (stricter) CSP where they serve bytes.
   const isApi = pathname.startsWith("/api/");
+  // The training service worker script gets its own policy: a worker's CSP comes from its script
+  // response, and it needs no nonce (no inline code; only same-origin fetches).
+  const isWorker = pathname === TRAINING_SW_PATH;
   let csp: string | null = null;
-  if (!isApi) {
+  if (isWorker) {
+    csp = WORKER_CSP;
+  } else if (!isApi) {
     const nonce = makeNonce();
     const https = request.nextUrl.protocol === "https:" || request.headers.get("x-forwarded-proto") === "https" || (process.env.APP_URL ?? "").startsWith("https://");
     csp = buildCsp({ nonce, pathname, isDev: process.env.NODE_ENV === "development", https });
@@ -127,6 +137,7 @@ export function proxy(request: NextRequest) {
   if (!pathname.startsWith("/_next") && pathname !== "/" && !pathname.startsWith("/programs") && !pathname.startsWith("/classes")) {
     res.headers.set("Cache-Control", "private, no-store");
   }
+  if (isWorker) res.headers.set("Cache-Control", "no-cache");
   return res;
 }
 

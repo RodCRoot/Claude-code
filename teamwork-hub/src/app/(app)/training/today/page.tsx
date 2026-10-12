@@ -6,6 +6,8 @@ import { requireViewer } from "@/lib/auth/viewer";
 import { accessibleAthleteIds, athleteScopeFilter, isStaff } from "@/lib/authz/policy";
 import { addDaysYmd, fmtDate, todayLocal } from "@/lib/time";
 import { workoutsForDate } from "@/lib/training/dashboard";
+import { offlineOwnerKey } from "@/lib/training/offline";
+import { TrainingOfflineSetup } from "../_components/offline-setup";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { ButtonLink, Callout, EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 import { TrainingNav } from "../_components/training-nav";
@@ -35,6 +37,7 @@ export default async function TrainingToday({ searchParams }: { searchParams: Pr
           .limit(10)
       : [];
   const staffView = isStaff(viewer);
+  const offlineOwner = offlineOwnerKey(viewer);
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -60,6 +63,11 @@ export default async function TrainingToday({ searchParams }: { searchParams: Pr
       </nav>
 
       {logScope === "all" || logScope.length ? <SyncBanner className="mb-4" /> : null}
+      {offlineOwner ? (
+        <div className="-mt-2 mb-4">
+          <TrainingOfflineSetup owner={offlineOwner} />
+        </div>
+      ) : null}
 
       {list.length === 0 ? (
         <EmptyState title="No workout scheduled">{viewer.role === "athlete" ? "Rest day — or check the upcoming list below." : "Nothing scheduled for this date in your scope."}</EmptyState>

@@ -31,10 +31,17 @@ export type QueueState = {
   nextRetryAt: number | null;
   rejected: { setIndex: number; workoutItemId: string; error: string }[];
   lastSyncedAt: number | null;
+  /**
+   * Entries the server confirmed (applied or duplicate) in this page session, newest per slot.
+   * Memory only (never persisted). Lets the logger show "saved" right away instead of depending
+   * on the follow-up page refresh, which can be slow or superseded.
+   */
+  confirmed: QueuedSet[];
 };
 
 export const QUEUE_KEY = "tw.training.queue.v1";
-const EMPTY: QueueState = { items: [], syncing: false, lastError: null, nextRetryAt: null, rejected: [], lastSyncedAt: null };
+const EMPTY: QueueState = { items: [], syncing: false, lastError: null, nextRetryAt: null, rejected: [], lastSyncedAt: null, confirmed: [] };
+const slotOf = (q: Pick<QueuedSet, "workoutItemId" | "setIndex" | "side">) => `${q.workoutItemId}:${q.setIndex}:${q.side}`;
 
 let state: QueueState = EMPTY;
 let loaded = false;
@@ -138,7 +145,10 @@ export function flush(): Promise<void> {
   ensureLoaded();
   if (inFlight) return inFlight;
   if (!state.items.length) return Promise.resolve();
-  inFlight = (async () => {
+  // `run` can settle synchronously (offline → throws before any await), so `inFlight` is cleared in
+  // a `.finally` callback — always async — which runs after the assignment below. Clearing it inside
+  // `run` would happen *before* the assignment and wedge the queue until the page reloads.
+  const run = async () => {
     const batch = state.items.slice(0, 200);
     set({ syncing: true });
     try {
@@ -154,6 +164,7 @@ export function flush(): Promise<void> {
       const { results } = (await res.json()) as { results: { clientMutationId: string; status: string; error?: string }[] };
       const done = new Set<string>();
       const rejected = [...state.rejected];
+      const confirmed = new Map(state.confirmed.map((c) => [slotOf(c), c]));
       let retryable = false;
       for (const r of results) {
         if (r.status === "error") {
@@ -161,12 +172,20 @@ export function flush(): Promise<void> {
           continue;
         }
         done.add(r.clientMutationId);
+        const q = batch.find((b) => b.clientMutationId === r.clientMutationId);
         if (r.status === "rejected") {
-          const q = batch.find((b) => b.clientMutationId === r.clientMutationId);
           if (q) rejected.push({ setIndex: q.setIndex, workoutItemId: q.workoutItemId, error: r.error ?? "Rejected" });
+        } else if (q && (r.status === "applied" || r.status === "duplicate")) {
+          confirmed.set(slotOf(q), q);
         }
       }
-      set({ items: state.items.filter((i) => !done.has(i.clientMutationId)), rejected: rejected.slice(-10), lastError: retryable ? "Some entries hit a server error; retrying." : null, lastSyncedAt: Date.now() });
+      set({
+        items: state.items.filter((i) => !done.has(i.clientMutationId)),
+        rejected: rejected.slice(-10),
+        confirmed: [...confirmed.values()].slice(-300),
+        lastError: retryable ? "Some entries hit a server error; retrying." : null,
+        lastSyncedAt: Date.now(),
+      });
       persist();
       if (retryable) throw new Error("retry");
       attempts = 0;
@@ -180,10 +199,13 @@ export function flush(): Promise<void> {
       schedule(delay);
     } finally {
       set({ syncing: false });
-      inFlight = null;
     }
-  })();
-  return inFlight;
+  };
+  const p: Promise<void> = run().finally(() => {
+    if (inFlight === p) inFlight = null;
+  });
+  inFlight = p;
+  return p;
 }
 
 export function pendingCount(): number {
