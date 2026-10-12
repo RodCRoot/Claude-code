@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { db } from "@/db";
 import { ActionForm, SubmitButton } from "@/components/forms";
-import { Badge, ButtonLink, Callout, Card, CardBody, CardHeader, EmptyState, PageHeader, Stat, StatusBadge } from "@/components/ui";
+import { Badge, ButtonLink, Callout, Card, CardBody, CardHeader, EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 import { isBillingStaff } from "@/lib/billing/access";
 import { listInvoices, listMemberships, myPayerAccounts, staffOverview } from "@/lib/billing/queries";
 import { paymentExceptions } from "@/lib/billing/reconciliation";
 import { fmtDate, todayLocal } from "@/lib/time";
 import { runRenewalsAction } from "./actions";
+import { KpiTile, Widget } from "@/components/profile/studio";
 import { BillingTabs, InvoiceStatus, Money, PROVIDER_LABEL, requireBillingViewer } from "./_components";
 
 export const metadata = { title: "Memberships & Billing" };
@@ -21,6 +22,8 @@ async function StaffOverview({ orgId }: { orgId: string }) {
   const [o, ex] = await Promise.all([staffOverview(db, orgId, today), paymentExceptions(db, orgId, { today, limit: 15 })]);
   const byStatus = (st: string) => o.memberships.filter((m) => m.status === st && m.billing_provider !== "external_zenplanner").reduce((s, m) => s + m.n, 0);
   const external = o.memberships.filter((m) => m.billing_provider === "external_zenplanner").reduce((s, m) => s + m.n, 0);
+  const STATUSES = ["active", "trialing", "pending", "past_due", "on_hold", "cancelled"] as const;
+  const totalHere = STATUSES.reduce((s, st) => s + byStatus(st), 0);
   return (
     <>
       <PageHeader
@@ -35,63 +38,82 @@ async function StaffOverview({ orgId }: { orgId: string }) {
         }
       />
       <BillingTabs current="overview" staff />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Open balance" value={<Money minor={o.openBalance} />} hint={`${o.openCount} open invoice(s)`} />
-        <Stat label="Past due" value={<Money minor={o.pastDueTotal} />} hint={`${o.pastDueCount} invoice(s)`} tone={o.pastDueCount ? "bad" : undefined} />
-        <Stat label="Settled · 30 days" value={<Money minor={o.settledVerified30 + o.settledAttested30} />} hint={<>Provider verified <Money minor={o.settledVerified30} /> · Staff attested <Money minor={o.settledAttested30} /></>} tone="ok" />
-        <Stat label="Pending · not settled" value={<Money minor={o.pending30} />} hint="Bank payments in flight" tone={o.pending30 ? "warn" : undefined} />
+      <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-4">
+        <KpiTile icon="billing" label="Open balance" value={<Money minor={o.openBalance} />} hint={`${o.openCount} open invoice(s)`} href="/billing/invoices?status=open" />
+        <KpiTile icon="clock" label="Past due" value={<Money minor={o.pastDueTotal} />} hint={`${o.pastDueCount} invoice(s)`} tone={o.pastDueCount ? "bad" : "ok"} href="/billing/invoices?status=past_due" />
+        <KpiTile icon="payroll" label="Settled · 30 days" value={<Money minor={o.settledVerified30 + o.settledAttested30} />} hint={<>Provider verified <Money minor={o.settledVerified30} /> · Staff attested <Money minor={o.settledAttested30} /></>} tone="ok" />
+        <KpiTile icon="reports" label="Pending · not settled" value={<Money minor={o.pending30} />} hint="Bank payments in flight" tone={o.pending30 ? "warn" : "info"} />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3 [&>*]:min-w-0">
-        <Card className="lg:col-span-2">
-          <CardHeader title="Payment exceptions" kicker="Needs attention" action={<ButtonLink href="/billing/reconciliation" size="sm" variant="ghost">Reconciliation →</ButtonLink>} />
-          <CardBody>
-            {ex.length === 0 ? (
+      <div className="mt-4 grid gap-4 lg:grid-cols-3 [&>*]:min-w-0">
+        <Widget title="Payment exceptions" icon="billing" count={ex.length} href="/billing/reconciliation" linkLabel="Reconciliation" className="lg:col-span-2" flush>
+          {ex.length === 0 ? (
+            <div className="p-4">
               <EmptyState title="No payment exceptions">Failed payments, long-pending bank payments, mismatches and past-due memberships appear here.</EmptyState>
-            ) : (
-              <ul className="divide-y divide-edge">
-                {ex.map((e, i) => (
-                  <li key={i} className="flex flex-wrap items-start justify-between gap-2 py-2.5">
-                    <div className="min-w-0">
-                      <Link href={e.href} className="font-medium hover:underline">{e.title}</Link>
-                      <p className="text-xs text-ink-3">{e.detail}</p>
-                      {e.decline?.familyText ? (
-                        <details className="mt-1 text-xs">
-                          <summary className="cursor-pointer text-ink-2">Message for the family</summary>
-                          <p className="mt-1 whitespace-pre-line rounded-lg border border-edge bg-surface-2 p-2">{e.decline.familyText}</p>
-                        </details>
-                      ) : null}
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {e.decline ? <Badge variant={e.decline.category === "card_needs_update" ? "red" : e.decline.category === "retryable" ? "yellow" : undefined}>{e.decline.label}</Badge> : null}
-                      <Badge variant={e.severity === "high" ? "red" : "yellow"}>{e.kind.replaceAll("_", " ")}</Badge>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardBody>
-        </Card>
-        <Card>
-          <CardHeader title="Memberships" />
-          <CardBody>
-            <dl className="grid grid-cols-2 gap-y-2 text-sm">
-              {(["active", "trialing", "pending", "past_due", "on_hold", "cancelled"] as const).map((st) => (
-                <div key={st} className="contents">
-                  <dt><StatusBadge status={st} /></dt>
-                  <dd className="text-right tabular font-semibold">{byStatus(st)}</dd>
-                </div>
+            </div>
+          ) : (
+            <ul className="divide-y divide-edge">
+              {ex.map((e, i) => (
+                <li key={i} className="flex flex-wrap items-start justify-between gap-2 px-4 py-2.5 hover:bg-surface-2">
+                  <div className="min-w-0">
+                    <Link href={e.href} className="font-semibold hover:underline">{e.title}</Link>
+                    <p className="text-xs text-ink-3">{e.detail}</p>
+                    {e.decline?.familyText ? (
+                      <details className="mt-1 text-xs">
+                        <summary className="cursor-pointer text-ink-2">Message for the family</summary>
+                        <p className="mt-1 whitespace-pre-line rounded-md border border-edge bg-surface-2 p-2">{e.decline.familyText}</p>
+                      </details>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {e.decline ? <Badge variant={e.decline.category === "card_needs_update" ? "red" : e.decline.category === "retryable" ? "yellow" : undefined}>{e.decline.label}</Badge> : null}
+                    <Badge variant={e.severity === "high" ? "red" : "yellow"}>{e.kind.replaceAll("_", " ")}</Badge>
+                  </div>
+                </li>
               ))}
-              <dt className="text-ink-3">Zen Planner (external)</dt>
-              <dd className="text-right tabular font-semibold">{external}</dd>
-            </dl>
-            <p className="mt-3 text-xs text-ink-3">Zen Planner-billed memberships are shown for reference and are never invoiced here until cutover.</p>
-            <ActionForm action={runRenewalsAction} className="mt-4">
+            </ul>
+          )}
+        </Widget>
+        <Widget title="Memberships by status" icon="people" href="/billing/memberships" linkLabel="View all" linkContext="memberships" flush>
+          <table className="w-full border-collapse text-sm">
+            <caption className="sr-only">Memberships by status</caption>
+            <thead>
+              <tr className="text-[11px] font-bold uppercase tracking-wide text-ink-2">
+                <th scope="col" className="border-b border-edge px-4 py-2 text-left">Status</th>
+                <th scope="col" className="border-b border-edge px-4 py-2 text-right">Count</th>
+              </tr>
+            </thead>
+            <tbody>
+              {STATUSES.map((st) => (
+                <tr key={st} className="hover:bg-surface-2">
+                  <td className="border-b border-edge/70 px-4 py-1.5">
+                    <Link href={`/billing/memberships?status=${st}`} className="hover:underline">
+                      <StatusBadge status={st} />
+                    </Link>
+                  </td>
+                  <td className="border-b border-edge/70 px-4 py-1.5 text-right font-semibold tabular">{byStatus(st)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="bg-th font-bold">
+                <th scope="row" className="border-y border-edge px-4 py-2 text-left">Total billed here</th>
+                <td className="border-y border-edge px-4 py-2 text-right tabular">{totalHere}</td>
+              </tr>
+              <tr>
+                <th scope="row" className="px-4 py-2 text-left font-normal text-ink-2">Zen Planner (external)</th>
+                <td className="px-4 py-2 text-right font-semibold tabular">{external}</td>
+              </tr>
+            </tfoot>
+          </table>
+          <div className="space-y-3 border-t border-edge px-4 py-3">
+            <p className="text-xs text-ink-3">Zen Planner-billed memberships are shown for reference and are never invoiced here until cutover.</p>
+            <ActionForm action={runRenewalsAction}>
               <SubmitButton variant="secondary" size="sm" pendingText="Running…">Run today&apos;s renewals now</SubmitButton>
               <p className="mt-1 text-xs text-ink-3">Same as the daily <code>billing.generate_renewals</code> job; safe to re-run.</p>
             </ActionForm>
-          </CardBody>
-        </Card>
+          </div>
+        </Widget>
       </div>
     </>
   );

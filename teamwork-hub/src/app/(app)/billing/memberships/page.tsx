@@ -12,12 +12,25 @@ import { formatMoney } from "@/lib/money";
 import { fmtDate, todayLocal } from "@/lib/time";
 import { createMembershipAction } from "../actions";
 import { BillingTabs, Money, PROVIDER_LABEL, requireBillingViewer } from "../_components";
+import { MemberAvatar, Segmented } from "@/components/profile/studio";
 
 export const metadata = { title: "Memberships" };
 
 const FILTERS = ["all", "active", "trialing", "pending", "past_due", "on_hold", "cancelled"];
 
-type Search = { status?: string; athletePayer?: string; productVersionId?: string; startDate?: string; preview?: string };
+/** Sum of list prices per currency + billing interval (never mixes intervals into one number). */
+function listTotals(rows: { priceMinor: number; currency: string; interval: string }[]) {
+  const by = new Map<string, { minor: number; currency: string; interval: string }>();
+  for (const r of rows) {
+    const k = `${r.currency}|${r.interval}`;
+    const cur = by.get(k) ?? { minor: 0, currency: r.currency, interval: r.interval };
+    cur.minor += r.priceMinor;
+    by.set(k, cur);
+  }
+  return [...by.values()];
+}
+
+type Search ={ status?: string; athletePayer?: string; productVersionId?: string; startDate?: string; preview?: string };
 
 export default async function MembershipsPage({ searchParams }: { searchParams: Promise<Search> }) {
   const v = await requireBillingViewer();
@@ -29,40 +42,61 @@ export default async function MembershipsPage({ searchParams }: { searchParams: 
     <>
       <PageHeader kicker="Billing" title="Memberships" />
       <BillingTabs current="memberships" staff={staff} />
-      <nav aria-label="Filter memberships" className="mb-4 flex flex-wrap gap-2">
-        {FILTERS.map((f) => (
-          <Link key={f} href={f === "all" ? "/billing/memberships" : `/billing/memberships?status=${f}`} aria-current={status === f ? "page" : undefined}
-            className={`rounded-full border px-3 py-1 text-xs font-medium ${status === f ? "border-brand bg-brand text-brand-ink" : "border-edge text-ink-2 hover:bg-surface-2"}`}>
-            {f.replace("_", " ")}
-          </Link>
-        ))}
-      </nav>
-      <Card>
-        <CardBody className="pt-4">
-          {rows.length === 0 ? (
+      <section aria-label="Membership ledger" className="min-w-0 overflow-hidden rounded-md border border-edge bg-surface shadow-[0_1px_3px_rgb(16_24_40/0.06)]">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-edge bg-th px-3 py-2.5 sm:px-4">
+          <Segmented
+            label="Filter memberships"
+            items={FILTERS.map((f) => ({ href: f === "all" ? "/billing/memberships" : `/billing/memberships?status=${f}`, label: f.replace("_", " "), current: status === f }))}
+          />
+          <p className="text-xs text-ink-2">
+            <strong className="tabular">{rows.length}</strong> membership{rows.length === 1 ? "" : "s"}
+          </p>
+        </div>
+        {rows.length === 0 ? (
+          <div className="p-4">
             <EmptyState title="No memberships" />
-          ) : (
-            <Table caption="Memberships">
-              <thead>
-                <tr><Th>Athlete</Th><Th>Plan</Th><Th>Status</Th><Th>Billed by</Th><Th>Next bill</Th>{staff ? <Th>Payer</Th> : null}<Th align="right">Price</Th></tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.m.id}>
-                    <Td><Link className="font-medium hover:underline" href={`/billing/memberships/${r.m.id}`}>{r.first} {r.last}</Link></Td>
-                    <Td>{r.productName} <span className="text-xs text-ink-3">v{r.version}</span>{r.m.kind === "in_season" ? <> <Badge variant="blue">In Season</Badge></> : null}</Td>
-                    <Td><StatusBadge status={r.m.status} />{r.m.cancelAt && r.m.status !== "cancelled" ? <div className="text-xs text-ink-3">ends {fmtDate(r.m.cancelAt)}</div> : null}</Td>
-                    <Td>{r.m.billingProvider === "external_zenplanner" ? <Badge title="Billed by Zen Planner until cutover — never invoiced here">Zen Planner</Badge> : PROVIDER_LABEL[r.m.billingProvider]}</Td>
-                    <Td>{r.m.billingProvider === "external_zenplanner" ? "—" : fmtDate(r.m.nextBillDate)}</Td>
-                    {staff ? <Td>{r.payerName ?? "—"}</Td> : null}
-                    <Td align="right"><Money minor={r.priceMinor} currency={r.currency} />/{r.interval}</Td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          )}
-        </CardBody>
-      </Card>
+          </div>
+        ) : (
+          <Table caption="Memberships" className="[&_table]:min-w-[720px]">
+            <thead>
+              <tr><Th className="pl-4">Member</Th><Th>Plan</Th><Th>Status</Th><Th>Billed by</Th><Th>Next bill</Th>{staff ? <Th>Payer</Th> : null}<Th align="right" className="pr-4">Price</Th></tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.m.id}>
+                  <Td className="pl-4">
+                    <Link className="flex items-center gap-2 font-semibold hover:underline" href={`/billing/memberships/${r.m.id}`}>
+                      <MemberAvatar name={`${r.first} ${r.last}`} size="sm" />
+                      {r.first} {r.last}
+                    </Link>
+                  </Td>
+                  <Td>{r.productName} <span className="text-xs text-ink-3">v{r.version}</span>{r.m.kind === "in_season" ? <> <Badge variant="blue">In Season</Badge></> : null}</Td>
+                  <Td><StatusBadge status={r.m.status} />{r.m.cancelAt && r.m.status !== "cancelled" ? <div className="text-xs text-ink-3">ends {fmtDate(r.m.cancelAt)}</div> : null}</Td>
+                  <Td>{r.m.billingProvider === "external_zenplanner" ? <Badge title="Billed by Zen Planner until cutover — never invoiced here">Zen Planner</Badge> : PROVIDER_LABEL[r.m.billingProvider]}</Td>
+                  <Td className="tabular whitespace-nowrap">{r.m.billingProvider === "external_zenplanner" ? "—" : fmtDate(r.m.nextBillDate)}</Td>
+                  {staff ? <Td>{r.payerName ?? "—"}</Td> : null}
+                  <Td align="right" className="pr-4 whitespace-nowrap"><Money minor={r.priceMinor} currency={r.currency} /><span className="text-xs text-ink-3">/{r.interval}</span></Td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="bg-th font-bold">
+                <th scope="row" colSpan={staff ? 6 : 5} className="border-t-2 border-edge px-4 py-2 text-left text-xs uppercase tracking-wide">
+                  List-price total of rows shown · {rows.length} membership{rows.length === 1 ? "" : "s"}
+                </th>
+                <td className="border-t-2 border-edge px-4 py-2 text-right tabular whitespace-nowrap">
+                  {listTotals(rows).map((t, i) => (
+                    <div key={i}>
+                      <Money minor={t.minor} currency={t.currency} />
+                      <span className="text-xs font-normal text-ink-3">/{t.interval}</span>
+                    </div>
+                  ))}
+                </td>
+              </tr>
+            </tfoot>
+          </Table>
+        )}
+      </section>
       {staff ? <NewMembership viewer={v} search={sp} /> : null}
     </>
   );

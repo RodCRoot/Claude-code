@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { db } from "@/db";
 import { requireViewer, getOrg } from "@/lib/auth/viewer";
-import { can, isAdmin, type Viewer } from "@/lib/authz/policy";
+import { type Viewer } from "@/lib/authz/policy";
 import {
   athleteToday,
   bodyReviewQueue,
@@ -9,16 +9,13 @@ import {
   familyAthletes,
   familyBilling,
   familyChildSummary,
-  integrationHealth,
-  leadSummary,
-  missingRequiredForms,
   myOpenTasks,
-  paymentExceptionsSummary,
   todaysSessions,
   unreadThreads,
   type FamilyChild,
   type SessionSummary,
 } from "@/lib/dashboards";
+import { StaffToday } from "./_components/staff-dashboard";
 import { Badge, ButtonLink, Card, CardBody, CardHeader, EmptyState, PageHeader, Stat, StatusBadge } from "@/components/ui";
 import { fmt, fmtDate, fmtTime } from "@/lib/time";
 import { formatMoney } from "@/lib/money";
@@ -64,201 +61,6 @@ function SessionList({ sessions, tz, empty }: { sessions: SessionSummary[]; tz?:
         </li>
       ))}
     </ul>
-  );
-}
-
-async function StaffToday({ v, tz, greeting, dateLabel }: { v: Viewer; tz?: string; greeting: string; dateLabel: string }) {
-  const [sessions, tasks, forms, pay, health, leads, review, unread] = await Promise.all([
-    todaysSessions(db, v.orgId, { tz }),
-    myOpenTasks(db, v),
-    missingRequiredForms(db, v.orgId, 8),
-    can(v, "billing.view_all") ? paymentExceptionsSummary(db, v.orgId) : null,
-    integrationHealth(db, v.orgId),
-    can(v, "crm.manage") ? leadSummary(db, v.orgId) : null,
-    isAdmin(v) ? bodyReviewQueue(db, v) : Promise.resolve([]),
-    unreadThreads(db, v),
-  ]);
-  const totalBooked = sessions.reduce((s, x) => s + x.booked, 0);
-  const totalIn = sessions.reduce((s, x) => s + x.checked_in, 0);
-  const brokenIntegrations = health.integrations.filter((i) => i.status === "error");
-  return (
-    <>
-      <PageHeader
-        kicker={dateLabel}
-        title={`${greeting}, ${v.displayName.split(" ")[0]}`}
-        actions={
-          <>
-            <ButtonLink href="/kiosk" variant="secondary">
-              Open check-in kiosk
-            </ButtonLink>
-            {can(v, "people.manage") ? <ButtonLink href="/people/new">Register athlete</ButtonLink> : null}
-          </>
-        }
-      />
-      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Sessions today" value={sessions.length} hint={`${totalIn} of ${totalBooked} booked checked in`} />
-        <Stat label="My open tasks" value={tasks.length} />
-        <Stat label="Missing required forms" value={forms.length} tone={forms.length ? "warn" : undefined} hint="active athletes" />
-        {pay ? (
-          <Stat label="Past-due invoices" value={pay.past_due} tone={pay.past_due ? "bad" : undefined} hint={pay.past_due ? `${formatMoney(pay.past_due_minor)} outstanding` : "none"} />
-        ) : (
-          <Stat label="Unread messages" value={unread} />
-        )}
-      </div>
-      <TimeClockCard v={v} tz={tz} />
-
-      <div className="grid gap-5 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader title="Today's sessions" kicker="Roster & check-in" action={<Link href="/schedule" className="text-sm text-brand underline">Full schedule</Link>} />
-          <CardBody>
-            <SessionList sessions={sessions} tz={tz} empty="No sessions scheduled today" />
-          </CardBody>
-        </Card>
-
-        <Card>
-          <CardHeader title="My follow-ups" action={<Link href="/people/tasks" className="text-sm text-brand underline">All tasks</Link>} />
-          <CardBody>
-            {tasks.length === 0 ? <p className="text-sm text-ink-3">You&apos;re all caught up.</p> : null}
-            <ul className="space-y-2">
-              {tasks.map((t) => (
-                <li key={t.id} className="text-sm">
-                  <div className="font-medium">{t.title}</div>
-                  <div className="text-xs text-ink-3">
-                    {t.person ? (
-                      <Link href={`/people/${t.related_person_id}`} className="underline">
-                        {t.person}
-                      </Link>
-                    ) : null}
-                    {t.due_at ? ` · due ${fmt(t.due_at, "MMM d", tz)}` : ""}
-                    {t.source !== "manual" ? ` · ${t.source}` : ""}
-                  </div>
-                </li>
-              ))}
-            </ul>
-            {leads ? (
-              <div className="mt-4 border-t border-edge pt-3 text-sm">
-                <Link href="/people/leads" className="font-medium text-brand underline">
-                  {leads.new_leads} new lead{leads.new_leads === 1 ? "" : "s"}
-                </Link>{" "}
-                · {leads.open_leads} open
-                {leads.uncontacted_48h ? <Badge variant="red" className="ml-2">{leads.uncontacted_48h} waiting &gt;48h</Badge> : null}
-              </div>
-            ) : null}
-            {unread ? (
-              <div className="mt-2 text-sm">
-                <Link href="/messages" className="font-medium text-brand underline">
-                  {unread} unread conversation{unread === 1 ? "" : "s"}
-                </Link>
-              </div>
-            ) : null}
-          </CardBody>
-        </Card>
-
-        <Card>
-          <CardHeader title="Missing forms" kicker="Required for booking" action={<Link href="/documents" className="text-sm text-brand underline">Documents</Link>} />
-          <CardBody>
-            {forms.length === 0 ? <p className="text-sm text-ink-3">Every active athlete has current required forms.</p> : null}
-            <ul className="space-y-1 text-sm">
-              {forms.map((f, i) => (
-                <li key={i}>
-                  <Link href={`/people/${f.person_id}`} className="font-medium hover:underline">
-                    {f.name}
-                  </Link>
-                  <span className="block text-xs text-ink-3">
-                    {f.template} · {f.status ? f.status.replace("_", " ") : "not sent"}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </CardBody>
-        </Card>
-
-        {pay ? (
-          <Card>
-            <CardHeader title="Payment exceptions" action={<Link href="/billing" className="text-sm text-brand underline">Billing</Link>} />
-            <CardBody className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span>Past-due invoices</span>
-                <span className="tabular">
-                  {pay.past_due} · {formatMoney(pay.past_due_minor)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Failed payment attempts (14d)</span>
-                <span className="tabular">{pay.failed_attempts}</span>
-              </div>
-              <div className="flex justify-between">
-                <span title="Initiated but not yet settled (e.g. bank transfers)">Pending, not yet settled</span>
-                <span className="tabular">
-                  {pay.pending_txn} · {formatMoney(pay.pending_minor)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Webhook failures (14d)</span>
-                <span className="tabular">{pay.webhook_failures}</span>
-              </div>
-            </CardBody>
-          </Card>
-        ) : null}
-
-        <Card>
-          <CardHeader title="Imports & integrations" action={isAdmin(v) ? <Link href="/settings/integrations" className="text-sm text-brand underline">Details</Link> : null} />
-          <CardBody className="space-y-2 text-sm">
-            <ul className="flex flex-wrap gap-1">
-              {health.integrations.map((i) => (
-                <li key={i.provider}>
-                  <Badge variant={i.status === "connected" || i.status === "verified_sandbox" ? "green" : i.status === "error" ? "red" : "neutral"} title={i.last_error ?? undefined}>
-                    {i.provider.replace("_", " ")}: {i.status.replace(/_/g, " ")}
-                  </Badge>
-                </li>
-              ))}
-            </ul>
-            {brokenIntegrations.length ? <p className="text-bad">{brokenIntegrations.length} integration(s) reporting errors.</p> : null}
-            <div className="flex justify-between">
-              <span>Background jobs failing / dead</span>
-              <span className="tabular">
-                {health.jobs?.failing ?? 0} / {health.jobs?.dead ?? 0}
-              </span>
-            </div>
-            {health.imports.length ? (
-              <div>
-                <div className="kicker mt-2">Recent imports</div>
-                <ul>
-                  {health.imports.map((b) => (
-                    <li key={b.id} className="flex justify-between">
-                      <Link href={`/imports/${b.id}`} className="hover:underline">
-                        {b.source} · {b.entity_type}
-                      </Link>
-                      <StatusBadge status={b.status} />
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : (
-              <p className="text-ink-3">No imports yet.</p>
-            )}
-          </CardBody>
-        </Card>
-
-        {review.length ? (
-          <Card>
-            <CardHeader title="Body-map reviews" kicker="Self-reported — needs coach review" action={<Link href="/science/body-map" className="text-sm text-brand underline">Review queue</Link>} />
-            <CardBody>
-              <ul className="space-y-1 text-sm">
-                {review.map((r) => (
-                  <li key={r.id} className="flex justify-between">
-                    <span>{r.name}</span>
-                    <span className="text-xs text-ink-3">
-                      {r.kind} · {r.region.replaceAll("_", " ")} ({r.side}) · {r.severity}/10
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </CardBody>
-          </Card>
-        ) : null}
-      </div>
-    </>
   );
 }
 

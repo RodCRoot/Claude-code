@@ -14,7 +14,7 @@ import {
   Input,
   PageHeader,
   Select,
-  Stat,
+
   Table,
   Tabs,
   Td,
@@ -25,6 +25,7 @@ import { listLeads, leadSources, type LeadFilters, type LeadRow } from "@/lib/cr
 import { ensureStages, type LeadStage } from "@/lib/crm/stages";
 import { staffDirectory } from "@/lib/messaging/threads";
 import { fmt, fmtDate } from "@/lib/time";
+import { KpiTile, MemberAvatar } from "@/components/profile/studio";
 import { changeStageAction, createStageAction, deleteStageAction, moveStageAction, updateStageAction } from "./actions";
 
 export const metadata = { title: "Leads" };
@@ -77,11 +78,11 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
         }
       />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Open leads" value={rows.filter((r) => openKeys.includes(r.stage)).length} />
-        <Stat label="New (uncontacted)" value={rows.filter((r) => r.stage === "new").length} tone={rows.some((r) => r.stage === "new") ? "warn" : undefined} />
-        <Stat label="Possible duplicates" value={rows.filter((r) => r.possibleDuplicate && !r.convertedAt).length} hint="Need review before converting" />
-        <Stat label="Converted" value={rows.filter((r) => r.convertedAt).length} />
+      <div className="mb-4 grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-4">
+        <KpiTile icon="people" label="Open leads" value={rows.filter((r) => openKeys.includes(r.stage)).length} />
+        <KpiTile icon="messages" label="New (uncontacted)" value={rows.filter((r) => r.stage === "new").length} tone={rows.some((r) => r.stage === "new") ? "warn" : "ok"} />
+        <KpiTile icon="shield" label="Possible duplicates" value={rows.filter((r) => r.possibleDuplicate && !r.convertedAt).length} hint="Need review before converting" />
+        <KpiTile icon="today" label="Converted" value={rows.filter((r) => r.convertedAt).length} tone="ok" />
       </div>
 
       <Tabs
@@ -97,7 +98,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
         <StageSettings stages={stages} />
       ) : (
         <>
-          <form method="get" className="mb-5 grid grid-cols-2 gap-3 rounded-xl border border-edge bg-surface p-4 sm:grid-cols-3 lg:grid-cols-7" aria-label="Filter leads">
+          <form method="get" className="mb-4 grid grid-cols-2 gap-3 rounded-md border border-edge bg-th p-3 sm:grid-cols-3 lg:grid-cols-7" aria-label="Filter leads">
             {view === "list" ? <input type="hidden" name="view" value="list" /> : null}
             <Field label="Search" htmlFor="f-q" className="col-span-2 sm:col-span-1">
               <Input id="f-q" name="q" defaultValue={sp.q} placeholder="Name or email" />
@@ -182,51 +183,66 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
 function Board({ rows, stages }: { rows: LeadRow[]; stages: LeadStage[] }) {
   const movable = stages.filter((s) => !s.isWon && !s.isLost);
   return (
-    <div className="relative -mx-4 overflow-x-auto px-4 pb-4 sm:mx-0 sm:px-0" role="region" aria-label="Lead pipeline board" tabIndex={0}>
-      <div className="flex gap-3">
+    <div className="relative -mx-4 overflow-x-auto px-4 pb-3 sm:mx-0 sm:px-0" role="region" aria-label="Lead pipeline board" tabIndex={0}>
+      <div className="flex items-start gap-3">
         {stages.map((s) => {
           const items = rows.filter((r) => r.stage === s.key);
           return (
-            <section key={s.id} className="w-72 shrink-0 rounded-xl border border-edge bg-surface-2/60" aria-labelledby={`col-${s.id}`}>
-              <h2 id={`col-${s.id}`} className="flex items-center justify-between px-3 py-2 text-sm font-semibold">
-                <span>{s.label}</span>
-                <Badge variant={s.isWon ? "green" : s.isLost ? "red" : "neutral"}>{items.length}</Badge>
+            <section
+              key={s.id}
+              className={`flex max-h-[75vh] w-64 shrink-0 flex-col overflow-hidden rounded-md border border-t-4 border-edge bg-th ${s.isWon ? "border-t-ok" : s.isLost ? "border-t-bad" : "border-t-brand"}`}
+              aria-labelledby={`col-${s.id}`}
+            >
+              <h2 id={`col-${s.id}`} className="flex items-center justify-between gap-2 border-b border-edge px-3 py-2 text-[12px] font-bold uppercase tracking-wide text-ink-2">
+                <span className="truncate">{s.label}</span>
+                <span className="rounded-full bg-surface px-2 text-[11px] tabular ring-1 ring-edge">
+                  {items.length}
+                  <span className="sr-only"> lead{items.length === 1 ? "" : "s"}</span>
+                </span>
               </h2>
-              <ul className="space-y-2 px-2 pb-2">
-                {items.length === 0 ? <li className="px-2 py-4 text-center text-xs text-ink-3">No leads</li> : null}
+              <ul className="space-y-1.5 overflow-y-auto p-1.5">
+                {items.length === 0 ? <li className="rounded border border-dashed border-edge px-2 py-4 text-center text-xs text-ink-3">No leads</li> : null}
                 {items.map((r) => (
-                  <li key={r.id} className="rounded-lg border border-edge bg-surface p-3 text-sm shadow-sm">
-                    <Link href={`/people/leads/${r.id}`} className="font-semibold hover:underline">
-                      {r.name}
-                    </Link>
-                    <div className="mt-0.5 text-xs text-ink-3">
-                      {[r.age != null ? `${r.age} yrs` : null, r.interest, r.source?.replaceAll("_", " ")].filter(Boolean).join(" · ")}
+                  <li key={r.id} className="rounded border border-edge bg-surface px-2.5 py-2 text-sm shadow-[0_1px_2px_rgb(16_24_40/0.06)] hover:border-brand/50">
+                    <div className="flex items-start gap-2">
+                      <MemberAvatar name={r.name} size="sm" />
+                      <div className="min-w-0 flex-1">
+                        <Link href={`/people/leads/${r.id}`} className="block truncate font-semibold leading-tight hover:underline">
+                          {r.name}
+                        </Link>
+                        <div className="truncate text-[11px] text-ink-3">
+                          {[r.age != null ? `${r.age} yrs` : null, r.interest, r.source?.replaceAll("_", " ")].filter(Boolean).join(" · ") || "—"}
+                        </div>
+                      </div>
                     </div>
-                    {r.contactName ? <div className="text-xs text-ink-3">Contact: {r.contactName}</div> : null}
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {r.possibleDuplicate && !r.convertedAt ? <Badge variant="yellow">Possible duplicate</Badge> : null}
-                      {r.openTasks ? <Badge variant="blue">{r.openTasks} task{r.openTasks > 1 ? "s" : ""}</Badge> : null}
-                      {r.tags.map((t) => (
-                        <Badge key={t.id}>{t.name}</Badge>
-                      ))}
-                    </div>
-                    <div className="mt-1 text-xs text-ink-3">
-                      {r.ownerName ?? "Unassigned"} · {r.lastContactedAt ? `contacted ${fmtDate(r.lastContactedAt)}` : "not contacted"}
+                    {r.contactName ? <div className="mt-1 truncate text-[11px] text-ink-3">Contact: {r.contactName}</div> : null}
+                    {(r.possibleDuplicate && !r.convertedAt) || r.openTasks || r.tags.length ? (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {r.possibleDuplicate && !r.convertedAt ? <Badge variant="yellow">Possible duplicate</Badge> : null}
+                        {r.openTasks ? <Badge variant="blue">{r.openTasks} task{r.openTasks > 1 ? "s" : ""}</Badge> : null}
+                        {r.tags.map((t) => (
+                          <Badge key={t.id}>{t.name}</Badge>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className="mt-1 flex items-center justify-between gap-2 border-t border-edge/70 pt-1 text-[11px] text-ink-3">
+                      <span className="truncate">{r.ownerName ?? "Unassigned"}</span>
+                      <span className={`shrink-0 ${r.lastContactedAt ? "" : "font-semibold text-warn"}`}>{r.lastContactedAt ? `contacted ${fmtDate(r.lastContactedAt)}` : "not contacted"}</span>
                     </div>
                     {!s.isWon && !s.isLost ? (
-                      <ActionForm action={changeStageAction} className="mt-2 flex gap-1.5">
+                      <ActionForm action={changeStageAction} className="mt-1.5 flex gap-1">
                         <input type="hidden" name="leadId" value={r.id} />
                         <label htmlFor={`mv-${r.id}`} className="sr-only">
                           Move {r.name} to stage
                         </label>
-                        <select id={`mv-${r.id}`} name="stage" defaultValue={r.stage} className="h-8 min-w-0 flex-1 rounded-md border border-edge bg-surface px-2 text-xs">
+                        <select id={`mv-${r.id}`} name="stage" defaultValue={r.stage} className="h-7 min-w-0 flex-1 rounded border border-edge bg-surface px-1.5 text-xs">
                           {movable.map((m) => (
                             <option key={m.id} value={m.key}>
                               {m.label}
                             </option>
                           ))}
                         </select>
-                        <SubmitButton size="sm" variant="secondary" pendingText="…">
+                        <SubmitButton size="sm" variant="secondary" pendingText="…" className="h-7 px-2">
                           Move
                         </SubmitButton>
                       </ActionForm>
