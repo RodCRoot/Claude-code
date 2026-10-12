@@ -15,8 +15,8 @@ import { athleteBookingsIn, familyAthletes, listSessions, type SessionListItem }
 import { addDaysYmd, fmt, fmtDate, localToUtc } from "@/lib/time";
 import { listLocations, parseLocationParam } from "@/lib/locations";
 import { bookAction, cancelBookingAction, rescheduleAction } from "../actions";
-import { capacityText, DaysView, MonthView, SessionCard } from "./calendar";
-import { CalendarToolbar, hrefWith, type Params } from "./nav";
+import { capacityText, DaysView, MonthView, SessionRow } from "./calendar";
+import { CalendarToolbar, hrefWith, rangeLabel, type Params } from "./nav";
 
 type Range = ReturnType<typeof calendarRange>;
 const ANY_SERVICE = "00000000-0000-0000-0000-000000000000";
@@ -65,7 +65,7 @@ export async function FamilySchedule({ viewer, params, range, tz, today }: { vie
     let action: React.ReactNode;
     if (b?.status === "booked" || b?.status === "attended") {
       action = (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-2 sm:mt-0 sm:justify-end">
           <Badge variant="green">{b.status === "attended" ? "Attended" : `Booked: ${selected.first}`}</Badge>
           {b.status === "booked" && s.startsAt > now && selected.canBook ? (
             <ActionForm action={cancelBookingAction}>
@@ -79,7 +79,7 @@ export async function FamilySchedule({ viewer, params, range, tz, today }: { vie
       );
     } else if (b?.status === "waitlisted") {
       action = (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-2 sm:mt-0 sm:justify-end">
           <Badge variant="yellow">Waitlist #{b.waitlistPosition}</Badge>
           {selected.canBook ? (
             <ActionForm action={cancelBookingAction}>
@@ -94,18 +94,18 @@ export async function FamilySchedule({ viewer, params, range, tz, today }: { vie
     } else if (s.status === "cancelled") {
       action = null;
     } else if (!selected.canBook) {
-      action = <p className="mt-2 text-xs text-ink-3">Booking for {selected.first} isn&apos;t enabled on your account.</p>;
+      action = <p className="mt-2 sm:mt-0 text-xs text-ink-3">Booking for {selected.first} isn&apos;t enabled on your account.</p>;
     } else {
       const cutoffAt = s.startsAt.getTime() - (settings.familyBookingCutoffMinutes ?? 0) * 60_000;
       const opensAt = settings.bookingWindowDays != null ? s.startsAt.getTime() - settings.bookingWindowDays * 86_400_000 : null;
       const waitOpen = s.waitlisted < s.waitlistCapacity;
-      if (now >= s.endsAt) action = <p className="mt-2 text-xs text-ink-3">Ended.</p>;
-      else if (now.getTime() > cutoffAt) action = <p className="mt-2 text-xs text-ink-3">Online booking closed{now < s.startsAt ? ". Please call the front desk" : ""}.</p>;
-      else if (opensAt && now.getTime() < opensAt) action = <p className="mt-2 text-xs text-ink-3">Booking opens {fmt(new Date(opensAt), "MMM d", tz)}.</p>;
-      else if (cap.full && !waitOpen) action = <p className="mt-2 text-xs font-medium text-ink-3">Full</p>;
+      if (now >= s.endsAt) action = <p className="mt-2 sm:mt-0 text-xs text-ink-3">Ended.</p>;
+      else if (now.getTime() > cutoffAt) action = <p className="mt-2 sm:mt-0 text-xs text-ink-3">Online booking closed{now < s.startsAt ? ". Please call the front desk" : ""}.</p>;
+      else if (opensAt && now.getTime() < opensAt) action = <p className="mt-2 sm:mt-0 text-xs text-ink-3">Booking opens {fmt(new Date(opensAt), "MMM d", tz)}.</p>;
+      else if (cap.full && !waitOpen) action = <p className="mt-2 sm:mt-0 text-xs font-medium text-ink-3">Full</p>;
       else
         action = (
-          <ActionForm action={bookAction} className="mt-2">
+          <ActionForm action={bookAction} className="mt-2 sm:mt-0">
             <input type="hidden" name="sessionId" value={s.id} />
             <input type="hidden" name="athleteId" value={selected.id} />
             <input type="hidden" name="idem" value={randomUUID()} />
@@ -123,9 +123,9 @@ export async function FamilySchedule({ viewer, params, range, tz, today }: { vie
         );
     }
     return (
-      <SessionCard s={s} tz={tz}>
+      <SessionRow s={s} tz={tz}>
         {action}
-      </SessionCard>
+      </SessionRow>
     );
   };
 
@@ -139,10 +139,14 @@ export async function FamilySchedule({ viewer, params, range, tz, today }: { vie
               href={hrefWith("/schedule", params, { athlete: a.id })}
               aria-current={a.id === selected.id ? "true" : undefined}
               className={cn(
-                "inline-flex min-h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium",
-                a.id === selected.id ? "border-brand bg-brand text-brand-ink" : "border-edge bg-surface hover:bg-surface-2",
+                "inline-flex min-h-11 items-center gap-2 rounded-full border py-1 pr-4 pl-1.5 text-sm font-semibold",
+                a.id === selected.id ? "border-brand bg-brand text-brand-ink" : "border-edge bg-surface text-ink hover:bg-surface-2",
               )}
             >
+              <span aria-hidden className={cn("inline-flex size-8 items-center justify-center rounded-full text-xs font-bold", a.id === selected.id ? "bg-brand-ink text-brand" : "bg-surface-2 text-ink-2")}>
+                {(a.first[0] ?? "").toUpperCase()}
+                {(a.last[0] ?? "").toUpperCase()}
+              </span>
               {a.first} {a.last}
             </Link>
           ))}
@@ -279,23 +283,33 @@ export async function FamilySchedule({ viewer, params, range, tz, today }: { vie
         </Card>
       </div>
 
-      <section aria-labelledby="family-cal">
+      <section aria-labelledby="family-cal" className="overflow-hidden rounded-md border border-edge bg-surface shadow-[0_1px_3px_rgb(16_24_40/0.06)]">
         <h2 id="family-cal" className="sr-only">
           Sessions
         </h2>
-        <CalendarToolbar params={p} view={range.view} label={range.label} prev={range.prev} next={range.next} today={today} />
+        <CalendarToolbar
+          className="border-b border-edge px-3 py-2.5"
+          params={p}
+          view={range.view}
+          label={rangeLabel(range.view, range.first, range.last, range.label)}
+          prev={range.prev}
+          next={range.next}
+          today={today}
+        />
         {settings.bookingWindowDays != null ? (
-          <p className="mb-3 text-xs text-ink-3">
+          <p className="border-b border-edge bg-th px-3 py-2 text-xs text-ink-2">
             Online booking opens {settings.bookingWindowDays} days ahead
             {settings.familyBookingCutoffMinutes ? ` and closes ${settings.familyBookingCutoffMinutes} minutes before start` : ""}. Today is {fmtDate(today)}.
           </p>
         ) : null}
         {sessions.length === 0 ? (
-          <EmptyState title="No bookable sessions in this range">Try the next week, or contact the front desk.</EmptyState>
+          <div className="p-4">
+            <EmptyState title="No bookable sessions in this range">Try the next week, or contact the front desk.</EmptyState>
+          </div>
         ) : range.view === "month" ? (
           <MonthView days={range.days} sessions={sessions} tz={tz} today={today} monthPrefix={range.monthPrefix!} dayHref={dayHref} />
         ) : (
-          <DaysView days={range.days} sessions={sessions} tz={tz} today={today} dayHref={dayHref} render={render} />
+          <DaysView className="bg-bg p-3" days={range.days} sessions={sessions} tz={tz} today={today} dayHref={dayHref} render={render} />
         )}
       </section>
     </div>
