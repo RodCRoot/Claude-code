@@ -24,6 +24,7 @@ import { autoMap, OPTION_PREFIX } from "@/lib/imports/mapping";
 import { getSchema } from "@/lib/imports/schemas";
 import { runHawkinSync, setHawkinOptions } from "@/lib/integrations/hawkin/sync";
 import { createExport } from "@/lib/exports/bundle";
+import { deleteStoredBytes } from "@/lib/storage";
 
 const str = (fd: FormData, k: string) => {
   const v = fd.get(k);
@@ -134,6 +135,8 @@ export const revertAction = safeAction(async (_p: ActionState, fd: FormData) => 
   const v = await importer();
   const batchId = str(fd, "batchId");
   const r = await db.transaction((tx) => revertBatch(tx, v, batchId));
+  // Rows are gone (committed); now remove their bytes. Best-effort, failures are logged.
+  await deleteStoredBytes(r.deletedStorageKeys);
   if (r.alreadyReverted) return flash(batchId, "Already reverted — nothing changed.");
   return flash(batchId, `Reverted: ${r.deleted} record(s) removed${r.kept.length ? `, ${r.kept.length} kept because later data uses them` : ""}.`);
 });

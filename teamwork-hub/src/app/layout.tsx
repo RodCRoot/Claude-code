@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { connection } from "next/server";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
@@ -13,7 +14,10 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  // Every page renders per request so Next.js can attach this request's CSP nonce (src/proxy.ts)
+  // to its scripts; a prerendered page would carry no nonce and be blocked.
+  await connection();
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable} h-full`}>
       <body className="min-h-full">

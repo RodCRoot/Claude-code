@@ -4,6 +4,7 @@ import { AuthzError } from "@/lib/authz/policy";
 import { TrainingError } from "@/lib/training/common";
 import { applySetMutation, setMutationSchema, type SetMutationResult } from "@/lib/training/logging";
 import { json, withViewer } from "@/lib/training/http";
+import { reportError } from "@/lib/observability";
 
 const body = z.object({
   mutations: z.array(z.unknown()).min(1).max(200),
@@ -37,7 +38,7 @@ export async function POST(req: Request) {
         } else if (e instanceof AuthzError || e instanceof TrainingError) {
           results.push({ clientMutationId: m.data.clientMutationId, status: "rejected", error: e.message });
         } else {
-          console.error(JSON.stringify({ level: "error", msg: "set_mutation_failed", message: (e as Error)?.message }));
+          reportError(e, { where: "route:/api/training/sets", op: "set_mutation" });
           results.push({ clientMutationId: m.data.clientMutationId, status: "error", error: "Temporary server error" });
         }
       }

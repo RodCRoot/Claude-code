@@ -52,7 +52,8 @@ export async function runJobs(tx: Tx, handlers: Record<string, JobHandler>, work
   // Only claim job types this runner can handle, so specialised runners never steal (and fail) others' jobs.
   // `orgId` scopes a runner to one tenant (used by tests that run in parallel on one database).
   const claimed = await claimJobs(tx, workerId, limit, Object.keys(handlers), opts.orgId);
-  const results: { id: string; type: string; status: string; error?: string }[] = [];
+  /** `cause` is the original thrown value (for error reporting); `error` its message. */
+  const results: { id: string; type: string; status: string; error?: string; cause?: unknown; attempts?: number }[] = [];
   for (const job of claimed) {
     const handler = handlers[job.type];
     try {
@@ -75,7 +76,7 @@ export async function runJobs(tx: Tx, handlers: Record<string, JobHandler>, work
           lockedAt: null,
         })
         .where(and(eq(jobs.id, job.id)));
-      results.push({ id: job.id, type: job.type, status: dead ? "dead" : "retry", error: msg });
+      results.push({ id: job.id, type: job.type, status: dead ? "dead" : "retry", error: msg, cause: e, attempts: job.attempts });
     }
   }
   return results;

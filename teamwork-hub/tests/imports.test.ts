@@ -19,8 +19,10 @@ import {
   testSessions,
   trials,
   questionnaireResponses,
+  storedObjects,
   wearableObservations,
 } from "@/db/schema";
+import { deleteStoredBytes, objectStore } from "@/lib/storage";
 import { closeTestDb, seedOrg, viewerFor } from "./helpers/db";
 import { confirmAndCommit, db, fixture, tx, uploadAndValidate, zipFolder } from "./imports.helpers";
 import {
@@ -202,6 +204,16 @@ describe("Zen Planner family links, memberships, attendance, documents", () => {
     expect(docs).toHaveLength(2);
     expect(docs[0].originalSystem).toBe("zenplanner");
     expect((docs[0].originalEvidence as Record<string, unknown>).sha256).toMatch(/^[0-9a-f]{64}$/);
+
+    // Reverting removes the rows, then (after commit) the bytes from the object store.
+    const objs = await db().select().from(storedObjects).where(inArray(storedObjects.id, docs.map((d) => d.objectId!)));
+    expect(objs).toHaveLength(2);
+    for (const o of objs) await expect(objectStore().get(o.storageKey)).resolves.toBeInstanceOf(Uint8Array);
+    const rev = await tx((t) => revertBatch(t, rod, r.batchId));
+    expect(rev.deletedStorageKeys.sort()).toEqual(objs.map((o) => o.storageKey).sort());
+    expect(await deleteStoredBytes(rev.deletedStorageKeys)).toEqual({ deleted: 2, failed: 0 });
+    for (const o of objs) await expect(objectStore().get(o.storageKey)).rejects.toThrow();
+    expect(await db().select().from(storedObjects).where(inArray(storedObjects.id, objs.map((o) => o.id)))).toHaveLength(0);
   });
 });
 
