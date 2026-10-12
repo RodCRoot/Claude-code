@@ -22,7 +22,7 @@ let ctx: Awaited<ReturnType<typeof seedOrg>>;
 let qid: string;
 
 beforeAll(async () => {
-  ctx = await seedOrg(TODAY);
+  ctx = await seedOrg(TODAY, { modules: ["scheduling", "science"] });
   qid = ctx.extra.science.questionnaireId;
 });
 afterAll(closeTestDb);

@@ -6,7 +6,7 @@ import { seedCore } from "./core";
 import { moduleSeeds } from "./modules";
 
 /** Builds the full synthetic demo dataset inside one transaction. */
-export async function seedAll(tx: Tx, opts: { today?: string; slug?: string } = {}): Promise<SeedCtx> {
+export async function seedAll(tx: Tx, opts: { today?: string; slug?: string; modules?: string[] } = {}): Promise<SeedCtx> {
   const [org] = await tx
     .insert(organizations)
     .values({
@@ -40,6 +40,7 @@ export async function seedAll(tx: Tx, opts: { today?: string; slug?: string } = 
   };
   await seedCore(ctx);
   for (const [name, fn] of moduleSeeds) {
+    if (opts.modules && !opts.modules.includes(name)) continue;
     await fn(ctx);
     if (process.env.SEED_VERBOSE) console.log(`  seeded ${name}`);
   }

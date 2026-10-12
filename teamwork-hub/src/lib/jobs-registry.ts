@@ -20,6 +20,7 @@ import { onLeadConverted } from "@/lib/crm/handlers";
 import { deliverOne } from "@/lib/messaging/delivery";
 import { billingJobHandlers } from "@/lib/billing/jobs";
 import { calendarJobHandlers } from "@/lib/calendar/sync";
+import { exportJobHandlers } from "@/lib/exports/jobs";
 
 const str = (v: unknown, name: string): string => {
   if (typeof v !== "string" || !v) throw new Error(`payload.${name} is required`);
@@ -45,6 +46,7 @@ export const jobHandlers: Record<string, JobHandler> = {
   // Billing renewals / webhook reprocessing and Google Calendar push/free-busy jobs.
   ...billingJobHandlers(db),
   ...calendarJobHandlers(db),
+  ...exportJobHandlers,
   [JOB_TYPES.NOTIFY_SESSION_CANCELLED]: (p) =>
     db.transaction((tx) => notifySession(tx, "session_cancelled", { sessionId: str(p.sessionId, "sessionId"), version: typeof p.version === "number" ? p.version : undefined })),
 

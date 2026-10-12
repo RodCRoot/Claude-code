@@ -265,7 +265,7 @@ export const maxes = pgTable(
   },
   (t) => [
     index("maxes_athlete_ex_idx").on(t.athleteId, t.exerciseId, t.recordedOn),
-    uniqueIndex("maxes_source_uq").on(t.source, t.sourceRecordId),
+    uniqueIndex("maxes_source_uq").on(t.orgId, t.source, t.sourceRecordId),
   ],
 );
 

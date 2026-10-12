@@ -229,7 +229,7 @@ export const testSessions = pgTable(
     notes: text("notes"),
     isDemo: isDemo(),
   },
-  (t) => [uniqueIndex("test_sessions_src_uq").on(t.source, t.sourceRecordId), index("test_sessions_athlete_idx").on(t.athleteId, t.testedAt)],
+  (t) => [uniqueIndex("test_sessions_src_uq").on(t.orgId, t.source, t.sourceRecordId), index("test_sessions_athlete_idx").on(t.athleteId, t.testedAt)],
 );
 
 export const trials = pgTable(

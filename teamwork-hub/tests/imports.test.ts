@@ -45,7 +45,7 @@ const peopleCount = async (orgId: string) => (await db().select({ n: sql<number>
 const rowByNumber = async (batchId: string, n: number) => (await db().select().from(importRows).where(and(eq(importRows.batchId, batchId), eq(importRows.rowNumber, n))))[0];
 
 beforeAll(async () => {
-  ctx = await seedOrg();
+  ctx = await seedOrg(undefined, { modules: [] });
   rod = await viewerFor(ctx, "rod");
 });
 afterAll(closeTestDb);

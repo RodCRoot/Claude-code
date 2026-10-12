@@ -144,7 +144,7 @@ describe("Hawkin sync → import pipeline", () => {
   const integ = async () => (await db().select().from(integrations).where(and(eq(integrations.orgId, ctx.orgId), eq(integrations.provider, "hawkin"))))[0];
 
   beforeAll(async () => {
-    ctx = await seedOrg();
+    ctx = await seedOrg(undefined, { modules: [] });
     rod = await viewerFor(ctx, "rod");
   });
   afterAll(closeTestDb);
@@ -227,7 +227,7 @@ describe("Hawkin sync → import pipeline", () => {
 
   it("archives raw force-time curves for newly committed API tests when enabled", async () => {
     // Fresh org avoids the global (source, test id) uniqueness of test sessions.
-    const ctx2 = await seedOrg();
+    const ctx2 = await seedOrg(undefined, { modules: [] });
     const owner = await viewerFor(ctx2, "rod");
     // Pre-link Maya so the first window commits without review.
     const { externalIds } = await import("@/db/schema");

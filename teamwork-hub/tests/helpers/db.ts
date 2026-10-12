@@ -31,9 +31,10 @@ export async function closeTestDb() {
 }
 
 /** Seeds an isolated synthetic organization (unique slug) with a fixed "today". */
-export async function seedOrg(today = "2026-03-02"): Promise<Omit<SeedCtx, "tx">> {
+/** `modules` limits which module seeds run (default: all) so a test file depends only on the fixtures it needs. */
+export async function seedOrg(today = "2026-03-02", opts: { modules?: string[] } = {}): Promise<Omit<SeedCtx, "tx">> {
   const db = testDb();
-  const ctx = await db.transaction((tx) => seedAll(tx, { today, slug: `test-${randomUUID()}` }));
+  const ctx = await db.transaction((tx) => seedAll(tx, { today, slug: `test-${randomUUID()}`, modules: opts.modules }));
   const rest: Partial<SeedCtx> = { ...ctx };
   delete rest.tx;
   return rest as Omit<SeedCtx, "tx">;
