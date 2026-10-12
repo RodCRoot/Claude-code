@@ -26,3 +26,10 @@ Merged: security review (10 fixes + tests: coach export scope, export download r
 Migrations renumbered after parallel work: 0004 cal tokens, 0005 provider plans, 0006 provider billing guard, 0007 signer step-up, 0008 form version status guard; `drizzle-kit generate` reports no drift.
 
 Verified: `pnpm test` 364/364 (23 files), typecheck/lint clean, production build OK, Playwright against the production build 24/24 (auth/access + CSP sweep for every role, desktop + mobile), training offline e2e 1/1, `/api/health` ok.
+
+## Checkpoint 5 — Product depth wave (2026-10-12)
+Merged: scheduling depth (series edits this/following/all with capacity-conflict choices, family multi-athlete and N-week booking, kiosk PIN check-in + PIN-only mode, attendance corrections re-settle credits); training (scoped service worker so athletes can reload offline and keep logging, shared-tablet cache purging, web manifest, accessible drag-and-drop/keyboard program builder; fixed a stuck-queue bug and a post-sync display race); messaging (family communication preferences with immutable consent history, saved segments + approved broadcast campaigns, Postmark/SendGrid/Twilio webhooks for bounces, complaints, STOP/START, threaded replies); custom fields (Settings + person page + list filters + export), report charts with text/table fallbacks, axe accessibility audit (263 violations → 0 across 217 page audits) with app-wide fixes.
+Migrations: 0009 crm preferences/campaigns/inbound, 0010 kiosk pins, 0011 custom fields (renumbered at merge; `drizzle-kit generate` reports no drift).
+Test infrastructure: vitest hook timeout 180 s and max 4 workers (seeding grew); job-count assertion scoped per org.
+
+Verified: `pnpm test` 455/455, typecheck/lint clean, production build OK.
