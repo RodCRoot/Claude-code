@@ -159,7 +159,7 @@ export const bookings = pgTable(
     waitlistPosition: integer("waitlist_position"),
     /** Credit bucket the reservation drew from (null = unlimited membership / staff comp). */
     creditBucketId: uuid("credit_bucket_id"),
-    entitlementSource: text("entitlement_source").$type<"credit" | "unlimited" | "comp" | "drop_in_invoice">(),
+    entitlementSource: text("entitlement_source").$type<"credit" | "unlimited" | "membership" | "comp" | "drop_in_invoice">(),
     membershipId: uuid("membership_id"),
     idempotencyKey: text("idempotency_key"),
     checkedInAt: ts("checked_in_at"),

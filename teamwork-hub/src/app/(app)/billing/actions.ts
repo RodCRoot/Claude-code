@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { products, type ProductKind } from "@/db/schema";
+import { products, REQUEST_CHANNELS, type ProductKind, type RequestChannel } from "@/db/schema";
 import { requireViewer } from "@/lib/auth/viewer";
 import { safeAction, UserError, type ActionState } from "@/lib/actions";
 import { assertCan } from "@/lib/authz/policy";
@@ -12,7 +12,7 @@ import { createProduct, createProductVersion, setProductActive, versionOn, type 
 import { startCheckout } from "@/lib/billing/checkout";
 import { UserError as BillingUserError } from "@/lib/billing/errors";
 import { createManualInvoice, issueInvoice, markUncollectible, recordManualPayment, voidInvoice, type LineInput, type ManualMethod } from "@/lib/billing/invoices";
-import { addHold, cancelMembership, changePlan, createMembership, cutoverMembership, removeHold, type InternalBillingProvider } from "@/lib/billing/memberships";
+import { addHold, cancelMembership, changePlan, createMembership, cutoverMembership, removeHold, startInSeason, type InternalBillingProvider } from "@/lib/billing/memberships";
 import { adjustStock, quickSale } from "@/lib/billing/pos";
 import { requestRefund } from "@/lib/billing/refunds";
 import { generateRenewals } from "@/lib/billing/renewals";
@@ -55,6 +55,7 @@ function versionFromForm(fd: FormData): VersionInput {
     intervalCount: optInt(fd, "intervalCount") ?? 1,
     creditsPerPeriod: optInt(fd, "credits"),
     unlimited: fd.get("unlimited") === "on",
+    classesPerWeek: optInt(fd, "classesPerWeek"),
     creditExpiryDays: optInt(fd, "creditExpiryDays"),
     trialDays: optInt(fd, "trialDays") ?? 0,
     commitmentMonths: optInt(fd, "commitmentMonths") ?? 0,
@@ -114,7 +115,7 @@ export async function createMembershipAction(_p: ActionState, fd: FormData) {
         startDate: s(fd, "startDate"),
         billingAnchorDay: optInt(fd, "anchorDay"),
         billingProvider: (s(fd, "billingProvider") || "manual") as InternalBillingProvider,
-        applyFamilyDiscount: fd.get("familyDiscount") === "on",
+        stubOverride: s(fd, "stubOverride") ? { amountMinor: money(fd, "stubOverride", "the first-period amount"), reason: s(fd, "stubOverrideReason") } : null,
         today: todayLocal(),
       }),
     );
@@ -122,13 +123,48 @@ export async function createMembershipAction(_p: ActionState, fd: FormData) {
   });
 }
 
+const channel = (fd: FormData) => (REQUEST_CHANNELS as readonly string[]).includes(s(fd, "requestChannel")) ? (s(fd, "requestChannel") as RequestChannel) : null;
+
 export async function addHoldAction(_p: ActionState, fd: FormData) {
   return run(async () => {
     const v = await requireViewer();
-    await db.transaction((tx) =>
-      addHold(tx, v, { membershipId: s(fd, "membershipId"), startDate: s(fd, "startDate"), endDate: s(fd, "endDate"), reason: s(fd, "reason"), requestedAt: opt(fd, "requestedOn") ? new Date(`${s(fd, "requestedOn")}T12:00:00Z`) : null, today: todayLocal() }),
+    const today = todayLocal();
+    const r = await db.transaction((tx) =>
+      addHold(tx, v, {
+        membershipId: s(fd, "membershipId"),
+        startDate: s(fd, "startDate"),
+        restartDate: s(fd, "restartDate"),
+        reason: s(fd, "reason"),
+        requestedOn: opt(fd, "requestedOn"),
+        requestChannel: channel(fd),
+        overrideReason: opt(fd, "overrideReason"),
+        unusedSessions: s(fd, "unusedSessions") ? { count: Number(s(fd, "unusedSessions")), reason: s(fd, "unusedSessionsReason") } : null,
+        grantMakeup: s(fd, "grantMakeupReason") ? { reason: s(fd, "grantMakeupReason") } : null,
+        today,
+      }),
     );
-    return { ok: true, message: "Hold saved. Renewals and credit grants pause during the hold." };
+    const punch = r.makeup ? ` Already-billed period: ${r.makeup.decision}${r.makeup.granted ? ` (${r.makeup.granted} session punch card from ${r.restartDate})` : ""}.` : "";
+    return { ok: true, message: `Hold saved; restarts ${r.restartDate}. Renewals pause during the hold and a restart nudge is scheduled.${punch}` };
+  });
+}
+
+export async function startInSeasonAction(_p: ActionState, fd: FormData) {
+  return run(async () => {
+    const v = await requireViewer();
+    const r = await db.transaction((tx) =>
+      startInSeason(tx, v, {
+        membershipId: s(fd, "membershipId"),
+        inSeasonVersionId: s(fd, "inSeasonVersionId"),
+        startDate: s(fd, "startDate"),
+        endDate: s(fd, "endDate"),
+        reason: s(fd, "reason"),
+        requestedOn: opt(fd, "requestedOn"),
+        requestChannel: channel(fd),
+        overrideReason: opt(fd, "overrideReason"),
+        today: todayLocal(),
+      }),
+    );
+    return { ok: true, message: `In Season membership added through ${r.inSeasonMembership.endDate}; the regular membership resumes the day after.` };
   });
 }
 
@@ -156,6 +192,7 @@ export async function cancelMembershipAction(_p: ActionState, fd: FormData) {
         membershipId: s(fd, "membershipId"),
         requestedOn: s(fd, "requestedOn") || todayLocal(),
         reason: s(fd, "reason"),
+        requestChannel: channel(fd),
         today: todayLocal(),
         overrideCancelAt: opt(fd, "overrideCancelAt"),
         overrideReason: opt(fd, "overrideReason"),

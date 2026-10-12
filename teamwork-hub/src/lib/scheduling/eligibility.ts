@@ -13,6 +13,7 @@ import {
 } from "@/db/schema";
 import type { ServiceType } from "./common";
 import { DEFAULT_TZ, localYmd } from "@/lib/time";
+import { activeMembershipOnDay } from "@/lib/credits";
 
 export type EligibilityResult = { ok: boolean; reasons: string[] };
 
@@ -83,6 +84,8 @@ export async function checkEligibility(
 export type Entitlement =
   | { kind: "not_required" }
   | { kind: "unlimited"; membershipId: string }
+  /** A membership with a weekly class cap; the booking flow counts the ISO week under a row lock. `credits` = fallback credits available. */
+  | { kind: "weekly"; membershipId: string; classesPerWeek: number; credits: number }
   | { kind: "credits"; available: number }
   | { kind: "none" };
 
@@ -93,35 +96,41 @@ export function requiresEntitlement(st: Pick<ServiceType, "eligibility" | "credi
 
 /**
  * What would pay for this athlete's booking (does not reserve anything):
- * 1. an active (or trialing) membership on an `unlimited` product version covering the service type
- *    on the session date, not on hold → "unlimited"
- * 2. otherwise eligible credits (unexpired, matching service type, available ≥ cost) → "credits"
+ * 1. a live membership covering the service type on the session date (active/trialing, or on_hold with
+ *    no hold covering that date, so a booking after a restart date works while the hold still runs):
+ *    - no weekly cap and `unlimited` → "unlimited"
+ *    - a weekly cap (`classes_per_week`) → "weekly" (the booking flow enforces the cap under a row lock)
+ * 2. otherwise eligible credits (unexpired, matching service type, available ≥ cost) → "credits".
+ *    Punch-card (hold_makeup) credits count only while the athlete has an active membership that day
+ *    (policy `makeupRequiresActiveMembership`; a 1x/week membership counts).
  * 3. otherwise "none" (families are told they need a membership or credits; staff may comp).
  */
 export async function resolveEntitlement(
   tx: Tx,
-  input: { orgId: string; athleteId: string; serviceType: Pick<ServiceType, "id" | "eligibility" | "creditCost">; at: Date; tz?: string },
+  input: { orgId: string; athleteId: string; serviceType: Pick<ServiceType, "id" | "eligibility" | "creditCost">; at: Date; tz?: string; makeupRequiresActiveMembership?: boolean },
 ): Promise<Entitlement> {
   if (!requiresEntitlement(input.serviceType)) return { kind: "not_required" };
   const day = localYmd(input.at, input.tz ?? DEFAULT_TZ);
   const ms = await tx
-    .select({ id: memberships.id, serviceTypeIds: productVersions.serviceTypeIds })
+    .select({ id: memberships.id, serviceTypeIds: productVersions.serviceTypeIds, unlimited: productVersions.unlimited, classesPerWeek: productVersions.classesPerWeek })
     .from(memberships)
     .innerJoin(productVersions, eq(productVersions.id, memberships.productVersionId))
     .where(
       and(
         eq(memberships.orgId, input.orgId),
         eq(memberships.athleteId, input.athleteId),
-        inArray(memberships.status, ["active", "trialing"]),
-        eq(productVersions.unlimited, true),
+        inArray(memberships.status, ["active", "trialing", "on_hold"]),
+        or(eq(productVersions.unlimited, true), sql`${productVersions.classesPerWeek} is not null`),
         lte(memberships.startDate, day),
         or(isNull(memberships.endDate), sql`${memberships.endDate} >= ${day}`),
         sql`not exists (select 1 from ${membershipHolds} h where h.membership_id = ${memberships.id} and h.start_date <= ${day} and h.end_date >= ${day})`,
       ),
     );
-  const unlimited = ms.find((m) => !m.serviceTypeIds?.length || m.serviceTypeIds.includes(input.serviceType.id));
+  const covering = ms.filter((m) => !m.serviceTypeIds?.length || m.serviceTypeIds.includes(input.serviceType.id));
+  const unlimited = covering.find((m) => m.classesPerWeek == null && m.unlimited);
   if (unlimited) return { kind: "unlimited", membershipId: unlimited.id };
 
+  const makeupOk = input.makeupRequiresActiveMembership === false ? sql`true` : activeMembershipOnDay(input.orgId, input.athleteId, day);
   const [row] = await tx
     .select({ available: sql<number>`coalesce(sum(${creditBuckets.available}),0)::int` })
     .from(creditBuckets)
@@ -134,8 +143,12 @@ export async function resolveEntitlement(
         or(isNull(creditBuckets.expiresAt), gt(creditBuckets.expiresAt, input.at)),
         or(sql`${creditBuckets.periodStart} is null`, lte(creditBuckets.periodStart, day)),
         sql`(jsonb_array_length(${creditBuckets.serviceTypeIds}) = 0 or ${creditBuckets.serviceTypeIds} ? ${input.serviceType.id})`,
+        sql`(${creditBuckets.sourceKind} <> 'hold_makeup' or ${makeupOk})`,
       ),
     );
-  if (row && row.available > 0) return { kind: "credits", available: row.available };
+  const credits = row?.available ?? 0;
+  const weekly = covering.filter((m) => m.classesPerWeek != null).sort((a, b) => b.classesPerWeek! - a.classesPerWeek!)[0];
+  if (weekly) return { kind: "weekly", membershipId: weekly.id, classesPerWeek: weekly.classesPerWeek!, credits };
+  if (credits > 0) return { kind: "credits", available: credits };
   return { kind: "none" };
 }

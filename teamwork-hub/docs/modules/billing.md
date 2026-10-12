@@ -77,8 +77,9 @@ there. The same matrix appears in the UI at `/billing/providers` (`src/lib/payme
 
   Holds pause renewals and credit grants; a period whose start falls inside a hold is deferred to the
   day after the hold. Plan changes take effect now or are scheduled for the first renewal on or after the
-  effective date. Cancellation date = max(request + notice, start + commitment). Staff can override it
-  only with a reason, and the override is audited. Every change writes `membership_events`.
+  effective date. Cancellation date = max(request + notice, end of commitment + 1 day). Staff can override it
+  only with a reason, and the override is audited. Every change writes `membership_events`. See "Teamwork
+  membership policies" below for anchoring, stubs, holds, in-season and the family discount.
 - **Renewal job** `billing.generate_renewals` (`src/lib/billing/renewals.ts`). It locks due memberships
   with `FOR UPDATE SKIP LOCKED`. Each period is idempotent through the unique
   `(membership_id, period_start)` index and the invoice idempotency key `membership:<id>:<periodStart>`.
@@ -126,6 +127,57 @@ there. The same matrix appears in the UI at `/billing/providers` (`src/lib/payme
 - **POS.** Counter sales of non-membership products. Sales use a walk-in payer account, or a payer +
   athlete when credits are involved. Tracked stock is checked under product row locks.
   `inventory_movements` records receive, adjust (note required), return and sale.
+
+## Teamwork membership policies (`src/lib/membership-policy.ts`)
+
+Values live in `organizations.settings.membershipPolicy` (defaults + provenance in `membership-policy.ts`;
+owners/admins edit them at Settings → Membership policy, where values listed in `unconfirmed` show a
+"Needs confirmation" badge until confirmed). Migration `0012_bill_membership_policy` (additive) adds
+`product_versions.classes_per_week`, `memberships.kind/commitment_starts_on/commitment_ends_on`, hold request
+fields (`requested_on`, `request_channel`, `override_reason`, `kind`, `related_membership_id`,
+`makeup_bucket_id`), CHECKs, and keeps the product-version immutability trigger covering the new column.
+Tests: `tests/billing-membership-policy.test.ts`.
+
+- **Weekly class caps.** A version with `classes_per_week` resolves to entitlement `weekly`. `bookSession` /
+  waitlist promotion lock the membership row and count the athlete's membership-paid bookings
+  (booked/attended/no-show; cancelled never) in the ISO week, Monday 00:00 → next Monday 00:00 in facility time
+  (DST-safe). Over the cap: use session credits if any, else refuse with "Maya's 2x/week plan already has 2
+  sessions booked the week of Mar 2." Staff can pass `capOverride {reason}` (audited). Bookings it covers have
+  `entitlement_source = 'membership'`.
+- **Billing on the 1st + stub.** Monthly plans anchor to `billingAnchorDay` (1st); never the start day. A
+  mid-month start (or a restart after a hold) bills a stub from that day to the day before the next anchor,
+  priced by `prorationMethod` (`computeStub`). Staff see `previewMembershipStart` before confirming on
+  /billing/memberships and can override the stub amount with a reason (audited). Weekly plans (College) bill
+  every 7 days from the start, no stub.
+- **Commitments.** `commitment_starts_on` = first full period (the 1st after a stub); `commitment_ends_on` =
+  start + months − 1 day. After it, the membership keeps its version (committed rate), the renewal job records
+  `commitment_ended` once, and cancellation only needs notice. Nothing ever creates a new commitment.
+- **Holds.** Firm restart date required; start may be backdated only to `requestedOn` (date the family sent
+  it; channel recorded). Cap `holdMaxMonthsPerMembershipYear` × 31 days per membership year (anniversary of
+  start); override needs a reason. A hold is never a cancellation. Already billed: if the invoice for the
+  period containing the request date was paid before the request, the money is kept and unused sessions
+  (cap × days/7 from the request date to period end, minus attended/no-show) become a `hold_makeup` credit
+  bucket usable from the restart date and expiring `punchCardExpiryMonths` after issue. Automatic only for
+  ≥12-month commitments that are active; otherwise a staff task (staff can grant with a reason).
+- **Makeup rule.** `hold_makeup` credits can only be spent on a day the athlete has a live, not-held
+  membership (`activeMembershipOnDay`, enforced in `resolveEntitlement` and credit reservation).
+- **In season.** `startInSeason`: an `in_season` hold pauses the regular membership and a new `kind='in_season'`
+  membership with explicit start/end (`cancel_at` = end + 1, DB CHECK) bills for the window, then expires.
+  Regular billing resumes the day after; its commitment is unchanged. 12-month members are capped at
+  `inSeasonMaxMonthsPer365Days` × 31 days in any rolling 365-day window (override with reason).
+- **Cancellation.** Effective = max(request + notice, commitment end + 1); notice = version's own if set,
+  else policy (30). Channel recorded. `cancellationPreview` shows effective date, last bill date, remaining
+  periods/amount and open balance (membership page).
+- **Family discount.** `syncFamilyDiscount` runs on create, immediate cancel and when the renewal job ends a
+  membership: 2+ athletes with live memberships on one payer account → "Family discount N%" on each
+  Teamwork-billed membership; below 2 → removed. Other discounts are never replaced; provider-billed ones get a
+  task. Events + audit for every change.
+- **Restart nudges.** Each hold / in-season term enqueues `automation.evaluate` (trigger
+  `membership_restart_upcoming`, deduped `restart_nudge:<holdId>`, run at restart − `restartNudgeDaysBefore`,
+  09:00 local) plus a deduped staff task. Families are messaged only if an enabled automation rule exists;
+  delivery stays gated by messaging rules.
+- **Declines.** `classifyDecline` (`src/lib/billing/declines.ts`) maps provider codes/messages to "card needs
+  updating" vs "retryable"; payment exceptions show the label and the app-first family text (sample wording).
 
 ## Exported for other modules
 

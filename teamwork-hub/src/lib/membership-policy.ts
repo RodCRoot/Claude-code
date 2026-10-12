@@ -1,6 +1,8 @@
 import type { Tx } from "@/db";
 import { organizations } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { assertCan, type Viewer } from "@/lib/authz/policy";
+import { audit } from "@/lib/audit";
 
 /**
  * Teamwork membership policy, stored in `organizations.settings.membershipPolicy`.
@@ -91,17 +93,106 @@ export async function membershipPolicy(tx: Tx, orgId: string): Promise<Membershi
   return policyFromSettings(o?.settings);
 }
 
+type EditableKey = Exclude<keyof MembershipPolicy, "unconfirmed">;
+
+/** Settings → Membership policy form metadata (labels shown to owners/admins). */
+export const POLICY_FIELDS: { key: EditableKey; label: string; hint: string; kind: "int" | "bool" | "proration"; min?: number; max?: number }[] = [
+  { key: "billingAnchorDay", label: "Billing day of month", hint: "Recurring monthly bills anchor to this day (policy: the 1st).", kind: "int", min: 1, max: 28 },
+  { key: "prorationMethod", label: "First partial month (stub) pricing", hint: "How a mid-month start is priced up to the billing day.", kind: "proration" },
+  { key: "cancellationNoticeDays", label: "Cancellation notice (days)", hint: "Written notice required; any channel is honored and recorded.", kind: "int", min: 0, max: 180 },
+  { key: "holdMaxMonthsPerMembershipYear", label: "Hold cap (months per membership year)", hint: "Staff can override with a reason (audited).", kind: "int", min: 0, max: 12 },
+  { key: "inSeasonMaxMonthsPer365Days", label: "In-season cap (months per rolling 365 days)", hint: "Applies to 12-month members. Override needs a reason.", kind: "int", min: 0, max: 12 },
+  { key: "defaultHoldMonths", label: "Default hold length (months)", hint: "Suggested restart date when staff enter a hold.", kind: "int", min: 1, max: 12 },
+  { key: "punchCardExpiryMonths", label: "Punch card expiry (months after issue)", hint: "Unused already-billed sessions from a hold become a punch card.", kind: "int", min: 1, max: 24 },
+  { key: "makeupRequiresActiveMembership", label: "Makeup / punch-card sessions need an active membership", hint: "A 1x/week membership counts as active.", kind: "bool" },
+  { key: "holdCreditEligibleCommitmentMonths", label: "Punch card eligibility: commitment (months)", hint: "Members on at least this commitment get a punch card automatically; others are a staff decision.", kind: "int", min: 0, max: 36 },
+  { key: "commitmentRollsToMonthToMonth", label: "After a commitment ends, continue month-to-month at the committed rate", hint: "Never rolls silently into a new commitment.", kind: "bool" },
+  { key: "familyDiscountPercent", label: "Family discount (%)", hint: "Applied to every active athlete on a payer account once 2 or more are enrolled.", kind: "int", min: 0, max: 100 },
+  { key: "restartNudgeDaysBefore", label: "Restart nudge (days before a hold / in-season term ends)", hint: "Schedules the family message (if a rule is enabled) and a staff task.", kind: "int", min: 1, max: 60 },
+  { key: "dormantAfterDays", label: "Flag billed members inactive for (days)", hint: "Used by the membership audit.", kind: "int", min: 1, max: 365 },
+  { key: "attendanceGapDays", label: "Attendance gap reported after (days)", hint: "Used by the membership audit.", kind: "int", min: 1, max: 365 },
+];
+
+export const PRORATION_LABELS: Record<MembershipPolicy["prorationMethod"], string> = {
+  teamwork_half_month: "Teamwork half-month rule (full / 50% / 25%)",
+  daily: "Daily proration",
+  weekly: "Weekly proration",
+};
+
+/** Validate a raw policy form (strings from FormData or numbers). Returns field errors by key. */
+export function parseMembershipPolicy(raw: Record<string, unknown>, current: MembershipPolicy): { policy: MembershipPolicy; errors: Record<string, string> } {
+  const errors: Record<string, string> = {};
+  const out: Record<string, unknown> = { ...current };
+  for (const f of POLICY_FIELDS) {
+    const v = raw[f.key];
+    if (f.kind === "bool") {
+      out[f.key] = v === true || v === "on" || v === "true";
+      continue;
+    }
+    if (f.kind === "proration") {
+      if (typeof v !== "string" || !(v in PRORATION_LABELS)) errors[f.key] = "Choose a stub pricing method.";
+      else out[f.key] = v;
+      continue;
+    }
+    const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
+    if (!Number.isInteger(n)) errors[f.key] = "Enter a whole number.";
+    else if ((f.min != null && n < f.min) || (f.max != null && n > f.max)) errors[f.key] = `Must be ${f.min}–${f.max}.`;
+    else out[f.key] = n;
+  }
+  const confirmed = new Set(Array.isArray(raw.confirm) ? (raw.confirm as string[]) : []);
+  out.unconfirmed = current.unconfirmed.filter((k) => !confirmed.has(k));
+  return { policy: out as MembershipPolicy, errors };
+}
+
+/** Owner/admin save of `organizations.settings.membershipPolicy` (audited, validated). */
+export async function saveMembershipPolicy(tx: Tx, v: Viewer, raw: Record<string, unknown>) {
+  assertCan(v, "settings.manage");
+  const [org] = await tx.select().from(organizations).where(eq(organizations.id, v.orgId)).for("update");
+  const before = policyFromSettings(org.settings);
+  const { policy, errors } = parseMembershipPolicy(raw, before);
+  if (Object.keys(errors).length) return { ok: false as const, errors };
+  const settings = { ...org.settings, membershipPolicy: policy };
+  await tx.update(organizations).set({ settings }).where(eq(organizations.id, v.orgId));
+  await audit(tx, { orgId: v.orgId, actorUserId: v.userId, actorRole: v.role }, "org.membership_policy_update", "organization", v.orgId, {
+    summary: `Membership policy saved${before.unconfirmed.length !== policy.unconfirmed.length ? ` (confirmed: ${before.unconfirmed.filter((k) => !policy.unconfirmed.includes(k)).join(", ")})` : ""}`,
+    before,
+    after: policy,
+  });
+  return { ok: true as const, policy };
+}
+
+/** A "month" of hold / in-season time, in days, for cap checks (2 months = 62 days, so any two calendar months fit). */
+export const CAP_DAYS_PER_MONTH = 31;
+
+/** Notice that applies: the plan version's own notice when set, else the policy notice. */
+export function effectiveNoticeDays(versionNoticeDays: number | null | undefined, policy: Pick<MembershipPolicy, "cancellationNoticeDays">) {
+  return versionNoticeDays && versionNoticeDays > 0 ? versionNoticeDays : policy.cancellationNoticeDays;
+}
+
+/** Family-facing weekly cap message (no em dashes). */
+export function weeklyCapMessage(athleteFirst: string, classesPerWeek: number, booked: number, weekStartYmd: string) {
+  const [y, m, d] = weekStartYmd.split("-").map(Number);
+  const label = new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  return `${athleteFirst}'s ${classesPerWeek}x/week plan already has ${booked} session${booked === 1 ? "" : "s"} booked the week of ${label}.`;
+}
+
 /** First-period ("stub") price for a mid-month start, before discounts. Pure; documented in Settings. */
 export function stubPriceMinor(monthlyMinor: number, startYmd: string, method: MembershipPolicy["prorationMethod"]): { amountMinor: number; coveredDays: number; daysInMonth: number; rule: string } {
   const [y, m, d] = startYmd.split("-").map(Number);
   const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
   const coveredDays = daysInMonth - d + 1;
   if (d === 1) return { amountMinor: monthlyMinor, coveredDays, daysInMonth, rule: "starts on the 1st: no stub" };
-  if (method === "daily") return { amountMinor: Math.round((monthlyMinor * coveredDays) / daysInMonth), coveredDays, daysInMonth, rule: "daily proration" };
+  return { ...partialPeriodPriceMinor(monthlyMinor, coveredDays, daysInMonth, method), coveredDays, daysInMonth };
+}
+
+/** Price for `coveredDays` of a `periodDays`-long monthly period under the policy method (used for stubs and short final periods). */
+export function partialPeriodPriceMinor(monthlyMinor: number, coveredDays: number, periodDays: number, method: MembershipPolicy["prorationMethod"]): { amountMinor: number; rule: string } {
+  if (coveredDays >= periodDays) return { amountMinor: monthlyMinor, rule: "full period" };
+  if (method === "daily") return { amountMinor: Math.round((monthlyMinor * coveredDays) / periodDays), rule: `daily proration (${coveredDays}/${periodDays} days)` };
   if (method === "weekly") {
     const weeks = Math.ceil(coveredDays / 7);
-    return { amountMinor: Math.round((monthlyMinor * weeks) / (daysInMonth / 7)), coveredDays, daysInMonth, rule: `weekly proration (${weeks} week(s))` };
+    return { amountMinor: Math.min(monthlyMinor, Math.round((monthlyMinor * weeks) / (periodDays / 7))), rule: `weekly proration (${weeks} week(s))` };
   }
   const fraction = coveredDays > 22 ? 1 : coveredDays >= 8 ? 0.5 : 0.25;
-  return { amountMinor: Math.round(monthlyMinor * fraction), coveredDays, daysInMonth, rule: `Teamwork half-month rule (${fraction * 100}% for ${coveredDays} days)` };
+  return { amountMinor: Math.round(monthlyMinor * fraction), rule: `Teamwork half-month rule (${fraction * 100}% for ${coveredDays} days)` };
 }

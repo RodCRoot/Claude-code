@@ -5,7 +5,7 @@ import { tasks } from "@/db/schema";
 export async function billingTask(
   tx: Tx,
   orgId: string,
-  t: { title: string; description?: string; relatedType?: string; relatedId?: string | null; dedupeKey: string; priority?: "low" | "normal" | "high"; isDemo?: boolean },
+  t: { title: string; description?: string; relatedType?: string; relatedId?: string | null; dedupeKey: string; priority?: "low" | "normal" | "high"; isDemo?: boolean; dueAt?: Date | null },
 ) {
   await tx
     .insert(tasks)
@@ -13,6 +13,7 @@ export async function billingTask(
       orgId,
       title: t.title,
       description: t.description ?? null,
+      dueAt: t.dueAt ?? null,
       relatedType: t.relatedType ?? null,
       relatedId: t.relatedId ?? null,
       priority: t.priority ?? "normal",

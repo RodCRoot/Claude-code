@@ -25,6 +25,8 @@ export type VersionInput = {
   intervalCount?: number;
   creditsPerPeriod?: number | null;
   unlimited?: boolean;
+  /** Classes per ISO week; null/undefined = no weekly cap. */
+  classesPerWeek?: number | null;
   creditExpiryDays?: number | null;
   rolloverMax?: number;
   trialDays?: number;
@@ -44,6 +46,10 @@ function validateVersion(kind: ProductKind, v: VersionInput) {
   if (v.siblingPercentOff != null && (v.siblingPercentOff < 0 || v.siblingPercentOff > 100)) throw new UserError("Sibling discount must be 0–100%.");
   if (v.creditsPerPeriod != null && (!Number.isInteger(v.creditsPerPeriod) || v.creditsPerPeriod <= 0)) throw new UserError("Credits must be a positive whole number.");
   if (kind === "package" && !v.creditsPerPeriod) throw new UserError("Packages must grant a number of credits.");
+  if (v.classesPerWeek != null) {
+    if (!Number.isInteger(v.classesPerWeek) || v.classesPerWeek <= 0 || v.classesPerWeek > 14) throw new UserError("Classes per week must be a whole number from 1 to 14 (leave empty for unlimited).");
+    if (kind !== "recurring_membership") throw new UserError("Only recurring memberships have a weekly class limit.");
+  }
 }
 
 function versionValues(productId: string, version: number, v: VersionInput, createdBy: string | null) {
@@ -56,6 +62,7 @@ function versionValues(productId: string, version: number, v: VersionInput, crea
     intervalCount: v.intervalCount ?? 1,
     creditsPerPeriod: v.creditsPerPeriod ?? null,
     unlimited: v.unlimited ?? false,
+    classesPerWeek: v.classesPerWeek ?? null,
     creditExpiryDays: v.creditExpiryDays ?? null,
     rolloverMax: v.rolloverMax ?? 0,
     serviceTypeIds: v.serviceTypeIds ?? [],

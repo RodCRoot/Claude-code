@@ -25,7 +25,8 @@ function VersionFields({ prefix, recurring }: { prefix: string; recurring?: bool
       <Field label="Trial days" htmlFor={id("tr")}><Input id={id("tr")} name="trialDays" type="number" min={0} /></Field>
       <Field label="Commitment (months)" htmlFor={id("cm")}><Input id={id("cm")} name="commitmentMonths" type="number" min={0} /></Field>
       <Field label="Cancellation notice (days)" htmlFor={id("nd")}><Input id={id("nd")} name="noticeDays" type="number" min={0} /></Field>
-      <Field label="Sibling discount (%)" htmlFor={id("sd")} hint="Applied only when staff choose it on a 2nd+ family membership"><Input id={id("sd")} name="siblingPercentOff" type="number" min={0} max={100} /></Field>
+      <Field label="Classes per week" htmlFor={id("cpw")} hint="1x / 2x / 3x plans. Leave empty for no weekly limit."><Input id={id("cpw")} name="classesPerWeek" type="number" min={1} max={14} /></Field>
+      <Field label="Sibling discount (%)" htmlFor={id("sd")} hint="Informational. The family discount from Settings → Membership policy applies automatically."><Input id={id("sd")} name="siblingPercentOff" type="number" min={0} max={100} /></Field>
       <label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" name="unlimited" /> Unlimited sessions</label>
     </div>
   );
@@ -59,7 +60,7 @@ export default async function ProductsPage() {
                   <Td align="right">{current ? <><Money minor={current.priceMinor} currency={current.currency} />{current.interval !== "none" ? `/${current.interval}` : ""}</> : <span className="text-ink-3">none in effect</span>}</Td>
                   <Td className="text-xs">
                     {current ? [
-                      current.unlimited ? "unlimited" : current.creditsPerPeriod ? `${current.creditsPerPeriod} credits` : null,
+                      current.classesPerWeek ? `${current.classesPerWeek}x/week` : current.unlimited ? "unlimited" : current.creditsPerPeriod ? `${current.creditsPerPeriod} credits` : null,
                       current.creditExpiryDays ? `expire ${current.creditExpiryDays}d` : null,
                       current.familyDiscount?.siblingPercentOff ? `sibling ${current.familyDiscount.siblingPercentOff}%` : null,
                       current.commitmentMonths ? `${current.commitmentMonths}mo commitment` : null,

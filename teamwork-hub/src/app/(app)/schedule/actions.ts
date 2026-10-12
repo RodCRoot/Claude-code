@@ -51,8 +51,9 @@ export async function bookAction(_prev: ActionState, fd: FormData): Promise<Acti
     const v = await requireViewer();
     const comp = checked(fd, "comp") ? { reason: str(fd, "compReason") } : null;
     const override = checked(fd, "override") ? { reason: str(fd, "overrideReason") } : null;
+    const capOverride = checked(fd, "capOverride") ? { reason: str(fd, "capOverrideReason") } : null;
     const r = await db.transaction((tx) =>
-      bookSession(tx, v, { sessionId: reqId(fd, "sessionId"), athleteId: reqId(fd, "athleteId"), idempotencyKey: str(fd, "idem") || null, comp, override }),
+      bookSession(tx, v, { sessionId: reqId(fd, "sessionId"), athleteId: reqId(fd, "athleteId"), idempotencyKey: str(fd, "idem") || null, comp, override, capOverride }),
     );
     refresh();
     return { ok: true, message: r.status === "booked" ? "Booked." : `Added to the waitlist (#${r.booking.waitlistPosition}).` };

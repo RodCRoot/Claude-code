@@ -16,6 +16,7 @@ import { addHold, createMembership } from "../../src/lib/billing/memberships";
 import { adjustStock, quickSale } from "../../src/lib/billing/pos";
 import { generateRenewals } from "../../src/lib/billing/renewals";
 import { refundableMinor } from "../../src/lib/billing/refunds";
+import { REFERENCE_PLANS } from "../../src/lib/membership-policy";
 import { addDaysYmd } from "../../src/lib/time";
 import type { SeedCtx } from "./context";
 
@@ -65,6 +66,27 @@ export async function seedBilling(ctx: SeedCtx) {
   await createProduct(tx, rod, { name: "Sample — Free Trial Week", kind: "trial", description: sample, category: "Trials", isDemo: true, version: { priceMinor: 0, creditsPerPeriod: 2, creditExpiryDays: 7, effectiveFrom: from } });
   const shirt = await createProduct(tx, rod, { name: "Sample — Team T-Shirt", kind: "retail", description: sample, category: "Retail", sku: "SAMPLE-TEE", trackInventory: true, isDemo: true, version: { priceMinor: 2500, effectiveFrom: from } });
   const bottle = await createProduct(tx, rod, { name: "Sample — Shaker Bottle", kind: "retail", description: sample, category: "Retail", sku: "SAMPLE-BTL", trackInventory: true, isDemo: true, version: { priceMinor: 1200, effectiveFrom: from } });
+  // Teamwork plan shapes from Rod's playbooks (REFERENCE_PLANS). Prices conflict between sources, so each is a
+  // clearly labelled SAMPLE for Rod to confirm before any family is billed on it.
+  const refVersions: Record<string, string> = {};
+  for (const plan of REFERENCE_PLANS) {
+    const r = await createProduct(tx, rod, {
+      name: `Sample — ${plan.name}`,
+      kind: "recurring_membership",
+      description: `SAMPLE reference price from Teamwork's playbooks (${(plan.referencePriceMinor / 100).toFixed(2)}). Confirm the price and terms before use.`,
+      category: "inSeason" in plan && plan.inSeason ? "In Season" : plan.interval === "week" ? "College" : "Memberships",
+      isDemo: true,
+      version: {
+        priceMinor: plan.referencePriceMinor,
+        interval: plan.interval,
+        classesPerWeek: plan.classesPerWeek,
+        unlimited: plan.classesPerWeek == null,
+        commitmentMonths: plan.commitmentMonths,
+        effectiveFrom: from,
+      },
+    });
+    refVersions[`ref_${plan.key}`] = r.version.id;
+  }
   await adjustStock(tx, rod, { productId: shirt.product.id, delta: 24, reason: "receive", note: "Sample opening stock" });
   await adjustStock(tx, rod, { productId: bottle.product.id, delta: 10, reason: "receive", note: "Sample opening stock" });
 
@@ -74,7 +96,7 @@ export async function seedBilling(ctx: SeedCtx) {
   };
 
   // Maya: unlimited monthly, two months paid offline, current month open.
-  const maya = await createMembership(tx, rod, { athleteId: ctx.athletes.maya, payerAccountId: ctx.payers.parker, productVersionId: unlimited.version.id, startDate: addDaysYmd(T, -60), billingAnchorDay: Number(addDaysYmd(T, -60).slice(8, 10)), today: T, isDemo: true });
+  const maya = await createMembership(tx, rod, { athleteId: ctx.athletes.maya, payerAccountId: ctx.payers.parker, productVersionId: unlimited.version.id, startDate: addDaysYmd(T, -60), today: T, isDemo: true });
   // Leo: unlimited monthly, then placed on hold.
   const leo = await createMembership(tx, rod, { athleteId: ctx.athletes.leo, payerAccountId: ctx.payers.rivera, productVersionId: unlimited.version.id, startDate: addDaysYmd(T, -45), today: T, isDemo: true });
   await generateRenewals(tx, orgId, addDaysYmd(T, -1));
@@ -86,7 +108,15 @@ export async function seedBilling(ctx: SeedCtx) {
       i++;
     }
   }
-  await addHold(tx, rod, { membershipId: leo.membership.id, startDate: addDaysYmd(T, -5), endDate: addDaysYmd(T, 20), reason: "Injury — doctor's note on file (sample)", today: T });
+  await addHold(tx, rod, {
+    membershipId: leo.membership.id,
+    startDate: addDaysYmd(T, -5),
+    endDate: addDaysYmd(T, 35),
+    requestedOn: addDaysYmd(T, -5),
+    requestChannel: "email",
+    reason: "Injury — doctor's note on file (sample)",
+    today: T,
+  });
 
   // Eli: 2x/week with configured sibling discount, first invoice unpaid → past due.
   const eli = await createMembership(tx, rod, { athleteId: ctx.athletes.eli, payerAccountId: ctx.payers.parker, productVersionId: twice.version.id, startDate: addDaysYmd(T, -10), applyFamilyDiscount: true, today: T, isDemo: true });
@@ -230,6 +260,7 @@ export async function seedBilling(ctx: SeedCtx) {
     danaInvoiceId: danaInv.invoice.id,
     masonInvoiceId: masonInv.invoice.id,
     zoeInvoiceId: zoeInv.invoice.id,
+    ...refVersions,
   };
 }
 

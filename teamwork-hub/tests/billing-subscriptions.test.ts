@@ -5,10 +5,10 @@
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, like, sql } from "drizzle-orm";
-import { invoices, membershipEvents, memberships, paymentAttempts, providerPlans, tasks, transactions, webhookEvents } from "@/db/schema";
+import { invoiceLines, invoices, membershipEvents, memberships, paymentAttempts, providerPlans, tasks, transactions, webhookEvents } from "@/db/schema";
 import { createProduct } from "@/lib/billing/catalog";
 import { createInvoiceRecord, createManualInvoice, recordManualPayment } from "@/lib/billing/invoices";
-import { addHold, cancelMembership, changePlan, createMembership } from "@/lib/billing/memberships";
+import { addHold, cancelMembership, changePlan, createMembership, nextAnchorOnOrAfter } from "@/lib/billing/memberships";
 import { generateRenewals } from "@/lib/billing/renewals";
 import { cancelProviderSubscription, EV, startProviderSubscription, switchToTeamworkBilling, type RequestDetails } from "@/lib/billing/subscriptions";
 import { addMonthsYmd } from "@/lib/billing/util";
@@ -161,7 +161,8 @@ describe("Stripe subscription creation (mocked API)", () => {
 
   it("creates the recurring price once (lookup_key + idempotency key) and a subscription-mode Checkout Session anchored at the next Teamwork bill date", async () => {
     const m = await newMembership();
-    expect(m.nextBillDate).toBe(addMonthsYmd(T, 1, Number(T.slice(8, 10))));
+    // Policy: monthly billing anchors to the 1st (a mid-month start bills a stub first), never to the start day.
+    expect(m.nextBillDate).toBe(nextAnchorOnOrAfter(addDaysYmd(T, 1), 1));
     const { calls, req } = await startStripe(m.id);
     const [lookup, price, session] = calls;
     expect(lookup.method).toBe("GET");
@@ -357,7 +358,9 @@ describe("Stripe subscription webhooks", () => {
     expect(await providerInvoices(m.id)).toHaveLength(0);
     const txns = await db().select().from(transactions).where(eq(transactions.invoiceId, first.id));
     expect(txns.map((t) => t.provider).sort()).toEqual(["manual", "stripe"]);
-    expect(await bucketsFor(first.id)).toEqual([{ granted: 6 }]);
+    // The first period may be a partial-month stub, whose credits are prorated.
+    const [line] = await db().select().from(invoiceLines).where(eq(invoiceLines.invoiceId, first.id));
+    expect(await bucketsFor(first.id)).toEqual([{ granted: line.entitlement!.credits }]);
     expect((await taskTitles()).some((t) => t.startsWith(`Period ${first.periodStart} was paid twice`))).toBe(true);
   });
 

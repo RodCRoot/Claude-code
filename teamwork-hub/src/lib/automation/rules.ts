@@ -15,6 +15,7 @@ export const TRIGGERS: { key: AutomationTrigger; label: string; help: string; da
   { key: "form_missing", label: "Form missing", help: "A form request is still pending after N days.", daysLabel: "Pending for at least (days)", defaultDays: 3 },
   { key: "payment_failed", label: "Payment failed", help: "A payment attempt failed in the last N days; reaches people authorized on the payer account.", daysLabel: "Failed within the last (days)", defaultDays: 7 },
   { key: "renewal_upcoming", label: "Renewal upcoming", help: "An active membership renews or ends within N days.", daysLabel: "Renews within (days)", defaultDays: 7 },
+  { key: "membership_restart_upcoming", label: "Membership restart upcoming", help: "A hold or in-season term ends within N days (Billing schedules this check when the hold or term is created); reaches people authorized on the payer account.", daysLabel: "Restarts within (days)", defaultDays: 14 },
   { key: "attendance_lapsed", label: "Attendance lapsed", help: "An active athlete has not attended for N days (but attended within the last 120).", daysLabel: "No attendance for (days)", defaultDays: 14 },
   { key: "lead_created", label: "Lead created", help: "A new lead arrived (web inquiry or staff entry); reaches the lead contact." },
 ];

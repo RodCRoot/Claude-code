@@ -4,7 +4,7 @@ import { invoices, membershipEvents, memberships, products, productVersions } fr
 import { audit } from "@/lib/audit";
 import { enqueue } from "@/lib/jobs";
 import { addDaysYmd } from "@/lib/time";
-import { billPeriod, holdOn } from "./memberships";
+import { billPeriod, holdOn, isStubStart, nextAnchorOnOrAfter, syncFamilyDiscount } from "./memberships";
 import { addIntervalYmd } from "./util";
 
 export const RENEWAL_JOB = "billing.generate_renewals";
@@ -19,6 +19,9 @@ export type RenewalSummary = {
   /** Memberships billed by a Stripe/PayPal subscription: never renewed by Teamwork (no double billing). */
   skippedProviderBilled: number;
   statusChanges: number;
+  /** Commitments that ended this run (membership continues month-to-month at the committed rate). */
+  commitmentsEnded: number;
+  familyDiscountChanges: number;
 };
 
 const SYSTEM = (orgId: string) => ({ orgId, actorUserId: null, actorRole: "system" });
@@ -32,7 +35,7 @@ const SYSTEM = (orgId: string) => ({ orgId, actorUserId: null, actorRole: "syste
  * - Cancelled memberships / periods on or after cancel_at are not billed.
  */
 export async function generateRenewals(tx: Tx, orgId: string, today: string): Promise<RenewalSummary> {
-  const s: RenewalSummary = { invoicesCreated: 0, alreadyBilled: 0, deferredForHold: 0, cancelled: 0, planChangesApplied: 0, skippedExternal: 0, skippedProviderBilled: 0, statusChanges: 0 };
+  const s: RenewalSummary = { invoicesCreated: 0, alreadyBilled: 0, deferredForHold: 0, cancelled: 0, planChangesApplied: 0, skippedExternal: 0, skippedProviderBilled: 0, statusChanges: 0, commitmentsEnded: 0, familyDiscountChanges: 0 };
   const ext = await tx.execute(sql`
     select count(*)::int as n from memberships where org_id = ${orgId} and billing_provider = 'external_zenplanner'
       and status in ('active','trialing','past_due','pending','on_hold') and next_bill_date <= ${today}`);
@@ -56,14 +59,34 @@ export async function generateRenewals(tx: Tx, orgId: string, today: string): Pr
     )
     .for("update", { skipLocked: true });
 
+  const endedPayers = new Set<string>();
   for (let m of due) {
     for (let guard = 0; guard < 24 && m.nextBillDate && m.nextBillDate <= today; guard++) {
       const periodStart = m.nextBillDate;
       if (m.cancelAt && periodStart >= m.cancelAt) {
-        await tx.update(memberships).set({ status: "cancelled", endDate: m.cancelAt, nextBillDate: null, updatedAt: new Date() }).where(eq(memberships.id, m.id));
-        await tx.insert(membershipEvents).values({ membershipId: m.id, type: "cancelled", effectiveOn: m.cancelAt, details: { by: "renewal_job" } });
+        // A fixed-term In Season membership expires at its end date; it never auto-renews.
+        const ended = m.kind === "in_season" ? "expired" : "cancelled";
+        await tx.update(memberships).set({ status: ended, endDate: m.endDate ?? m.cancelAt, nextBillDate: null, updatedAt: new Date() }).where(eq(memberships.id, m.id));
+        await tx.insert(membershipEvents).values({ membershipId: m.id, type: ended, effectiveOn: m.cancelAt, details: { by: "renewal_job" } });
+        if (m.payerAccountId) endedPayers.add(m.payerAccountId);
         s.cancelled++;
         break;
+      }
+      // Commitment over: continue month-to-month at the committed rate (same version). Never a new commitment.
+      if (m.commitmentEndsOn && periodStart > m.commitmentEndsOn) {
+        const [done] = await tx
+          .select({ id: membershipEvents.id })
+          .from(membershipEvents)
+          .where(and(eq(membershipEvents.membershipId, m.id), eq(membershipEvents.type, "commitment_ended")));
+        if (!done) {
+          await tx.insert(membershipEvents).values({
+            membershipId: m.id,
+            type: "commitment_ended",
+            effectiveOn: addDaysYmd(m.commitmentEndsOn, 1),
+            details: { commitmentEndsOn: m.commitmentEndsOn, continues: "month_to_month_at_committed_rate", productVersionId: m.productVersionId },
+          });
+          s.commitmentsEnded++;
+        }
       }
       const hold = await holdOn(tx, m.id, periodStart);
       if (hold) {
@@ -107,7 +130,10 @@ export async function generateRenewals(tx: Tx, orgId: string, today: string): Pr
       if (existing) {
         // Already billed (e.g. on creation); just advance the schedule.
         s.alreadyBilled++;
-        await tx.update(memberships).set({ nextBillDate: addIntervalYmd(periodStart, row.version.interval, row.version.intervalCount, m.billingAnchorDay) }).where(eq(memberships.id, m.id));
+        const next = isStubStart(row.version, m.billingAnchorDay, periodStart)
+          ? nextAnchorOnOrAfter(addDaysYmd(periodStart, 1), m.billingAnchorDay!)
+          : addIntervalYmd(periodStart, row.version.interval, row.version.intervalCount, m.billingAnchorDay);
+        await tx.update(memberships).set({ nextBillDate: m.endDate && next > m.endDate ? null : next }).where(eq(memberships.id, m.id));
       } else {
         await billPeriod(tx, SYSTEM(orgId), m, row.version, row.name, periodStart);
         s.invoicesCreated++;
@@ -116,7 +142,13 @@ export async function generateRenewals(tx: Tx, orgId: string, today: string): Pr
       m = fresh;
     }
   }
-  s.statusChanges = await syncMembershipStatuses(tx, orgId, today);
+  const sync = await syncMembershipStatuses(tx, orgId, today, endedPayers);
+  s.statusChanges = sync;
+  // Family discount follows enrollment: re-check families where a membership just ended.
+  for (const payerId of [...endedPayers].sort()) {
+    const r = await syncFamilyDiscount(tx, SYSTEM(orgId), orgId, payerId);
+    s.familyDiscountChanges += r.changes.length;
+  }
   if (s.invoicesCreated || s.cancelled || s.deferredForHold) {
     await audit(tx, SYSTEM(orgId), "billing.renewals.run", "org", orgId, { summary: `Renewals for ${today}: ${JSON.stringify(s)}` });
   }
@@ -127,7 +159,7 @@ export async function generateRenewals(tx: Tx, orgId: string, today: string): Pr
  * Derive statuses from holds, cancellations and overdue invoices.
  * External (Zen Planner) memberships are left as imported.
  */
-export async function syncMembershipStatuses(tx: Tx, orgId: string, today: string): Promise<number> {
+export async function syncMembershipStatuses(tx: Tx, orgId: string, today: string, endedPayers?: Set<string>): Promise<number> {
   let changed = 0;
   const onHold = await tx.execute(sql`
     update memberships m set status = 'on_hold', updated_at = now()
@@ -140,10 +172,13 @@ export async function syncMembershipStatuses(tx: Tx, orgId: string, today: strin
       and not exists (select 1 from membership_holds h where h.membership_id = m.id and h.start_date <= ${today} and h.end_date >= ${today})`);
   changed += offHold.rowCount ?? 0;
   const ended = await tx.execute(sql`
-    update memberships set status = 'cancelled', end_date = cancel_at, next_bill_date = null, updated_at = now()
+    update memberships set status = case when kind = 'in_season' then 'expired' else 'cancelled' end,
+      end_date = coalesce(end_date, cancel_at), next_bill_date = null, updated_at = now()
     where org_id = ${orgId} and billing_provider <> 'external_zenplanner' and status in ('active','past_due','pending','trialing','on_hold')
-      and cancel_at is not null and cancel_at <= ${today}`);
+      and cancel_at is not null and cancel_at <= ${today}
+    returning payer_account_id`);
   changed += ended.rowCount ?? 0;
+  for (const r of ended.rows as { payer_account_id: string | null }[]) if (r.payer_account_id) endedPayers?.add(r.payer_account_id);
   const pastDue = await tx.execute(sql`
     update memberships m set status = 'past_due', updated_at = now()
     where m.org_id = ${orgId} and m.billing_provider <> 'external_zenplanner' and m.status in ('active','pending','trialing')

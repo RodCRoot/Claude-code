@@ -351,6 +351,7 @@ export type AutomationTrigger =
   | "form_missing"
   | "payment_failed"
   | "renewal_upcoming"
+  | "membership_restart_upcoming"
   | "attendance_lapsed"
   | "lead_created";
 

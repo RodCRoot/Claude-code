@@ -274,6 +274,46 @@ export async function findCandidates(
       return out;
     }
 
+    case "membership_restart_upcoming": {
+      // A hold / in-season pause whose restart (day after it ends) is ahead. Billing schedules this check per
+      // membership at restart − restartNudgeDaysBefore; with a membership scope the day window is not applied.
+      const today = todayLocal(tz, now);
+      const res = await tx.execute(sql`
+        select m.id, m.athlete_id, m.payer_account_id, h.id as hold_id, h.kind, (h.end_date + 1)::text as restart
+        from membership_holds h join memberships m on m.id = h.membership_id
+        where m.org_id = ${orgId} and m.status in ('active','on_hold','past_due','pending')
+          and h.end_date >= ${today}::date
+          ${scope.membershipId ? sql`and m.id = ${scope.membershipId}` : sql`and h.end_date + 1 <= ${addDaysYmd(today, days)}::date`}
+        limit ${SCAN_LIMIT}`);
+      for (const r of res.rows as { id: string; athlete_id: string; payer_account_id: string | null; hold_id: string; kind: string; restart: string }[]) {
+        if (!(await sportOk(r.athlete_id))) continue;
+        const a = await athleteRecipients(tx, orgId, r.athlete_id, s);
+        if (!a) continue;
+        let recipients = a.recipients;
+        if (r.payer_account_id) {
+          const auths = await tx
+            .select({ personId: payerAuthorizations.personId })
+            .from(payerAuthorizations)
+            .where(and(eq(payerAuthorizations.payerAccountId, r.payer_account_id), eq(payerAuthorizations.canViewInvoices, true)));
+          const payers = (await Promise.all(auths.map((x) => recipientForPerson(tx, orgId, x.personId, "guardian")))).filter(Boolean) as Recipient[];
+          if (payers.length) recipients = payers;
+        }
+        out.push({
+          entityType: "membership",
+          entityId: r.id,
+          period: `restart:${r.hold_id}`,
+          label: `${a.name} restarts ${fmtDate(r.restart)}`,
+          athleteId: r.athlete_id,
+          leadId: null,
+          recipients,
+          vars: { athlete_first_name: a.first, athlete_name: a.name, restart_date: fmtDate(r.restart), pause_kind: r.kind === "in_season" ? "in-season term" : "hold" },
+          taskAssigneeUserId: null,
+          relatedPersonId: a.personId,
+        });
+      }
+      return out;
+    }
+
     case "attendance_lapsed": {
       const cutoff = new Date(now.getTime() - days * 86_400_000);
       const floor = new Date(now.getTime() - 120 * 86_400_000);
@@ -585,7 +625,8 @@ export async function sampleOptions(tx: Tx, orgId: string, trigger: AutomationTr
         .limit(40);
       return rows.map((r) => ({ id: r.id, label: `Invoice ${r.number} · ${formatMoney(r.amount, r.currency)} · ${r.status}` }));
     }
-    case "renewal_upcoming": {
+    case "renewal_upcoming":
+    case "membership_restart_upcoming": {
       const rows = await tx
         .select({ id: memberships.id, first: people.firstName, last: people.lastName, status: memberships.status, end: memberships.endDate, next: memberships.nextBillDate })
         .from(memberships)
@@ -622,6 +663,7 @@ function scopeFromSample(trigger: AutomationTrigger, id: string | undefined): Sc
     case "payment_failed":
       return { paymentAttemptId: id };
     case "renewal_upcoming":
+    case "membership_restart_upcoming":
       return { membershipId: id };
     case "attendance_lapsed":
       return { athleteId: id };

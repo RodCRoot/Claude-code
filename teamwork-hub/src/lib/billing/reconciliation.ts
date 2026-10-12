@@ -4,6 +4,7 @@ import { paymentAttempts, payouts, refunds } from "@/db/schema";
 import { formatMoney } from "@/lib/money";
 import { todayLocal } from "@/lib/time";
 import { billingSettings, int } from "./util";
+import { classifyDecline, type DeclineCategory } from "./declines";
 
 export type PaymentException = {
   kind: "failed_payment" | "amount_mismatch" | "pending_too_long" | "past_due_membership" | "webhook_problem" | "refund_blocked" | "dispute_open" | "invoice_mismatch";
@@ -12,6 +13,8 @@ export type PaymentException = {
   detail: string;
   href: string;
   at: Date | string | null;
+  /** Failed payments: decline classification and the family-facing instructions to send. */
+  decline?: { category: DeclineCategory; label: string; familyText: string | null };
 };
 
 /**
@@ -33,13 +36,15 @@ export async function paymentExceptions(tx: Tx, orgId: string, opts: { today?: s
   for (const r of failed.rows as Record<string, unknown>[]) {
     const mismatch = r.failure_code === "amount_mismatch";
     if (!mismatch && r.invoice_status === "paid") continue; // later paid another way
+    const decline = mismatch ? undefined : classifyDecline(r.failure_code as string | null, r.failure_message as string | null);
     out.push({
       kind: mismatch ? "amount_mismatch" : "failed_payment",
-      severity: mismatch ? "high" : "medium",
-      title: `${mismatch ? "Amount mismatch" : "Failed payment"} on ${r.number}`,
+      severity: mismatch ? "high" : decline?.category === "card_needs_update" ? "high" : "medium",
+      title: `${mismatch ? "Amount mismatch" : decline ? `Failed payment (${decline.label.toLowerCase()})` : "Failed payment"} on ${r.number}`,
       detail: `${r.provider}: ${r.failure_message ?? r.failure_code ?? "provider reported failure"}`,
       href: `/billing/invoices/${r.invoice_id}`,
       at: r.updated_at as Date,
+      decline,
     });
   }
 
