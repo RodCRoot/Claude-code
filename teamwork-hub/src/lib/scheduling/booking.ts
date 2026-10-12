@@ -1,12 +1,13 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Tx } from "@/db";
-import { bookings, creditLedger, scheduleSessions } from "@/db/schema";
+import { bookings, creditLedger, memberships, scheduleSessions } from "@/db/schema";
 import { UserError } from "@/lib/actions";
 import { audit } from "@/lib/audit";
 import { AuthzError, athleteCapabilities, can, type Viewer } from "@/lib/authz/policy";
 import { InsufficientCreditsError, reserveCredits, resettleBookingCharge, restoreCredit, settleReservation, type Settlement } from "@/lib/credits";
 import { enqueue } from "@/lib/jobs";
-import { fmt } from "@/lib/time";
+import { membershipPolicy, weeklyCapMessage } from "@/lib/membership-policy";
+import { addDaysYmd, DEFAULT_TZ, fmt, localToUtc, localYmd, startOfWeekYmd } from "@/lib/time";
 import {
   actorOf,
   athleteName,
@@ -34,6 +35,8 @@ export type BookInput = {
   comp?: { reason: string } | null;
   /** Staff only: bypass eligibility (forms/age) and the family booking window. A reason is required. */
   override?: { reason: string } | null;
+  /** Staff only: book past the membership's weekly class cap. A reason is required (audited). */
+  capOverride?: { reason: string } | null;
   /** When the session is full, join the waitlist (default) instead of failing. */
   allowWaitlist?: boolean;
   rescheduledFromBookingId?: string | null;
@@ -77,9 +80,10 @@ export async function bookInternal(tx: Tx, v: Viewer, input: BookInput, opts: { 
   if (v.role === "kiosk") throw new AuthzError();
   if (v.role === "coach" && !staffActor) throw new AuthzError("Coaches can only add athletes to their own sessions.");
   if (!caps.has("booking.create")) throw new AuthzError("You don't have permission to book for this athlete.");
-  if ((input.comp || input.override) && !staffActor) throw new AuthzError("Only staff can comp a booking or override eligibility.");
+  if ((input.comp || input.override || input.capOverride) && !staffActor) throw new AuthzError("Only staff can comp a booking or override eligibility.");
   if (input.comp && !input.comp.reason.trim()) throw new UserError("A reason is required to comp a booking.", { compReason: "Required" });
   if (input.override && !input.override.reason.trim()) throw new UserError("A reason is required to override eligibility.", { overrideReason: "Required" });
+  if (input.capOverride && !input.capOverride.reason.trim()) throw new UserError("A reason is required to book past the weekly class limit.", { capOverrideReason: "Required" });
 
   const who = await athleteName(tx, input.athleteId);
   if (!who) throw new UserError("Athlete not found.");
@@ -127,15 +131,43 @@ export async function bookInternal(tx: Tx, v: Viewer, input: BookInput, opts: { 
   else throw new UserError(session.waitlistCapacity > 0 ? "This session and its waitlist are full." : "This session is full.");
 
   // --- Entitlement ----------------------------------------------------------------------
-  const ent = input.comp
+  const policy = await membershipPolicy(tx, v.orgId);
+  const resolved = input.comp
     ? ({ kind: "comp" } as const)
-    : await resolveEntitlement(tx, { orgId: v.orgId, athleteId: input.athleteId, serviceType: st, at: session.startsAt, tz: settings.timezone, locationId: session.locationId });
-  if (ent.kind === "none") {
-    if (ent.locationBlocked) {
-      const why = locationBlockMessage(label, ent.locationBlocked);
-      throw new UserError(staffActor ? `${why} Book as a comp (with a reason) or sell a ${ent.locationBlocked.sessionLocation} package first.` : why);
+    : await resolveEntitlement(tx, {
+        orgId: v.orgId,
+        athleteId: input.athleteId,
+        serviceType: st,
+        at: session.startsAt,
+        tz: settings.timezone,
+        locationId: session.locationId,
+        makeupRequiresActiveMembership: policy.makeupRequiresActiveMembership,
+      });
+  if (resolved.kind === "none") {
+    if (resolved.locationBlocked) {
+      const why = locationBlockMessage(label, resolved.locationBlocked);
+      throw new UserError(staffActor ? `${why} Book as a comp (with a reason) or sell a ${resolved.locationBlocked.sessionLocation} package first.` : why);
     }
     throw new UserError(staffActor ? `${label} has no membership or credits for ${st.name}. Book as a comp (with a reason) or sell a package first.` : `${label} ${NEEDS_ENTITLEMENT}`);
+  }
+  // Weekly class cap: count this ISO week's membership bookings under a lock on the membership row, so
+  // concurrent bookings for the same athlete (different sessions) can never exceed the cap.
+  let ent: Exclude<typeof resolved, { kind: "weekly" }> | { kind: "membership"; membershipId: string; capOverridden: boolean };
+  let capNote = "";
+  if (resolved.kind !== "weekly") ent = resolved;
+  else {
+    const usage = await lockWeeklyUsage(tx, { orgId: v.orgId, membershipId: resolved.membershipId, athleteId: input.athleteId, at: session.startsAt, tz: settings.timezone });
+    if (usage.used < resolved.classesPerWeek) ent = { kind: "membership", membershipId: resolved.membershipId, capOverridden: false };
+    else if (resolved.credits > 0 && !input.capOverride) {
+      ent = { kind: "credits", available: resolved.credits };
+      capNote = ` (weekly limit reached; using a session credit)`;
+    } else if (input.capOverride) {
+      ent = { kind: "membership", membershipId: resolved.membershipId, capOverridden: true };
+      capNote = ` (weekly limit ${resolved.classesPerWeek}x overridden: ${input.capOverride.reason})`;
+    } else {
+      const msg = weeklyCapMessage(who.first, resolved.classesPerWeek, usage.used, usage.weekStart);
+      throw new UserError(staffActor ? `${msg} Staff can override with a reason, or use a session credit.` : `${msg} Choose a session in another week, or contact the front desk.`, { capOverrideReason: "Weekly limit reached" });
+    }
   }
 
   const waitPos = status === "waitlisted" ? occ.waitlisted + 1 : null;
@@ -148,8 +180,8 @@ export async function bookInternal(tx: Tx, v: Viewer, input: BookInput, opts: { 
       bookedByUserId: v.userId,
       status,
       waitlistPosition: waitPos,
-      entitlementSource: ent.kind === "comp" ? "comp" : ent.kind === "unlimited" ? "unlimited" : null,
-      membershipId: ent.kind === "unlimited" ? ent.membershipId : null,
+      entitlementSource: ent.kind === "comp" ? "comp" : ent.kind === "unlimited" ? "unlimited" : ent.kind === "membership" ? "membership" : null,
+      membershipId: ent.kind === "unlimited" || ent.kind === "membership" ? ent.membershipId : null,
       idempotencyKey: input.idempotencyKey ?? null,
       rescheduledFromBookingId: input.rescheduledFromBookingId ?? null,
     })
@@ -158,7 +190,17 @@ export async function bookInternal(tx: Tx, v: Viewer, input: BookInput, opts: { 
   let final = booking;
   if (status === "booked" && ent.kind === "credits") {
     try {
-      const r = await reserveCredits(tx, { orgId: v.orgId, athleteId: input.athleteId, bookingId: booking.id, serviceTypeId: st.id, cost: st.creditCost, sessionStartsAt: session.startsAt, actorUserId: v.userId, locationId: session.locationId });
+      const r = await reserveCredits(tx, {
+        orgId: v.orgId,
+        athleteId: input.athleteId,
+        bookingId: booking.id,
+        serviceTypeId: st.id,
+        cost: st.creditCost,
+        sessionStartsAt: session.startsAt,
+        actorUserId: v.userId,
+        locationId: session.locationId,
+        makeupRequiresActiveMembership: policy.makeupRequiresActiveMembership,
+      });
       [final] = await tx.update(bookings).set({ creditBucketId: r.bucketId, entitlementSource: "credit" }).where(eq(bookings.id, booking.id)).returning();
     } catch (e) {
       if (e instanceof InsufficientCreditsError) throw new UserError(`${label} ${NEEDS_ENTITLEMENT}`);
@@ -167,10 +209,45 @@ export async function bookInternal(tx: Tx, v: Viewer, input: BookInput, opts: { 
   }
 
   await audit(tx, actorOf(v), status === "booked" ? "booking.create" : "booking.waitlist", "booking", final.id, {
-    summary: `${label} ${status === "booked" ? "booked into" : `waitlisted (#${waitPos}) for`} ${session.title} ${fmt(session.startsAt, "EEE MMM d h:mm a", session.timezone)}${input.comp ? ` — comp: ${input.comp.reason}` : ""}${input.override ? ` — eligibility override: ${input.override.reason}` : ""}`,
-    after: { status, entitlementSource: final.entitlementSource, creditBucketId: final.creditBucketId, sessionId: session.id, athleteId: input.athleteId },
+    summary: `${label} ${status === "booked" ? "booked into" : `waitlisted (#${waitPos}) for`} ${session.title} ${fmt(session.startsAt, "EEE MMM d h:mm a", session.timezone)}${input.comp ? ` — comp: ${input.comp.reason}` : ""}${input.override ? ` — eligibility override: ${input.override.reason}` : ""}${capNote}`,
+    after: {
+      status,
+      entitlementSource: final.entitlementSource,
+      creditBucketId: final.creditBucketId,
+      sessionId: session.id,
+      athleteId: input.athleteId,
+      ...(ent.kind === "membership" && ent.capOverridden ? { weeklyCapOverride: input.capOverride?.reason } : {}),
+    },
   });
   return { booking: final, status, reused: false };
+}
+
+/**
+ * Lock the membership row (serializes all bookings against it) and count the athlete's membership-paid
+ * bookings (booked / attended / no-show; cancelled never count) in the ISO week, Monday 00:00 to the
+ * next Monday 00:00 in facility time, that contains `at`. DST-safe: bounds come from local midnights.
+ */
+export async function lockWeeklyUsage(tx: Tx, r: { orgId: string; membershipId: string; athleteId: string; at: Date; tz?: string; excludeBookingId?: string }) {
+  await tx.select({ id: memberships.id }).from(memberships).where(and(eq(memberships.id, r.membershipId), eq(memberships.orgId, r.orgId))).for("update");
+  const tz = r.tz ?? DEFAULT_TZ;
+  const weekStart = startOfWeekYmd(localYmd(r.at, tz));
+  const from = localToUtc(weekStart, "00:00", tz);
+  const to = localToUtc(addDaysYmd(weekStart, 7), "00:00", tz);
+  const [row] = await tx
+    .select({ n: sql<number>`count(*)::int` })
+    .from(bookings)
+    .innerJoin(scheduleSessions, eq(scheduleSessions.id, bookings.sessionId))
+    .where(
+      and(
+        eq(bookings.orgId, r.orgId),
+        eq(bookings.athleteId, r.athleteId),
+        eq(bookings.entitlementSource, "membership"),
+        inArray(bookings.status, ["booked", "attended", "no_show"]),
+        sql`${scheduleSessions.startsAt} >= ${from.toISOString()}::timestamptz and ${scheduleSessions.startsAt} < ${to.toISOString()}::timestamptz`,
+        r.excludeBookingId ? sql`${bookings.id} <> ${r.excludeBookingId}` : sql`true`,
+      ),
+    );
+  return { used: row?.n ?? 0, weekStart, from, to };
 }
 
 async function lockBooking(tx: Tx, v: Viewer, bookingId: string): Promise<{ booking: Booking; session: Session }> {
@@ -260,6 +337,7 @@ export async function promoteWaitlist(tx: Tx, v: Viewer, sessionId: string, opts
   if (session.status !== "scheduled" || now >= session.startsAt) return { promoted, skipped };
   const st = await getServiceType(tx, v.orgId, session.serviceTypeId);
   const settings = await bookingSettings(tx, v.orgId);
+  const policy = await membershipPolicy(tx, v.orgId);
 
   const waiting = await tx
     .select()
@@ -279,18 +357,47 @@ export async function promoteWaitlist(tx: Tx, v: Viewer, sessionId: string, opts
     let membershipId = w.membershipId;
     let creditBucketId: string | null = null;
     if (!reason && entitlementSource !== "comp" && requiresEntitlement(st)) {
-      const ent = await resolveEntitlement(tx, { orgId: v.orgId, athleteId: w.athleteId, serviceType: st, at: session.startsAt, tz: settings.timezone, locationId: session.locationId });
+      const ent = await resolveEntitlement(tx, {
+        orgId: v.orgId,
+        athleteId: w.athleteId,
+        serviceType: st,
+        at: session.startsAt,
+        tz: settings.timezone,
+        locationId: session.locationId,
+        makeupRequiresActiveMembership: policy.makeupRequiresActiveMembership,
+      });
+      let weeklyFull: string | null = null;
+      let coveredByMembership = false;
+      if (ent.kind === "weekly") {
+        const usage = await lockWeeklyUsage(tx, { orgId: v.orgId, membershipId: ent.membershipId, athleteId: w.athleteId, at: session.startsAt, tz: settings.timezone, excludeBookingId: w.id });
+        if (usage.used < ent.classesPerWeek) {
+          entitlementSource = "membership";
+          membershipId = ent.membershipId;
+          coveredByMembership = true;
+        } else weeklyFull = weeklyCapMessage(who?.first ?? "This athlete", ent.classesPerWeek, usage.used, usage.weekStart);
+      }
       if (ent.kind === "unlimited") {
         entitlementSource = "unlimited";
         membershipId = ent.membershipId;
-      } else {
+      } else if (!coveredByMembership) {
         try {
-          const r = await reserveCredits(tx, { orgId: v.orgId, athleteId: w.athleteId, bookingId: w.id, serviceTypeId: st.id, cost: st.creditCost, sessionStartsAt: session.startsAt, actorUserId: v.userId, locationId: session.locationId });
+          const r = await reserveCredits(tx, {
+            orgId: v.orgId,
+            athleteId: w.athleteId,
+            bookingId: w.id,
+            serviceTypeId: st.id,
+            cost: st.creditCost,
+            sessionStartsAt: session.startsAt,
+            actorUserId: v.userId,
+            locationId: session.locationId,
+            makeupRequiresActiveMembership: policy.makeupRequiresActiveMembership,
+          });
           entitlementSource = "credit";
+          membershipId = null;
           creditBucketId = r.bucketId;
         } catch (e) {
           if (!(e instanceof InsufficientCreditsError)) throw e;
-          reason = ent.kind === "none" && ent.locationBlocked ? locationBlockMessage(label, ent.locationBlocked) : "No active membership or available credits.";
+          reason = weeklyFull ?? (ent.kind === "none" && ent.locationBlocked ? locationBlockMessage(label, ent.locationBlocked) : "No active membership or available credits.");
         }
       }
     }

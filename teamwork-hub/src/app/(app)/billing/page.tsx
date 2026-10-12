@@ -55,8 +55,17 @@ async function StaffOverview({ orgId }: { orgId: string }) {
                     <div className="min-w-0">
                       <Link href={e.href} className="font-medium hover:underline">{e.title}</Link>
                       <p className="text-xs text-ink-3">{e.detail}</p>
+                      {e.decline?.familyText ? (
+                        <details className="mt-1 text-xs">
+                          <summary className="cursor-pointer text-ink-2">Message for the family</summary>
+                          <p className="mt-1 whitespace-pre-line rounded-lg border border-edge bg-surface-2 p-2">{e.decline.familyText}</p>
+                        </details>
+                      ) : null}
                     </div>
-                    <Badge variant={e.severity === "high" ? "red" : "yellow"}>{e.kind.replaceAll("_", " ")}</Badge>
+                    <div className="flex flex-wrap gap-1">
+                      {e.decline ? <Badge variant={e.decline.category === "card_needs_update" ? "red" : e.decline.category === "retryable" ? "yellow" : undefined}>{e.decline.label}</Badge> : null}
+                      <Badge variant={e.severity === "high" ? "red" : "yellow"}>{e.kind.replaceAll("_", " ")}</Badge>
+                    </div>
                   </li>
                 ))}
               </ul>

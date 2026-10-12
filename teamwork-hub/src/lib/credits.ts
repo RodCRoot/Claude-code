@@ -1,6 +1,24 @@
-import { and, asc, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 import type { Tx } from "@/db";
 import { creditBuckets, creditLedger } from "@/db/schema";
+import { DEFAULT_TZ } from "@/lib/time";
+
+/**
+ * SQL: the athlete has a live (not held) membership covering local date `day`. Used by the makeup rule:
+ * punch-card (hold_makeup) credits can only be spent while the athlete has an active membership.
+ */
+export function activeMembershipOnDay(orgId: string, athleteId: SQL | string, day: SQL | string): SQL {
+  return sql`exists (select 1 from memberships am
+    where am.org_id = ${orgId} and am.athlete_id = ${athleteId}
+      and am.status in ('active','trialing','on_hold')
+      and am.start_date <= ${day} and (am.end_date is null or am.end_date >= ${day})
+      and not exists (select 1 from membership_holds ah where ah.membership_id = am.id and ah.start_date <= ${day} and ah.end_date >= ${day}))`;
+}
+
+/** Facility-local date of an instant, in SQL. */
+export function localDateSql(at: Date, tz = DEFAULT_TZ): SQL {
+  return sql`((${at.toISOString()}::timestamptz) at time zone ${tz})::date`;
+}
 
 /**
  * Session-credit ledger.
@@ -93,8 +111,10 @@ export class InsufficientCreditsError extends Error {
  */
 async function lockEligibleBuckets(
   tx: Tx,
-  r: { orgId: string; athleteId: string; serviceTypeId: string; amount: number; sessionStartsAt: Date; preferBucketId?: string | null; locationId?: string | null },
+  r: { orgId: string; athleteId: string; serviceTypeId: string; amount: number; sessionStartsAt: Date; preferBucketId?: string | null; locationId?: string | null; makeupRequiresActiveMembership?: boolean },
 ) {
+  const day = localDateSql(r.sessionStartsAt);
+  const makeupOk = r.makeupRequiresActiveMembership === false ? sql`true` : activeMembershipOnDay(r.orgId, r.athleteId, day);
   return tx
     .select()
     .from(creditBuckets)
@@ -105,9 +125,10 @@ async function lockEligibleBuckets(
         eq(creditBuckets.status, "active"),
         sql`${creditBuckets.available} >= ${r.amount}`,
         or(isNull(creditBuckets.expiresAt), gt(creditBuckets.expiresAt, r.sessionStartsAt)),
-        or(sql`${creditBuckets.periodStart} is null`, lte(creditBuckets.periodStart, sql`(${r.sessionStartsAt.toISOString()}::timestamptz)::date`)),
+        or(sql`${creditBuckets.periodStart} is null`, lte(creditBuckets.periodStart, day)),
         sql`(jsonb_array_length(${creditBuckets.serviceTypeIds}) = 0 or ${creditBuckets.serviceTypeIds} ? ${r.serviceTypeId})`,
         r.locationId ? sql`(jsonb_array_length(${creditBuckets.locationIds}) = 0 or ${creditBuckets.locationIds} ? ${r.locationId})` : undefined,
+        sql`(${creditBuckets.sourceKind} <> 'hold_makeup' or ${makeupOk})`,
       ),
     )
     .orderBy(
@@ -124,14 +145,14 @@ async function lockEligibleBuckets(
  */
 export async function reserveCredits(
   tx: Tx,
-  r: { orgId: string; athleteId: string; bookingId: string; serviceTypeId: string; cost: number; sessionStartsAt: Date; actorUserId?: string | null; locationId?: string | null },
+  r: { orgId: string; athleteId: string; bookingId: string; serviceTypeId: string; cost: number; sessionStartsAt: Date; actorUserId?: string | null; locationId?: string | null; makeupRequiresActiveMembership?: boolean },
 ) {
   const key = `reserve:${r.bookingId}`;
   const [prior] = await tx.select().from(creditLedger).where(eq(creditLedger.idempotencyKey, key));
   if (prior) return { bucketId: prior.bucketId, reused: true };
   if (r.cost === 0) return { bucketId: null, reused: false };
 
-  const candidates = await lockEligibleBuckets(tx, { ...r, amount: r.cost });
+  const candidates = await lockEligibleBuckets(tx, { ...r, amount: r.cost, makeupRequiresActiveMembership: r.makeupRequiresActiveMembership });
   const bucket = candidates[0];
   if (!bucket) throw new InsufficientCreditsError();
 

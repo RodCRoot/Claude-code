@@ -240,8 +240,11 @@ describe("memberships and renewals", () => {
     expect(ev.length).toBeGreaterThan(0);
     const leoInv = await db.select().from(invoices).where(eq(invoices.membershipId, B.leoMembershipId));
     const holdStart = addDaysYmd(T, -5);
-    const holdEnd = addDaysYmd(T, 20);
-    expect(leoInv.some((i) => i.periodStart! >= holdStart && i.periodStart! <= holdEnd)).toBe(false);
+    const holdEnd = addDaysYmd(T, 35);
+    // The March period was billed (and paid) before the hold was recorded; nothing is billed inside the hold after that.
+    expect(leoInv.some((i) => i.periodStart! > T && i.periodStart! >= holdStart && i.periodStart! <= holdEnd)).toBe(false);
+    // Billing resumes on the restart date with a partial-month stub, then the 1st.
+    expect(leoInv.some((i) => i.periodStart === addDaysYmd(holdEnd, 1))).toBe(true);
     // Concurrent runs also create nothing twice.
     const day2 = addDaysYmd(T, 75);
     await Promise.allSettled([1, 2, 3].map(() => db.transaction((tx) => generateRenewals(tx, ctx.orgId, day2))));
@@ -300,13 +303,15 @@ describe("memberships and renewals", () => {
 
     const up = await db.transaction((tx) => changePlan(tx, rod, { membershipId: membership.id, toVersionId: B.unlimitedVersionId, effectiveOn: addDaysYmd(T, 31), today: T }));
     expect(up).toMatchObject({ direction: "upgrade", scheduled: true });
-    // Commitment (3 months) beats the 30-day notice.
+    // Commitment (3 months, counted from the first full period on the 1st after the stub) beats the 30-day notice.
+    expect(membership.commitmentStartsOn).toBe("2026-04-01");
+    expect(membership.commitmentEndsOn).toBe("2026-06-30");
     const c = await db.transaction((tx) => cancelMembership(tx, rod, { membershipId: membership.id, requestedOn: T, reason: "Moving", today: T }));
-    expect(c.cancelAt).toBe(addMonthsYmd(T, 3));
+    expect(c.cancelAt).toBe(addMonthsYmd("2026-04-01", 3));
     expect(c.immediate).toBe(false);
     expect(earliestCancelDate({ startDate: "2026-01-01" }, { cancellationNoticeDays: 30, commitmentMonths: 0 }, "2026-03-01")).toBe("2026-03-31");
     // Renewals run up to cancel_at apply the scheduled upgrade and then stop billing.
-    await db.transaction((tx) => generateRenewals(tx, ctx.orgId, addDaysYmd(T, 120)));
+    await db.transaction((tx) => generateRenewals(tx, ctx.orgId, addDaysYmd(T, 130)));
     const [ended] = await db.select().from(memberships).where(eq(memberships.id, membership.id));
     expect(ended.status).toBe("cancelled");
     expect(ended.productVersionId).toBe(B.unlimitedVersionId);

@@ -176,10 +176,15 @@ export async function FamilySchedule({ viewer, params, range, tz, today }: { vie
                 <Badge variant="green">Unlimited membership</Badge>
               </p>
             ) : null}
+            {ent.kind === "weekly" ? (
+              <p>
+                <Badge variant="green">{ent.classesPerWeek}x per week membership</Badge>
+              </p>
+            ) : null}
             <p>
               <span className="text-2xl font-bold tabular">{selected.credits}</span> session credit{selected.credits === 1 ? "" : "s"} available
             </p>
-            {ent.kind !== "unlimited" && selected.credits === 0 ? (
+            {ent.kind !== "unlimited" && ent.kind !== "weekly" && selected.credits === 0 ? (
               <Callout tone="warn">No membership or credits yet. Buy a package or membership (or ask the front desk) before booking.</Callout>
             ) : null}
             {!selected.canBook ? <Callout tone="info">You can view {selected.first}&apos;s schedule, but booking is managed by another guardian or the front desk.</Callout> : null}

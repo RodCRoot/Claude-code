@@ -2,9 +2,10 @@ import { requireCap, getOrg } from "@/lib/auth/viewer";
 import { policiesOf } from "@/lib/settings";
 import { getPublicSite } from "@/lib/public-site";
 import { ActionForm, SubmitButton } from "@/components/forms";
-import { Card, CardBody, CardHeader, Field, Input, PageHeader, Select, Textarea } from "@/components/ui";
+import { Badge, Card, CardBody, CardHeader, Field, Input, PageHeader, Select, Textarea } from "@/components/ui";
 import { SettingsTabs } from "@/components/settings-tabs";
-import { saveOrgSettingsAction } from "./actions";
+import { POLICY_FIELDS, PRORATION_LABELS, REFERENCE_PLANS, policyFromSettings } from "@/lib/membership-policy";
+import { saveMembershipPolicyAction, saveOrgSettingsAction } from "./actions";
 
 export const metadata = { title: "Settings" };
 
@@ -107,6 +108,80 @@ export default async function SettingsPage() {
           <SubmitButton size="lg">Save settings</SubmitButton>
         </div>
       </ActionForm>
+      <MembershipPolicyPanel settings={org.settings} />
     </>
+  );
+}
+
+function MembershipPolicyPanel({ settings }: { settings: Record<string, unknown> | null }) {
+  const policy = policyFromSettings(settings);
+  const pending = new Set(policy.unconfirmed);
+  const fmtUsd = (minor: number) => `$${(minor / 100).toFixed(2)}`;
+  return (
+    <Card className="mt-6" id="membership-policy">
+      <CardHeader
+        title="Membership policy"
+        kicker="Owner / admin"
+        action={pending.size ? <Badge variant="yellow">{pending.size} value{pending.size === 1 ? "" : "s"} need confirmation</Badge> : <Badge variant="green">All confirmed</Badge>}
+      />
+      <CardBody className="space-y-4">
+        <p className="text-sm text-ink-3">
+          Defaults come from Teamwork&apos;s documented procedures. Values marked &quot;Needs confirmation&quot; conflict between sources; tick &quot;Confirm&quot; when you have checked them. Billing, holds, in-season, cancellations and the family discount all read these values.
+        </p>
+        <ActionForm action={saveMembershipPolicyAction} className="grid gap-4 sm:grid-cols-2 [&>*]:min-w-0">
+          {POLICY_FIELDS.map((f) => {
+            const value = policy[f.key];
+            const needs = pending.has(f.key);
+            const label = (
+              <span className="inline-flex flex-wrap items-center gap-2">
+                {f.label}
+                {needs ? <Badge variant="yellow">Needs confirmation</Badge> : null}
+              </span>
+            );
+            return (
+              <div key={f.key} className="space-y-1">
+                {f.kind === "bool" ? (
+                  <label className="flex min-h-11 items-start gap-2 text-sm">
+                    <input type="checkbox" name={f.key} defaultChecked={value === true} className="mt-1" />
+                    <span>
+                      {label}
+                      <span className="block text-xs text-ink-3">{f.hint}</span>
+                    </span>
+                  </label>
+                ) : f.kind === "proration" ? (
+                  <Field label={label} htmlFor={`mp-${f.key}`} hint={f.hint}>
+                    <Select id={`mp-${f.key}`} name={f.key} defaultValue={String(value)}>
+                      {Object.entries(PRORATION_LABELS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                    </Select>
+                  </Field>
+                ) : (
+                  <Field label={label} htmlFor={`mp-${f.key}`} hint={f.hint}>
+                    <Input id={`mp-${f.key}`} name={f.key} type="number" min={f.min} max={f.max} defaultValue={String(value)} required />
+                  </Field>
+                )}
+                {needs ? (
+                  <label className="flex items-center gap-2 text-xs">
+                    <input type="checkbox" name="confirm" value={f.key} /> Confirm this value
+                  </label>
+                ) : null}
+              </div>
+            );
+          })}
+          <div className="sm:col-span-2">
+            <SubmitButton>Save membership policy</SubmitButton>
+          </div>
+        </ActionForm>
+        <div>
+          <h3 className="mb-1 text-sm font-semibold">Reference plans (seeded as SAMPLE products to confirm)</h3>
+          <ul className="space-y-1 text-sm">
+            {REFERENCE_PLANS.map((p) => (
+              <li key={p.key}>
+                {p.name}: {p.classesPerWeek ? `${p.classesPerWeek}x/week` : "unlimited"}, {p.commitmentMonths ? `${p.commitmentMonths}-month commitment` : "no commitment"}, billed per {p.interval}, reference {fmtUsd(p.referencePriceMinor)} <Badge variant="yellow">Sample price, confirm</Badge>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </CardBody>
+    </Card>
   );
 }

@@ -153,7 +153,7 @@ export function Field({
   className,
   required,
 }: {
-  label: string;
+  label: React.ReactNode;
   htmlFor: string;
   hint?: string;
   error?: string;

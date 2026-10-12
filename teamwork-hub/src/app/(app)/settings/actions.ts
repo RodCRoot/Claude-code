@@ -9,6 +9,7 @@ import { recheckIntegrations, updateOrgSettings } from "@/lib/settings";
 import { beginMfaEnrollment, changeRole, confirmMfaEnrollment, createResetToken, disableMfa, inviteUser, setUserDisabled } from "@/lib/auth/accounts";
 import { env } from "@/lib/env";
 import { createFieldDef, setFieldDefArchived, updateFieldDef } from "@/lib/people/custom-fields";
+import { POLICY_FIELDS, saveMembershipPolicy } from "@/lib/membership-policy";
 
 const on = (fd: FormData, k: string) => fd.get(k) === "on";
 
@@ -18,6 +19,16 @@ export const saveOrgSettingsAction = safeAction(async (_p: ActionState, fd: Form
   await db.transaction((tx) => updateOrgSettings(tx, v, { ...o, requireStaffMfa: on(fd, "requireStaffMfa"), minorsReceiveDirectMessages: on(fd, "minorsReceiveDirectMessages"), kioskPinOnly: on(fd, "kioskPinOnly") }));
   revalidatePath("/", "layout");
   return { ok: true, message: "Settings saved." };
+});
+
+export const saveMembershipPolicyAction = safeAction(async (_p: ActionState, fd: FormData) => {
+  const v = await requireViewer();
+  const raw: Record<string, unknown> = { ...formToObject(fd), confirm: fd.getAll("confirm").map(String) };
+  for (const f of POLICY_FIELDS) if (f.kind === "bool") raw[f.key] = on(fd, f.key);
+  const r = await db.transaction((tx) => saveMembershipPolicy(tx, v, raw));
+  if (!r.ok) return { ok: false, error: "Check the highlighted policy values.", fieldErrors: r.errors };
+  revalidatePath("/settings");
+  return { ok: true, message: "Membership policy saved." };
 });
 
 export const inviteUserAction = safeAction(async (_p: ActionState, fd: FormData) => {

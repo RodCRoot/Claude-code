@@ -306,6 +306,12 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                                   <Field label="Override reason" htmlFor={`ovr-${a.id}`}>
                                     <Input id={`ovr-${a.id}`} name="overrideReason" className="h-11" />
                                   </Field>
+                                  <label className="flex min-h-11 items-center gap-2 text-sm">
+                                    <input type="checkbox" name="capOverride" className="size-5" /> Book past the weekly class limit
+                                  </label>
+                                  <Field label="Weekly limit override reason" htmlFor={`cap-${a.id}`}>
+                                    <Input id={`cap-${a.id}`} name="capOverrideReason" className="h-11" />
+                                  </Field>
                                 </div>
                               </details>
                               <SubmitButton className="min-h-11" pendingText="Booking…">

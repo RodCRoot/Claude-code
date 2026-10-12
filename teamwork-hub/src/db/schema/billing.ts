@@ -67,6 +67,8 @@ export const productVersions = pgTable(
     /** Credits granted per purchase / billing period. Null with unlimited=false means no credits. */
     creditsPerPeriod: integer("credits_per_period"),
     unlimited: boolean("unlimited").notNull().default(false),
+    /** Classes per ISO week (facility time) this plan entitles. Null = no weekly cap (unlimited or credit-based). */
+    classesPerWeek: integer("classes_per_week"),
     creditExpiryDays: integer("credit_expiry_days"),
     rolloverMax: integer("rollover_max").notNull().default(0),
     /** Service type ids these credits can be spent on; empty = any. */
@@ -93,6 +95,12 @@ export const discounts = pgTable("discounts", {
   code: text("code"),
   active: boolean("active").notNull().default(true),
 });
+
+export type MembershipKind = "regular" | "in_season";
+
+/** How a family sent a hold / cancellation request (all channels are honored and recorded). */
+export const REQUEST_CHANNELS = ["email", "forwarded_email", "sms", "messenger", "phone", "voice_agent_recap", "website_form", "in_person"] as const;
+export type RequestChannel = (typeof REQUEST_CHANNELS)[number];
 
 export type MembershipStatus = "pending" | "trialing" | "active" | "on_hold" | "past_due" | "cancelled" | "expired";
 
@@ -122,6 +130,11 @@ export const memberships = pgTable(
     /** Per-membership location override; null = use the product's locations. */
     locationIds: jsonb("location_ids").$type<string[]>(),
     source: text("source").notNull().default("teamwork"),
+    /** regular = the family's ongoing plan; in_season = a fixed-term plan that never auto-renews. */
+    kind: text("kind").$type<MembershipKind>().notNull().default("regular"),
+    /** Commitment term (first full period → end). Null when the plan has no commitment. Never extended silently. */
+    commitmentStartsOn: date("commitment_starts_on"),
+    commitmentEndsOn: date("commitment_ends_on"),
     createdBy: uuid("created_by"),
     isDemo: isDemo(),
     createdAt: createdAt(),
@@ -139,6 +152,17 @@ export const membershipHolds = pgTable("membership_holds", {
   endDate: date("end_date").notNull(),
   reason: text("reason"),
   requestedAt: ts("requested_at"),
+  /** hold = family pause; in_season = regular plan paused while an In Season membership runs. */
+  kind: text("kind").$type<"hold" | "in_season">().notNull().default("hold"),
+  /** Local date the family SENT the request (a hold may be backdated to it). */
+  requestedOn: date("requested_on"),
+  requestChannel: text("request_channel").$type<RequestChannel>(),
+  /** Staff reason when a policy cap was overridden (audited). */
+  overrideReason: text("override_reason"),
+  /** The In Season membership that runs during an in_season pause. */
+  relatedMembershipId: uuid("related_membership_id"),
+  /** Punch-card bucket granted for already-billed unused sessions. */
+  makeupBucketId: uuid("makeup_bucket_id"),
   createdBy: uuid("created_by"),
   createdAt: createdAt(),
 });
@@ -407,6 +431,9 @@ export const webhookEvents = pgTable(
 // Session-credit ledger
 // ---------------------------------------------------------------------------
 
+/** hold_makeup = punch card for already-billed sessions unused because of a hold (usable only with an active membership). */
+export type CreditSourceKind = "purchase" | "membership_period" | "staff_grant" | "imported" | "rollover" | "hold_makeup";
+
 /**
  * A grant of credits. source_invoice_line_id is unique so a settled invoice line
  * can grant credits at most once, no matter how many webhooks arrive.
@@ -421,7 +448,7 @@ export const creditBuckets = pgTable(
       .references(() => athletes.id),
     membershipId: uuid("membership_id").references(() => memberships.id),
     sourceInvoiceLineId: uuid("source_invoice_line_id").references(() => invoiceLines.id),
-    sourceKind: text("source_kind").$type<"purchase" | "membership_period" | "staff_grant" | "imported" | "rollover">().notNull(),
+    sourceKind: text("source_kind").$type<CreditSourceKind>().notNull(),
     serviceTypeIds: jsonb("service_type_ids").$type<string[]>().notNull().default([]),
     /** Locations these credits can be spent at; empty = any (copied from the product/membership at grant). */
     locationIds: jsonb("location_ids").$type<string[]>().notNull().default([]),
