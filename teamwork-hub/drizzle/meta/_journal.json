@@ -85,6 +85,13 @@
       "when": 1791788803772,
       "tag": "0011_people_custom_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791802885594,
+      "tag": "0012_crm_member_requests",
+      "breakpoints": true
     }
   ]
 }

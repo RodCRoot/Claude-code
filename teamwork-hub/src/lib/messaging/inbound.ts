@@ -5,6 +5,7 @@ import { inboundMessages, messageDeliveries, messages, organizations, people, th
 import { audit } from "@/lib/audit";
 import { assertCan, type Viewer } from "@/lib/authz/policy";
 import { publicOrg } from "@/lib/crm/public";
+import { suggestSafely } from "@/lib/member-ops/requests";
 import { normalizeEmail, phoneKey } from "./addresses";
 import { DomainError } from "./errors";
 import { threadIdFromToken } from "./reply-token";
@@ -156,6 +157,16 @@ export async function receiveInbound(tx: Tx, input: InboundInput, now = new Date
         receivedAt: now,
       })
       .returning();
+    await suggestSafely(tx, {
+      orgId: match.thread.orgId,
+      body: [subject, body].filter(Boolean).join("\n"),
+      sentAt: now,
+      channel: input.channel === "sms" ? "sms" : "email_direct",
+      senderPersonId: match.personId,
+      threadId: match.thread.id,
+      messageId: m.id,
+      inboundId: row.id,
+    });
     return { status: "threaded" as const, inboundId: row.id, threadId: match.thread.id, messageId: m.id };
   }
 
@@ -178,6 +189,14 @@ export async function receiveInbound(tx: Tx, input: InboundInput, now = new Date
     })
     .returning();
   await audit(tx, { orgId: input.orgId, actorUserId: null, actorRole: "webhook" }, "messaging.inbound_unmatched", "inbound_message", row.id, { summary: `Unmatched ${input.channel} reply: ${reason}` });
+  await suggestSafely(tx, {
+    orgId: input.orgId,
+    body: [subject, row.body].filter(Boolean).join("\n"),
+    sentAt: now,
+    channel: input.channel === "sms" ? "sms" : "email_direct",
+    senderPersonId: row.matchedPersonId,
+    inboundId: row.id,
+  });
   return { status: "unmatched" as const, inboundId: row.id };
 }
 
