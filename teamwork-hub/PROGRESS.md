@@ -60,3 +60,34 @@ Verified:
 - `pnpm test` 568/568 (48 files); typecheck and lint clean; production build OK.
 - Playwright against the production build: 234/234.
 - The axe and CSP sweeps now also cover payroll, `/time`, member requests, the membership audit and the kiosk staff clock. Owner, coach and kiosk passed 180/180 at desktop and 390px.
+
+## Checkpoint 7 — Studio-style redesign (2026-10-12)
+Rod asked for the look and feel of Zen Planner (operations) and TeamBuildr (training). Layout and interaction patterns only: no logos, product names or brand colors were copied, and the accent stays configurable per org.
+- **App frame:**
+  - Dark navy sidebar with icons, grouped Front desk / Members / Coaching / Business.
+  - Top bar: member search, a "+ New" menu filtered by capability, and an account menu.
+  - Denser components: title-bar cards, striped tables, KPI tiles with an accent bar.
+- **Calendar (Zen Planner style):**
+  - Week view as an hour grid; day view with one column per coach; month grid.
+  - Session roster as a check-in table.
+  - Agenda list on phones.
+- **Dashboard, People, Billing:**
+  - Widget dashboard.
+  - Dense member directory.
+  - Member profile: header band, info column, tabs.
+  - Leads kanban.
+  - Ledger-style billing tables with totals.
+  - Checkout-style point of sale.
+- **Training, Sports Science, Performance (TeamBuildr / AMS style):**
+  - Week calendar with group progress.
+  - Phone-first workout cards.
+  - Dark weight-room board.
+  - Program builder with day columns.
+  - Leaderboards.
+  - Readiness heat table: values shown as text and symbols, not color alone.
+- Before/after screenshots at 1440px and 390px are in `docs/screenshots/redesign/`.
+
+Verified:
+- `pnpm test` 594/594; typecheck and lint clean; build OK.
+- Playwright 252/252: auth, CSP, and axe for every role at desktop and mobile.
+- Training offline/builder suite 4/4.
