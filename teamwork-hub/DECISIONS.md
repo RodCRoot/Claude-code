@@ -15,3 +15,14 @@ Reversible implementation choices made autonomously during the build. Newest las
 | D9 | pnpm instead of npm | npm 10.9 arborist crashes (`edgesOut` null) resolving vitest 4 peers. | Low |
 | D10 | All seed data synthetic, `is_demo=true`, `.test`/`example.test` emails, products named "Sample …" with placeholder prices | Brief forbids inventing real prices/policies or seeding real athletes. | Low |
 | D11 | Interval arithmetic in exclusion constraints via an IMMUTABLE helper `tw_buffered_range()` | Postgres rejects STABLE timestamptz±interval in index expressions; minute offsets are timezone-independent so IMMUTABLE is correct. | Low |
+| D12 | Separate worktree per parallel module agent; lead merges and renumbers Drizzle migrations | Parallel delivery without shared-file churn; migrations regenerated against merged schema (no drift) | Low |
+| D13 | Job runners claim only job types they have handlers for | Specialised runners (and parallel tests) never steal and fail others' jobs | Low |
+| D14 | Body-map review tasks carry no symptom details | Operations staff can see tasks but have no health access | Low |
+| D15 | Signer identity step-up on by default for waivers/agreements; staff-witnessed in-person fallback when email isn't configured | Typed name alone is not adequate identity evidence | Low (org setting) |
+| D16 | Google Calendar scope `calendar.app.created` + `calendar.freebusy` (Teamwork-owned calendar per coach) | Narrower than full calendar access | Low |
+
+## Open decisions for Rod (from the security review)
+- Which proxy hop to trust for client IP (rate limit + signature evidence) — set at deployment.
+- Coaches currently see facility-wide attendance/no-show reports (not health data). Restrict to assigned athletes?
+- Guardians see co-guardians' email/phone on their child's page (separated parents). Hide?
+- Login resolves by email across orgs; fine single-tenant, revisit if multi-tenant.

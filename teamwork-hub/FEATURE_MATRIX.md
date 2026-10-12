@@ -10,6 +10,8 @@ Test evidence refers to files in `tests/` (Vitest, real Postgres) and `e2e/` (Pl
 
 ## Platform & security
 
+Security review: see `docs/SECURITY-REVIEW.md` (10 findings fixed with regression tests; open decisions listed in DECISIONS.md).
+
 | Feature | Status | Test evidence | Gaps |
 |---|---|---|---|
 | Person ≠ login ≠ athlete ≠ guardian ≠ household ≠ payer; no auto-merge | verified locally | `people.test.ts`, `imports.test.ts`, `crm.test.ts`, e2e duplicate flow | — |
@@ -17,12 +19,12 @@ Test evidence refers to files in `tests/` (Vitest, real Postgres) and `e2e/` (Pl
 | Sessions (hashed, revocable), lockout, TOTP MFA, invites/reset links, role changes revoke sessions | verified locally | `reports-settings.test.ts`, e2e | Email delivery of invites needs an email provider (links are shown once to staff) |
 | Staff MFA enforcement (org policy) | implemented (manual check) | — | Not covered by an automated test |
 | Audit log (append-only trigger), audit UI | verified locally | trigger in `0001`, used across modules | — |
-| Security headers, no-store caching for private pages, dev role switcher disabled outside demo | verified locally | e2e redirect test | CSP not configured |
+| Security headers, nonce-based CSP, no-store caching for private pages, dev role switcher disabled outside demo, optional staging password gate | verified locally | `e2e/csp.spec.ts` (0 violations across all roles on the production build), e2e redirect test | — |
 | Migrations, constraints (exclusion, partial unique, CHECK, immutability triggers) | verified locally | all DB tests | — |
-| Object storage (local disk, S3-shaped interface), auth-checked downloads | verified locally | `forms-files.test.ts`, `exports.test.ts` | S3/bucket backend not implemented; no delete (orphans possible on rollback) |
+| Object storage (local disk or S3-compatible bucket, private + SSE), deletes, auth-checked downloads | verified locally (S3 via mocked client) | `storage*.test.ts`, `forms-files.test.ts`, `exports.test.ts` | Real bucket not configured |
 | Job queue/outbox + worker (`pnpm jobs:work`) | verified locally | `messaging.test.ts`, `scheduling-calendar.test.ts` | No process supervisor/deploy config |
-| Backups (`pnpm backup`), restore docs | partially verified | dump readable by `pg_restore --list` | Full restore into a fresh DB not rehearsed |
-| Error monitoring | not implemented | — | `SENTRY_DSN` reserved; no SDK wired |
+| Backups (`pnpm backup`) and restore rehearsal (`pnpm restore:check`) | verified locally | full restore into a scratch DB: schema, 103 tables' row counts, stored-file checksums identical; corrupted/truncated dumps rejected | Managed-Postgres (Render) and S3 restores not rehearsed |
+| Error monitoring (redacted structured logs; Sentry when `SENTRY_DSN` set) and `/api/health` | verified locally (fake Sentry endpoint) | `observability.test.ts` | Real Sentry project not configured |
 | Responsive UI (desktop / 390px), loading/empty/error/denied states | verified locally | Playwright sweep of all nav routes for 9 roles (no page errors, no horizontal overflow) | Formal accessibility audit (axe) not run |
 | Public site (overview, programs, public schedule, assessment inquiry) | verified locally | browser checks | Copy is draft (editable in Settings) |
 
@@ -38,7 +40,7 @@ Test evidence refers to files in `tests/` (Vitest, real Postgres) and `e2e/` (Pl
 | Coach availability, time off, slot finder, substitution | verified locally | `scheduling.test.ts` | — |
 | Family self-service booking, eligibility (forms, age, entitlement) | verified locally | `scheduling.test.ts`, `connected-flows.test.ts` | Multi-athlete family checkout not implemented |
 | Restricted kiosk check-in (first name + last initial) | verified locally | `scheduling.test.ts`, browser | No QR/PIN/barcode check-in |
-| Google Calendar push + free/busy | implemented, configuration required | adapter tests with mocked fetch | OAuth consent flow and encrypted token storage not built |
+| Google Calendar: per-coach OAuth (PKCE, signed state), AES-256-GCM token storage, push to a Teamwork-owned calendar, free/busy import | implemented, configuration required | `calendar-oauth.test.ts`, `scheduling-calendar.test.ts` (mocked Google) | Needs Google Cloud OAuth client + `CALENDAR_TOKEN_KEY`; not run against a real account |
 | Memberships: versions, trials, family discount, holds, upgrades, cancellation rules | verified locally | `billing.test.ts` | Families can't self-request holds/cancellations |
 | Session-credit ledger (reserve/consume/release/forfeit/restore/expire/adjust) | verified locally | `credits.test.ts` (concurrency), `scheduling.test.ts` | — |
 | Lead/member status, custom fields, skills/levels, notes (visibility), tags, tasks, alerts | verified locally | `people.test.ts` | Custom-field definitions UI not built (schema exists) |
@@ -55,11 +57,11 @@ Test evidence refers to files in `tests/` (Vitest, real Postgres) and `e2e/` (Pl
 | Stripe webhook verification (HMAC, tolerance), idempotent + out-of-order processing, amount/currency mismatch handling | verified locally (signed fixtures) | `billing-webhooks.test.ts` | Not verified with real Stripe events |
 | Pending ACH vs settled; entitlement policy | verified locally | `billing-webhooks.test.ts` | — |
 | Refunds/disputes ingestion, reconciliation, payouts | verified locally (fixtures) | `billing-webhooks.test.ts` | Stripe refund/dispute/payout field names unverified |
-| Stripe Billing subscriptions (recurring mandates) | not implemented | — | Memberships are invoiced per period by the app and paid by one-time checkout or offline |
+| Stripe Billing subscriptions (subscription-mode Checkout, webhook sync, cancel at period end, never double-billed) | implemented, configuration required | `billing-subscriptions.test.ts` (signed fixtures) | Anchor/first-charge behaviour and period alignment need sandbox verification; no plan changes/trials on provider subscriptions |
 | PayPal Orders checkout + capture | implemented, configuration required | contract tests | Never run against PayPal sandbox |
 | PayPal webhook verification (verify-webhook-signature API) | implemented, configuration required | rejects when unconfigured | `verification_status` value unverified |
-| PayPal Subscriptions | not implemented | — | — |
-| Venmo (via PayPal Checkout) | blocked | capability matrix documents eligibility (US, USD, Venmo app) | Button page not built; recurring Venmo unverified, so the UI offers Stripe/PayPal for recurring |
+| PayPal Subscriptions (plans, approval link, webhooks) | implemented, configuration required | `billing-subscriptions.test.ts` (mocked API) | Approval link, sale payload fields need sandbox verification |
+| Venmo (via PayPal Checkout, one-time) | implemented, configuration required | `billing-subscriptions.test.ts` (server-side order + capture, amount checks) | Needs PayPal credentials and a real device test with the Venmo app; recurring Venmo not offered (not documented by PayPal) |
 | Offline/manual payments (cash, check, personal Venmo/Zelle) with attribution, labeled staff-attested | verified locally | `billing.test.ts` (DB CHECKs) | — |
 | Zen Planner cutover safety (imported memberships never invoiced; cutover requires confirming Zen Planner billing stopped) | verified locally | `billing.test.ts` | — |
 

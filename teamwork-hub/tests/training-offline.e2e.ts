@@ -22,8 +22,11 @@ test("athlete logs sets offline, reloads, reconnects: synced with no duplicates"
   expect(rows.length, "seeded scheduled workout for Maya").toBe(1);
   const { date, item_id: itemId } = rows[0] as { date: string; item_id: string };
 
-  await page.goto("/dev/switch");
-  await page.locator("li", { hasText: "Maya Parker" }).first().getByRole("button", { name: "Sign in" }).click();
+  // Sign in through the real login form (the demo role switcher is disabled in production builds).
+  await page.goto("/login");
+  await page.fill("#email", "maya.parker@example.test");
+  await page.fill("#password", "teamwork-demo-1");
+  await page.click("button[type=submit]");
   await page.waitForURL(/\/today/);
   await page.goto(`/training/today?date=${date}`);
   const item = page.locator(`section:has(#item-${itemId})`);
