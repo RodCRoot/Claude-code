@@ -1,11 +1,11 @@
 import { and, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import type { Tx } from "@/db";
-import { busyBlocks, calendarConnections, calendarEventLinks, resources, scheduleSessions } from "@/db/schema";
+import { busyBlocks, calendarConnections, calendarEventLinks, calendarOauthTokens, resources, scheduleSessions } from "@/db/schema";
 import { enqueue, type JobHandler } from "@/lib/jobs";
 import { googleConfigured } from "./google";
+import { missingCalendarEnv } from "./oauth";
+import { googleProviderFactory, type ProviderFactory } from "./tokens";
 import { CalendarConflictError, CalendarProviderError, type BusyInterval, type CalendarProvider } from "./types";
-
-type Connection = typeof calendarConnections.$inferSelect;
 
 export const CALENDAR_SYNC_JOB = "calendar.sync_session";
 export const CALENDAR_FREEBUSY_JOB = "calendar.import_freebusy";
@@ -48,17 +48,14 @@ export async function queueCalendarSync(tx: Tx, sessionId: string, opts: { previ
   return conns.length;
 }
 
-export type ProviderFactory = (connection: Connection) => Promise<CalendarProvider | null>;
+export type { ProviderFactory };
 
 /**
- * Default factory: returns null until Google OAuth is configured AND a token store exists for the
- * connection. (The OAuth connect flow/token storage is a documented follow-up; until then sync
- * honestly reports "not configured" and internal scheduling is unaffected.)
+ * Default factory: a real Google provider when GOOGLE_CLIENT_ID/SECRET + CALENDAR_TOKEN_KEY are
+ * configured AND the coach has connected (encrypted tokens stored). Otherwise null, so sync
+ * honestly reports "not configured" and internal scheduling is unaffected.
  */
-export const defaultProviderFactory: ProviderFactory = async () => {
-  if (!googleConfigured()) return null;
-  return null;
-};
+export const defaultProviderFactory: ProviderFactory = googleProviderFactory();
 
 /** Push/update/delete one session copy. Teamwork wins conflicts: an externally edited event is overwritten. */
 export async function syncSessionToCalendar(tx: Tx, provider: CalendarProvider | null, input: { connectionId: string; sessionId: string }) {
@@ -76,11 +73,15 @@ export async function syncSessionToCalendar(tx: Tx, provider: CalendarProvider |
       .set({ status, lastError: msg.slice(0, 500), attempts: link.attempts + 1, updatedAt: new Date() })
       .where(eq(calendarEventLinks.id, link.id));
   };
-  if (!provider || !conn.externalCalendarId) {
-    await fail("Google Calendar is not configured for this connection.");
+  const shouldExist = s.status !== "cancelled" && s.coachUserId === conn.userId;
+  // Duplicate/late delivery of a job whose work is already done: nothing to do.
+  if ((shouldExist && link.status === "synced" && link.pushedVersion === s.version) || (!shouldExist && link.status === "deleted")) {
+    return { action: "skipped" as const, reason: "up_to_date" };
+  }
+  if (!provider || !conn.externalCalendarId || conn.status !== "connected") {
+    await fail(conn.status === "connected" ? "Google Calendar is not configured for this connection." : `Google Calendar is not connected (status: ${conn.status}).`);
     return { action: "skipped" as const, reason: "not_configured" };
   }
-  const shouldExist = s.status !== "cancelled" && s.coachUserId === conn.userId;
   try {
     if (!shouldExist) {
       if (link.externalEventId) await provider.deleteEvent(conn.externalCalendarId, link.externalEventId);
@@ -155,14 +156,18 @@ export async function importFreeBusy(tx: Tx, input: { orgId: string; coachUserId
 export async function syncFreeBusy(tx: Tx, provider: CalendarProvider | null, input: { connectionId: string; from: Date; to: Date }) {
   const [conn] = await tx.select().from(calendarConnections).where(eq(calendarConnections.id, input.connectionId));
   if (!conn) return { imported: 0, skipped: "missing" as const };
-  if (!provider || !conn.externalCalendarId || conn.status !== "connected" || conn.syncDirection === "push_events") return { imported: 0, skipped: "not_configured" as const };
+  const fbCalendar = conn.freebusyCalendarId ?? conn.externalCalendarId;
+  if (!provider || !fbCalendar || conn.status !== "connected" || conn.syncDirection === "push_events") return { imported: 0, skipped: "not_configured" as const };
   try {
-    const busy = await provider.freeBusy(conn.externalCalendarId, input.from, input.to);
+    const busy = await provider.freeBusy(fbCalendar, input.from, input.to);
     const r = await importFreeBusy(tx, { orgId: conn.orgId, coachUserId: conn.userId, from: input.from, to: input.to, busy });
     await tx.update(calendarConnections).set({ lastSyncAt: new Date(), lastError: null }).where(eq(calendarConnections.id, conn.id));
     return r;
   } catch (e) {
-    await tx.update(calendarConnections).set({ lastError: (e as Error).message.slice(0, 500) }).where(eq(calendarConnections.id, conn.id));
+    const msg = (e as Error).message.slice(0, 500);
+    await tx.update(calendarConnections).set({ lastError: msg }).where(eq(calendarConnections.id, conn.id));
+    // Permanent failures stop here (and stay committed); retryable ones go back to the queue.
+    if (e instanceof CalendarProviderError && !e.retryable) return { imported: 0, failed: msg };
     throw e;
   }
 }
@@ -173,14 +178,14 @@ export function calendarJobHandlers(tx: Tx, factory: ProviderFactory = defaultPr
     [CALENDAR_SYNC_JOB]: async (payload) => {
       const connectionId = String(payload.connectionId);
       const [conn] = await tx.select().from(calendarConnections).where(eq(calendarConnections.id, connectionId));
-      return syncSessionToCalendar(tx, conn ? await factory(conn) : null, { connectionId, sessionId: String(payload.sessionId) });
+      return syncSessionToCalendar(tx, conn ? await factory(conn, tx) : null, { connectionId, sessionId: String(payload.sessionId) });
     },
     [CALENDAR_FREEBUSY_JOB]: async (payload) => {
       const connectionId = String(payload.connectionId);
       const [conn] = await tx.select().from(calendarConnections).where(eq(calendarConnections.id, connectionId));
       const from = new Date(String(payload.from));
       const to = new Date(String(payload.to));
-      return syncFreeBusy(tx, conn ? await factory(conn) : null, { connectionId, from, to });
+      return syncFreeBusy(tx, conn ? await factory(conn, tx) : null, { connectionId, from, to });
     },
   };
 }
@@ -193,5 +198,12 @@ export async function calendarStatus(tx: Tx, orgId: string) {
         await tx.execute(sql`select status, count(*)::int as n from calendar_event_links where connection_id in ${conns.map((c) => c.id)} group by status`)
       ).rows as { status: string; n: number }[])
     : [];
-  return { configured: googleConfigured(), connections: conns, linkCounts: Object.fromEntries(counts.map((c) => [c.status, c.n])) as Record<string, number> };
+  const withGrant = conns.length
+    ? new Set((await tx.select({ id: calendarOauthTokens.connectionId }).from(calendarOauthTokens).where(inArray(calendarOauthTokens.connectionId, conns.map((c) => c.id)))).map((r) => r.id))
+    : new Set<string>();
+  return {
+    configured: googleConfigured(),
+    missingEnv: missingCalendarEnv(),
+    // Only whether a grant is stored — never token values.
+    connections: conns.map((c) => ({ ...c, hasGrant: withGrant.has(c.id) })), linkCounts: Object.fromEntries(counts.map((c) => [c.status, c.n])) as Record<string, number> };
 }

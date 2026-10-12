@@ -29,12 +29,13 @@ export async function enqueue(
 
 export type JobHandler = (payload: Record<string, unknown>, job: typeof jobs.$inferSelect) => Promise<unknown>;
 
-export async function claimJobs(tx: Tx, workerId: string, limit = 10, types?: string[]) {
+export async function claimJobs(tx: Tx, workerId: string, limit = 10, types?: string[], orgId?: string) {
   const res = await tx.execute(sql`
     update jobs set status = 'running', locked_at = now(), locked_by = ${workerId}, attempts = attempts + 1
     where id in (
       select id from jobs where status = 'pending' and run_at <= now()
         ${types && types.length ? sql`and type in ${types}` : sql``}
+        ${orgId ? sql`and org_id = ${orgId}` : sql``}
       order by run_at limit ${limit} for update skip locked
     )
     returning id`);
@@ -47,9 +48,10 @@ export function backoffMs(attempts: number) {
   return Math.min(60 * 60_000, 30_000 * 2 ** Math.max(0, attempts - 1));
 }
 
-export async function runJobs(tx: Tx, handlers: Record<string, JobHandler>, workerId = `worker-${process.pid}`, limit = 10) {
+export async function runJobs(tx: Tx, handlers: Record<string, JobHandler>, workerId = `worker-${process.pid}`, limit = 10, opts: { orgId?: string } = {}) {
   // Only claim job types this runner can handle, so specialised runners never steal (and fail) others' jobs.
-  const claimed = await claimJobs(tx, workerId, limit, Object.keys(handlers));
+  // `orgId` scopes a runner to one tenant (used by tests that run in parallel on one database).
+  const claimed = await claimJobs(tx, workerId, limit, Object.keys(handlers), opts.orgId);
   const results: { id: string; type: string; status: string; error?: string }[] = [];
   for (const job of claimed) {
     const handler = handlers[job.type];

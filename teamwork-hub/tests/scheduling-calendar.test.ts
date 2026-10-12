@@ -221,7 +221,7 @@ describe("Google Calendar adapter (no network)", () => {
     const erin = await viewerFor(ctx, "erin");
     const [conn] = await d.insert(calendarConnections).values({ orgId: ctx.orgId, userId: ctx.users.tess, externalCalendarId: "tess@example.test", status: "connected", syncDirection: "both" }).returning();
     const fake = fakeProvider();
-    const run = () => d.transaction((tx) => runJobs(tx, calendarJobHandlers(tx, async () => fake), "test-worker", 50));
+    const run = () => d.transaction((tx) => runJobs(tx, calendarJobHandlers(tx, async () => fake), "test-worker", 50, { orgId: ctx.orgId }));
 
     const s = await d.transaction((tx) => createSession(tx, erin, { serviceTypeId: ctx.extra.scheduling.private, startsAt: localToUtc(addDaysYmd(todayLocal(TZ), 12), "13:00", TZ), coachUserId: ctx.users.tess }));
     await run();
@@ -259,12 +259,12 @@ describe("Google Calendar adapter (no network)", () => {
     const erin = await viewerFor(ctx, "erin");
     const [conn] = await d.insert(calendarConnections).values({ orgId: ctx.orgId, userId: ctx.users.marcus, externalCalendarId: "marcus@example.test", status: "connected" }).returning();
     const s = await d.transaction((tx) => createSession(tx, erin, { serviceTypeId: ctx.extra.scheduling.private, startsAt: localToUtc(addDaysYmd(todayLocal(TZ), 13), "13:00", TZ), coachUserId: ctx.users.marcus }));
-    const res = await d.transaction((tx) => runJobs(tx, calendarJobHandlers(tx), "test-worker", 50));
+    const res = await d.transaction((tx) => runJobs(tx, calendarJobHandlers(tx), "test-worker", 50, { orgId: ctx.orgId }));
     expect(res.find((r) => r.type === "calendar.sync_session")?.status).toBe("done");
     const [link] = await d.select().from(calendarEventLinks).where(and(eq(calendarEventLinks.connectionId, conn.id), eq(calendarEventLinks.sessionId, s.id)));
     expect(link.status).toBe("error");
     expect(link.lastError).toMatch(/not configured/);
-    const pending = await d.select().from(jobs).where(and(eq(jobs.type, "calendar.sync_session"), eq(jobs.status, "pending")));
+    const pending = await d.select().from(jobs).where(and(eq(jobs.orgId, ctx.orgId), eq(jobs.type, "calendar.sync_session"), eq(jobs.status, "pending")));
     expect(pending).toHaveLength(0);
   });
 });

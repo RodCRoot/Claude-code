@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { busyBlocks, cancellationPolicies, classSeries, coachAvailability, formTemplates, resources, serviceTypes, users } from "@/db/schema";
 import { ActionForm, SubmitButton } from "@/components/forms";
-import { Badge, Callout, Card, CardBody, CardHeader, EmptyState, Field, Input, NotConfigured, PageHeader, StatusBadge } from "@/components/ui";
+import { Badge, buttonClass, Callout, Card, CardBody, CardHeader, EmptyState, Field, Input, NotConfigured, PageHeader, StatusBadge } from "@/components/ui";
 import { getOrg, requireStaff } from "@/lib/auth/viewer";
 import { can } from "@/lib/authz/policy";
 import { calendarStatus } from "@/lib/calendar/sync";
@@ -12,6 +12,7 @@ import { listCoaches } from "@/lib/scheduling/availability";
 import { DEFAULT_TZ, fmt, todayLocal } from "@/lib/time";
 import { generateSeriesAction, removeAvailabilityAction, removeBusyBlockAction } from "../actions";
 import { ScheduleTabs } from "../_components/calendar";
+import { disconnectCalendarAction } from "./calendar-actions";
 import { AvailabilityForm, OneOffSessionForm, PolicyForm, ResourceForm, SeriesForm, ServiceTypeForm, TimeOffForm } from "./forms";
 
 export const metadata = { title: "Schedule settings" };
@@ -44,7 +45,76 @@ function Details({ title, meta, children }: { title: React.ReactNode; meta?: Rea
   );
 }
 
-export default async function ScheduleSettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+const CAL_FLASH: Record<string, { tone: "ok" | "warn" | "bad"; title: string; text: string }> = {
+  connected: { tone: "ok", title: "Google Calendar connected", text: "Your upcoming sessions are being copied to the “Teamwork Hub” calendar in your Google account, and your Google busy time will block private-session slots." },
+  denied: { tone: "warn", title: "Google Calendar not connected", text: "Access was not granted at Google, so nothing was connected." },
+  not_configured: { tone: "warn", title: "Google Calendar is not configured", text: "An admin needs to set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and CALENDAR_TOKEN_KEY on the server." },
+  expired: { tone: "warn", title: "The Google sign-in took too long", text: "Nothing was saved. Start again with Connect Google Calendar." },
+  invalid_state: { tone: "bad", title: "Couldn’t verify this Google sign-in", text: "For your security nothing was saved. Start again from this page in the same browser." },
+  forbidden: { tone: "bad", title: "Not allowed", text: "Only staff can connect their own Google Calendar." },
+  no_refresh_token: { tone: "warn", title: "Google didn’t grant lasting access", text: "Remove “Teamwork Hub” under Google Account → Security → Third-party access, then connect again." },
+  no_scopes: { tone: "warn", title: "No calendar permissions were granted", text: "Nothing was connected. Connect again and allow the calendar permissions." },
+  error: { tone: "bad", title: "Google Calendar connection failed", text: "Nothing was saved. Try again; if it keeps failing, ask an admin to check the Google OAuth setup." },
+};
+
+const DIRECTION_LABEL: Record<string, string> = { both: "sessions pushed + busy time imported", push_events: "sessions pushed (busy time not shared)", freebusy_only: "busy time imported only (sessions not pushed)" };
+
+/** The signed-in staff member's own Google Calendar connection. */
+async function MyCalendarCard({ v, flash, tz }: { v: Awaited<ReturnType<typeof requireStaff>>; flash?: string; tz: string }) {
+  const st = await calendarStatus(db, v.orgId);
+  const mine = st.connections.find((c) => c.userId === v.userId && c.provider === "google");
+  const f = flash ? CAL_FLASH[flash] : undefined;
+  const live = mine && mine.status === "connected" && mine.hasGrant;
+  return (
+    <Card>
+      <CardHeader title="My Google Calendar" kicker="Calendar sync" />
+      <CardBody className="space-y-3 text-sm">
+        {f ? (
+          <Callout tone={f.tone} title={f.title}>
+            {f.text}
+          </Callout>
+        ) : null}
+        {!st.configured ? (
+          <NotConfigured provider="Google Calendar" envVars={st.missingEnv}>
+            Calendar sync is not set up for Teamwork yet, so you can&apos;t connect a calendar. Scheduling inside Teamwork Hub works normally.
+          </NotConfigured>
+        ) : (
+          <>
+            <p className="text-ink-2">
+              {live ? (
+                <>
+                  <StatusBadge status="connected" /> <span className="ml-1">{DIRECTION_LABEL[mine.syncDirection] ?? mine.syncDirection}</span>
+                  <span className="block text-xs text-ink-3">{mine.lastSyncAt ? `Last sync ${fmt(mine.lastSyncAt, "MMM d h:mm a", tz)}` : "Waiting for the first sync."}</span>
+                </>
+              ) : mine?.status === "error" ? (
+                <>
+                  <StatusBadge status="error" /> <span className="ml-1">{mine.lastError ?? "Google Calendar access stopped working. Reconnect to resume sync."}</span>
+                </>
+              ) : (
+                <>Connect your Google account to get your Teamwork sessions in a separate “Teamwork Hub” calendar and keep private-session slots off your busy times. Teamwork only sees busy/free from your own calendars — not event details.</>
+              )}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <a href="/api/calendar/google/start" className={buttonClass(live ? "secondary" : "primary", "md", "min-h-11")}>
+                {live ? "Reconnect" : mine?.status === "error" ? "Reconnect Google Calendar" : "Connect Google Calendar"}
+              </a>
+              {mine && (mine.hasGrant || mine.status === "connected" || mine.status === "error") ? (
+                <ActionForm action={disconnectCalendarAction}>
+                  <input type="hidden" name="connectionId" value={mine.id} />
+                  <SubmitButton variant="ghost" className="min-h-11" pendingText="Disconnecting…" confirm="Disconnect Google Calendar? Teamwork will stop updating it and revoke its access.">
+                    Disconnect
+                  </SubmitButton>
+                </ActionForm>
+              ) : null}
+            </div>
+          </>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+export default async function ScheduleSettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string; calendar?: string }> }) {
   const v = await requireStaff();
   const manager = can(v, "schedule.manage");
   const sp = await searchParams;
@@ -225,6 +295,7 @@ export default async function ScheduleSettingsPage({ searchParams }: { searchPar
     ]);
     body = (
       <div className="space-y-6">
+        <MyCalendarCard v={v} flash={sp.calendar} tz={tz} />
         <Card>
           <CardHeader title={manager ? "Coach availability" : "My availability"} kicker="Private sessions & assessments" />
           <CardBody>
@@ -289,23 +360,28 @@ export default async function ScheduleSettingsPage({ searchParams }: { searchPar
     );
   } else if (tab === "calendar") {
     const st = await calendarStatus(db, v.orgId);
-    const userName = new Map(coaches.map((c) => [c.id, c.name]));
+    const ids = st.connections.map((c) => c.userId);
+    const userName = new Map(
+      (ids.length ? await db.select({ id: users.id, name: users.displayName }).from(users).where(and(eq(users.orgId, v.orgId), inArray(users.id, ids))) : []).map((u) => [u.id, u.name]),
+    );
+    const canDisconnectOthers = can(v, "integrations.manage");
     body = (
       <div className="space-y-6">
         {!st.configured ? (
-          <NotConfigured provider="Google Calendar" envVars={["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]}>
+          <NotConfigured provider="Google Calendar" envVars={st.missingEnv}>
             Coach calendars are not syncing. Scheduling inside Teamwork Hub works normally; sessions just won&apos;t appear in Google Calendar and Google busy time isn&apos;t imported.
           </NotConfigured>
         ) : (
-          <Callout tone="warn" title="Google OAuth credentials found — coach connection flow pending">
-            Credentials are set, but per-coach OAuth consent and token storage are not enabled in this build yet, so no calendar is connected. Nothing is being sent to Google.
+          <Callout tone="ok" title="Google Calendar is configured">
+            Each coach connects their own Google account from Schedule → Settings → Availability (“Connect Google Calendar”). Tokens are stored encrypted; nobody, including admins, can see them.
           </Callout>
         )}
         <Card>
           <CardHeader title="How sync works" />
           <CardBody className="space-y-2 text-sm text-ink-2">
-            <p>Teamwork Hub is the source of truth for sessions. Each coach&apos;s connected Google Calendar receives a copy of their sessions; edits made in Google are overwritten on the next sync.</p>
-            <p>Pushes run through the job queue with retries and exponential backoff. Google free/busy time is imported as “busy” blocks so the private-session slot finder avoids conflicts.</p>
+            <p>Teamwork Hub is the source of truth for sessions. Each connected coach gets a separate “Teamwork Hub” calendar in Google that receives a copy of their sessions; edits made there are overwritten on the next sync.</p>
+            <p>Pushes run through the job queue with retries and exponential backoff. Google free/busy time (no event details) is imported as “busy” blocks so the private-session slot finder avoids conflicts.</p>
+            <p>If Google access is revoked or expires, the connection shows <StatusBadge status="error" /> and the coach is asked to reconnect. Coaches can disconnect their own calendar; owners and admins can disconnect anyone&apos;s.</p>
           </CardBody>
         </Card>
         <Card>
@@ -317,10 +393,24 @@ export default async function ScheduleSettingsPage({ searchParams }: { searchPar
               <ul className="divide-y divide-edge text-sm">
                 {st.connections.map((c) => (
                   <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                    <span>{userName.get(c.userId) ?? "Staff member"}</span>
-                    <span className="flex items-center gap-2">
+                    <span>
+                      {userName.get(c.userId) ?? "Staff member"}
+                      <span className="block text-xs text-ink-3">
+                        {DIRECTION_LABEL[c.syncDirection] ?? c.syncDirection}
+                        {c.status === "error" && c.lastError ? ` · ${c.lastError}` : ""}
+                      </span>
+                    </span>
+                    <span className="flex flex-wrap items-center gap-2">
                       <StatusBadge status={c.status} />
                       <span className="text-xs text-ink-3">{c.lastSyncAt ? `last sync ${fmt(c.lastSyncAt, "MMM d h:mm a", tz)}` : "never synced"}</span>
+                      {(canDisconnectOthers || c.userId === v.userId) && (c.hasGrant || c.status === "connected" || c.status === "error") ? (
+                        <ActionForm action={disconnectCalendarAction}>
+                          <input type="hidden" name="connectionId" value={c.id} />
+                          <SubmitButton variant="ghost" className="min-h-11" pendingText="…" confirm="Disconnect this Google Calendar? Teamwork will stop updating it and revoke its access.">
+                            Disconnect
+                          </SubmitButton>
+                        </ActionForm>
+                      ) : null}
                     </span>
                   </li>
                 ))}
