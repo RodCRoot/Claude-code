@@ -300,26 +300,55 @@ export default async function MembershipPage({ params }: { params: Promise<{ id:
         </Card>
       ) : null}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2 [&>*]:min-w-0">
-        <Card>
-          <CardHeader title="Invoices" />
-          <CardBody>
-            {d.invoices.length === 0 ? <p className="text-sm text-ink-3">{ext ? "Invoiced by Zen Planner." : "No invoices yet."}</p> : (
-              <Table caption="Membership invoices">
-                <thead><tr><Th>Number</Th><Th>Period</Th><Th>Status</Th><Th align="right">Balance</Th></tr></thead>
-                <tbody>
-                  {d.invoices.map(({ invoice: i, money }) => (
-                    <tr key={i.id}>
-                      <Td><Link href={`/billing/invoices/${i.id}`} className="hover:underline">{i.number}</Link></Td>
-                      <Td>{fmtDate(i.periodStart)} – {fmtDate(i.periodEnd)}</Td>
-                      <Td><InvoiceStatus status={i.status} dueDate={i.dueDate} today={today} /></Td>
-                      <Td align="right"><Money minor={money.balanceMinor} currency={i.currency} /></Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            )}
-          </CardBody>
+      <div className="mt-6 grid gap-6 lg:grid-cols-3 [&>*]:min-w-0">
+        <Card className="lg:col-span-2">
+          <CardHeader title="Billing ledger" kicker={`${d.invoices.length} invoice${d.invoices.length === 1 ? "" : "s"}`} />
+          {d.invoices.length === 0 ? (
+            <CardBody>
+              <p className="text-sm text-ink-3">{ext ? "Invoiced by Zen Planner." : "No invoices yet."}</p>
+            </CardBody>
+          ) : (
+            <Table caption="Membership invoices" className="[&_table]:min-w-[600px]">
+              <thead>
+                <tr>
+                  <Th className="pl-4">Number</Th>
+                  <Th>Period</Th>
+                  <Th>Status</Th>
+                  <Th align="right">Amount</Th>
+                  <Th align="right">Paid</Th>
+                  <Th align="right" className="pr-4">Balance</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.invoices.map(({ invoice: i, money }) => (
+                  <tr key={i.id}>
+                    <Td className="pl-4"><Link href={`/billing/invoices/${i.id}`} className="font-medium hover:underline">{i.number}</Link></Td>
+                    <Td className="whitespace-nowrap">{fmtDate(i.periodStart)} – {fmtDate(i.periodEnd)}</Td>
+                    <Td><InvoiceStatus status={i.status} dueDate={i.dueDate} today={today} /></Td>
+                    <Td align="right"><Money minor={i.totalMinor} currency={i.currency} /></Td>
+                    <Td align="right"><Money minor={money.settledMinor} currency={i.currency} /></Td>
+                    <Td align="right" className="pr-4 font-semibold"><Money minor={money.balanceMinor} currency={i.currency} /></Td>
+                  </tr>
+                ))}
+              </tbody>
+              {new Set(d.invoices.map((x) => x.invoice.currency)).size === 1 ? (
+                <tfoot>
+                  <tr className="bg-th font-bold">
+                    <th scope="row" colSpan={3} className="border-t-2 border-edge px-4 py-2 text-left text-xs uppercase tracking-wide">Totals (void excluded)</th>
+                    {[
+                      d.invoices.reduce((s, x) => s + (x.invoice.status === "void" ? 0 : x.invoice.totalMinor), 0),
+                      d.invoices.reduce((s, x) => s + (x.invoice.status === "void" ? 0 : x.money.settledMinor), 0),
+                      d.invoices.reduce((s, x) => s + (x.invoice.status === "void" ? 0 : x.money.balanceMinor), 0),
+                    ].map((m, k) => (
+                      <td key={k} className={`border-t-2 border-edge px-3 py-2 text-right whitespace-nowrap ${k === 2 ? "pr-4" : ""}`}>
+                        <Money minor={m} currency={d.invoices[0].invoice.currency} />
+                      </td>
+                    ))}
+                  </tr>
+                </tfoot>
+              ) : null}
+            </Table>
+          )}
         </Card>
         <Card>
           <CardHeader title="History" />

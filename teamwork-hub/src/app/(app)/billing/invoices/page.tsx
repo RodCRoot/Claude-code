@@ -9,6 +9,7 @@ import { formatMoney } from "@/lib/money";
 import { fmtDate, todayLocal } from "@/lib/time";
 import { createInvoiceAction } from "../actions";
 import { BillingTabs, InvoiceStatus, Money, requireBillingViewer } from "../_components";
+import { Segmented } from "@/components/profile/studio";
 
 export const metadata = { title: "Invoices" };
 
@@ -24,24 +25,23 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader kicker="Billing" title={staff ? "Invoices" : "Invoices & receipts"} />
       <BillingTabs current="invoices" staff={staff} />
-      <nav aria-label="Filter invoices" className="mb-4 flex flex-wrap gap-2">
-        {FILTERS.map((f) => (
-          <Link
-            key={f}
-            href={f === "all" ? "/billing/invoices" : `/billing/invoices?status=${f}`}
-            aria-current={status === f ? "page" : undefined}
-            className={`rounded-full border px-3 py-1 text-xs font-medium ${status === f ? "border-brand bg-brand text-brand-ink" : "border-edge text-ink-2 hover:bg-surface-2"}`}
-          >
-            {f.replace("_", " ")}
-          </Link>
-        ))}
-      </nav>
-      <Card>
-        <CardBody className="pt-4">
+      <section aria-label="Invoice ledger" className="min-w-0 overflow-hidden rounded-md border border-edge bg-surface shadow-[0_1px_3px_rgb(16_24_40/0.06)]">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-edge bg-th px-3 py-2.5 sm:px-4">
+          <Segmented
+            label="Filter invoices"
+            items={FILTERS.map((f) => ({ href: f === "all" ? "/billing/invoices" : `/billing/invoices?status=${f}`, label: f.replace("_", " "), current: status === f }))}
+          />
+          <p className="text-xs text-ink-2">
+            <strong className="tabular">{rows.length}</strong> invoice{rows.length === 1 ? "" : "s"}
+          </p>
+        </div>
+        <div>
           {rows.length === 0 ? (
-            <EmptyState title="No invoices" />
+            <div className="p-4">
+              <EmptyState title="No invoices" />
+            </div>
           ) : (
-            <Table caption="Invoices">
+            <Table caption="Invoices" className="[&_table]:min-w-[720px]">
               <thead>
                 <tr>
                   <Th>Number</Th>
@@ -72,10 +72,29 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                   </tr>
                 ))}
               </tbody>
+              {new Set(rows.map((r) => r.invoice.currency)).size === 1 ? (
+                <tfoot>
+                  <tr className="bg-th font-bold">
+                    <th scope="row" colSpan={staff ? 4 : 3} className="border-t-2 border-edge px-3 py-2 text-left text-xs uppercase tracking-wide">
+                      Totals · {rows.filter((r) => r.invoice.status !== "void").length} invoices (void excluded)
+                    </th>
+                    {[
+                      rows.reduce((s, r) => s + (r.invoice.status === "void" ? 0 : r.invoice.totalMinor), 0),
+                      rows.reduce((s, r) => s + (r.invoice.status === "void" ? 0 : r.money.settledMinor), 0),
+                      rows.reduce((s, r) => s + (r.invoice.status === "void" ? 0 : r.money.pendingMinor), 0),
+                      rows.reduce((s, r) => s + (r.invoice.status === "void" ? 0 : r.money.balanceMinor), 0),
+                    ].map((m, i) => (
+                      <td key={i} className="border-t-2 border-edge px-3 py-2 text-right whitespace-nowrap">
+                        <Money minor={m} currency={rows[0].invoice.currency} />
+                      </td>
+                    ))}
+                  </tr>
+                </tfoot>
+              ) : null}
             </Table>
           )}
-        </CardBody>
-      </Card>
+        </div>
+      </section>
       {staff ? <NewInvoice orgId={v.orgId} today={today} /> : null}
     </>
   );
