@@ -1,5 +1,6 @@
 import type { SeedCtx } from "./context";
 import { seedScheduling } from "./scheduling";
+import { seedTraining } from "./training";
 
 /**
  * Module seed registry, run in order after the core identity seed.
@@ -8,4 +9,5 @@ import { seedScheduling } from "./scheduling";
 export const moduleSeeds: [string, (ctx: SeedCtx) => Promise<void>][] = [
   ["scheduling", seedScheduling],
   ["documents", (ctx) => import("./documents").then((m) => m.seedDocuments(ctx))],
+  ["training", seedTraining],
 ];
