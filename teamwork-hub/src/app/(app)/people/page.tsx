@@ -8,6 +8,7 @@ import { searchPeople, type PeopleFilter } from "@/lib/people/queries";
 import { Avatar, Badge, ButtonLink, Card, DemoBadge, EmptyState, Input, PageHeader, Select, StatusBadge, Table, Td, Th } from "@/components/ui";
 import { PeopleTabs } from "@/components/people-tabs";
 import { ROLE_LABEL } from "@/lib/nav";
+import { formatCustomValue, listFieldDefs } from "@/lib/people/custom-fields";
 
 export const metadata = { title: "People" };
 
@@ -32,11 +33,18 @@ function age(dob: string | null) {
 export default async function PeoplePage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const v = await requireStaff();
   const sp = await searchParams;
+  const listDefs = (await listFieldDefs(db, v.orgId)).filter((d) => d.showInList).slice(0, 4);
+  const filterDefs = listDefs.filter((d) => d.fieldType === "select" || d.fieldType === "boolean");
+  const cfOptions = filterDefs.flatMap((d) =>
+    (d.fieldType === "boolean" ? [["true", "Yes"], ["false", "No"]] : (d.options ?? []).map((o) => [o, o])).map(([val, lbl]) => ({ value: `${d.key}:${val}`, label: `${d.label}: ${lbl}` })),
+  );
+  const cfSel = cfOptions.find((o) => o.value === sp.cf)?.value;
   const filter: PeopleFilter = {
     q: sp.q,
     kind: (KINDS.find((k) => k.key === sp.kind)?.key ?? "athletes") as PeopleFilter["kind"],
     groupId: sp.group || undefined,
     tagId: sp.tag || undefined,
+    custom: cfSel ? { key: cfSel.slice(0, cfSel.indexOf(":")), value: cfSel.slice(cfSel.indexOf(":") + 1) } : undefined,
     page: Number(sp.page ?? 1) || 1,
   };
   const [result, groupRows, tagRows] = await Promise.all([
@@ -47,7 +55,7 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
   const pages = Math.max(1, Math.ceil(result.total / result.pageSize));
   const qs = (patch: Record<string, string | number | undefined>) => {
     const p = new URLSearchParams();
-    const merged = { q: filter.q, kind: filter.kind, group: filter.groupId, tag: filter.tagId, page: filter.page, ...patch };
+    const merged = { q: filter.q, kind: filter.kind, group: filter.groupId, tag: filter.tagId, cf: cfSel, page: filter.page, ...patch };
     for (const [k, val] of Object.entries(merged)) if (val !== undefined && val !== "") p.set(k, String(val));
     return `/people?${p}`;
   };
@@ -62,7 +70,7 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
       />
       <PeopleTabs current="directory" showLeads={can(v, "crm.manage")} />
 
-      <form role="search" className="mb-4 grid gap-3 sm:grid-cols-[1fr_auto_auto_auto_auto]" action="/people">
+      <form role="search" className={`mb-4 grid gap-3 ${cfOptions.length ? "sm:grid-cols-[1fr_auto_auto_auto_auto_auto]" : "sm:grid-cols-[1fr_auto_auto_auto_auto]"}`} action="/people">
         <label className="sr-only" htmlFor="q">
           Search people
         </label>
@@ -90,6 +98,21 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
             </option>
           ))}
         </Select>
+        {cfOptions.length ? (
+          <>
+            <label className="sr-only" htmlFor="cf">
+              Custom field
+            </label>
+            <Select id="cf" name="cf" defaultValue={cfSel ?? ""}>
+              <option value="">Any custom field</option>
+              {cfOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+          </>
+        ) : null}
         <button className="h-10 rounded-lg bg-brand px-4 text-sm font-medium text-brand-ink" type="submit">
           Search
         </button>
@@ -143,6 +166,9 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
                 <Th>Type</Th>
                 <Th>Sport / level</Th>
                 <Th>Contact</Th>
+                {listDefs.map((d) => (
+                  <Th key={d.id}>{d.label}</Th>
+                ))}
                 <Th>Status</Th>
               </tr>
             </thead>
@@ -172,6 +198,11 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
                     <div className="max-w-56 truncate">{r.email ?? (v.role === "coach" ? <span className="text-ink-3">hidden</span> : "—")}</div>
                     {r.phone ? <div className="text-xs text-ink-3">{r.phone}</div> : null}
                   </Td>
+                  {listDefs.map((d) => (
+                    <Td key={d.id} className="text-ink-2">
+                      {formatCustomValue(d, (r.customFields as Record<string, unknown>)?.[d.key]) ?? "—"}
+                    </Td>
+                  ))}
                   <Td>
                     <StatusBadge status={r.athleteId && r.athleteActive === false ? "inactive" : r.status} />
                   </Td>

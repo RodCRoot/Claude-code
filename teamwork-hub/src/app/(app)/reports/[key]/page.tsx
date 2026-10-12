@@ -6,6 +6,10 @@ import { can } from "@/lib/authz/policy";
 import { reportByKey, type ReportColumn } from "@/lib/reports";
 import { addDaysYmd, fmt, fmtDate, todayLocal } from "@/lib/time";
 import { formatMoney } from "@/lib/money";
+import { chartFor } from "@/lib/report-charts";
+import { ChartFigure } from "@/components/charts/chart-figure";
+import { ReportBarChart } from "@/components/charts/report-chart";
+import { fmtChartValue } from "@/components/charts/format";
 import { ButtonLink, Callout, Card, CardBody, EmptyState, Input, PageHeader, Stat, Table, Td, Th } from "@/components/ui";
 
 export const metadata = { title: "Report" };
@@ -42,6 +46,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const to = valid(sp.to) ?? today;
   const from = valid(sp.from) ?? addDaysYmd(to, -29);
   const result = from > to ? null : await def.run(db, v.orgId, { from, to, tz });
+  const chart = result ? await chartFor(def.key, db, v.orgId, { from, to, tz }, result) : null;
   return (
     <>
       <PageHeader
@@ -89,6 +94,24 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
                 <Stat key={s.label} label={s.label} value={s.kind === "money" ? formatMoney(Number(s.value)) : s.value} />
               ))}
             </div>
+          ) : null}
+          {chart ? (
+            <Card className="mb-5">
+              <CardBody className="pt-4">
+                <ChartFigure
+                  title={chart.title}
+                  unit={chart.unitLabel}
+                  range={def.key === "receivables" ? "As of today" : `${fmtDate(from)} – ${fmtDate(to)}`}
+                  summary={chart.summary}
+                  note={chart.note}
+                  legend={chart.series.map((s, i) => ({ label: s.label, slot: i, kind: "rect" as const }))}
+                  columns={[chart.xLabel, ...chart.series.map((s) => s.label)]}
+                  rows={chart.data.map((d) => [d.label, ...chart.series.map((s) => fmtChartValue(d[s.key], chart.unit))])}
+                >
+                  <ReportBarChart data={chart.data} series={chart.series} unit={chart.unit} layout={chart.layout} />
+                </ChartFigure>
+              </CardBody>
+            </Card>
           ) : null}
           <Card>
             <CardBody className="pt-4">

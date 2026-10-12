@@ -33,6 +33,8 @@ export type PeopleFilter = {
   kind?: "all" | "athletes" | "guardians" | "staff" | "leads" | "inactive";
   groupId?: string;
   tagId?: string;
+  /** Custom field equality filter (key must be a defined field; caller validates). */
+  custom?: { key: string; value: string };
   page?: number;
 };
 
@@ -68,6 +70,7 @@ export async function searchPeople(tx: Tx, v: Viewer, f: PeopleFilter) {
   if (kind === "leads") conds.push(sql`(${people.status} in ('lead','prospect') or exists (select 1 from leads l where l.person_id = ${people.id} and l.converted_at is null))`);
   if (f.groupId) conds.push(sql`exists (select 1 from athletes a join group_members gm on gm.athlete_id = a.id where a.person_id = ${people.id} and gm.group_id = ${f.groupId})`);
   if (f.tagId) conds.push(sql`exists (select 1 from person_tags pt where pt.person_id = ${people.id} and pt.tag_id = ${f.tagId})`);
+  if (f.custom && /^[a-z][a-z0-9_]{0,39}$/.test(f.custom.key)) conds.push(sql`(${people.customFields} ->> ${f.custom.key}) = ${f.custom.value}`);
 
   if (scope !== "all") {
     // Coaches: their athletes, plus guardians of those athletes.
@@ -92,6 +95,7 @@ export async function searchPeople(tx: Tx, v: Viewer, f: PeopleFilter) {
       status: people.status,
       dob: people.dateOfBirth,
       isDemo: people.isDemo,
+      customFields: people.customFields,
       athleteId: athletes.id,
       athleteActive: athletes.active,
       sport: athletes.sport,
@@ -227,8 +231,10 @@ export async function getPersonDetail(tx: Tx, v: Viewer, personId: string) {
     : [];
 
   const redactContacts = v.role === "coach" && !athlete;
+  // Raw custom values may include staff-only fields; families get them via customFieldsForView.
+  const safePerson = isStaff(v) ? person : { ...person, customFields: {} };
   return {
-    person: redactContacts ? { ...person, email: null, phone: null } : person,
+    person: redactContacts ? { ...safePerson, email: null, phone: null } : safePerson,
     athlete: athlete ?? null,
     login: ["owner", "admin"].includes(v.role) ? login ?? null : null,
     caps: [...caps] as string[],

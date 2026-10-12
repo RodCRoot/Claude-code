@@ -14,10 +14,11 @@
   --ink: #0f172a;
   --ink-2: #3b4658;
   --ink-3: #5d6779;
-  --ok: #15803d;
-  --warn: #b45309;
+  /* ok/warn are one step darker than Tailwind 700 so status text stays >= 4.5:1 on its own tinted badge background. */
+  --ok: #166534;
+  --warn: #92400e;
   --bad: #b91c1c;
-  --info: #0369a1;
+  --info: #075985;
 }
 
 @media (prefers-color-scheme: dark) {

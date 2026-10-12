@@ -19,6 +19,7 @@ import {
   updateGuardianship,
   updatePerson,
 } from "@/lib/people/mutations";
+import { updatePersonCustomFields } from "@/lib/people/custom-fields";
 
 const checkbox = (fd: FormData, k: string) => fd.get(k) === "on" || fd.get(k) === "true";
 
@@ -144,4 +145,13 @@ export const tagAction = safeAction(async (_prev: ActionState, fd: FormData) => 
   await db.transaction((tx) => setTag(tx, v, id, String(fd.get("tag") ?? ""), fd.get("op") !== "remove"));
   revalidatePath(`/people/${id}`);
   return { ok: true };
+});
+
+export const updateCustomFieldsAction = safeAction(async (_prev: ActionState, fd: FormData) => {
+  const v = await requireViewer();
+  const id = String(fd.get("personId"));
+  const res = await db.transaction((tx) => updatePersonCustomFields(tx, v, id, formToObject(fd)));
+  revalidatePath(`/people/${id}`);
+  revalidatePath("/people");
+  return { ok: true, message: res.changed ? "Custom fields saved." : "No changes." };
 });

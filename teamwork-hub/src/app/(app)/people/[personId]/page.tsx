@@ -39,6 +39,8 @@ import {
   updatePersonAction,
 } from "../actions";
 import { AddGuardianForm, GuardianEditor } from "./guardian-forms";
+import { CustomFieldsCard } from "./custom-fields-card";
+import { customFieldsForView } from "@/lib/people/custom-fields";
 import { attendanceHistory } from "@/lib/scheduling";
 import { AttendanceHistoryPanel } from "@/lib/scheduling/components/attendance-history";
 
@@ -271,6 +273,8 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
                 </CardBody>
               </Card>
             ) : null}
+
+            <CustomFieldsCard personId={personId} items={await customFieldsForView(db, v, personId)} editable={manage} settingsLink={can(v, "settings.manage")} />
 
             {athlete ? (
               <Card>

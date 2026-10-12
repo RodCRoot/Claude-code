@@ -9,6 +9,7 @@ export function SettingsTabs({ current }: { current: string }) {
         tabs={[
           { key: "org", href: "/settings", label: "Organization & policies" },
           { key: "users", href: "/settings/users", label: "Users & roles" },
+          { key: "custom-fields", href: "/settings/custom-fields", label: "Custom fields" },
           { key: "security", href: "/settings/security", label: "My security" },
           { key: "integrations", href: "/settings/integrations", label: "Integrations" },
           { key: "audit", href: "/settings/audit", label: "Audit log" },

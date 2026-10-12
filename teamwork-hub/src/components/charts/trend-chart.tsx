@@ -36,7 +36,7 @@ export function TrendChart({
   return (
     <div style={{ height }} aria-hidden>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
+        <LineChart accessibilityLayer={false} data={data} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
           <CartesianGrid stroke={t.grid} vertical={false} />
           <XAxis dataKey="x" tick={{ fill: t.axis, fontSize: 11 }} tickLine={false} axisLine={{ stroke: t.grid }} minTickGap={24} tickFormatter={(d: string) => (/^\d{4}-\d{2}-\d{2}$/.test(d) ? d.slice(5) : d)} />
           <YAxis tick={{ fill: t.axis, fontSize: 11 }} tickLine={false} axisLine={false} width={48} domain={yDomain ?? ["auto", "auto"]} tickFormatter={(v: number) => (Math.abs(v) >= 1000 ? compact.format(v) : String(Number(v.toFixed(digits))))} />

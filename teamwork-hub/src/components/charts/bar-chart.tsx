@@ -9,7 +9,7 @@ export function ColumnChart({ data, unit, label, height = 200, digits = 0 }: { d
   return (
     <div style={{ height }} aria-hidden>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 8, right: 8, bottom: 4, left: 4 }} barCategoryGap={2}>
+        <BarChart accessibilityLayer={false} data={data} margin={{ top: 8, right: 8, bottom: 4, left: 4 }} barCategoryGap={2}>
           <CartesianGrid stroke={t.grid} vertical={false} />
           <XAxis dataKey="x" tick={{ fill: t.axis, fontSize: 11 }} tickLine={false} axisLine={{ stroke: t.grid }} minTickGap={20} tickFormatter={(d: string) => (/^\d{4}-\d{2}-\d{2}$/.test(d) ? d.slice(5) : d)} />
           <YAxis tick={{ fill: t.axis, fontSize: 11 }} tickLine={false} axisLine={false} width={44} tickFormatter={(v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}K` : String(v))} />

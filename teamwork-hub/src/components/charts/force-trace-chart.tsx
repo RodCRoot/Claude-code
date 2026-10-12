@@ -9,7 +9,7 @@ export function ForceTraceChart({ points, height = 260 }: { points: { t: number;
   return (
     <div style={{ height }} aria-hidden>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={points} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
+        <LineChart accessibilityLayer={false} data={points} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
           <CartesianGrid stroke={t.grid} vertical={false} />
           <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tick={{ fill: t.axis, fontSize: 11 }} tickLine={false} axisLine={{ stroke: t.grid }} tickFormatter={(v: number) => `${v.toFixed(1)} s`} />
           <YAxis tick={{ fill: t.axis, fontSize: 11 }} tickLine={false} axisLine={false} width={52} tickFormatter={(v: number) => `${Math.round(v)}`} />

@@ -2,6 +2,7 @@
  * Teamwork Hub component kit — server-component friendly, accessible defaults.
  * Interactive form helpers live in ./forms.tsx (client).
  */
+import { cloneElement, isValidElement } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 
@@ -136,6 +137,12 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return <select {...props} className={cn(fieldBase, "h-10", props.className)} />;
 }
 
+/** Point a single control at its hint/error text (unless the caller already set aria-describedby). */
+function describe(children: React.ReactNode, id: string | undefined) {
+  if (!id || !isValidElement<{ "aria-describedby"?: string }>(children) || children.props["aria-describedby"]) return children;
+  return cloneElement(children, { "aria-describedby": id });
+}
+
 /** Label + control + hint/error, with ids wired for screen readers. */
 export function Field({
   label,
@@ -160,7 +167,7 @@ export function Field({
         {label}
         {required ? <span className="text-bad" aria-hidden> *</span> : null}
       </label>
-      {children}
+      {describe(children, hint && !error ? `${htmlFor}-hint` : error ? `${htmlFor}-error` : undefined)}
       {hint && !error ? (
         <p id={`${htmlFor}-hint`} className="text-xs text-ink-3">
           {hint}
@@ -177,7 +184,8 @@ export function Field({
 
 export function Table({ children, className, caption }: { children: React.ReactNode; className?: string; caption?: string }) {
   return (
-    <div className={cn("relative overflow-x-auto", className)}>
+    // Focusable so keyboard users can scroll wide tables (WCAG 2.1.1); labelled by the caption.
+    <div className={cn("relative overflow-x-auto", className)} tabIndex={0} role={caption ? "region" : undefined} aria-label={caption}>
       <table className="w-full min-w-[560px] border-collapse text-sm">
         {caption ? <caption className="sr-only">{caption}</caption> : null}
         {children}
@@ -189,7 +197,7 @@ export function Table({ children, className, caption }: { children: React.ReactN
 export function Th({ children, className, align }: { children?: React.ReactNode; className?: string; align?: "left" | "right" | "center" }) {
   return (
     <th scope="col" className={cn("border-b border-edge px-3 py-2 text-xs font-semibold uppercase tracking-wide text-ink-3", align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left", className)}>
-      {children}
+      {children ?? <span className="sr-only">Actions</span>}
     </th>
   );
 }
