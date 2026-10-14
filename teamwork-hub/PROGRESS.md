@@ -91,3 +91,13 @@ Verified:
 - `pnpm test` 594/594; typecheck and lint clean; build OK.
 - Playwright 252/252: auth, CSP, and axe for every role at desktop and mobile.
 - Training offline/builder suite 4/4.
+
+## Checkpoint 8 — Planning brief reconciled (2026-10-14)
+Rod's planning brief was checked against the build. Most of it was already implemented; the gaps were filled:
+- `docs/REPLACEMENT-PLAN.md`: four separate replacement decisions with cutover criteria; Hawkin capture is not replaceable by this project.
+- `docs/HAWKIN-CONNECTORS.md`: every documented Hawkin route evaluated (public docs only; account not inspected).
+- `docs/VALIDATION.md`: brief scenarios mapped to the real tests, with gaps listed.
+- `DECISIONS.md` opens with the five decisions that change architecture or migration.
+- Code: performance trends exclude and disclose points from a different protocol, device, unit or aggregation (`science/comparability.ts`); staff MFA policy extracted and tested, fixing a blank page after login when MFA is required; Hawkin assessment-date, explicit-window, includeInactive and in-place-update behaviour now asserted by tests.
+
+Verified: `pnpm test` 611/611; typecheck, lint, build clean; Playwright 253/253 (now including `staff-mfa.spec.ts`); training offline/builder 4/4.
