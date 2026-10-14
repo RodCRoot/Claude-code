@@ -67,6 +67,20 @@ Missing provider variables leave that integration in an honest **not configured*
 
 Modular monolith: Next.js 16 App Router (server components + server actions + route handlers), TypeScript, Tailwind 4, Drizzle ORM on PostgreSQL 16, Postgres-backed job queue, object storage on local disk or an S3-compatible bucket (`STORAGE_BACKEND`). Conventions for contributors are in [`AGENTS.md`](AGENTS.md); design decisions in [`DECISIONS.md`](DECISIONS.md); per-module workflows, formulas, and provider research in `docs/modules/`.
 
+## Documents
+
+| Document | What it covers |
+|---|---|
+| [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md) | What works, what was verified, what is missing, with evidence levels |
+| [`DECISIONS.md`](DECISIONS.md) | The five decisions that change the architecture or migration, implementation decisions, open questions for Rod |
+| [`BLOCKERS.md`](BLOCKERS.md) | Credentials and access still needed |
+| [`NEXT_STEPS.md`](NEXT_STEPS.md) | Prioritized backlog and resume prompt |
+| [`docs/REPLACEMENT-PLAN.md`](docs/REPLACEMENT-PLAN.md) | Four separate replacement decisions (Zen Planner operations, TeamBuildr training, Hawkin historical data, Hawkin capture) with cutover rules |
+| [`docs/HAWKIN-CONNECTORS.md`](docs/HAWKIN-CONNECTORS.md) | Evaluation of every Hawkin data route (REST API, Python and R packages, Power Query, Excel, Sheets, Cloud exports) and the recommended import approach |
+| [`docs/VALIDATION.md`](docs/VALIDATION.md) | Risk scenarios mapped to the tests that cover them, with the gaps listed |
+| [`docs/DEPLOY.md`](docs/DEPLOY.md), [`docs/BACKUP-RESTORE.md`](docs/BACKUP-RESTORE.md), [`docs/SECURITY-REVIEW.md`](docs/SECURITY-REVIEW.md), [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md) | Operations, backups, security findings, accessibility |
+| `docs/modules/*.md` | Per-module workflows, formulas, and provider research |
+
 Key guarantees:
 - **Authorization is server-side** in one policy module (`src/lib/authz/policy.ts`). Guardian permissions are per relationship; payment access never implies health-data access; coaches see only assigned athletes; kiosks see first name + last initial.
 - **Integrity in the database**: exclusion constraints prevent double-booking a coach or exclusive room; partial unique indexes allow one live booking per athlete per session; credit balances are row-locked and CHECK-constrained; audit events and signatures are append-only (triggers); published form versions are immutable.

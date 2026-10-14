@@ -1,5 +1,36 @@
 # Decisions
 
+## Five decisions that change the architecture or migration
+
+These are the decisions whose answer changes what gets built or how the migration runs. Where the code already takes a default, that default is named so Rod can confirm or overturn it. Details and evidence are in `docs/REPLACEMENT-PLAN.md`.
+
+1. **Which subscriptions are actually in use and intended for retirement.**
+   Decision: confirm the list of paid systems, their tiers and renewal dates. Zen Planner Studio is confirmed in use (the scoreboard reads from it). PushPress, the TeamBuildr tier and any Hawkin software tier are unknown; PushPress is referenced only as a feature model for the CRM module.
+   Recommended default: treat Zen Planner as the only confirmed retirement target; treat TeamBuildr as a candidate gated on the essentials list; treat Hawkin as never a retirement target (see decision 3). Do not assume PushPress is installed.
+   Consequence: the migration plan has one confirmed cutover (Zen Planner) and one conditional one (TeamBuildr). If PushPress turns out to be in use, its data would need its own import schema and identity review, which do not exist today.
+
+2. **Stripe as the primary processor, with PayPal and Venmo for one-time payments only.**
+   Decision: which provider owns recurring billing.
+   Recommended default (what the code does): Stripe Billing or PayPal Subscriptions may hold a recurring membership, but the UI offers Venmo for one-time invoices only because recurring Venmo is not documented by PayPal (`docs/modules/billing.md`, "Venmo decision"). Stripe is the processor the cutover plan and the sandbox checklist are written around.
+   Consequence: payers re-enter payment details on hosted checkout (or Rod requests a PAN migration through Stripe's Data Migrations team). Every recurring charge has exactly one owner, enforced by DB checks and the renewal job. Choosing PayPal Subscriptions as primary instead would be supported by the code but would need its own sandbox verification first.
+
+3. **Hawkin stays the capture system; the Hub syncs read-only.**
+   Decision: whether the Hub ever replaces force-plate acquisition.
+   Recommended default (what the code does): no. The Hub holds a read-only API client and a CSV import; it never writes to Hawkin and never talks to a plate. Metrics imported from Hawkin keep `defined_by = hawkin`; Teamwork-derived values carry their own formula keys.
+   Consequence: the Hawkin subscription cannot be cancelled by this project under any outcome. The dependencies that would have to be resolved first are listed in `docs/REPLACEMENT-PLAN.md`, decision 4. Historical import and ongoing sync are valuable on their own but do not change this.
+
+4. **TeamBuildr retirement gate: which features must exist first.**
+   Decision: what has to be true before the TeamBuildr subscription ends.
+   Recommended default: the essentials list in `docs/REPLACEMENT-PLAN.md`, decision 2: program building and assignment, athlete logging on phones and weight-room tablets with offline tolerance (checked on real devices), maxes with percentage loading, coach review, a confirmed historical import of maxes and workout logs, and a comparison period signed off by the coaches. Historical import alone is not enough.
+   Consequence: three of those items are not done (device check, confirmed import mappings, comparison period). Until they are, TeamBuildr stays. Nice-to-have items (calendar-wide drag, native app, full report catalogue, VBT UI) do not gate retirement.
+
+5. **Family discount and the other policy confirmations.**
+   Decision: the 13 membership and payroll policy questions listed under "Open decisions for Rod (Teamwork membership policy, wave 4)" below, starting with the family discount percentage (10% is in use and flagged; one source says 15%).
+   Recommended default (what the code does): every value is a Settings entry with a "Needs confirmation" badge until confirmed; the seeded plans are labelled samples; the discount is applied by `syncFamilyDiscount` at the saved percentage.
+   Consequence: no member can be cut over at a real price until these are answered, because the renewal job would invoice sample amounts. Answers are Settings changes, not code, so they do not block anything else.
+
+## Implementation decisions
+
 Reversible implementation choices made autonomously during the build. Newest last.
 
 | # | Decision | Why | Reversal cost |

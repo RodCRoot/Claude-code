@@ -4,6 +4,17 @@ Status values: **verified locally** (automated tests and/or browser check agains
 
 Evidence levels for reference workflows: **public docs** (vendor marketing/help pages), **existing Teamwork integration** (field knowledge from `teamwork-scoreboard`), **account observation** (none yet: account access is blocked, see BLOCKERS.md).
 
+Rod's planning brief uses four evidence labels. They map onto the levels above as follows; rows below keep the original wording.
+
+| Brief label | Meaning | Maps to |
+|---|---|---|
+| **publicly documented** | Stated on a vendor's public page, with the URL and the date it was checked | = **public docs** (and **existing Teamwork integration** where the scoreboard's field knowledge is the source) |
+| **account-verified** | Observed in Teamwork's own vendor account (Zen Planner, TeamBuildr, Hawkin Cloud) or in a provider sandbox | = **account observation**; currently none. No row carries this label yet |
+| **proposed Teamwork functionality** | Something the Hub could do but does not do today; not implemented, or implemented without any test or browser check | corresponds to status **not implemented**, and to items listed under Gaps or in `NEXT_STEPS.md` |
+| **unresolved dependency** | Needs something outside this repository before it can be verified: credentials, an account export, a real device, a policy answer, or a vendor fact that no public page states | corresponds to status **blocked** or **implemented, configuration required**, and to every item in `BLOCKERS.md` |
+
+The replacement decisions that use these labels are in `docs/REPLACEMENT-PLAN.md`; the Hawkin route evaluation is in `docs/HAWKIN-CONNECTORS.md`; scenario-to-test mapping is in `docs/VALIDATION.md`.
+
 Test evidence refers to files in `tests/` (Vitest, real Postgres) and `e2e/` (Playwright). Module docs with formulas, policies, and research are in `docs/modules/`.
 
 **No provider integration is verified with a sandbox yet** (no credentials were available).
