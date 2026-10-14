@@ -37,6 +37,7 @@ export function ReportBody({ snapshot, sections, summary }: { snapshot: ReportSn
                   <tr key={k.metric}>
                     <Td>
                       {k.metric} <span className="text-xs text-ink-3">({k.unit})</span> <Badge variant={k.source === "hawkin" ? "yellow" : "neutral"}>{VENDOR_LABEL[k.source] ?? k.source}</Badge>
+                      {k.excludedNote ? <div className="text-xs text-ink-3">{k.excludedNote}</div> : null}
                     </Td>
                     <Td align="right">
                       {n(k.latest, k.precision)}

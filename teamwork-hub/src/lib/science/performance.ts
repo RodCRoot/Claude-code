@@ -37,7 +37,7 @@ export async function performanceSummary(tx: Tx, v: Viewer, athleteId: string, t
     health = { readinessMean: r ? mean([...r.values()]) : null, checkins: r ? [...r.values()].filter((x) => x !== undefined).length : 0, days: 28, recentBody: body };
   }
   return {
-    kpis: series.filter((s) => s.points.some((p) => isNum(p.value))),
+    kpis: series.filter((s) => s.points.some((p) => isNum(p.value)) || s.excludedPoints.length),
     strength: prs,
     habits,
     attendance,

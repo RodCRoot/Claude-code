@@ -17,7 +17,7 @@ export const DEFAULT_SECTIONS: ReportSections = { kpis: true, strength: true, ha
 export type ReportSnapshot = {
   generatedAt: string;
   period: { start: string; end: string };
-  kpis: { metric: string; unit: string; source: string; precision: number; higherIsBetter: boolean | null; latest: number | null; latestDate: string | null; baseline: number | null; target: number | null; changePct: number | null; sessions: number }[];
+  kpis: { metric: string; unit: string; source: string; precision: number; higherIsBetter: boolean | null; latest: number | null; latestDate: string | null; baseline: number | null; target: number | null; changePct: number | null; sessions: number; /** Present when results measured a different way were left out of the comparison. */ excludedNote?: string }[];
   strength: { exercise: string; value: number; unit: string; date: string; method: string; prInPeriod: boolean }[];
   habits: { name: string; adherencePct: number | null; expected: number; done: number; partial: number; missed: number; noCheckin: number; streak: number }[];
   attendance: { attended: number; noShow: number; ratePct: number | null } | null;
@@ -52,6 +52,7 @@ export async function assembleSnapshot(tx: Tx, v: Viewer, athleteId: string, sta
         target: s.target?.value ?? null,
         changePct: s.changePct,
         sessions: s.points.length,
+        ...(s.excluded.length ? { excludedNote: `${s.excludedPoints.length} result(s) measured a different way were not compared: ${s.excluded.map((e) => e.reason).join(" ")}` } : {}),
       })),
     strength: prs.map((p) => ({ exercise: p.exercise, value: p.best.value, unit: p.best.unit, date: p.best.date, method: p.best.method, prInPeriod: p.prInPeriod })),
     habits: habits.map((h) => ({ name: h.habit.name, adherencePct: h.adherence.adherencePct, expected: h.adherence.expected, done: h.adherence.done, partial: h.adherence.partial, missed: h.adherence.missed, noCheckin: h.adherence.noCheckin, streak: h.streak })),

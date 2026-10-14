@@ -28,7 +28,7 @@ Security review: see `docs/SECURITY-REVIEW.md` (10 findings fixed with regressio
 | Person ≠ login ≠ athlete ≠ guardian ≠ household ≠ payer; no auto-merge | verified locally | `people.test.ts`, `imports.test.ts`, `crm.test.ts`, e2e duplicate flow | — |
 | Server-side authorization (owner/admin/operations/coach/guardian/athlete/kiosk), per-guardian flags, org boundary | verified locally | `authz.test.ts`, every module test file, e2e `auth-and-access` | Row-level security in Postgres not added (app-layer enforcement only) |
 | Sessions (hashed, revocable), lockout, TOTP MFA, invites/reset links, role changes revoke sessions | verified locally | `reports-settings.test.ts`, e2e | Email delivery of invites needs an email provider (links are shown once to staff) |
-| Staff MFA enforcement (org policy) | implemented (manual check) | — | Not covered by an automated test |
+| Staff MFA enforcement (org policy) | verified locally | `security.test.ts` (`shouldRequireMfa` policy per role/path, org settings switch), `e2e/staff-mfa.spec.ts` (coach redirected to enrol, guardian not; run with `--workers=1`) | — |
 | Audit log (append-only trigger), audit UI | verified locally | trigger in `0001`, used across modules | — |
 | Security headers, nonce-based CSP, no-store caching for private pages, dev role switcher disabled outside demo, optional staging password gate | verified locally | `e2e/csp.spec.ts` (0 violations across all roles on the production build), e2e redirect test | — |
 | Migrations, constraints (exclusion, partial unique, CHECK, immutability triggers) | verified locally | all DB tests | — |
@@ -128,10 +128,11 @@ Security review: see `docs/SECURITY-REVIEW.md` (10 findings fixed with regressio
 | Body heat map (front/back SVG + accessible entry, history, coach review queue + generic task) | verified locally | `science.test.ts`, `connected-flows.test.ts` | — |
 | Habits (assignments, check-ins, adherence, streaks; missed ≠ missing) | verified locally | `science.test.ts` | — |
 | KPI tracker (definitions, protocols, trial selection, baselines, targets, group dashboard) | verified locally | `science.test.ts` | — |
+| Comparability disclosure: trends, baselines and change % only use sessions measured the same way as the latest result (test type, protocol, source/calculation version, exact unit conversion, aggregation level, body mass for relative metrics); mismatches are listed, never merged or converted | verified locally | `science-comparability.test.ts` (pure rules + two-protocol trend through series, progress view and report snapshot) | — |
 | Load monitoring (`srpe_load_v1` AU, `acwr_rolling_v1` with coverage threshold, monotony/strain) | verified locally | `science-formulas.test.ts` | — |
 | Volume tracker (tonnage rules, unit conversion, intensity zones vs dated max) | verified locally | `science.test.ts` | — |
 | Wearables (normalized schema, CSV/manual import, missingness) | implemented (file/manual only) | `science.test.ts` | No live vendor APIs (OAuth per vendor needed) |
-| Force-plate dashboard (trials, aggregates separate, baselines, SWC band, asymmetry, raw force-time plot) | verified locally | `science.test.ts` | — |
+| Force-plate dashboard (trials, aggregates separate, baselines, SWC band, asymmetry, raw force-time plot, comparability notice) | verified locally | `science.test.ts`, `science-comparability.test.ts` | — |
 | Coach-reviewed parent progress reports (health sections opt-in + permission-gated) | verified locally | `science.test.ts` | No PDF/email delivery of reports |
 
 ## Imports, Hawkin, exports
@@ -142,7 +143,7 @@ Security review: see `docs/SECURITY-REVIEW.md` (10 findings fixed with regressio
 | Zen Planner schemas (members, family links, memberships, attendance, documents index) | implemented, configuration required | fixtures in `fixtures/` | All column mappings unverified until checked against a real export |
 | TeamBuildr schemas (maxes, workout log, questionnaire) | implemented, configuration required | fixtures | Mappings unverified; no public API (by research) |
 | Hawkin CSV import (tests vs averages kept separate) | verified locally (fixtures) | `imports.test.ts` | Cloud CSV headers unverified |
-| Hawkin Cloud API sync (token exchange, historical windows, incremental `syncFrom`, backend filtering, pagination, backoff, checkpoints, schema-change warnings, raw curves) | implemented, configuration required | `hawkin.test.ts` (mocked HTTP) | Needs `HAWKIN_REFRESH_TOKEN`; response shapes partially unverified; rate limits undocumented |
+| Hawkin Cloud API sync (token exchange, historical windows, incremental `syncFrom`, backend filtering, pagination, backoff, checkpoints, schema-change warnings, raw curves) | implemented, configuration required | `hawkin.test.ts` (mocked HTTP; also: test date = the test's own timestamp, explicit backfill window required, `includeInactive` on athletes and tests, edited tests update in place with the prior value in the row's audit trail) | Needs `HAWKIN_REFRESH_TOKEN`; response shapes partially unverified; rate limits undocumented |
 | Exports (org/athlete zip: CSV + JSON + PDFs + raw signals + checksummed manifest) | verified locally | `exports.test.ts` | — |
 
 ## Staff time clock & payroll

@@ -6,6 +6,7 @@ import { isDemoMode } from "@/lib/env";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { STAFF_ROLES } from "@/lib/auth/session";
+import { MFA_REQUIRED_REDIRECT, shouldRequireMfa } from "@/lib/auth/mfa-policy";
 import { can } from "@/lib/authz/policy";
 import { offlineOwnerKey } from "@/lib/training/offline";
 import { TrainingOfflineGuard } from "@/components/training-offline";
@@ -14,11 +15,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const viewer = await requireViewer();
   if (viewer.role === "kiosk") redirect("/kiosk");
   const org = await getOrg(viewer.orgId);
-  // Enforce staff MFA when the organization requires it.
-  if (org?.settings?.requireStaffMfa && STAFF_ROLES.includes(viewer.role) && !(viewer as { mfaEnabled?: boolean }).mfaEnabled) {
-    const path = (await headers()).get("x-pathname") ?? "";
-    if (!path.startsWith("/settings/security")) redirect("/settings/security?required=1");
-  }
+  // Enforce staff MFA when the organization requires it (decision in src/lib/auth/mfa-policy.ts).
+  if (shouldRequireMfa(viewer as { role: typeof viewer.role; mfaEnabled?: boolean }, org?.settings, (await headers()).get("x-pathname") ?? "")) redirect(MFA_REQUIRED_REDIRECT);
   const brand = org?.branding?.primaryColor;
   const staff = STAFF_ROLES.includes(viewer.role);
   // "+ New" menu: only shortcuts this role can actually use (each page re-checks access).

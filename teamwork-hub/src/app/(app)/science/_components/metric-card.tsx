@@ -2,6 +2,7 @@ import { ChartFigure } from "@/components/charts/chart-figure";
 import { TrendChart } from "@/components/charts/trend-chart";
 import { Badge, Card, CardBody, CardHeader } from "@/components/ui";
 import type { MetricSeries } from "@/lib/science/kpis";
+import { ComparabilityNotice } from "./comparability-notice";
 import { SourceBadge, fmtN } from "./shared";
 
 export function MetricCard({ s, from, to }: { s: MetricSeries; from: string; to: string }) {
@@ -38,24 +39,28 @@ export function MetricCard({ s, from, to }: { s: MetricSeries; from: string; to:
             Change {s.change === null ? "—" : `${s.change > 0 ? "+" : ""}${s.change.toFixed(d)} ${u}`} ({s.changePct === null ? "—" : `${s.changePct > 0 ? "+" : ""}${s.changePct.toFixed(1)}%`}) · SWC ±{fmtN(s.swc, d)} {s.swc === null ? "(needs ≥ 3 sessions)" : u}
           </span>
         </div>
+        <ComparabilityNotice excluded={s.excluded} metricName={s.metric.name} />
         <ChartFigure
           title={`${s.metric.name} by session`}
           unit={u}
           range={`${from} – ${to}`}
           summary={`${s.points.length} session(s); ${s.points.filter((x) => x.value === null).length} without a usable value. Rule per session: ${[...new Set(s.points.map((x) => x.rule))].join(", ") || "—"}.`}
           note={converted.length ? `Some trials were entered in ${converted.join(", ")} and converted to ${u} explicitly (1 in = 2.54 cm; 1 lb = 0.45359237 kg).` : undefined}
-          columns={["Date", "Test", "Selected", "Trials used", "Vendor aggregate (not averaged in)", "Trial values (entered unit)"]}
-          rows={s.points.map((x) => [
-            x.date,
-            x.testTypeName,
-            x.value === null ? null : `${x.value.toFixed(d)} ${u}`,
-            x.n,
-            x.vendorAggregate === null ? null : `${x.vendorAggregate.toFixed(d)} ${u}`,
-            x.trials
-              .filter((t) => !t.isAggregate)
-              .map((t) => `#${t.trialNumber ?? "?"}: ${t.value === null ? "null" : `${t.value} ${t.enteredUnit}`}${t.excluded ? " (excluded)" : ""}`)
-              .join("; "),
-          ])}
+          columns={["Date", "Test", "Selected", "Trials used", "Vendor aggregate (not averaged in)", "Trial values (entered unit)", "In trend"]}
+          rows={[...s.points, ...s.excludedPoints]
+            .sort((a, b) => a.testedAt.getTime() - b.testedAt.getTime())
+            .map((x) => [
+              x.date,
+              x.testTypeName,
+              x.value === null ? null : `${x.value.toFixed(d)} ${u}`,
+              x.n,
+              x.vendorAggregate === null ? null : `${x.vendorAggregate.toFixed(d)} ${u}`,
+              x.trials
+                .filter((t) => !t.isAggregate)
+                .map((t) => `#${t.trialNumber ?? "?"}: ${t.value === null ? "null" : `${t.value} ${t.enteredUnit}`}${t.excluded ? " (excluded)" : ""}`)
+                .join("; "),
+              x.incomparable.length ? `No: ${x.incomparable.join(" ")}` : "Yes",
+            ])}
         >
           <TrendChart data={s.points.map((x) => ({ x: x.date, value: x.value }))} series={[{ key: "value", label: s.metric.name }]} unit={u} digits={d} refLines={refLines} band={band} />
         </ChartFigure>
