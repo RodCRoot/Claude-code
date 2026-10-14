@@ -6,12 +6,14 @@ The four decisions are independent. Retiring one system does not imply retiring 
 
 | Decision | Source system today | Current verdict |
 |---|---|---|
-| 1. Membership, scheduling, billing, CRM, parent communication | Zen Planner Studio (PushPress named as a reference only) | Replaceable in stages, after sandbox verification and the cutover criteria below |
+| 1. Membership, scheduling, billing, CRM, parent communication | Zen Planner Studio (memberships, scheduling, billing) and GoHighLevel via the "Automatic Members" agency plan (CRM, SMS, automations). PushPress is a feature reference only | Replaceable in stages, after sandbox verification and the cutover criteria below. Zen Planner and GHL are separate cutovers |
 | 2. Training program creation, delivery, logging, coaching workflows | TeamBuildr | Partially replaceable; retirement gated on the essentials list |
 | 3. Historical performance storage, analysis, reporting | Hawkin Cloud data | Replaceable for storage and reporting only, after a validated import |
-| 4. Live force-plate acquisition and device operation | Hawkin capture app and hardware | **Not replaceable by this project** |
+| 4. Live force-plate acquisition and device operation | Hawkin Cloud plus leased force plates | **Not replaceable by this project** |
 
-**Which subscriptions are actually in use is UNKNOWN until Rod confirms.** The build was done without account access to Zen Planner, TeamBuildr or Hawkin (see `BLOCKERS.md`). Zen Planner Studio is confirmed as the current operations system because the existing `teamwork-scoreboard` integration reads from it. PushPress appears in the brief and in `FEATURE_MATRIX.md` as the reference for the CRM module ("PushPress Grow-style; evidence: public docs"). Nothing in this repository shows that PushPress is installed or paid for, so this plan does not assume it. The TeamBuildr plan tier and any Hawkin software tier are also unknown.
+**Subscriptions in use (confirmed by Rod, 2026-10-14):** Zen Planner Studio; Hawkin Cloud, with the force plates leased from Hawkin; GoHighLevel through the "Automatic Members" agency plan; Google Workspace; TeamBuildr. PushPress is not in use and is only a feature reference. Plan tiers, renewal dates and contract terms (especially the plate lease) are still **unknown** and matter for timing. The build was done without account access to any of these systems (see `BLOCKERS.md`).
+
+Google Workspace is not a retirement target: the Hub depends on it for staff email and the Google Calendar connection, and families keep their own email. GoHighLevel is a retirement candidate for CRM and SMS only; it is handled under decision 1 as its own cutover (see "GoHighLevel" below). The "Automatic Members" plan may bundle services beyond the GHL software (automations, templates, a phone number); what would be lost on cancellation is **unknown** until the agency agreement is read.
 
 Status labels used below match the `FEATURE_MATRIX.md` legend (verified locally, implemented configuration required, blocked, not implemented) and its evidence levels (publicly documented, account-verified, proposed Teamwork functionality, unresolved dependency).
 
@@ -27,7 +29,15 @@ Source today: Zen Planner Studio. PushPress is a feature reference only. Everyth
 | Parent communication | Email and SMS to families, consent (publicly documented) | Shared inbox, templates, automations, consent and quiet hours, campaigns, bounce and STOP webhooks: **verified locally** with mocked providers (`messaging*.test.ts`). Email and SMS adapters: **implemented, configuration required** | No provider keys; `DELIVERY_ENABLED` is off by design; no attachments; no drip sequences | One real round trip per provider (send, bounce, STOP) verified; consent records imported or re-collected; test-recipient redirect used first | In-app messaging works without providers. Zen Planner communication stays available until the Hub provider is verified |
 | Reports | Zen Planner reports read from page grids by the scoreboard (existing Teamwork integration) | Memberships, attendance, utilization, receivables, collections, refunds, payouts, credits, renewals, retention and staff activity reports with CSV: **verified locally** (`reports-settings.test.ts`, `report-charts.test.ts`) | No saved or scheduled reports; Zen Planner billing history is not imported (membership audit amounts are estimates) | Collections and attendance reports match Zen Planner totals for the comparison period | The scoreboard's Zen Planner readers keep working as long as the Zen Planner account exists |
 
-**Verdict:** replaceable in stages. The blocking items are provider sandbox verification, confirmed import mappings, the real price list, and the open policy questions. Nothing here is a code gap that blocks a careful cutover, but no Zen Planner cancellation should happen until every member has been cut over and a full comparison period has passed. PushPress is not in scope for cancellation because its use is unknown.
+### GoHighLevel (Automatic Members plan)
+
+| GHL does today (public docs plus Rod's description) | Hub today | Still missing | Cutover criteria |
+|---|---|---|---|
+| Contacts, pipelines, SMS and email conversations, automations, a business phone number | CRM leads and stages, shared inbox, campaigns, automations with inspectable runs: **verified locally**; GHL contacts import with identity review: **verified locally** (mocked fetch); SMS can be sent through GHL or Twilio: **implemented, configuration required** | A verified SMS provider in production (either keep sending through GHL, or port the number to Twilio); import of conversation history (GHL export format unverified); any automations built inside GHL have to be rebuilt as Hub rules | Every live automation listed and rebuilt or retired; the SMS number's fate decided (porting takes time and must not break consent records); contact import reconciled; a comparison period with both inboxes open |
+
+The Hub can keep using GHL as the SMS transport after the CRM moves, so cancelling GHL is the last step of decision 1, not the first.
+
+**Verdict:** replaceable in stages. The blocking items are provider sandbox verification, confirmed import mappings, the real price list, and the open policy questions. Nothing here is a code gap that blocks a careful cutover, but no Zen Planner cancellation should happen until every member has been cut over and a full comparison period has passed. GoHighLevel is a second, later cutover within this decision. PushPress is not in use and not in scope.
 
 ## Decision 2: Training program creation, delivery, logging, coaching workflows
 
@@ -84,10 +94,10 @@ Dependencies that would have to be resolved before anyone could recommend cancel
 
 | Dependency | What has to be answered | Status |
 |---|---|---|
-| Hardware ownership and support | Who owns the plates, whether firmware updates and warranty support require an active software subscription, and whether the plates operate at all without the vendor app | unknown |
+| Hardware ownership and support | The plates are **leased from Hawkin** (Rod, 2026-10-14), so cancelling the subscription likely means returning the hardware. Lease term, buy-out option, and whether the plates operate at all without the vendor app are unknown | leased; terms unknown |
 | SDK or protocol availability and licensing | Whether Hawkin publishes any device SDK or wire protocol, and under what licence. The public connector pages (`connect.hawkindynamics.com`) document a data API and data clients only, not device access | unknown; no public device SDK was found during the 2026-10-12 research |
 | Calibration | How plates are zeroed and calibrated, and whether that is possible outside the vendor app | unknown |
-| Device and firmware support | Which plate models and firmware versions Teamwork owns, and their update path | unknown |
+| Device and firmware support | Which plate models and firmware versions Teamwork leases, and their update path | unknown |
 | Future data access after cancellation | Whether Cloud data, exports and the API remain readable after the subscription ends, and for how long | unknown; must be confirmed with Hawkin before any cancellation |
 | Test-type definitions and metric calculations | Metric values in the Hub carry `defined_by = hawkin`; the Hub does not compute them from raw force. Without Hawkin, no new vendor metrics exist | known gap by design |
 | Hub features that depend on Hawkin continuing to run | Incremental API sync (`runHawkinSync`), force-time archiving (`archiveForceTime`), the Hawkin-vendor badges on the force-plate dashboard, KPI baselines built from Hawkin metrics, relative-strength plans that use Hawkin body-mass trials | all depend on new tests arriving from Hawkin |
@@ -105,4 +115,4 @@ Cutover criterion for this decision: there is none. The recommended state is "ke
 3. **Recovery route stays open** until the comparison period ends: import batches are revertible, Hub memberships can be ended and Zen Planner charges re-enabled, programs still exist in TeamBuildr, and Hawkin data remains in Hawkin Cloud.
 4. **No duplicate subscriptions or double billing.** Each member is cut over individually, never in bulk, and never before the Zen Planner charge for that member has been stopped. The Hub's own guards (`billing.test.ts` "cutover from Zen Planner requires confirmation and a future first bill date"; `billing-subscriptions.test.ts` "a provider charge for a period Teamwork already settled is applied to that invoice and flagged as double collection") are the backstop, not the plan.
 5. **Force-plate capture is never part of a cutover.** Any step that would interrupt Hawkin capture is out of scope.
-6. **Account facts first.** Before any of the above, Rod confirms which subscriptions exist, their tiers and renewal dates. Those facts are unknown to this repository.
+6. **Account facts first.** The list of subscriptions is confirmed (above). Tiers, renewal dates, the plate lease terms and the Automatic Members agreement are still unknown to this repository and must be read before any cancellation is scheduled.

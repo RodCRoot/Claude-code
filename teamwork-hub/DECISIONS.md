@@ -5,9 +5,9 @@
 These are the decisions whose answer changes what gets built or how the migration runs. Where the code already takes a default, that default is named so Rod can confirm or overturn it. Details and evidence are in `docs/REPLACEMENT-PLAN.md`.
 
 1. **Which subscriptions are actually in use and intended for retirement.**
-   Decision: confirm the list of paid systems, their tiers and renewal dates. Zen Planner Studio is confirmed in use (the scoreboard reads from it). PushPress, the TeamBuildr tier and any Hawkin software tier are unknown; PushPress is referenced only as a feature model for the CRM module.
-   Recommended default: treat Zen Planner as the only confirmed retirement target; treat TeamBuildr as a candidate gated on the essentials list; treat Hawkin as never a retirement target (see decision 3). Do not assume PushPress is installed.
-   Consequence: the migration plan has one confirmed cutover (Zen Planner) and one conditional one (TeamBuildr). If PushPress turns out to be in use, its data would need its own import schema and identity review, which do not exist today.
+   Confirmed by Rod (2026-10-14): Zen Planner Studio; Hawkin Cloud with leased force plates; GoHighLevel on the "Automatic Members" agency plan; Google Workspace; TeamBuildr. PushPress is not in use. Tiers, renewal dates, the plate lease terms and the Automatic Members agreement are still unknown.
+   Recommended default: Zen Planner and GoHighLevel are the retirement targets under decision 1, as two separate cutovers (GHL last, since it can stay as the SMS transport); TeamBuildr is gated on the essentials list; Google Workspace stays (email and calendar); Hawkin is never a retirement target (see decision 3), and the plate lease makes that firmer.
+   Consequence: three cutovers to plan (Zen Planner, GHL, TeamBuildr) and one system to keep integrating with (Hawkin). GHL automations built inside GHL must be inventoried and rebuilt as Hub rules before GHL goes; the SMS number needs a porting decision.
 
 2. **Stripe as the primary processor, with PayPal and Venmo for one-time payments only.**
    Decision: which provider owns recurring billing.
