@@ -1,0 +1,132 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1791774330587,
+      "tag": "0000_init",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791774349806,
+      "tag": "0001_integrity_constraints",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791775626597,
+      "tag": "0002_bill_product_version_immutable",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791777991876,
+      "tag": "0003_per_org_source_uniques",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791779360575,
+      "tag": "0004_cal_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791780731796,
+      "tag": "0005_bill_provider_plans",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791780733239,
+      "tag": "0006_bill_provider_billing_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791780884596,
+      "tag": "0007_docs_signer_step_up",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791780885830,
+      "tag": "0008_docs_form_version_status_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791784003829,
+      "tag": "0009_crm_preferences_campaigns_inbound",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791787843290,
+      "tag": "0010_sched_kiosk_pins",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791788803772,
+      "tag": "0011_people_custom_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791802541198,
+      "tag": "0012_loc_multi_location",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791802549549,
+      "tag": "0013_crm_ghl_integration_row",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1791805027597,
+      "tag": "0014_bill_membership_policy",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1791805273601,
+      "tag": "0015_payroll_timeclock",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791805275044,
+      "tag": "0016_payroll_run_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791805355872,
+      "tag": "0017_crm_member_requests",
+      "breakpoints": true
+    }
+  ]
+}

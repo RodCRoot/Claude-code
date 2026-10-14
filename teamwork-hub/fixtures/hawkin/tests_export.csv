@@ -1,0 +1,8 @@
+Test ID,Athlete,Athlete Active,Test Type,Timestamp,Trial,Jump Height(m),Jump Height(in),Peak Propulsive Force(N),Braking RFD(N/s),RSI-modified(m/s),Body Weight(kg),Body Weight(lb),Notes
+hkcsv-0001,Maya Parker,true,Countermovement Jump,2026-03-08T01:45:00-05:00,1,0.4312,16.98,1843.2,5120.55,0.512,54.3,,
+hkcsv-0002,Maya Parker,true,Countermovement Jump,2026-03-08T01:47:30-05:00,2,0.4290,16.89,1830.0,N/A,0.498,54.3,,second rep
+,Maya Parker,true,Countermovement Jump,2026-03-08T01:47:30-05:00,Average,0.4301,16.93,1836.6,5120.55,0.505,54.3,,
+hkcsv-0003,Maya Parker,true,Countermovement Jump,2026-03-08T03:10:00-04:00,1,0.4400,17.32,1851.0,5200,0.520,,119.7,
+hkcsv-0004,Noah Kim,false,Squat Jump,2026-11-01T01:30:00-04:00,1,0.3800,,1650.25,,,,,inactive athlete
+hkcsv-0005,Noah Kim,false,Squat Jump,2026-11-01T01:30:00-05:00,1,,,1660.00,,,,,second 1:30 after fall back
+hkcsv-0005,Noah Kim,false,Squat Jump,2026-11-01T01:30:00-05:00,1,,,1660.00,,,,,duplicate row

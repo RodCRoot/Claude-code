@@ -1,0 +1,7 @@
+Athlete,Email,Date,Workout,Exercise,Set,Reps,Weight,Unit,RPE,Notes
+Quinn Avery,quinn.avery@example.test,2026-02-16,Lower A (sample),Back Squat,1,5,135,lb,6,
+Quinn Avery,quinn.avery@example.test,2026-02-16,Lower A (sample),Back Squat,2,5,155,lb,7,
+Quinn Avery,quinn.avery@example.test,2026-02-16,Lower A (sample),Back Squat,3,5,175,lb,8.5,felt heavy
+Quinn Avery,quinn.avery@example.test,2026-02-16,Lower A (sample),RDL,1,8,60,kg,,
+Quinn Avery,quinn.avery@example.test,2026-02-16,Lower A (sample),RDL,2,8,,,,
+Quinn Avery,quinn.avery@example.test,2026-02-16,Lower A (sample),Back Squat,3,5,175,lb,8.5,felt heavy
