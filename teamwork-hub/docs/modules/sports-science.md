@@ -48,6 +48,10 @@ All formulas are pure functions, and each one has a version key that is shown in
 
 **Dates and time zones.** Daily buckets are local calendar dates in America/Indiana/Indianapolis. A workout's load is assigned to the local date of its `completed_at` (`workoutLoadDate`), so it is DST-correct: 23:30 EDT on 2026-03-08 is bucketed to 03-08. Date arithmetic uses UTC-noon, so a DST change never skips or duplicates a day. Derived load metrics are anchored to today only if today's load is known; otherwise they use yesterday, and the UI says so.
 
+### Comparability (`src/lib/science/comparability.ts`)
+
+A trend, baseline, personal best or change % is only built from sessions that were measured the same way as the athlete's latest usable session. `compareContexts(a, b)` returns `{ comparable, reasons }` and fails on any of: a different test type, a different protocol text (whitespace/case-insensitive), a different source (vendor vs Teamwork manual vs Teamwork-derived) or a different calculation version, units with no exact `convertUnit` factor, a different aggregation level (individual trial vs vendor mean/best vs derived), or, for metrics per kg of body mass, body mass known for one measurement and not the other. `athleteMetricSeries` keeps the incomparable sessions in `excludedPoints` with their reasons and summarizes them in `excluded: [{ reason, count }]`; the KPI, force-plate and family progress pages show that list in a notice, and progress-report snapshots carry it as `excludedNote`. Nothing is converted or merged to make values comparable.
+
 ## 3. Volume rules (`computeVolume`, `src/lib/science/volume.ts`)
 
 Volume is read-only over `set_logs → workout_items → workouts → exercises`. If the item was substituted, the substituted exercise is used.

@@ -10,6 +10,7 @@ import { scopedAthletes } from "@/lib/science/access";
 import { forcePlateDashboard, readForceTrace, type ForceTrace } from "@/lib/science/forceplate";
 import { fmt } from "@/lib/time";
 import { toggleTrialAction } from "../actions";
+import { ComparabilityNotice } from "../_components/comparability-notice";
 import { AthletePicker, FormulaTag, SourceBadge, fmtN, pickAthlete, sp1, type SP } from "../_components/shared";
 
 export const metadata = { title: "Force plate" };
@@ -55,6 +56,7 @@ export default async function ForcePlatePage({ searchParams }: { searchParams: S
                   {s.baseline ? ` · baseline ${s.baseline.value.toFixed(d)} (${s.baseline.source === "target" ? "set by coach" : "first session"})` : ""}
                   {s.change !== null ? ` · change ${s.change > 0 ? "+" : ""}${s.change.toFixed(d)} ${u}` : ""} · SWC ±{fmtN(s.swc, d)}
                 </p>
+                <ComparabilityNotice excluded={s.excluded} metricName={s.metric.name} />
                 <ChartFigure
                   title={`${s.metric.name} by session`}
                   unit={u}
@@ -72,12 +74,13 @@ export default async function ForcePlatePage({ searchParams }: { searchParams: S
                   />
                 </ChartFigure>
                 <details>
-                  <summary className="cursor-pointer text-xs font-medium text-ink-3 hover:text-ink">Trials per session ({s.points.length})</summary>
+                  <summary className="cursor-pointer text-xs font-medium text-ink-3 hover:text-ink">Trials per session ({s.points.length + s.excludedPoints.length})</summary>
                   <div className="mt-2 space-y-3">
-                    {[...s.points].reverse().map((pt) => (
+                    {[...s.points, ...s.excludedPoints].sort((a, b) => b.testedAt.getTime() - a.testedAt.getTime()).map((pt) => (
                       <div key={pt.sessionId} className="rounded-lg border border-edge p-2 text-sm">
                         <div className="mb-1 text-xs text-ink-3">
                           {fmt(pt.testedAt)} · {pt.testTypeName} · rule {pt.rule} → {pt.value === null ? (pt.reason ?? "—") : `${pt.value.toFixed(d)} ${u}`}
+                          {pt.incomparable.length ? ` · not in trend: ${pt.incomparable.join(" ")}` : ""}
                         </div>
                         <ul className="space-y-1">
                           {pt.trials.map((t) => (

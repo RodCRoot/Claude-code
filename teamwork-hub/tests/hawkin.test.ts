@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { and, eq } from "drizzle-orm";
-import { importBatches, integrations, metricValues, rawSignals, syncRuns } from "@/db/schema";
+import { auditEvents, importBatches, importRows, integrations, metricDefinitions, metricValues, rawSignals, syncRuns, testSessions, trials } from "@/db/schema";
 import { closeTestDb, seedOrg, viewerFor } from "./helpers/db";
 import { db, FIXTURES, tx } from "./imports.helpers";
 import { HawkinClient, HawkinError } from "@/lib/integrations/hawkin/client";
@@ -178,10 +178,15 @@ describe("Hawkin sync → import pipeline", () => {
     if (r.status === "not_configured") throw new Error("unexpected");
     expect(r.status).toBe("awaiting_review");
     expect(r.fetched).toBe(3);
-    // Every creation-date window was requested with from/to and no sync params.
+    // Every creation-date window was requested with from/to and no sync params, and inactive tests are included.
     const windows = m.calls.filter((x) => x.url.pathname === "/api/v1" && !x.url.searchParams.get("cursor"));
     expect(windows.length).toBe(10);
     expect(windows.every((x) => x.url.searchParams.get("from") && !x.url.searchParams.get("syncFrom"))).toBe(true);
+    expect(windows.every((x) => x.url.searchParams.get("includeInactive") === "true")).toBe(true);
+    // Inactive athletes are included too (they still own historical tests).
+    const athleteCalls = m.calls.filter((x) => x.url.pathname === "/api/v1/athletes");
+    expect(athleteCalls.length).toBeGreaterThan(0);
+    expect(athleteCalls.every((x) => x.url.searchParams.get("includeInactive") === "true")).toBe(true);
     expect((await integ()).checkpoint.historicalThrough).toBeUndefined();
 
     const [batch] = await db().select().from(importBatches).where(eq(importBatches.id, r.batchId!));
@@ -197,6 +202,21 @@ describe("Hawkin sync → import pipeline", () => {
     // Raw payload preserved on the trial, nulls kept.
     const mv = await db().select().from(metricValues).where(eq(metricValues.sourceRecordId, "hkapi-0001"));
     expect(mv.find((x) => x.unit === "N/s")!.value).toBeNull();
+    // The assessment date is the test's own Unix timestamp from the API, not the sync time or row creation time.
+    const fixture = json("tests_page1.json").data.find((t: { id: string }) => t.id === "hkapi-0001") as { timestamp: number };
+    const [session] = await db().select().from(testSessions).where(and(eq(testSessions.orgId, ctx.orgId), eq(testSessions.sourceRecordId, "hkapi-0001")));
+    expect(session.testedAt.getTime()).toBe(fixture.timestamp * 1000);
+    expect(session.sourceTimestamp).toBe(String(fixture.timestamp));
+    expect(Math.abs(session.testedAt.getTime() - Date.now())).toBeGreaterThan(24 * 3600 * 1000);
+    expect(mv.every((x) => x.recordedAt.getTime() === fixture.timestamp * 1000)).toBe(true);
+  });
+
+  it("historical import requires an explicit window (no 'recent results' default)", async () => {
+    const m = mockHawkin();
+    const at = new Date("2026-06-01T00:00:00Z");
+    await expect(runHawkinSync(db(), rod, { mode: "historical", from: at, to: at }, { client: client(m) })).rejects.toThrow(/start must be before end/);
+    await expect(runHawkinSync(db(), rod, { mode: "historical", from: new Date("2026-07-01T00:00:00Z"), to: at }, { client: client(m) })).rejects.toThrow(/start must be before end/);
+    expect(m.calls.filter((x) => x.url.pathname === "/api/v1")).toHaveLength(0);
   });
 
   it("incremental sync uses syncFrom without filters, filters in backend, warns on schema changes, auto-commits", async () => {
@@ -217,8 +237,26 @@ describe("Hawkin sync → import pipeline", () => {
     expect(r.warnings.join("\n")).toMatch(/Expected metric field "Braking RFD\(N\/s\)" missing|not in Hawkin/);
     expect(r.status).toBe("succeeded");
     expect((await integ()).checkpoint.lastSyncTime).toBe(1794003600);
-    const updated = await db().select().from(metricValues).where(and(eq(metricValues.sourceRecordId, "hkapi-0001"), eq(metricValues.unit, "m")));
-    expect(updated.map((x) => x.rawValue).sort()).toContain("0.4315");
+    // A retroactively edited test (same id, changed Jump Height) updates the existing row in place: still one
+    // session, one trial and one value per metric for hkapi-0001, with the old value kept in the audit trail.
+    const sessions = await db().select().from(testSessions).where(and(eq(testSessions.orgId, ctx.orgId), eq(testSessions.sourceRecordId, "hkapi-0001")));
+    expect(sessions).toHaveLength(1);
+    expect(await db().select().from(trials).where(eq(trials.testSessionId, sessions[0].id))).toHaveLength(1);
+    const jumpHeight = await db()
+      .select()
+      .from(metricValues)
+      .innerJoin(metricDefinitions, eq(metricDefinitions.id, metricValues.metricDefinitionId))
+      .where(and(eq(metricValues.sourceRecordId, "hkapi-0001"), eq(metricValues.orgId, ctx.orgId), eq(metricDefinitions.name, "Jump Height")));
+    expect(jumpHeight).toHaveLength(1);
+    expect(jumpHeight[0].metric_values.rawValue).toBe("0.4315");
+    expect(jumpHeight[0].metric_values.value).toBeCloseTo(0.4315, 9);
+    expect(jumpHeight[0].metric_values.testSessionId).toBe(sessions[0].id);
+    const [row] = await db().select().from(importRows).where(and(eq(importRows.batchId, r.batchId!), eq(importRows.sourceRecordId, "hkapi-0001")));
+    expect((row.normalized as { _result?: string })._result).toBe("update");
+    const updates = (row.normalized as { _updates?: { type: string; id: string; before: Record<string, unknown> }[] })._updates ?? [];
+    expect(updates.find((u) => u.type === "metric_value" && u.id === jumpHeight[0].metric_values.id)?.before).toEqual({ value: 0.4312, rawValue: "0.4312" });
+    const commits = await db().select().from(auditEvents).where(and(eq(auditEvents.orgId, ctx.orgId), eq(auditEvents.action, "import.commit"), eq(auditEvents.entityId, r.batchId!)));
+    expect(commits).toHaveLength(1);
     const [run] = await db().select().from(syncRuns).where(eq(syncRuns.id, r.syncRunId));
     expect(((run.cursorAfter as Record<string, unknown>).warnings as string[]).length).toBeGreaterThan(0);
     // No new trials for an updated test → no force-time archived for it; the call log never leaks the token.

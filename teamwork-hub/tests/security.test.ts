@@ -3,7 +3,9 @@ import { strFromU8, unzipSync } from "fflate";
 import Papa from "papaparse";
 import { NextRequest } from "next/server";
 import { and, eq } from "drizzle-orm";
-import { archivedDocuments, formRequests, leads, people, personTags, tasks, users } from "@/db/schema";
+import { archivedDocuments, formRequests, leads, organizations, people, personTags, tasks, users } from "@/db/schema";
+import { MFA_REQUIRED_REDIRECT, MFA_SETUP_PATH, shouldRequireMfa } from "@/lib/auth/mfa-policy";
+import { updateOrgSettings } from "@/lib/settings";
 import { closeTestDb, seedOrg, viewerFor } from "./helpers/db";
 import { db, tx } from "./imports.helpers";
 import type { Viewer } from "@/lib/authz/policy";
@@ -207,6 +209,51 @@ describe("authentication hardening", () => {
     await tx((t) => disableMfa(t, rod, ctx.users.rod));
     const [off] = await db().select().from(users).where(eq(users.id, ctx.users.rod));
     expect(off.mfaEnabled).toBe(false);
+  });
+});
+
+describe("staff MFA enforcement (org policy)", () => {
+  const on = { requireStaffMfa: true };
+  const off = { requireStaffMfa: false };
+
+  it("with the policy on, staff without a second factor are sent to enrol from every page except the enrolment page", () => {
+    for (const role of ["owner", "admin", "operations", "coach"] as const) {
+      expect(shouldRequireMfa({ role, mfaEnabled: false }, on, "/today")).toBe(true);
+      expect(shouldRequireMfa({ role }, on, "/people")).toBe(true);
+      expect(shouldRequireMfa({ role, mfaEnabled: false }, on, MFA_SETUP_PATH)).toBe(false);
+      expect(shouldRequireMfa({ role, mfaEnabled: false }, on, `${MFA_SETUP_PATH}?required=1`)).toBe(false);
+    }
+    expect(MFA_REQUIRED_REDIRECT.startsWith(MFA_SETUP_PATH)).toBe(true);
+  });
+
+  it("staff who already use two-step verification are not redirected", () => {
+    expect(shouldRequireMfa({ role: "coach", mfaEnabled: true }, on, "/today")).toBe(false);
+    expect(shouldRequireMfa({ role: "owner", mfaEnabled: true }, on, "/settings")).toBe(false);
+  });
+
+  it("guardians, athletes and kiosk logins are never affected by the staff policy", () => {
+    for (const role of ["guardian", "athlete", "kiosk"] as const) {
+      expect(shouldRequireMfa({ role, mfaEnabled: false }, on, "/today")).toBe(false);
+    }
+  });
+
+  it("with the policy off or unset, nobody is redirected", () => {
+    expect(shouldRequireMfa({ role: "coach", mfaEnabled: false }, off, "/today")).toBe(false);
+    expect(shouldRequireMfa({ role: "coach", mfaEnabled: false }, {}, "/today")).toBe(false);
+    expect(shouldRequireMfa({ role: "coach", mfaEnabled: false }, null, "/today")).toBe(false);
+  });
+
+  it("the org settings form is the switch the layout reads", async () => {
+    const [before] = await db().select().from(organizations).where(eq(organizations.id, ctx.orgId));
+    expect(shouldRequireMfa({ role: "coach", mfaEnabled: false }, before.settings, "/today")).toBe(false);
+    const form = { displayName: "Teamwork", primaryColor: "#1d4ed8", requireStaffMfa: "true", pendingBankPaymentPolicy: "grant_on_settlement", bookingWindowDays: 21, familyBookingCutoffMinutes: 60, quietStart: "21:00", quietEnd: "07:30", minorsReceiveDirectMessages: false, kioskPinOnly: false };
+    await tx((t) => updateOrgSettings(t, rod, form));
+    const [after] = await db().select().from(organizations).where(eq(organizations.id, ctx.orgId));
+    expect(shouldRequireMfa({ role: "coach", mfaEnabled: false }, after.settings, "/today")).toBe(true);
+    expect(shouldRequireMfa({ role: "guardian", mfaEnabled: false }, after.settings, "/today")).toBe(false);
+    await tx((t) => updateOrgSettings(t, rod, { ...form, requireStaffMfa: "" }));
+    const [reset] = await db().select().from(organizations).where(eq(organizations.id, ctx.orgId));
+    expect(shouldRequireMfa({ role: "coach", mfaEnabled: false }, reset.settings, "/today")).toBe(false);
   });
 });
 

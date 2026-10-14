@@ -1,25 +1,18 @@
 import { and, asc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Tx } from "@/db";
-import { bookings, exercises, groupMembers, kpiTargets, maxes, metricDefinitions, metricValues, scheduleSessions, testSessions, testTypes, trials } from "@/db/schema";
+import { athletes, bookings, exercises, groupMembers, kpiTargets, maxes, metricDefinitions, metricValues, scheduleSessions, testSessions, testTypes, trials } from "@/db/schema";
 import { assertCan, AuthzError, isStaff, requireOnAthlete, type Viewer } from "@/lib/authz/policy";
 import { audit } from "@/lib/audit";
 import { UserError } from "@/lib/actions";
 import { localDayBounds, localToUtc, localYmd } from "@/lib/time";
 import { actorOf, scopedAthletes } from "./access";
+import { compareContexts, isRelativeToBodyMass, summarizeExclusions, type ExclusionSummary, type MeasurementContext } from "./comparability";
 import { attendanceRate, changePct, classifyChange, convertUnit, isNum, selectTrials, swcBand, unitFamily } from "./formulas";
 
-export type MetricDef = typeof metricDefinitions.$inferSelect;
+export { VENDOR_LABEL, isVendor } from "./labels";
 
-export const VENDOR_LABEL: Record<string, string> = {
-  hawkin: "Hawkin (vendor)",
-  teambuildr: "TeamBuildr (vendor)",
-  other_vendor: "Vendor",
-  wearable: "Wearable",
-  teamwork_manual: "Teamwork",
-  teamwork_derived: "Teamwork-derived",
-};
-export const isVendor = (s: string) => s === "hawkin" || s === "teambuildr" || s === "other_vendor";
+export type MetricDef = typeof metricDefinitions.$inferSelect;
 
 export const metricInput = z.object({
   key: z.string().trim().regex(/^[a-z][a-z0-9_]{1,40}$/, "lowercase_with_underscores"),
@@ -199,11 +192,22 @@ export type SessionPoint = {
   reason: string | null;
   trials: TrialRow[];
   convertedFromUnits: string[];
+  /** How the selected value was measured (null when the session has no usable value). */
+  context: MeasurementContext | null;
+  /** Why this session was left out of the trend (empty when it is part of the series). */
+  incomparable: string[];
 };
 
 export type MetricSeries = {
   metric: MetricDef;
+  /** Sessions comparable with the latest measurement (plus sessions without a usable value). */
   points: SessionPoint[];
+  /** Sessions with a value that cannot be compared with the latest measurement. Never merged into the trend. */
+  excludedPoints: SessionPoint[];
+  /** Disclosure for the UI: one row per reason with the number of sessions it applies to. */
+  excluded: ExclusionSummary[];
+  /** The measurement context every point in `points` is compared against (the latest usable session). */
+  context: MeasurementContext | null;
   latest: SessionPoint | null;
   baseline: { value: number; date: string | null; source: "target" | "first_session" } | null;
   target: { value: number; goalDate: string | null; scope: "athlete" | "group" } | null;
@@ -249,6 +253,8 @@ export async function athleteMetricSeries(tx: Tx, v: Viewer, athleteId: string, 
     .orderBy(asc(testSessions.testedAt), asc(trials.trialNumber));
   const defs = await listMetrics(tx, v);
   const targets = await targetsForAthlete(tx, v.orgId, athleteId);
+  const [athleteRow] = await tx.select({ bodyMassKg: athletes.bodyMassKg }).from(athletes).where(and(eq(athletes.id, athleteId), eq(athletes.orgId, v.orgId)));
+  const bodyMassKnown = athleteRow?.bodyMassKg != null && athleteRow.bodyMassKg !== "";
   const out: MetricSeries[] = [];
   for (const metric of defs) {
     if (opts.category && metric.category !== opts.category) continue;
@@ -256,9 +262,11 @@ export async function athleteMetricSeries(tx: Tx, v: Viewer, athleteId: string, 
     const mine = rows.filter((r) => r.mv.metricDefinitionId === metric.id);
     if (!mine.length && !targets.has(metric.id)) continue;
     const target = targets.get(metric.id);
+    const relative = isRelativeToBodyMass(metric.unit);
     const bySession = new Map<string, typeof mine>();
     for (const r of mine) bySession.set(r.s.id, [...(bySession.get(r.s.id) ?? []), r]);
-    const points: SessionPoint[] = [];
+    const allPoints: SessionPoint[] = [];
+    const trialExclusions: string[] = [];
     for (const list of bySession.values()) {
       const { s, tt } = list[0];
       const rule = target?.trialSelection ?? tt.trialSelection;
@@ -274,12 +282,27 @@ export async function athleteMetricSeries(tx: Tx, v: Viewer, athleteId: string, 
         excluded: r.t?.excluded ?? false,
         exclusionReason: r.t?.exclusionReason ?? null,
       }));
+      // A value whose entered unit has no exact conversion is never guessed; it is left out and disclosed.
+      for (const t of trialRows) if (!t.isAggregate && !t.excluded && isNum(t.value) && t.converted === null) trialExclusions.push(`Trial value in ${t.enteredUnit} cannot be converted to ${metric.unit}.`);
       const sel = selectTrials(
         trialRows.map((t) => ({ trialId: t.trialId, trialNumber: t.trialNumber, value: t.converted, isAggregate: t.isAggregate, excluded: t.excluded })),
         rule,
         metric.higherIsBetter,
       );
-      points.push({
+      // Measurement context of the rows that produced the value (never aggregate rows or excluded trials).
+      const used = list.filter((r) => sel.usedTrialIds.includes(r.t?.id ?? r.mv.id));
+      const sources = [...new Set(used.map((r) => r.mv.source))];
+      const versions = [...new Set(used.map((r) => r.mv.formulaVersion ?? null))];
+      const aggregations = [...new Set(used.map((r) => r.mv.aggregation))];
+      const incomparable: string[] = [];
+      if (sources.length > 1) incomparable.push("Mixed sources within one session.");
+      if (versions.length > 1) incomparable.push("Mixed calculation versions within one session.");
+      if (aggregations.length > 1) incomparable.push("Mixed aggregation levels within one session.");
+      const context: MeasurementContext | null =
+        isNum(sel.value) && used.length
+          ? { testTypeId: tt.id, protocol: tt.protocol, source: sources[0], formulaVersion: versions[0], unit: metric.unit, aggregation: aggregations[0], relativeToBodyMass: relative, bodyMassKnown }
+          : null;
+      allPoints.push({
         sessionId: s.id,
         testedAt: s.testedAt!,
         date: localYmd(s.testedAt!),
@@ -293,8 +316,21 @@ export async function athleteMetricSeries(tx: Tx, v: Viewer, athleteId: string, 
         reason: sel.reason,
         trials: trialRows,
         convertedFromUnits: [...new Set(trialRows.filter((t) => t.enteredUnit !== metric.unit && t.value !== null).map((t) => t.enteredUnit))],
+        context,
+        incomparable,
       });
     }
+    // The latest usable session sets the reference context; earlier sessions join the trend only when comparable.
+    const reference = [...allPoints].reverse().find((p) => p.context && !p.incomparable.length) ?? null;
+    const refContext = reference?.context ?? null;
+    for (const p of allPoints) {
+      if (!p.context || p === reference || p.incomparable.length) continue;
+      const c = compareContexts(refContext!, p.context);
+      if (!c.comparable) p.incomparable.push(...c.reasons);
+    }
+    const points = allPoints.filter((p) => !p.incomparable.length);
+    const excludedPoints = allPoints.filter((p) => p.incomparable.length > 0);
+    const excluded = summarizeExclusions([...excludedPoints.flatMap((p) => p.incomparable), ...trialExclusions]);
     const valued = points.filter((p) => isNum(p.value));
     const latest = valued.at(-1) ?? null;
     const baseline = isNum(target?.baselineValue)
@@ -307,6 +343,9 @@ export async function athleteMetricSeries(tx: Tx, v: Viewer, athleteId: string, 
     out.push({
       metric,
       points,
+      excludedPoints,
+      excluded,
+      context: refContext,
       latest,
       baseline,
       target: target ? { value: target.targetValue, goalDate: target.goalDate, scope: target.scope } : null,

@@ -13,6 +13,7 @@ import { performanceSummary } from "@/lib/science/performance";
 import type { ReportContent } from "@/lib/science/reports";
 import { fmt, fmtDate } from "@/lib/time";
 import { ReportBody } from "../_components/report-view";
+import { ComparabilityNotice } from "../../science/_components/comparability-notice";
 
 export const metadata = { title: "Athlete progress" };
 
@@ -67,6 +68,7 @@ export default async function AthletePerformancePage({ params }: { params: Promi
                           good={k.changePct === null || k.metric.higherIsBetter === null ? null : k.metric.higherIsBetter ? k.changePct > 0 : k.changePct < 0}
                         />
                       </div>
+                    <ComparabilityNotice excluded={k.excluded} metricName={k.metric.name} className="mb-2" />
                     <ChartFigure
                       title={`${k.metric.name} (${VENDOR_LABEL[k.metric.definedBy] ?? k.metric.definedBy})`}
                       unit={k.metric.unit}

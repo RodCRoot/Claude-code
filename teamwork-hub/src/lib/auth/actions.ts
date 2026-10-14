@@ -5,7 +5,8 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { verify } from "otplib";
 import { db } from "@/db";
-import { users } from "@/db/schema";
+import { organizations, users } from "@/db/schema";
+import { MFA_REQUIRED_REDIRECT, shouldRequireMfa } from "./mfa-policy";
 import { createSession, destroySession, markSessionMfaVerified, recordMfaFailure } from "./session";
 import { getPendingMfaUser } from "./viewer";
 import type { ActionState } from "@/lib/actions";
@@ -20,7 +21,18 @@ export async function loginAction(_prev: ActionState, fd: FormData): Promise<Act
   const res = await verifyCredentials(parsed.data.email, parsed.data.password);
   if (!res.ok) return { ok: false, error: res.error };
   await createSession(res.userId, { mfaVerified: !res.needsMfa });
-  redirect(res.needsMfa ? "/login/mfa" : "/today");
+  redirect(res.needsMfa ? "/login/mfa" : await postLoginPath(res.userId));
+}
+
+/**
+ * Staff whose organization requires two-step verification go straight to enrolment. (Sending them
+ * to /today and letting the app layout redirect leaves the browser on a blank page after the
+ * sign-in action's own redirect, so the policy is applied here as well.)
+ */
+async function postLoginPath(userId: string) {
+  const [u] = await db.select({ role: users.role, orgId: users.orgId, mfaEnabled: users.mfaEnabled }).from(users).where(eq(users.id, userId));
+  const [org] = u ? await db.select({ settings: organizations.settings }).from(organizations).where(eq(organizations.id, u.orgId)) : [];
+  return u && shouldRequireMfa(u, org?.settings, "/today") ? MFA_REQUIRED_REDIRECT : "/today";
 }
 
 export async function mfaAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
