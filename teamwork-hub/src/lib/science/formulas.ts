@@ -34,7 +34,8 @@ export type FormulaKey =
   | "change_pct_v1"
   | "asymmetry_v1"
   | "habit_adherence_v1"
-  | "attendance_rate_v1";
+  | "attendance_rate_v1"
+  | "load_origin_v1";
 
 export const FORMULAS: Record<FormulaKey, { name: string; unit: string; definition: string }> = {
   srpe_load_v1: {
@@ -104,6 +105,12 @@ export const FORMULAS: Record<FormulaKey, { name: string; unit: string; definiti
     name: "Attendance rate (v1)",
     unit: "%",
     definition: "attended ÷ (attended + no-show) bookings in the window × 100. Cancelled bookings are excluded. Null if no eligible bookings.",
+  },
+  load_origin_v1: {
+    name: "Load by origin (v1)",
+    unit: "AU",
+    definition:
+      "srpe_load_v1 summed per ISO week and split by where the session happened: gym (Hub workouts and manual training), sport (My Season logs and manual practice or game), on your own (finished On Your Own sessions with RPE and duration), other. A display split only: ACWR, monotony and strain use the same total as before.",
   },
 };
 

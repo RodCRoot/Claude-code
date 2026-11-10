@@ -105,8 +105,8 @@ const ROLES: { name: string; email?: string; starts: string[] }[] = [
     ],
   },
   { name: "coach", email: USERS.marcus, starts: ["/today", "/training/today", "/training/weight-room", "/science", "/schedule", "/people/retention", "/reports/session-feedback", "/time"] },
-  { name: "guardian", email: USERS.alex, starts: ["/today", "/schedule", "/schedule/book", "/billing/invoices", "/documents", "/messages", "/performance", "/goals", "/shop", "/refer"] },
-  { name: "athlete", email: USERS.maya, starts: ["/today", "/training/today", "/science/body-map", "/goals"] },
+  { name: "guardian", email: USERS.alex, starts: ["/today", "/schedule", "/schedule/book", "/billing/invoices", "/documents", "/messages", "/performance", "/goals", "/shop", "/refer", "/anywhere", "/anywhere/season"] },
+  { name: "athlete", email: USERS.maya, starts: ["/today", "/training/today", "/science/body-map", "/goals", "/anywhere", "/anywhere/season"] },
   { name: "kiosk", email: USERS.kiosk, starts: ["/kiosk", "/kiosk/clock"] },
 ];
 

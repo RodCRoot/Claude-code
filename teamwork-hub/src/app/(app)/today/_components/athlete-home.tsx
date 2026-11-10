@@ -9,6 +9,7 @@ import { athleteHome, countdown, type AthleteHome } from "@/lib/engagement/home"
 import { formatMoney } from "@/lib/money";
 import { fmt, fmtDate, fmtTime, localToUtc, localYmd } from "@/lib/time";
 import { PrBadge, ProgressBar } from "../../training/_components/tb";
+import { AnywhereGameDay, AnywhereHomeCards } from "@/components/anywhere/home-cards";
 
 /**
  * Athlete Home: the athlete and guardian view of /today. Mobile-first. Everything shown comes
@@ -54,6 +55,7 @@ export async function AthleteHomeView({ v, tz, dateLabel, greeting, selected }: 
       ) : (
         <div className="grid gap-4 lg:grid-cols-3">
           <div className="space-y-4 lg:col-span-2">
+            <AnywhereGameDay athleteId={child.athleteId} tz={tz} isAthlete={isAthlete} multi={children.length > 1} />
             <WorkoutCard home={home} isAthlete={isAthlete} />
             {isAthlete && home.wellness?.due && !home.wellness.done ? (
               <section className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-info/30 bg-info/5 px-4 py-3">
@@ -66,6 +68,7 @@ export async function AthleteHomeView({ v, tz, dateLabel, greeting, selected }: 
                 </ButtonLink>
               </section>
             ) : null}
+            <AnywhereHomeCards athleteId={child.athleteId} tz={tz} isAthlete={isAthlete} multi={children.length > 1} />
             <NextSessionCard home={home} tz={tz} />
             <WeekCard home={home} />
             {home.goals ? (

@@ -11,6 +11,7 @@ import { listExercises } from "@/lib/training/exercises";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Badge, Button, buttonClass, Card, CardBody, CardHeader, EmptyState, Field, Input, PageHeader, Select, Stat, StatusBadge, Table, Td, Th } from "@/components/ui";
 import { TrainingNav } from "../../_components/training-nav";
+import { AthleteSeasonCard } from "@/components/anywhere/coach-cards";
 import { E1rmChart } from "../../_components/e1rm-chart";
 import { confirmEstimateAction, leaderboardOptInAction, recordMaxAction } from "../../actions";
 import { guarded, isYmd, sp } from "../../_lib/helpers";
@@ -119,6 +120,7 @@ export default async function AthleteTraining({ params, searchParams }: { params
         </CardBody>
       </Card>
 
+      <AthleteSeasonCard viewer={viewer} athleteId={id} />
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader title="Max & PR history" kicker="Append-only" />

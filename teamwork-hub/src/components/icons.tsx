@@ -9,6 +9,7 @@ const PATHS = {
   training: "M6 7v10M18 7v10M3 9v6M21 9v6M6 12h12",
   science: "M3 20h18M6 16l4-6 4 3 5-8",
   performance: "M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L3.4 9.3l6-.7z",
+  anywhere: "M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11zM12 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5",
   goals: "M12 21a9 9 0 100-18 9 9 0 000 18M12 16a4 4 0 100-8 4 4 0 000 8M12 12h.01",
   messages: "M4 5h16v11H8l-4 4z",
   documents: "M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6",

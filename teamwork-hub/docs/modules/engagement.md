@@ -227,3 +227,7 @@ filled bar; that edit exists only in the seed.
 - No notifications are sent for new badges or levels.
 - The weekly cap shown under This week is the plan's `classes_per_week`; plans without one show
   the count only.
+
+## On Your Own sessions (anywhere module)
+
+A finished On Your Own session (`anywhere_completions`) is a streak source and earns the XP kind `on_your_own_completed` (default 10, configurable on the same settings page). See `docs/modules/anywhere.md`.

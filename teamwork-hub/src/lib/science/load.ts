@@ -68,7 +68,22 @@ export function workoutLoadDate(completedAt: Date | null, scheduledDate: string,
   return completedAt ? localYmd(completedAt, tz) : scheduledDate;
 }
 
-export type LoadRow = LoadEntry & { id: string; source: "activity" | "workout"; label: string; load: number | null; notes: string | null };
+/** Where a session's load came from (load_origin_v1). Display only: the load math never reads it. */
+export type LoadOrigin = "gym" | "sport" | "on_your_own" | "other";
+
+/**
+ * load_origin_v1 (pure). Gym = completed Hub workouts and manual "training" entries. Sport =
+ * anything logged from My Season (source "sport") or a manual practice/game. On your own =
+ * finished On Your Own sessions (source "on_your_own"). Other = manual conditioning/other.
+ */
+export function loadOrigin(e: { source: "activity" | "workout"; kind?: string; activitySource?: string | null }): LoadOrigin {
+  if (e.source === "workout") return "gym";
+  if (e.activitySource === "on_your_own") return "on_your_own";
+  if (e.activitySource === "sport" || e.kind === "practice" || e.kind === "game") return "sport";
+  return e.kind === "training" ? "gym" : "other";
+}
+
+export type LoadRow = LoadEntry & { id: string; source: "activity" | "workout"; origin: LoadOrigin; label: string; load: number | null; notes: string | null };
 
 /** All load entries (manual activity sessions + completed workouts not already linked) for one athlete. */
 export async function loadEntries(tx: Tx, orgId: string, athleteId: string, from: string, to: string): Promise<LoadRow[]> {
@@ -95,6 +110,7 @@ export async function loadEntries(tx: Tx, orgId: string, athleteId: string, from
   const out: LoadRow[] = acts.map((a) => ({
     id: a.id,
     source: "activity",
+    origin: loadOrigin({ source: "activity", kind: a.kind, activitySource: a.source }),
     date: a.activityDate,
     kind: a.kind,
     durationMin: a.durationMinutes,
@@ -108,7 +124,7 @@ export async function loadEntries(tx: Tx, orgId: string, athleteId: string, from
     if (w.completedAt && (w.completedAt < start || w.completedAt > end)) continue;
     const date = workoutLoadDate(w.completedAt, w.scheduledDate);
     if (date < from || date > to) continue;
-    out.push({ id: w.id, source: "workout", date, kind: "training", durationMin: w.durationMinutes, rpe: w.sessionRpe, load: srpeLoad(w.durationMinutes, w.sessionRpe), label: `Workout: ${w.title}`, notes: null });
+    out.push({ id: w.id, source: "workout", origin: "gym", date, kind: "training", durationMin: w.durationMinutes, rpe: w.sessionRpe, load: srpeLoad(w.durationMinutes, w.sessionRpe), label: `Workout: ${w.title}`, notes: null });
   }
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
