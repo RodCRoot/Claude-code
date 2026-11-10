@@ -43,6 +43,7 @@ All formulas are pure functions, and each one has a version key that is shown in
 | `asymmetry_v1` | (L − R) ÷ ((L + R)/2) × 100, where positive means left is greater. It is Teamwork-derived, for example from peak forces in a raw trace. | % |
 | `habit_adherence_v1` | (done + 0.5·partial) ÷ expected × 100. Explicit "missed" and "no check-in" are counted and shown **separately**. | % |
 | `attendance_rate_v1` | attended ÷ (attended + no-show) bookings × 100. Cancellations are excluded, and the rate is null if there are no eligible bookings. | % |
+| `load_origin_v1` | `srpe_load_v1` summed per ISO week and split by where the session happened: gym (Hub workouts, manual training), sport (My Season logs with source `sport`, manual practice or game), on your own (finished On Your Own sessions with source `on_your_own`), other. A display split only: ACWR, monotony and strain use the same total as before. See `docs/modules/anywhere.md`. | AU |
 
 **Unit conversion** (`convertUnit`) uses exact constants: 1 lb = 0.45359237 kg and 1 in = 2.54 cm. Units in different families, such as cm and s, return `null` and are never compared.
 

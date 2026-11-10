@@ -182,6 +182,24 @@ Security review: see `docs/SECURITY-REVIEW.md` (10 findings fixed with regressio
 | Coach Engagement strip and Goals panel on `/performance/[athleteId]` | verified locally | `engagement.test.ts` (assigned vs unassigned coach), e2e `a11y` detail pages | Not shown on the People profile |
 | Engagement settings (XP points, levels on/off, badges on/off), owner/admin, audited | verified locally | `engagement.test.ts`, e2e `a11y` + `csp` for owner | Point values are defaults to confirm with the owner |
 
+## Anywhere: On Your Own, My Season, Daily 3 (proposed Teamwork functionality, built; see `docs/modules/anywhere.md`)
+
+| Feature | Status | Test evidence | Gaps |
+|---|---|---|---|
+| On Your Own library (`/anywhere`): coach-curated short sessions built from the existing exercise library, filter by time and equipment, safety line on every session, under-13 athletes see only sessions marked suitable | verified locally | `anywhere.test.ts` (published only, age rule, scope per role, org isolation), `anywhere-pure.test.ts`, e2e `a11y` + `csp` for guardian and athlete, screenshots in `docs/screenshots/anywhere/` | Sample sessions are starting points for coaches to edit. No birthday on file is treated as under 13 |
+| Coach builder and library (`/training/anywhere`), keyboard operable (Up/Down/Remove buttons) | verified locally | `anywhere.test.ts` (builder roles, publish needs a step, other-org exercise refused, reorder), e2e `a11y` for owner and coach | Steps are removed and re-added rather than edited in place |
+| Finish a session: own record (`anywhere_completions`), idempotent client key, optional RPE and minutes | verified locally | `anywhere.test.ts` (repeat + 4 racing retries = 1 row, late retry keeps finish time, who may finish) | Save-and-retry only: an open session works without a connection, a first load does not (no service worker) |
+| Completions count toward the weekly streak and a new XP kind `on_your_own_completed` (default 10, configurable) | verified locally | `anywhere.test.ts`, `anywhere-pure.test.ts`, existing `engagement*.test.ts` unchanged | Point value is a default to confirm with the owner |
+| Assign a session or a type for specific days to an athlete or group; status on Athlete Home and on the coach board; review queue | verified locally | `anywhere.test.ts` (coach scope, group scope, progress, under-13 hidden) | No reminders are sent |
+| My Season (`/anywhere/season`): team, sport, dates, one-off and weekly events in facility time, DST safe | verified locally | `anywhere.test.ts` (who can edit/view), `anywhere-pure.test.ts` (both DST changes) | Weekly repeats only. Events are removed and re-added rather than edited |
+| `.ics` upload: bounded parser, staged preview, import idempotent by UID; no remote fetches | verified locally | `anywhere-pure.test.ts` (limits, malformed, alarms/URLs ignored, time zones), `anywhere.test.ts` (stage, import twice, roles) | Calendar URLs are out of scope. Changes to single days of a repeating event are skipped with a warning |
+| Log outside practice and games (duration + RPE) into `activity_sessions` with source `sport`; missing logs stay missing | verified locally | `anywhere.test.ts` (ACWR equals existing formulas over the new series, unchanged without outside sessions, relog updates one row, access mirrors load) | Guardians cannot log for a child (existing `training.log` rule) |
+| Weekly load stacked by origin (gym / sport / on your own) on the load page, `load_origin_v1`, text summary and table | verified locally | `anywhere-pure.test.ts`, `anywhere.test.ts` (split adds up), e2e `a11y` on `/science/load` | Unlogged sport sessions make the sport share look smaller than it is (stated on the chart) |
+| Coach views: "Who has a game in the next 48 hours" on the training overview; season on the athlete training page | verified locally | `anywhere.test.ts` (own athletes only, 48h window) | Not shown on the People profile |
+| Game Day card on Athlete Home with a pre-game warm-up suggestion and a post-game log prompt; never based on wellness or injury data | verified locally | `anywhere.test.ts` (pain report changes nothing), screenshots | Suggestion is the shortest published warm-up, not sport specific |
+| Daily 3 on Athlete Home from the existing habit tables, one-tap done | verified locally | `anywhere.test.ts` (max three, existing check-in rules) | Changing a check-in is done on the Habits page |
+| In Season informational link, org setting, default off; never changes a membership | verified locally | `anywhere.test.ts` (off by default, owner/admin only, no membership or request rows written) | Opens a new message to the front desk; staff log the request as today |
+
 ## Cross-module acceptance paths (brief §13)
 
 | Path | Status | Evidence |

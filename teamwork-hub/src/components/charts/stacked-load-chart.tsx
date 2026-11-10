@@ -27,7 +27,7 @@ export function StackedLoadChart({ data, series, height = 240 }: { data: Stacked
       </ul>
       <div style={{ height }} aria-hidden>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart accessibilityLayer={false} data={data} margin={{ top: 18, right: 8, bottom: 4, left: 4 }} barCategoryGap="22%">
+          <BarChart accessibilityLayer={false} data={data.map((d) => ({ ...d, cap: d.total === null ? null : 0.001 }))} margin={{ top: 18, right: 8, bottom: 4, left: 4 }} barCategoryGap="22%">
             <CartesianGrid stroke={t.grid} vertical={false} />
             <XAxis dataKey="x" tick={{ fill: t.axis, fontSize: 11 }} tickLine={false} axisLine={{ stroke: t.grid }} tickFormatter={(d: string) => (/^\d{4}-\d{2}-\d{2}$/.test(d) ? d.slice(5) : d)} />
             <YAxis tick={{ fill: t.axis, fontSize: 11 }} tickLine={false} axisLine={false} width={44} tickFormatter={(v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}K` : String(v))} />
@@ -38,10 +38,12 @@ export function StackedLoadChart({ data, series, height = 240 }: { data: Stacked
               formatter={(v, name) => [`${typeof v === "number" ? Math.round(v) : "0"} AU`, String(name)]}
             />
             {series.map((s, i) => (
-              <Bar key={s.key} dataKey={s.key} name={s.label} stackId="load" fill={colors[i % colors.length]} stroke={t.surface} strokeWidth={1} maxBarSize={44} isAnimationActive={false}>
-                {i === series.length - 1 ? <LabelList dataKey="total" position="top" fill={t.ink} fontSize={11} formatter={(v) => (typeof v === "number" ? String(Math.round(v)) : "")} /> : null}
-              </Bar>
+              <Bar key={s.key} dataKey={s.key} name={s.label} stackId="load" fill={colors[i % colors.length]} stroke={t.surface} strokeWidth={1} maxBarSize={44} isAnimationActive={false} />
             ))}
+            {/* Zero-height cap on top of every stack: it only carries the printed week total. */}
+            <Bar dataKey="cap" stackId="load" fill="transparent" maxBarSize={44} isAnimationActive={false} tooltipType="none" legendType="none">
+              <LabelList dataKey="total" position="top" fill={t.ink} fontSize={11} formatter={(v) => (typeof v === "number" ? String(Math.round(v)) : "")} />
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>

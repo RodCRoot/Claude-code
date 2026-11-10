@@ -59,7 +59,7 @@ export async function seedAnywhere(ctx: SeedCtx) {
     const names = [...new Set(SAMPLES.flatMap((s) => s.steps.map((x) => x[0])))];
     const byName = new Map((await tx.select({ id: exercises.id, name: exercises.name }).from(exercises).where(and(eq(exercises.orgId, orgId), inArray(exercises.name, names)))).map((e) => [e.name, e.id]));
     for (const s of SAMPLES) {
-      const input = { title: s.title, description: `${s.description} Sample session: edit it to fit your athletes.`, category: s.category, durationMinutes: s.minutes, equipment: s.equipment, suitableUnder13: s.u13 };
+      const input = { title: s.title, description: s.description, category: s.category, durationMinutes: s.minutes, equipment: s.equipment, suitableUnder13: s.u13 };
       const row = await createSession(tx, owner, { ...input, status: "draft" });
       let n = 0;
       for (const [name, prescription, cue] of s.steps) {
