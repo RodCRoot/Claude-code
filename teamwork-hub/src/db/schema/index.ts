@@ -7,3 +7,4 @@ export * from "./training";
 export * from "./science";
 export * from "./imports";
 export * from "./payroll";
+export * from "./growth";

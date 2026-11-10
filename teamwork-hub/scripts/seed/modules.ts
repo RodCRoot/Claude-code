@@ -18,5 +18,6 @@ export const moduleSeeds: [string, (ctx: SeedCtx) => Promise<void>][] = [
   ["custom-fields", (ctx) => import("./custom-fields").then((m) => m.seedCustomFields(ctx))],
   ["payroll", (ctx) => import("./payroll").then((m) => m.seedPayroll(ctx))],
   ["member-requests", (ctx) => import("./member-requests").then((m) => m.seedMemberRequests(ctx))],
+  ["growth", (ctx) => import("./growth").then((m) => m.seedGrowth(ctx))], // after billing, crm and scheduling
   ["science", seedScience], // keep after any training seed (uses its set_logs if present)
 ];

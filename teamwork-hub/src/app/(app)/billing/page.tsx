@@ -8,6 +8,7 @@ import { paymentExceptions } from "@/lib/billing/reconciliation";
 import { fmtDate, todayLocal } from "@/lib/time";
 import { runRenewalsAction } from "./actions";
 import { KpiTile, Widget } from "@/components/profile/studio";
+import { FamilySuggestion } from "@/components/growth/family-suggestion";
 import { BillingTabs, InvoiceStatus, Money, PROVIDER_LABEL, requireBillingViewer } from "./_components";
 
 export const metadata = { title: "Memberships & Billing" };
@@ -129,6 +130,7 @@ async function FamilyOverview() {
     <>
       <PageHeader kicker="Billing" title="Your memberships & billing" description="Invoices, receipts, memberships and session credits for the accounts you're authorized on." />
       <BillingTabs current="overview" staff={false} />
+      <FamilySuggestion viewer={v} className="mb-5" />
       {accounts.length === 0 ? (
         <EmptyState title="No billing accounts">You aren&apos;t listed on a billing account. If you expected to see one, please contact the front desk.</EmptyState>
       ) : null}

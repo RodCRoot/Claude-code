@@ -127,6 +127,13 @@
       "when": 1791805355872,
       "tag": "0017_crm_member_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794276850667,
+      "tag": "0018_growth",
+      "breakpoints": true
     }
   ]
 }

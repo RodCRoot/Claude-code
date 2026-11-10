@@ -25,6 +25,7 @@ import { requireCap } from "@/lib/auth/viewer";
 import { getLead, upcomingAssessmentSessions } from "@/lib/crm/leads";
 import { listStages } from "@/lib/crm/stages";
 import { DomainError } from "@/lib/messaging/errors";
+import { LeadGrowthCard } from "@/components/growth/lead-growth-card";
 import { staffDirectory } from "@/lib/messaging/threads";
 import { fmt, fmtDate } from "@/lib/time";
 import {
@@ -163,6 +164,8 @@ export default async function LeadDetail({ params, searchParams }: { params: Pro
               </ul>
             </CardBody>
           </Card>
+
+          <LeadGrowthCard viewer={v} leadId={lead.id} closed={closed} />
 
           <Card>
             <CardHeader title="Conversations" />

@@ -23,7 +23,7 @@ const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", ...(process.env.A11Y_B
 /** Keep in sync with docs/ACCESSIBILITY.md → "Deferred". */
 const DISABLED_RULES: string[] = [];
 
-const PUBLIC = ["/", "/classes", "/programs", "/inquire", "/login"];
+const PUBLIC = ["/", "/classes", "/programs", "/inquire", "/login", "/r/parkerdemo26"];
 const STAFF = [
   "/today",
   "/people",
@@ -76,6 +76,10 @@ const STAFF = [
   "/reports/receivables",
   "/reports/membership-audit",
   "/people/requests",
+  "/people/referrals",
+  "/billing/opportunities",
+  "/settings/growth",
+  "/reports/growth-referrals",
   "/payroll",
   "/payroll/staff",
   "/payroll/import",
@@ -92,7 +96,7 @@ const STAFF = [
   "/settings/audit",
 ];
 const COACH = ["/today", "/people", "/people/tasks", "/schedule", "/training", "/training/today", "/training/weight-room", "/training/review", "/science", "/science/load", "/performance", "/messages", "/documents", "/reports", "/reports/attendance", "/reports/utilization", "/settings/security", "/time"];
-const FAMILY = ["/today", "/schedule", "/schedule/book", "/billing", "/training", "/science", "/science/wellness", "/science/body-map", "/performance", "/messages", "/documents"];
+const FAMILY = ["/today", "/schedule", "/schedule/book", "/billing", "/training", "/science", "/science/wellness", "/science/body-map", "/performance", "/messages", "/documents", "/shop", "/refer"];
 
 type Role = { name: string; email?: string; routes: string[]; dynamic?: [string, RegExp][] };
 const ROLES: Role[] = [
