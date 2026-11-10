@@ -9,6 +9,8 @@ const q = async (tx: Tx, s: ReturnType<typeof sql>) => (await tx.execute(s)).row
 const n = (v: unknown) => (v == null ? 0 : Number(v));
 const bounds = (r: ReportRange) => ({ start: localDayBounds(r.from, r.tz).start.toISOString(), end: localDayBounds(r.to, r.tz).end.toISOString() });
 const pct = (a: number, b: number) => (b ? a / b : null);
+/** Summary tiles only format money, so rates are given as text. */
+const pctText = (a: number, b: number) => (b ? `${Math.round((a / b) * 1000) / 10}%` : "n/a");
 
 /** Growth reports, appended to the shared report registry (src/lib/reports.ts). */
 export const GROWTH_REPORTS: ReportDef[] = [
@@ -54,7 +56,7 @@ export const GROWTH_REPORTS: ReportDef[] = [
           { label: "Referred", value: referred },
           { label: "Started", value: started },
           { label: "Earned", value: earned },
-          { label: "Referred → started", value: pct(started, referred) ?? "n/a", kind: pct(started, referred) == null ? "text" : "pct" },
+          { label: "Referred → started", value: pctText(started, referred) },
         ],
       };
     },
@@ -174,7 +176,7 @@ export const GROWTH_REPORTS: ReportDef[] = [
           { label: "Passes issued", value: rows.length },
           { label: "Converted", value: converted },
           { label: "Joined", value: joined },
-          { label: "Joined ÷ issued", value: pct(joined, rows.length) ?? "n/a", kind: pct(joined, rows.length) == null ? "text" : "pct" },
+          { label: "Joined ÷ issued", value: pctText(joined, rows.length) },
         ],
       };
     },
