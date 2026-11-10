@@ -11,7 +11,7 @@
  */
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Tx } from "@/db";
-import { athleteBadges, athleteGoals, athletes, bookings, formRequests, maxes, membershipHolds, memberships, organizations, questionnaireResponses, scheduleSessions, workouts, xpEvents, type XpKind } from "@/db/schema";
+import { anywhereCompletions, athleteBadges, athleteGoals, athletes, bookings, formRequests, maxes, membershipHolds, memberships, organizations, questionnaireResponses, scheduleSessions, workouts, xpEvents, type XpKind } from "@/db/schema";
 import { DEFAULT_TZ, addDaysYmd, fmt, localToUtc, localYmd, todayLocal } from "@/lib/time";
 import { EARLY_BIRD_BEFORE_HOUR, STREAK_MILESTONES, evaluateBadges, type BadgeStats } from "./badges";
 import { evaluateGoals } from "./goals";
@@ -23,6 +23,8 @@ import { computeStreak, type HoldRange, type StreakResult } from "./streaks";
 export type Activity = {
   attended: { bookingId: string; startsAt: Date }[];
   workouts: { id: string; completedAt: Date; localDate: string }[];
+  /** Finished On Your Own sessions (anywhere module). They count toward the weekly streak. */
+  onYourOwn: { id: string; completedAt: Date; localDate: string }[];
   /** One entry per facility-local date with at least one submitted check-in. No answers. */
   checkinDays: { forDate: string; submittedAt: Date }[];
   prs: PrEvent[];
@@ -43,6 +45,10 @@ export async function loadActivity(tx: Tx, orgId: string, athleteId: string, tz 
     .select({ id: workouts.id, completedAt: workouts.completedAt, scheduledDate: workouts.scheduledDate })
     .from(workouts)
     .where(and(eq(workouts.orgId, orgId), eq(workouts.athleteId, athleteId), eq(workouts.status, "completed")));
+  const own = await tx
+    .select({ id: anywhereCompletions.id, completedAt: anywhereCompletions.completedAt, localDate: anywhereCompletions.localDate })
+    .from(anywhereCompletions)
+    .where(and(eq(anywhereCompletions.orgId, orgId), eq(anywhereCompletions.athleteId, athleteId)));
   const checkins = await tx
     .select({ forDate: questionnaireResponses.forDate, submittedAt: sql<Date>`min(${questionnaireResponses.submittedAt})`.mapWith(questionnaireResponses.submittedAt) })
     .from(questionnaireResponses)
@@ -71,6 +77,7 @@ export async function loadActivity(tx: Tx, orgId: string, athleteId: string, tz 
       const completedAt = w.completedAt ?? localToUtc(w.scheduledDate, "12:00", tz);
       return { id: w.id, completedAt, localDate: w.completedAt ? localYmd(w.completedAt, tz) : w.scheduledDate };
     }),
+    onYourOwn: own,
     checkinDays: checkins.map((c) => ({ forDate: c.forDate, submittedAt: c.submittedAt })),
     prs: detectPrs(maxRows.map((m) => ({ ...m, value: Number(m.value) }))),
     holds: holdRows,
@@ -81,7 +88,7 @@ export async function loadActivity(tx: Tx, orgId: string, athleteId: string, tz 
 
 export function streakFromActivity(a: Activity, today: string, tz = DEFAULT_TZ): StreakResult {
   return computeStreak({
-    activeDates: [...a.attended.map((x) => localYmd(x.startsAt, tz)), ...a.workouts.map((w) => w.localDate)],
+    activeDates: [...a.attended.map((x) => localYmd(x.startsAt, tz)), ...a.workouts.map((w) => w.localDate), ...a.onYourOwn.map((o) => o.localDate)],
     holds: a.holds,
     today,
     milestones: STREAK_MILESTONES,
@@ -106,6 +113,7 @@ export function xpCandidates(a: Activity, athleteId: string, tz = DEFAULT_TZ): C
   return [
     ...a.attended.map((x): Candidate => ({ kind: "session_attended", sourceType: "booking", sourceId: x.bookingId, key: `session:${x.bookingId}`, occurredAt: x.startsAt })),
     ...a.workouts.map((w): Candidate => ({ kind: "workout_completed", sourceType: "workout", sourceId: w.id, key: `workout:${w.id}`, occurredAt: w.completedAt })),
+    ...a.onYourOwn.map((o): Candidate => ({ kind: "on_your_own_completed", sourceType: "anywhere_completion", sourceId: o.id, key: `own:${o.id}`, occurredAt: o.completedAt })),
     // One award per day however many questionnaires were answered. The key holds the date only.
     ...a.checkinDays.map((c): Candidate => ({ kind: "wellness_checkin", sourceType: "checkin_day", sourceId: c.forDate, key: `checkin:${athleteId}:${c.forDate}`, occurredAt: c.submittedAt })),
     ...a.prs.map((p): Candidate => ({ kind: "pr_set", sourceType: "max", sourceId: p.maxId, key: `pr:${p.maxId}`, occurredAt: localToUtc(p.recordedOn, "12:00", tz) })),
@@ -240,6 +248,6 @@ export async function readEngagement(tx: Tx, orgId: string, athleteId: string, o
   const badges = org.settings.badgesEnabled
     ? (await tx.select({ key: athleteBadges.badgeKey, earnedAt: athleteBadges.earnedAt }).from(athleteBadges).where(and(eq(athleteBadges.orgId, orgId), eq(athleteBadges.athleteId, athleteId)))).sort((a, b) => b.earnedAt.getTime() - a.earnedAt.getTime())
     : null;
-  const times = [...activity.attended.map((x) => x.startsAt.getTime()), ...activity.workouts.map((w) => w.completedAt.getTime())];
+  const times = [...activity.attended.map((x) => x.startsAt.getTime()), ...activity.workouts.map((w) => w.completedAt.getTime()), ...activity.onYourOwn.map((o) => o.completedAt.getTime())];
   return { settings: org.settings, streak: streakFromActivity(activity, today, org.tz), level, badges, lastActivityAt: times.length ? new Date(Math.max(...times)) : null, activity };
 }

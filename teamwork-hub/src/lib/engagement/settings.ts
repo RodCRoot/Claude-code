@@ -21,6 +21,7 @@ export const DEFAULT_XP: Record<XpKind, number> = {
   pr_set: 25,
   goal_achieved: 50,
   form_signed: 10,
+  on_your_own_completed: 10,
 };
 
 export const DEFAULT_ENGAGEMENT_SETTINGS: EngagementSettings = { levelsEnabled: true, badgesEnabled: true, xp: DEFAULT_XP };
@@ -32,6 +33,7 @@ export const XP_KIND_LABEL: Record<XpKind, string> = {
   pr_set: "Personal record set",
   goal_achieved: "Goal achieved",
   form_signed: "Form signed",
+  on_your_own_completed: "On Your Own session finished",
 };
 
 export const MAX_XP_PER_EVENT = 1000;
@@ -61,6 +63,8 @@ export const engagementSettingsInput = z.object({
   pr_set: points,
   goal_achieved: points,
   form_signed: points,
+  // Optional so a form saved without the newest field keeps the default.
+  on_your_own_completed: points.default(DEFAULT_XP.on_your_own_completed),
 });
 
 /** Owner/admin only. New point values apply to future awards; the ledger is never rewritten. */

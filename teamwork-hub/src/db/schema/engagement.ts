@@ -10,8 +10,8 @@ import { exercises } from "./training";
  * check-ins, maxes, forms, goals); nothing here stores a health value.
  */
 
-export type XpKind = "session_attended" | "workout_completed" | "wellness_checkin" | "pr_set" | "goal_achieved" | "form_signed";
-export const XP_KINDS: XpKind[] = ["session_attended", "workout_completed", "wellness_checkin", "pr_set", "goal_achieved", "form_signed"];
+export type XpKind = "session_attended" | "workout_completed" | "wellness_checkin" | "pr_set" | "goal_achieved" | "form_signed" | "on_your_own_completed";
+export const XP_KINDS: XpKind[] = ["session_attended", "workout_completed", "wellness_checkin", "pr_set", "goal_achieved", "form_signed", "on_your_own_completed"];
 
 /** Append-only XP ledger (DB trigger blocks UPDATE/DELETE). One row per awarded event. */
 export const xpEvents = pgTable(
