@@ -3,10 +3,12 @@ import type { Tx } from "@/db";
 import type { OrgCapability } from "@/lib/authz/policy";
 import { localDayBounds } from "@/lib/time";
 import { membershipAuditSweep } from "@/lib/member-ops/membership-audit";
+import { RETENTION_REPORTS } from "@/lib/retention/reports";
 
 export type ReportColumn = { key: string; label: string; kind?: "money" | "int" | "pct" | "date" | "datetime" | "text" };
 /** `locationId` narrows location-aware reports (attendance, utilization) to one location. */
-export type ReportRange = { from: string; to: string; tz: string; locationId?: string | null };
+/** `viewer` lets a report narrow itself to the person asking (session-feedback: a coach sees only their own sessions). */
+export type ReportRange = { from: string; to: string; tz: string; locationId?: string | null; viewer?: { userId: string; role: string } };
 export type ReportResult = { rows: Record<string, unknown>[]; summary?: { label: string; value: string | number; kind?: ReportColumn["kind"] }[]; notes?: string[] };
 
 export type ReportDef = {
@@ -487,6 +489,7 @@ export const REPORTS: ReportDef[] = [
       };
     },
   },
+  ...RETENTION_REPORTS,
 ];
 
 export function reportByKey(key: string) {

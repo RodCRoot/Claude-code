@@ -11,6 +11,7 @@ import { cn } from "@/lib/cn";
 import { CapacityBar, Initials } from "../../_components/calendar";
 import { svcStyle } from "../../_components/time-grid";
 import { requireStaff } from "@/lib/auth/viewer";
+import { SessionFeedbackSummaryLine } from "@/components/retention/session-feedback-summary";
 import { can } from "@/lib/authz/policy";
 import { listCoaches } from "@/lib/scheduling/availability";
 import { canRunSession } from "@/lib/scheduling/common";
@@ -90,6 +91,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           View only — this is another coach&apos;s session. Ask operations to make changes.
         </Callout>
       ) : null}
+
+      <SessionFeedbackSummaryLine viewer={v} sessionId={s.id} />
 
       <section aria-label="Session summary" className="mb-5 overflow-hidden rounded-md border border-edge bg-surface shadow-[0_1px_3px_rgb(16_24_40/0.06)]">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-l-4 border-edge border-l-[var(--svc)] bg-th px-4 py-2 text-xs text-ink-2" style={svcStyle(service.color)}>

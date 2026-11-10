@@ -157,6 +157,20 @@ Security review: see `docs/SECURITY-REVIEW.md` (10 findings fixed with regressio
 | Payroll runs (draft → approved → exported, frozen by DB trigger), CSV export | verified locally | `payroll.test.ts` | No direct payroll-provider integration |
 | Zen Planner payroll paste/CSV import (dedupe, preview) | implemented, configuration required | `payroll-engine.test.ts`, `payroll.test.ts` | Column mapping unverified against a real export; one staff member per paste |
 
+## Retention & athlete experience (proposed Teamwork functionality; no vendor equivalent claimed)
+
+| Feature | Status | Evidence | Gaps |
+|---|---|---|---|
+| Retention radar (`/people/retention`): transparent low / watch / at-risk level per active member from 15 documented rule-based signals, each with evidence; estimated monthly value at risk; last contact; recommended next action; filters and sort | verified locally | `retention.test.ts` (one fixture per signal + healthy control, read-only transaction, thresholds from settings, coach scope, org isolation) | Thresholds are starting points to tune, not norms. "Last contact" only knows Hub messages, tasks and logged outcomes (not calls or GoHighLevel). No health/wellness data by design |
+| Retention thresholds in `organizations.settings.retention` (Settings → Retention radar thresholds), validated and audited | verified locally | `retention.test.ts` | "Days since last visit" reuses `attendanceGapDays` from the membership policy |
+| Save log (`retention_actions`): action, outcome saved / still at risk / lost + reason code, signal snapshot, audited; "Create follow-up task" (existing tasks, one per athlete per day); "Open conversation" link | verified locally | `retention.test.ts` | A coach's entry stores no billing signals or dollar value |
+| Report "Retention: saves, losses and churn" (saves, losses by reason, athlete churn overall / by tenure cohort / by plan, average tenure) with CSV via the existing reports route; every row states how it is computed | verified locally | `retention-milestones-reports.test.ts` | Dollar figures are value-at-risk estimates, not collected or lost revenue |
+| Session feedback: 1–5 rating + optional comment + "tell my coach", one response per booking, editable 24h by the person who left it; family schedule card and `/feedback/[bookingId]`; no messages sent | verified locally | `retention-feedback.test.ts` (authorization per role, uniqueness, edit window, DB CHECKs) | No reminder or prompt is sent: families must open the schedule page. Not yet mounted on the family dashboard (being rebuilt separately) |
+| Feedback privacy: coaches see averages only (anonymity floor, default 3 responses) unless "tell my coach" was ticked; per-session line on the session page; "Session feedback averages" report by coach and class (owner/admin; coach = own sessions) | verified locally | `retention-feedback.test.ts` | Operations can read individual responses (they do the follow-up) but cannot open the averages report |
+| Low rating → staff task "Follow up on session feedback" (no comment, rating or name in the task; not linked to the athlete unless shared with the coach) | verified locally | `retention-feedback.test.ts` | Unshared follow-ups go to the first owner login |
+| Milestones this week on the staff dashboard (anniversaries, 25/50/100/250 sessions, birthdays staff-only, first 30 days) with "Create shoutout task"; facility-timezone math | verified locally | `retention-milestones-reports.test.ts` | Shown on the owner/admin/operations dashboard only; no automatic messages by design |
+| Winback list (`/people/retention/winback`): ended in the last 12 months with end reason, last plan, tenure; follow-up task only | verified locally | `retention-milestones-reports.test.ts` | End reason is only as good as the cancellation reason or logged loss |
+
 ## Cross-module acceptance paths (brief §13)
 
 | Path | Status | Evidence |

@@ -48,7 +48,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const from = valid(sp.from) ?? addDaysYmd(to, -29);
   const locs = def.locationAware ? await listLocations(db, v.orgId) : [];
   const locationId = locs.find((l) => l.id === parseLocationParam(sp.location))?.id ?? null;
-  const range = { from, to, tz, locationId };
+  const range = { from, to, tz, locationId, viewer: { userId: v.userId, role: v.role } };
   const result = from > to ? null : await def.run(db, v.orgId, range);
   const chart = result ? await chartFor(def.key, db, v.orgId, range, result) : null;
   return (

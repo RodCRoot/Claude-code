@@ -17,6 +17,7 @@ import { listLocations, parseLocationParam } from "@/lib/locations";
 import { bookAction, cancelBookingAction, rescheduleAction } from "../actions";
 import { capacityText, DaysView, MonthView, SessionRow } from "./calendar";
 import { CalendarToolbar, hrefWith, rangeLabel, type Params } from "./nav";
+import { SessionFeedbackCard } from "@/components/retention/feedback-card";
 
 type Range = ReturnType<typeof calendarRange>;
 const ANY_SERVICE = "00000000-0000-0000-0000-000000000000";
@@ -170,6 +171,8 @@ export async function FamilySchedule({ viewer, params, range, tz, today }: { vie
           ))}
         </nav>
       ) : null}
+
+      <SessionFeedbackCard viewer={viewer} />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-1">
