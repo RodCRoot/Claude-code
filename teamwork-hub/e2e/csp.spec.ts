@@ -70,7 +70,7 @@ async function crawl(page: Page, starts: string[], findings: Finding[]) {
 }
 
 const ROLES: { name: string; email?: string; starts: string[] }[] = [
-  { name: "public (signed out)", starts: ["/", "/programs", "/classes", "/inquire", "/login", "/denied", "/dev/switch", "/does-not-exist"] },
+  { name: "public (signed out)", starts: ["/", "/programs", "/classes", "/inquire", "/login", "/denied", "/dev/switch", "/does-not-exist", "/s/TeamworkDemoShowcaseMayaP000000000000000000", "/s/not-a-real-showcase-link"] },
   {
     name: "owner",
     email: USERS.rod,
@@ -81,13 +81,13 @@ const ROLES: { name: string; email?: string; starts: string[] }[] = [
       "/training/settings", "/training/today", "/training/weight-room", "/science", "/science/body-map", "/science/force-plate", "/science/habits",
       "/science/kpis", "/science/load", "/science/reports", "/science/volume", "/science/wearables", "/science/wellness", "/science/wellness/builder",
       "/performance", "/messages", "/messages/new", "/messages/outbox", "/messages/templates", "/messages/automations", "/documents", "/documents/archive",
-      "/reports", "/settings", "/settings/audit", "/settings/integrations", "/settings/security", "/settings/users", "/imports", "/imports/exports", "/imports/hawkin", "/settings/engagement",
+      "/reports", "/settings", "/settings/audit", "/settings/integrations", "/settings/security", "/settings/users", "/imports", "/imports/exports", "/imports/hawkin", "/settings/engagement", "/settings/showcase", "/people/showcases", "/training/recaps",
       "/people/requests", "/people/retention", "/people/retention/winback", "/reports/retention-saves", "/reports/session-feedback", "/reports/membership-audit", "/payroll", "/payroll/staff", "/payroll/import", "/payroll/settings", "/time",
     ],
   },
-  { name: "coach", email: USERS.marcus, starts: ["/today", "/training/today", "/training/weight-room", "/science", "/schedule", "/people/retention", "/reports/session-feedback", "/time"] },
-  { name: "guardian", email: USERS.alex, starts: ["/today", "/schedule", "/schedule/book", "/billing/invoices", "/documents", "/messages", "/performance", "/goals"] },
-  { name: "athlete", email: USERS.maya, starts: ["/today", "/training/today", "/science/body-map", "/goals"] },
+  { name: "coach", email: USERS.marcus, starts: ["/today", "/training/today", "/training/weight-room", "/science", "/schedule", "/people/retention", "/reports/session-feedback", "/time", "/training/recaps", "/people/showcases"] },
+  { name: "guardian", email: USERS.alex, starts: ["/today", "/schedule", "/schedule/book", "/billing/invoices", "/documents", "/messages", "/performance", "/goals", "/showcase", "/recap"] },
+  { name: "athlete", email: USERS.maya, starts: ["/today", "/training/today", "/science/body-map", "/goals", "/showcase", "/recap"] },
   { name: "kiosk", email: USERS.kiosk, starts: ["/kiosk", "/kiosk/clock"] },
 ];
 

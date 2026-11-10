@@ -1,11 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { showcaseRateOk } from "@/lib/showcase/rate-limit";
 
 /**
  * Security headers (incl. a per-request nonce-based Content-Security-Policy) + an optimistic
  * redirect for signed-out users on app routes. Real authorization happens server-side in every
  * page, action, and route handler.
  */
-const APP_PREFIXES = ["/today", "/people", "/schedule", "/billing", "/training", "/science", "/performance", "/messages", "/documents", "/reports", "/settings", "/imports", "/kiosk", "/payroll", "/time"];
+const APP_PREFIXES = ["/today", "/people", "/schedule", "/billing", "/training", "/science", "/performance", "/messages", "/documents", "/reports", "/settings", "/imports", "/kiosk", "/payroll", "/time", "/showcase", "/recap"];
 
 /**
  * Hosted checkout pages a payment form may be redirected to (Stripe Checkout / PayPal approval).
@@ -98,6 +99,11 @@ export function proxy(request: NextRequest) {
       headers: { "WWW-Authenticate": 'Basic realm="Teamwork Hub staging", charset="UTF-8"', "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" },
     });
   }
+  // Public Showcase links (/s/<token>): no sign-in, rate-limited per client, never indexed.
+  const isShowcase = pathname.startsWith("/s/");
+  if (isShowcase && !showcaseRateOk(request.headers.get("x-forwarded-for"))) {
+    return new NextResponse("Too many requests. Please try again in a minute.", { status: 429, headers: { "Retry-After": "60", "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex, nofollow" } });
+  }
   if (APP_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/")) && !request.cookies.has("tw_session")) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
@@ -132,7 +138,7 @@ export function proxy(request: NextRequest) {
   res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(self)");
   if (process.env.NODE_ENV === "production") res.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains");
   // Demo and staging deployments must never show up in search results.
-  if (process.env.APP_MODE !== "production") res.headers.set("X-Robots-Tag", "noindex, nofollow");
+  if (process.env.APP_MODE !== "production" || isShowcase) res.headers.set("X-Robots-Tag", "noindex, nofollow");
   // Private data must never be cached by shared caches.
   if (!pathname.startsWith("/_next") && pathname !== "/" && !pathname.startsWith("/programs") && !pathname.startsWith("/classes")) {
     res.headers.set("Cache-Control", "private, no-store");

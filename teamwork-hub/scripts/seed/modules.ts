@@ -20,5 +20,6 @@ export const moduleSeeds: [string, (ctx: SeedCtx) => Promise<void>][] = [
   ["member-requests", (ctx) => import("./member-requests").then((m) => m.seedMemberRequests(ctx))],
   ["retention", (ctx) => import("./retention").then((m) => m.seedRetention(ctx))], // after scheduling + billing + documents
   ["science", seedScience], // keep after any training seed (uses its set_logs if present)
-  ["engagement", (ctx) => import("./engagement").then((m) => m.seedEngagement(ctx))], // last: derives XP/badges from every other module
+  ["engagement", (ctx) => import("./engagement").then((m) => m.seedEngagement(ctx))], // derives XP/badges from every other module
+  ["showcase", (ctx) => import("./showcase").then((m) => m.seedShowcase(ctx))], // after engagement: recaps read badges and goals
 ];

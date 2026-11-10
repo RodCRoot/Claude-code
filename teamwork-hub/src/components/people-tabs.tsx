@@ -1,11 +1,12 @@
 import { Tabs } from "./ui";
 
-export function PeopleTabs({ current, showLeads = true, showRequests = false, showRetention = true }: { current: "directory" | "leads" | "tasks" | "requests" | "retention" | "new"; showLeads?: boolean; showRequests?: boolean; showRetention?: boolean }) {
+export function PeopleTabs({ current, showLeads = true, showRequests = false, showRetention = true }: { current: "directory" | "leads" | "tasks" | "requests" | "retention" | "showcases" | "new"; showLeads?: boolean; showRequests?: boolean; showRetention?: boolean }) {
   const tabs = [
     { key: "directory", href: "/people", label: "Directory" },
     ...(showLeads ? [{ key: "leads", href: "/people/leads", label: "Leads & pipeline" }] : []),
     ...(showRequests ? [{ key: "requests", href: "/people/requests", label: "Member requests" }] : []),
     ...(showRetention ? [{ key: "retention", href: "/people/retention", label: "Retention" }] : []),
+    { key: "showcases", href: "/people/showcases", label: "Showcases" },
     { key: "tasks", href: "/people/tasks", label: "Tasks" },
   ];
   return <Tabs tabs={tabs} current={current} />;

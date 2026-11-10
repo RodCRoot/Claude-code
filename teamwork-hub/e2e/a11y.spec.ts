@@ -23,7 +23,9 @@ const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", ...(process.env.A11Y_B
 /** Keep in sync with docs/ACCESSIBILITY.md → "Deferred". */
 const DISABLED_RULES: string[] = [];
 
-const PUBLIC = ["/", "/classes", "/programs", "/inquire", "/login"];
+/** Demo share token from scripts/seed/showcase.ts (synthetic data only). */
+const SHOWCASE = "/s/TeamworkDemoShowcaseMayaP000000000000000000";
+const PUBLIC = ["/", "/classes", "/programs", "/inquire", "/login", SHOWCASE, "/s/not-a-real-showcase-link"];
 const STAFF = [
   "/today",
   "/people",
@@ -93,12 +95,15 @@ const STAFF = [
   "/settings/users",
   "/settings/custom-fields",
   "/settings/engagement",
+  "/settings/showcase",
+  "/people/showcases",
+  "/training/recaps",
   "/settings/security",
   "/settings/integrations",
   "/settings/audit",
 ];
-const COACH = ["/today", "/people", "/people/tasks", "/schedule", "/training", "/training/today", "/training/weight-room", "/training/review", "/science", "/science/load", "/performance", "/messages", "/documents", "/reports", "/reports/attendance", "/reports/utilization", "/people/retention", "/reports/session-feedback", "/settings/security", "/time"];
-const FAMILY = ["/today", "/schedule", "/schedule/book", "/billing", "/training", "/science", "/science/wellness", "/science/body-map", "/performance", "/messages", "/documents", "/goals"];
+const COACH = ["/today", "/people", "/people/tasks", "/schedule", "/training", "/training/today", "/training/weight-room", "/training/review", "/science", "/science/load", "/performance", "/messages", "/documents", "/reports", "/reports/attendance", "/reports/utilization", "/people/retention", "/reports/session-feedback", "/settings/security", "/time", "/training/recaps", "/people/showcases"];
+const FAMILY = ["/today", "/schedule", "/schedule/book", "/billing", "/training", "/science", "/science/wellness", "/science/body-map", "/performance", "/messages", "/documents", "/goals", "/showcase", "/recap"];
 
 type Role = { name: string; email?: string; routes: string[]; dynamic?: [string, RegExp][] };
 const ROLES: Role[] = [
@@ -127,6 +132,7 @@ const ROLES: Role[] = [
       ["/today", /^\/people\/[0-9a-f-]{36}$/],
       ["/performance", /^\/performance\/[0-9a-f-]{36}$/],
       ["/schedule", /^\/feedback\/[0-9a-f-]{36}$/],
+      ["/recap", /^\/recap\/\d{4}-\d{2}\?athlete=[0-9a-f-]{36}$/],
     ],
   },
   { name: "athlete", email: USERS.maya, routes: FAMILY.filter((r) => r !== "/billing") },

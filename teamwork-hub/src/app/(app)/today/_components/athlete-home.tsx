@@ -8,6 +8,7 @@ import { familyAthletes, familyBilling, familyChildSummary, unreadThreads, type 
 import { athleteHome, countdown, type AthleteHome } from "@/lib/engagement/home";
 import { formatMoney } from "@/lib/money";
 import { fmt, fmtDate, fmtTime, localToUtc, localYmd } from "@/lib/time";
+import { ShowcaseHomeCards } from "@/components/showcase/home-cards";
 import { PrBadge, ProgressBar } from "../../training/_components/tb";
 
 /**
@@ -155,6 +156,7 @@ export async function AthleteHomeView({ v, tz, dateLabel, greeting, selected }: 
                 </CardBody>
               </Card>
             ) : null}
+            <ShowcaseHomeCards v={v} athleteId={home.athleteId} firstName={home.firstName} />
             {isAthlete ? <PaymentsCard billing={billing} /> : null}
             <Card>
               <CardBody className="flex items-center justify-between gap-3 text-sm">
