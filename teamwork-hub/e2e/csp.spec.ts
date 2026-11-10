@@ -81,13 +81,13 @@ const ROLES: { name: string; email?: string; starts: string[] }[] = [
       "/training/settings", "/training/today", "/training/weight-room", "/science", "/science/body-map", "/science/force-plate", "/science/habits",
       "/science/kpis", "/science/load", "/science/reports", "/science/volume", "/science/wearables", "/science/wellness", "/science/wellness/builder",
       "/performance", "/messages", "/messages/new", "/messages/outbox", "/messages/templates", "/messages/automations", "/documents", "/documents/archive",
-      "/reports", "/settings", "/settings/audit", "/settings/integrations", "/settings/security", "/settings/users", "/imports", "/imports/exports", "/imports/hawkin",
+      "/reports", "/settings", "/settings/audit", "/settings/integrations", "/settings/security", "/settings/users", "/settings/engagement", "/imports", "/imports/exports", "/imports/hawkin",
       "/people/requests", "/reports/membership-audit", "/payroll", "/payroll/staff", "/payroll/import", "/payroll/settings", "/time",
     ],
   },
   { name: "coach", email: USERS.marcus, starts: ["/today", "/training/today", "/training/weight-room", "/science", "/schedule", "/time"] },
-  { name: "guardian", email: USERS.alex, starts: ["/today", "/schedule/book", "/billing/invoices", "/documents", "/messages", "/performance"] },
-  { name: "athlete", email: USERS.maya, starts: ["/today", "/training/today", "/science/body-map"] },
+  { name: "guardian", email: USERS.alex, starts: ["/today", "/goals", "/schedule/book", "/billing/invoices", "/documents", "/messages", "/performance"] },
+  { name: "athlete", email: USERS.maya, starts: ["/today", "/goals", "/training/today", "/science/body-map"] },
   { name: "kiosk", email: USERS.kiosk, starts: ["/kiosk", "/kiosk/clock"] },
 ];
 

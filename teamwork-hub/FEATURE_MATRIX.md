@@ -157,6 +157,18 @@ Security review: see `docs/SECURITY-REVIEW.md` (10 findings fixed with regressio
 | Payroll runs (draft → approved → exported, frozen by DB trigger), CSV export | verified locally | `payroll.test.ts` | No direct payroll-provider integration |
 | Zen Planner payroll paste/CSV import (dedupe, preview) | implemented, configuration required | `payroll-engine.test.ts`, `payroll.test.ts` | Column mapping unverified against a real export; one staff member per paste |
 
+## Athlete engagement (proposed Teamwork functionality, built; see `docs/modules/engagement.md`)
+
+| Feature | Status | Test evidence | Gaps |
+|---|---|---|---|
+| Athlete Home on `/today` for athletes and guardians (workout, next session, week progress, goals, badges, PRs, checklist, family items) | verified locally | `engagement.test.ts` (read model + access), e2e `a11y` + `csp` for guardian and athlete, screenshots in `docs/screenshots/engagement/` | Refreshes on page load only (no background job, no notifications) |
+| Weekly streak in facility-local ISO weeks; hold weeks skipped; DST safe | verified locally | `engagement-pure.test.ts`, `engagement.test.ts` | In-season pauses are not treated as holds (by design) |
+| XP ledger (`xp_events`, append-only trigger, idempotent derive-and-upsert) and levels | verified locally | `engagement.test.ts` (repeat + concurrent sync, constraints), `engagement-pure.test.ts` | XP is never reversed after a correction |
+| Badges: catalog in code, idempotent awarding, SVG medallions | verified locally | `engagement.test.ts`, `engagement-pure.test.ts`, e2e `a11y` | No notification when a badge is earned |
+| Goals: free text or linked to a test metric or lift max; comparability enforced; auto-achieve with audit and XP | verified locally | `engagement.test.ts` | Staff manage goals from the performance page only |
+| Coach Engagement strip and Goals panel on `/performance/[athleteId]` | verified locally | `engagement.test.ts` (assigned vs unassigned coach), e2e `a11y` detail pages | Not shown on the People profile |
+| Engagement settings (XP points, levels on/off, badges on/off), owner/admin, audited | verified locally | `engagement.test.ts`, e2e `a11y` + `csp` for owner | Point values are defaults to confirm with the owner |
+
 ## Cross-module acceptance paths (brief §13)
 
 | Path | Status | Evidence |

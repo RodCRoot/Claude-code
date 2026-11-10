@@ -87,12 +87,13 @@ const STAFF = [
   "/settings",
   "/settings/users",
   "/settings/custom-fields",
+  "/settings/engagement",
   "/settings/security",
   "/settings/integrations",
   "/settings/audit",
 ];
 const COACH = ["/today", "/people", "/people/tasks", "/schedule", "/training", "/training/today", "/training/weight-room", "/training/review", "/science", "/science/load", "/performance", "/messages", "/documents", "/reports", "/reports/attendance", "/reports/utilization", "/settings/security", "/time"];
-const FAMILY = ["/today", "/schedule", "/schedule/book", "/billing", "/training", "/science", "/science/wellness", "/science/body-map", "/performance", "/messages", "/documents"];
+const FAMILY = ["/today", "/schedule", "/schedule/book", "/billing", "/training", "/science", "/science/wellness", "/science/body-map", "/performance", "/goals", "/messages", "/documents"];
 
 type Role = { name: string; email?: string; routes: string[]; dynamic?: [string, RegExp][] };
 const ROLES: Role[] = [
