@@ -46,6 +46,7 @@ import { listMemberships } from "@/lib/billing/queries";
 import { formatMoney } from "@/lib/money";
 import { ProfileHeader } from "@/components/profile/profile-header";
 import { InfoList, InfoSection, MemberAvatar } from "@/components/profile/studio";
+import { OpportunitiesCard } from "@/components/growth/opportunities-card";
 
 export const metadata = { title: "Person" };
 
@@ -389,6 +390,7 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
 
       {tab === "overview" ? (
         <div className="space-y-4">
+          {athlete ? <OpportunitiesCard viewer={v} athleteId={athlete.id} /> : null}
           {staff ? (
             <Card>
               <CardHeader title="Follow-ups" kicker={`${d.tasks.length} open task${d.tasks.length === 1 ? "" : "s"}`} />

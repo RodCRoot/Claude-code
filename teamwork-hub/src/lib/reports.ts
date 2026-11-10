@@ -4,6 +4,7 @@ import type { OrgCapability } from "@/lib/authz/policy";
 import { localDayBounds } from "@/lib/time";
 import { membershipAuditSweep } from "@/lib/member-ops/membership-audit";
 import { RETENTION_REPORTS } from "@/lib/retention/reports";
+import { GROWTH_REPORTS } from "@/lib/growth/reports";
 
 export type ReportColumn = { key: string; label: string; kind?: "money" | "int" | "pct" | "date" | "datetime" | "text" };
 /** `locationId` narrows location-aware reports (attendance, utilization) to one location. */
@@ -14,7 +15,7 @@ export type ReportResult = { rows: Record<string, unknown>[]; summary?: { label:
 export type ReportDef = {
   key: string;
   title: string;
-  category: "Memberships" | "Attendance" | "Money" | "Retention" | "Staff";
+  category: "Memberships" | "Attendance" | "Money" | "Retention" | "Staff" | "Growth";
   /** Plain-language definition shown with the report. */
   definition: string;
   /** Report honours `ReportRange.locationId` (shows the location filter). */
@@ -490,6 +491,7 @@ export const REPORTS: ReportDef[] = [
     },
   },
   ...RETENTION_REPORTS,
+  ...GROWTH_REPORTS,
 ];
 
 export function reportByKey(key: string) {

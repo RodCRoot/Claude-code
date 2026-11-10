@@ -6,6 +6,8 @@ import { listCatalog, PRODUCT_KINDS } from "@/lib/billing/catalog";
 import { fmtDate, todayLocal } from "@/lib/time";
 import { createProductAction, createVersionAction, productLocationsAction, toggleProductAction } from "../actions";
 import { listLocations } from "@/lib/locations";
+import { ShopListingToggle } from "@/components/growth/shop-listing-toggle";
+import { shopListingsByProduct } from "@/lib/growth/shop";
 import { BillingTabs, Money, requireBillingStaff } from "../_components";
 
 export const metadata = { title: "Products" };
@@ -38,6 +40,7 @@ export default async function ProductsPage() {
   const today = todayLocal();
   const catalog = await listCatalog(db, v.orgId, today);
   const locs = await listLocations(db, v.orgId);
+  const shopListings = await shopListingsByProduct(db, v.orgId);
   const locName = new Map(locs.map((l) => [l.id, l.name]));
   const manage = can(v, "billing.manage");
   return (
@@ -58,6 +61,7 @@ export default async function ProductsPage() {
                     <div className="font-medium">{p.name}</div>
                     {p.sku ? <div className="text-xs text-ink-3">SKU {p.sku}</div> : null}
                     {!p.active ? <Badge>archived</Badge> : null}
+                    <ShopListingToggle productId={p.id} kind={p.kind} name={p.name} listing={shopListings.get(p.id)} manage={manage} />
                     {locs.length ? (
                       <div className="mt-1 text-xs text-ink-3">{p.locationIds.length ? `Only at ${p.locationIds.map((id) => locName.get(id) ?? "?").join(", ")}` : "All locations"}</div>
                     ) : null}

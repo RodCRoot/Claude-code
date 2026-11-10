@@ -24,6 +24,7 @@ export function BillingTabs({ current, staff }: { current: string; staff: boolea
         { key: "memberships", href: "/billing/memberships", label: "Memberships" },
         { key: "invoices", href: "/billing/invoices", label: "Invoices" },
         { key: "products", href: "/billing/products", label: "Products" },
+        { key: "opportunities", href: "/billing/opportunities", label: "Opportunities" },
         { key: "pos", href: "/billing/pos", label: "Point of sale" },
         { key: "reconciliation", href: "/billing/reconciliation", label: "Reconciliation" },
         { key: "providers", href: "/billing/providers", label: "Payment providers" },
