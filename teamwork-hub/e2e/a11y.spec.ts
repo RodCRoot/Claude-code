@@ -50,6 +50,8 @@ const STAFF = [
   "/training/review",
   "/training/reports",
   "/training/weight-room",
+  "/training/anywhere",
+  "/training/anywhere/new",
   "/training/settings",
   "/science",
   "/science/load",
@@ -97,8 +99,8 @@ const STAFF = [
   "/settings/integrations",
   "/settings/audit",
 ];
-const COACH = ["/today", "/people", "/people/tasks", "/schedule", "/training", "/training/today", "/training/weight-room", "/training/review", "/science", "/science/load", "/performance", "/messages", "/documents", "/reports", "/reports/attendance", "/reports/utilization", "/people/retention", "/reports/session-feedback", "/settings/security", "/time"];
-const FAMILY = ["/today", "/schedule", "/schedule/book", "/billing", "/training", "/science", "/science/wellness", "/science/body-map", "/performance", "/messages", "/documents", "/goals"];
+const COACH = ["/today", "/people", "/people/tasks", "/schedule", "/training", "/training/today", "/training/weight-room", "/training/review", "/training/anywhere", "/science", "/science/load", "/performance", "/messages", "/documents", "/reports", "/reports/attendance", "/reports/utilization", "/people/retention", "/reports/session-feedback", "/settings/security", "/time"];
+const FAMILY = ["/today", "/schedule", "/schedule/book", "/billing", "/training", "/science", "/science/wellness", "/science/body-map", "/performance", "/messages", "/documents", "/goals", "/anywhere", "/anywhere/season"];
 
 type Role = { name: string; email?: string; routes: string[]; dynamic?: [string, RegExp][] };
 const ROLES: Role[] = [
@@ -115,6 +117,7 @@ const ROLES: Role[] = [
       ["/messages", /^\/messages\/[0-9a-f-]{36}$/],
       ["/performance", /^\/performance\/[0-9a-f-]{36}$/],
       ["/people/retention", /^\/people\/retention\/feedback\/[0-9a-f-]{36}$/],
+      ["/training/anywhere", /^\/training\/anywhere\/[0-9a-f-]{36}$/],
     ],
   },
   { name: "coach", email: USERS.marcus, routes: COACH, dynamic: [["/people", /^\/people\/[0-9a-f-]{36}$/]] },
@@ -129,7 +132,7 @@ const ROLES: Role[] = [
       ["/schedule", /^\/feedback\/[0-9a-f-]{36}$/],
     ],
   },
-  { name: "athlete", email: USERS.maya, routes: FAMILY.filter((r) => r !== "/billing") },
+  { name: "athlete", email: USERS.maya, routes: FAMILY.filter((r) => r !== "/billing"), dynamic: [["/anywhere", /^\/anywhere\/sessions\/[0-9a-f-]{36}/]] },
   { name: "kiosk", email: USERS.kiosk, routes: ["/kiosk", "/kiosk/clock"] },
 ];
 

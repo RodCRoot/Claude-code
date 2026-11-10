@@ -14,7 +14,7 @@ export async function guarded<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-export type TabKey = "overview" | "today" | "weight-room" | "review" | "athletes" | "programs" | "exercises" | "plan" | "reports" | "settings";
+export type TabKey = "overview" | "today" | "weight-room" | "review" | "athletes" | "programs" | "exercises" | "anywhere" | "plan" | "reports" | "settings";
 
 export function trainingTabs(v: Viewer) {
   if (v.role === "athlete") {
@@ -31,6 +31,7 @@ export function trainingTabs(v: Viewer) {
     { key: "athletes", href: "/training/athletes", label: "Athletes" },
     { key: "programs", href: "/training/programs", label: "Programs" },
     { key: "exercises", href: "/training/exercises", label: "Exercises" },
+    { key: "anywhere", href: "/training/anywhere", label: "On Your Own" },
     { key: "plan", href: "/training/plan", label: "Annual plan" },
     { key: "reports", href: "/training/reports", label: "Reports" },
   ];

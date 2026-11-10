@@ -40,7 +40,6 @@ export function cleanText(raw: string | undefined, max = MAX_TEXT): string | nul
   const s = raw
     .replace(/\\n/gi, " ")
     .replace(/\\([,;\\])/g, "$1")
-    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001f\u007f]/g, " ")
     .replace(/\s+/g, " ")
     .trim();

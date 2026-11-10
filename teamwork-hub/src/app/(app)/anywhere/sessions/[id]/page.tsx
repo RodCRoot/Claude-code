@@ -35,9 +35,10 @@ export default async function AnywhereSessionPage({ params, searchParams }: { pa
   }
   return (
     <div className="mx-auto max-w-3xl">
-      <ModuleHero kicker="On Your Own" title={session.title} description={session.description ?? undefined}>
+      <ModuleHero kicker="On Your Own" title={session.title} description={session.description ?? undefined} />
+      <div className="mb-3">
         <SessionMeta s={session} />
-      </ModuleHero>
+      </div>
       <SafetyNote className="mb-4" />
       <SessionPlayer
         athleteId={child.athleteId}

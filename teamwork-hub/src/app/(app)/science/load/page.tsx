@@ -1,5 +1,6 @@
 import { ColumnChart } from "@/components/charts/bar-chart";
 import { ChartFigure } from "@/components/charts/chart-figure";
+import { LoadByOriginCard } from "@/components/anywhere/coach-cards";
 import { TrendChart } from "@/components/charts/trend-chart";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Card, CardBody, CardHeader, EmptyState, Field, Input, Select, Table, Td, Th } from "@/components/ui";
@@ -128,6 +129,7 @@ export default async function LoadPage({ searchParams }: { searchParams: SP }) {
             <p className="mt-2 text-xs text-ink-3">A partial week’s total only includes known days; it is not a full-week figure.</p>
           </CardBody>
         </Card>
+        <LoadByOriginCard entries={L.entries} from={L.from} to={L.to} />
         {L.readiness ? (
           <Card>
             <CardHeader title="Wellness context" kicker="Separate chart · shared dates, separate scale" />

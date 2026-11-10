@@ -11,6 +11,7 @@ import { groupsForViewer } from "@/lib/training/assignments";
 import { weightRoomRoster } from "@/lib/training/weightroom";
 import { ButtonLink, Card, CardBody, CardHeader, EmptyState, StatusBadge } from "@/components/ui";
 import { TrainingNav } from "./_components/training-nav";
+import { GamesSoonCard } from "@/components/anywhere/coach-cards";
 import { CoachTrainingFeedCard, PrAlertsCard, TodayTrainingCard } from "./_components/dashboard-cards";
 import { HeroLink, HeroStat, ModuleHero, ProgressBar, ProgressText, WeekStrip, type WeekDay } from "./_components/tb";
 
@@ -157,6 +158,7 @@ export default async function TrainingHome() {
         </div>
       </ModuleHero>
       <TrainingNav viewer={viewer} current="overview" />
+      <GamesSoonCard viewer={viewer} />
 
       <section aria-labelledby="week-h" className="mb-6">
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
