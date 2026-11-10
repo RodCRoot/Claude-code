@@ -170,6 +170,17 @@ Security review: see `docs/SECURITY-REVIEW.md` (10 findings fixed with regressio
 | Low rating → staff task "Follow up on session feedback" (no comment, rating or name in the task; not linked to the athlete unless shared with the coach) | verified locally | `retention-feedback.test.ts` | Unshared follow-ups go to the first owner login |
 | Milestones this week on the staff dashboard (anniversaries, 25/50/100/250 sessions, birthdays staff-only, first 30 days) with "Create shoutout task"; facility-timezone math | verified locally | `retention-milestones-reports.test.ts` | Shown on the owner/admin/operations dashboard only; no automatic messages by design |
 | Winback list (`/people/retention/winback`): ended in the last 12 months with end reason, last plan, tenure; follow-up task only | verified locally | `retention-milestones-reports.test.ts` | End reason is only as good as the cancellation reason or logged loss |
+## Athlete engagement (proposed Teamwork functionality, built; see `docs/modules/engagement.md`)
+
+| Feature | Status | Test evidence | Gaps |
+|---|---|---|---|
+| Athlete Home on `/today` for athletes and guardians (workout, next session, week progress, goals, badges, PRs, checklist, family items) | verified locally | `engagement.test.ts` (read model + access), e2e `a11y` + `csp` for guardian and athlete, screenshots in `docs/screenshots/engagement/` | Refreshes on page load only (no background job, no notifications) |
+| Weekly streak in facility-local ISO weeks; hold weeks skipped; DST safe | verified locally | `engagement-pure.test.ts`, `engagement.test.ts` | In-season pauses are not treated as holds (by design) |
+| XP ledger (`xp_events`, append-only trigger, idempotent derive-and-upsert) and levels | verified locally | `engagement.test.ts` (repeat + concurrent sync, constraints), `engagement-pure.test.ts` | XP is never reversed after a correction |
+| Badges: catalog in code, idempotent awarding, SVG medallions | verified locally | `engagement.test.ts`, `engagement-pure.test.ts`, e2e `a11y` | No notification when a badge is earned |
+| Goals: free text or linked to a test metric or lift max; comparability enforced; auto-achieve with audit and XP | verified locally | `engagement.test.ts` | Staff manage goals from the performance page only |
+| Coach Engagement strip and Goals panel on `/performance/[athleteId]` | verified locally | `engagement.test.ts` (assigned vs unassigned coach), e2e `a11y` detail pages | Not shown on the People profile |
+| Engagement settings (XP points, levels on/off, badges on/off), owner/admin, audited | verified locally | `engagement.test.ts`, e2e `a11y` + `csp` for owner | Point values are defaults to confirm with the owner |
 
 ## Cross-module acceptance paths (brief §13)
 

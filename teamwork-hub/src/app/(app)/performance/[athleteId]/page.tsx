@@ -14,6 +14,7 @@ import type { ReportContent } from "@/lib/science/reports";
 import { fmt, fmtDate } from "@/lib/time";
 import { ReportBody } from "../_components/report-view";
 import { ComparabilityNotice } from "../../science/_components/comparability-notice";
+import { EngagementPanels } from "./engagement-panels";
 
 export const metadata = { title: "Athlete progress" };
 
@@ -46,6 +47,7 @@ export default async function AthletePerformancePage({ params }: { params: Promi
           <HeroStat label="Shared reports" value={s.reports.length} />
         </div>
       </ModuleHero>
+      <EngagementPanels v={v} athleteId={athleteId} />
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="lg:col-span-2">
           <CardHeader title="Testing results" kicker="Latest vs baseline vs target" />

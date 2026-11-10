@@ -28,6 +28,7 @@ export const NAV: NavItem[] = [
   { key: "training", href: "/training", label: "Training", roles: ALL, icon: "training", group: "coaching" },
   { key: "science", href: "/science", label: "Sports Science", roles: ALL, icon: "science", group: "coaching" },
   { key: "performance", href: "/performance", label: "Performance", roles: ALL, icon: "performance", group: "coaching" },
+  { key: "goals", href: "/goals", label: "Goals", roles: FAMILY, icon: "goals", group: "coaching" },
   { key: "reports", href: "/reports", label: "Reports", roles: ["owner", "admin", "operations", "coach"], icon: "reports", group: "business" },
   { key: "payroll", href: "/payroll", label: "Payroll", roles: ["owner", "admin"], icon: "payroll", group: "business" },
   { key: "imports", href: "/imports", label: "Imports", roles: ["owner", "admin"], icon: "imports", group: "business" },
