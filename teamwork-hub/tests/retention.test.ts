@@ -181,16 +181,20 @@ describe("retention radar: one fixture per signal", () => {
   });
 });
 
+// Counted for this test's own org only: other test files write to the same database in parallel.
+const countOwnRows = () =>
+  sql`select (select count(*) from tasks where org_id = ${ctx.orgId}) + (select count(*) from audit_events where org_id = ${ctx.orgId}) + (select count(*) from retention_actions where org_id = ${ctx.orgId}) as n`;
+
 describe("retention radar: rules of the road", () => {
   it("is read-only: the whole computation runs inside a READ ONLY transaction", async () => {
     const v = await viewerFor(ctx, "rod");
-    const before = await db().execute(sql`select (select count(*) from tasks) + (select count(*) from audit_events) + (select count(*) from retention_actions) as n`);
+    const before = await db().execute(countOwnRows());
     const res = await db().transaction(async (tx) => {
       await tx.execute(sql`set transaction read only`);
       return retentionRadar(tx, v, { today: TODAY });
     });
     expect(res.rows).toHaveLength(16);
-    const after = await db().execute(sql`select (select count(*) from tasks) + (select count(*) from audit_events) + (select count(*) from retention_actions) as n`);
+    const after = await db().execute(countOwnRows());
     expect(after.rows[0].n).toEqual(before.rows[0].n);
   });
 

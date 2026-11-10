@@ -218,6 +218,22 @@ Security review: see `docs/SECURITY-REVIEW.md` (10 findings fixed with regressio
 | Daily 3 on Athlete Home from the existing habit tables, one-tap done | verified locally | `anywhere.test.ts` (max three, existing check-in rules) | Changing a check-in is done on the Habits page |
 | In Season informational link, org setting, default off; never changes a membership | verified locally | `anywhere.test.ts` (off by default, owner/admin only, no membership or request rows written) | Opens a new message to the front desk; staff log the request as today |
 
+## Athlete Showcase and monthly recap (proposed Teamwork functionality, built; see `docs/modules/showcase.md`)
+
+| Feature | Status | Test evidence | Gaps |
+|---|---|---|---|
+| Showcase builder at `/showcase` (athlete or guardian picks test results, lift maxes, consistency, profile, bio, video link, contact email; live preview) | verified locally | `showcase.test.ts`, e2e `a11y` + `csp` for guardian and athlete, screenshots in `docs/screenshots/showcase/` | Height is not on file anywhere in the Hub, so it cannot be shown. Families cannot edit sport, school or body weight themselves |
+| Allowlist: config, catalog and public payload hold only named keys; wellness, body map, health, notes, billing, attendance detail, date of birth, address and account contacts can never appear | verified locally | `showcase.test.ts` (extra posted keys dropped, non-allowlisted metric refused, rendered HTML and JSON checked for a seeded athlete with wellness, body map, notes and invoices) | |
+| "Verified by Teamwork on <date>" only for staff-entered or device-imported values; measured vs estimated maxes labelled; trend sparkline only with three or more comparable results | verified locally | `showcase.test.ts` | No athlete-entered test path exists today, so the unverified branch is exercised by test data only |
+| Consent and control: minors need a guardian to publish, adults publish themselves, staff never; append-only consent table (who, when, fields, policy version); a change by anyone returns it to draft until republished | verified locally | `showcase.test.ts` | Consent wording is SAMPLE text and needs review. A guardian's own edit also pauses the link until they publish again (stricter than asked) |
+| Share link `/s/[token]`: 256-bit token stored as SHA-256 only, instant revoke, optional expiry (default 90 days), rotate, same generic page for unknown, revoked and expired, `noindex` meta and `X-Robots-Tag`, `private, no-store`, rate limit, daily view counts with no visitor data | verified locally | `showcase.test.ts`, e2e `a11y` + `csp` (seeded demo token and a dead link) | The rate limit is in memory per server process. The link is shown once and cannot be recovered, only replaced |
+| Public one-pager: branding from org settings, metric tiles, methods footnote, "Train at Teamwork" link to `/inquire?ref=showcase`, prints to one page | verified locally | e2e `a11y` + `csp`, screenshots (1440, 390, print) | The inquiry form does not store the `ref` value yet. An external logo URL is ignored (same-origin path only) |
+| Showcase PDF (`/api/showcase/[athleteId]/pdf`, family only, pdf-lib, content hash in footer and header) | verified locally | `showcase.test.ts` (text, hash, one page, access) | Generated on request, not stored |
+| Staff list at `/people/showcases` (coach scope applies) with owner/admin revoke, audited; org switch and minimum age in `/settings/showcase` | verified locally | `showcase.test.ts`, e2e `a11y` + `csp` | |
+| Monthly Progress Recap at `/recap` and `/recap/[yyyy-mm]`: sessions vs plan, streak, PRs, badges, goals, tests with comparable change, coach note, next month; printable | verified locally | `showcase-recap.test.ts`, e2e `a11y` + `csp` | Goal progress is as of finalization, not the month's last day |
+| Recap snapshot: finalized once under `tw_recap_v1`, immutable by database trigger; guardian flags and coach scope respected; no health values | verified locally | `showcase-recap.test.ts` | |
+| Coach queue `/training/recaps` for notes before the month closes; monthly job `recap.monthly` creates the record and an in-app notice only | verified locally | `showcase-recap.test.ts` (job, idempotency, no deliveries or jobs created) | No email is sent for a recap (by design; delivery stays off). The notice is a card on Athlete Home, not a push |
+
 ## Cross-module acceptance paths (brief §13)
 
 | Path | Status | Evidence |

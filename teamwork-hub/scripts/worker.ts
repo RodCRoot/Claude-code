@@ -16,6 +16,7 @@ import { db, getPool } from "../src/db";
 import { organizations } from "../src/db/schema";
 import { enqueue, runJobs } from "../src/lib/jobs";
 import { jobHandlers } from "../src/lib/jobs-registry";
+import { enqueueRecapJobs } from "../src/lib/showcase/jobs";
 import { flushMonitoring, initMonitoring, log as olog, reportError } from "../src/lib/observability";
 
 const args = process.argv.slice(2);
@@ -40,6 +41,7 @@ async function housekeeping() {
     where status = 'running' and locked_at < now() - make_interval(mins => ${STALE_MINUTES})
     returning id`);
   if (res.rows.length) log("requeued_stale", { count: res.rows.length });
+  await enqueueRecapJobs(db); // monthly recaps: one deduped job per organization per day
   const hour = new Date().toISOString().slice(0, 13);
   const orgs = await db.select({ id: organizations.id }).from(organizations);
   for (const o of orgs) {

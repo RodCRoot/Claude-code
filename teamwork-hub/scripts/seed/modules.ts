@@ -23,4 +23,5 @@ export const moduleSeeds: [string, (ctx: SeedCtx) => Promise<void>][] = [
   ["science", seedScience], // keep after any training seed (uses its set_logs if present)
   ["anywhere", (ctx) => import("./anywhere").then((m) => m.seedAnywhere(ctx))], // after training + science (reuses the exercise library, adds load rows)
   ["engagement", (ctx) => import("./engagement").then((m) => m.seedEngagement(ctx))], // last: derives XP/badges from every other module
+  ["showcase", (ctx) => import("./showcase").then((m) => m.seedShowcase(ctx))], // after engagement: recaps read badges and goals
 ];

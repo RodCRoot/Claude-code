@@ -14,7 +14,7 @@ export async function guarded<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-export type TabKey = "overview" | "today" | "weight-room" | "review" | "athletes" | "programs" | "exercises" | "anywhere" | "plan" | "reports" | "settings";
+export type TabKey = "overview" | "today" | "weight-room" | "review" | "athletes" | "programs" | "exercises" | "anywhere" | "plan" | "recaps" | "reports" | "settings";
 
 export function trainingTabs(v: Viewer) {
   if (v.role === "athlete") {
@@ -33,10 +33,11 @@ export function trainingTabs(v: Viewer) {
     { key: "exercises", href: "/training/exercises", label: "Exercises" },
     { key: "anywhere", href: "/training/anywhere", label: "On Your Own" },
     { key: "plan", href: "/training/plan", label: "Annual plan" },
+    { key: "recaps", href: "/training/recaps", label: "Monthly recaps" },
     { key: "reports", href: "/training/reports", label: "Reports" },
   ];
   if (can(v, "settings.manage")) tabs.push({ key: "settings", href: "/training/settings", label: "Settings" });
-  if (!can(v, "training.manage")) return tabs.filter((t) => !["programs", "plan"].includes(t.key));
+  if (!can(v, "training.manage")) return tabs.filter((t) => !["programs", "plan", "recaps"].includes(t.key));
   return tabs;
 }
 
