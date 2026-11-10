@@ -32,21 +32,39 @@ async function instrument(page: Page, findings: Finding[]) {
   page.on("pageerror", (err) => findings.push({ url: page.url(), kind: "pageerror", detail: err.message }));
 }
 
-async function crawl(page: Page, starts: string[], findings: Finding[]) {
+/** Pages per browser tab. One tab crawling a few hundred pages can exhaust renderer memory and crash. */
+const PAGES_PER_TAB = 40;
+
+async function crawl(first: Page, starts: string[], findings: Finding[]) {
+  let page = first;
   const origin = new URL(page.url()).origin;
   const seen = new Set<string>();
   const queue = [...starts];
   let visited = 0;
+  // A fresh tab in the same context keeps the session cookie and the instrumentation.
+  const freshTab = async () => {
+    const next = await page.context().newPage();
+    await instrument(next, findings);
+    await page.close().catch(() => undefined);
+    page = next;
+  };
   while (queue.length && visited < MAX_PAGES) {
     const path = queue.shift()!;
     if (seen.has(path)) continue;
     seen.add(path);
-    const res = await page.goto(path, { waitUntil: "load" }).catch((e: Error) => {
-      findings.push({ url: path, kind: "navigation", detail: e.message });
-      return null;
-    });
+    if (visited > 0 && visited % PAGES_PER_TAB === 0) await freshTab();
+    let res = await page.goto(path, { waitUntil: "load" }).catch((e: Error) => e);
+    if (res instanceof Error && /crash/i.test(res.message)) {
+      // A renderer crash is not a CSP result: retry the same path once in a new tab.
+      await freshTab();
+      res = await page.goto(path, { waitUntil: "load" }).catch((e: Error) => e);
+    }
+    if (res instanceof Error) {
+      findings.push({ url: path, kind: "navigation", detail: res.message });
+      res = null;
+    }
     // Let hydration, client components, and charts run (violations fire during this window).
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(400).catch(() => undefined);
     visited++;
     if (res && res.status() >= 500) findings.push({ url: path, kind: "http", detail: String(res.status()) });
     const violations = await page.evaluate(() => (window as unknown as { __csp?: string[] }).__csp ?? []).catch(() => []);
