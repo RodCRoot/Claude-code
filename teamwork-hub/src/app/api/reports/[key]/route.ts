@@ -20,7 +20,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ key:
   const from = valid(req.nextUrl.searchParams.get("from")) ?? addDaysYmd(to, -29);
   const wanted = def.locationAware ? parseLocationParam(req.nextUrl.searchParams.get("location")) : null;
   const locationId = wanted && (await listLocations(db, v.orgId)).some((l) => l.id === wanted) ? wanted : null;
-  const result = await def.run(db, v.orgId, { from, to, tz, locationId });
+  const result = await def.run(db, v.orgId, { from, to, tz, locationId, viewer: { userId: v.userId, role: v.role } });
   await audit(db, { orgId: v.orgId, actorUserId: v.userId, actorRole: v.role }, "report.export", "report", def.key, { summary: `${from}..${to}${locationId ? ` location=${locationId}` : ""}` });
   return new NextResponse(toCsv(def.columns, result.rows), {
     headers: {

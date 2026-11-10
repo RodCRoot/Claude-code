@@ -70,7 +70,15 @@ export type OrgCapability =
   | "integrations.manage"
   | "audit.read"
   /** Payroll & staff pay. Operations can be granted access per person in Payroll → Settings (see canManagePayroll). */
-  | "payroll.manage";
+  | "payroll.manage"
+  /** Retention radar + milestones. Coaches are limited to assigned athletes and never see billing signals or dollar values. */
+  | "retention.view"
+  /** Org-wide retention: value at risk, winback list, retention report. */
+  | "retention.manage"
+  /** Read an individual session-feedback response (rating + comment). Coaches only when "tell my coach" was ticked (checked per response). */
+  | "feedback.review"
+  /** Session-feedback averages report. A coach only gets their own sessions. */
+  | "feedback.report";
 
 const ORG_MATRIX: Record<OrgCapability, Role[]> = {
   "people.manage": ["owner", "admin", "operations"],
@@ -91,6 +99,10 @@ const ORG_MATRIX: Record<OrgCapability, Role[]> = {
   "integrations.manage": ["owner", "admin"],
   "audit.read": ["owner", "admin"],
   "payroll.manage": ["owner", "admin"],
+  "retention.view": ["owner", "admin", "operations", "coach"],
+  "retention.manage": ["owner", "admin", "operations"],
+  "feedback.review": ["owner", "admin", "operations"],
+  "feedback.report": ["owner", "admin", "coach"],
 };
 
 export function can(v: Viewer, cap: OrgCapability): boolean {

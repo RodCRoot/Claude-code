@@ -76,6 +76,11 @@ const STAFF = [
   "/reports/receivables",
   "/reports/membership-audit",
   "/people/requests",
+  "/people/retention",
+  "/people/retention?level=all",
+  "/people/retention/winback",
+  "/reports/retention-saves",
+  "/reports/session-feedback",
   "/payroll",
   "/payroll/staff",
   "/payroll/import",
@@ -91,7 +96,7 @@ const STAFF = [
   "/settings/integrations",
   "/settings/audit",
 ];
-const COACH = ["/today", "/people", "/people/tasks", "/schedule", "/training", "/training/today", "/training/weight-room", "/training/review", "/science", "/science/load", "/performance", "/messages", "/documents", "/reports", "/reports/attendance", "/reports/utilization", "/settings/security", "/time"];
+const COACH = ["/today", "/people", "/people/tasks", "/schedule", "/training", "/training/today", "/training/weight-room", "/training/review", "/science", "/science/load", "/performance", "/messages", "/documents", "/reports", "/reports/attendance", "/reports/utilization", "/people/retention", "/reports/session-feedback", "/settings/security", "/time"];
 const FAMILY = ["/today", "/schedule", "/schedule/book", "/billing", "/training", "/science", "/science/wellness", "/science/body-map", "/performance", "/messages", "/documents"];
 
 type Role = { name: string; email?: string; routes: string[]; dynamic?: [string, RegExp][] };
@@ -108,6 +113,7 @@ const ROLES: Role[] = [
       ["/payroll", /^\/payroll\/runs\/[0-9a-f-]{36}$/],
       ["/messages", /^\/messages\/[0-9a-f-]{36}$/],
       ["/performance", /^\/performance\/[0-9a-f-]{36}$/],
+      ["/people/retention", /^\/people\/retention\/feedback\/[0-9a-f-]{36}$/],
     ],
   },
   { name: "coach", email: USERS.marcus, routes: COACH, dynamic: [["/people", /^\/people\/[0-9a-f-]{36}$/]] },
@@ -119,6 +125,7 @@ const ROLES: Role[] = [
       ["/billing", /^\/billing\/invoices\/[0-9a-f-]{36}$/],
       ["/today", /^\/people\/[0-9a-f-]{36}$/],
       ["/performance", /^\/performance\/[0-9a-f-]{36}$/],
+      ["/schedule", /^\/feedback\/[0-9a-f-]{36}$/],
     ],
   },
   { name: "athlete", email: USERS.maya, routes: FAMILY.filter((r) => r !== "/billing") },

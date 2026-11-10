@@ -5,6 +5,7 @@ import { ActionForm, SubmitButton } from "@/components/forms";
 import { Badge, Card, CardBody, CardHeader, Field, Input, PageHeader, Select, Textarea } from "@/components/ui";
 import { SettingsTabs } from "@/components/settings-tabs";
 import { POLICY_FIELDS, PRORATION_LABELS, REFERENCE_PLANS, policyFromSettings } from "@/lib/membership-policy";
+import { RetentionSettingsPanel } from "@/components/retention/settings-panel";
 import { saveMembershipPolicyAction, saveOrgSettingsAction } from "./actions";
 
 export const metadata = { title: "Settings" };
@@ -109,6 +110,7 @@ export default async function SettingsPage() {
         </div>
       </ActionForm>
       <MembershipPolicyPanel settings={org.settings} />
+      <RetentionSettingsPanel settings={org.settings} />
     </>
   );
 }
