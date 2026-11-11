@@ -25,6 +25,7 @@ const GLYPH: Record<BadgeFamily, string> = {
   early: "M3.5 18h17M7 18a5 5 0 0110 0M12 6v3M5.6 10.6l1.9 1.9M18.4 10.6l-1.9 1.9",
   forms: "M7 3.5h7l4 4v13H7zM14 3.5v4h4M9.5 14l2 2 3.5-4",
   member: "M12 3.5l7 2.6v5.4c0 4.4-3 7.2-7 8.5-4-1.3-7-4.1-7-8.5V6.1zM9 12l2.2 2.2L15 10.4",
+  challenge: "M8 4h8v5a4 4 0 01-8 0zM8 6H5v1.5A3 3 0 008 10.5M16 6h3v1.5a3 3 0 01-3 3M12 13v4M8.5 20h7M10 17h4",
 };
 
 /** Badge medallion. `locked` draws a grey version for badges not earned yet. */

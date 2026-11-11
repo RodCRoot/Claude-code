@@ -6,7 +6,7 @@
  * No rule reads a health value.
  */
 
-export type BadgeFamily = "sessions" | "streak" | "pr" | "goal" | "early" | "forms" | "member";
+export type BadgeFamily = "sessions" | "streak" | "pr" | "goal" | "early" | "forms" | "member" | "challenge";
 export type BadgeTier = "bronze" | "silver" | "gold" | "platinum";
 
 export type BadgeDef = {
@@ -37,6 +37,9 @@ export const BADGES: BadgeDef[] = [
   { key: "early_bird_v1", name: "Early Bird", description: `Attend ${EARLY_BIRD_SESSIONS} sessions that start before ${EARLY_BIRD_BEFORE_HOUR} AM.`, family: "early", tier: "gold", mark: null },
   { key: "all_forms_signed_v1", name: "Paperwork Pro", description: "Have every required form signed.", family: "forms", tier: "bronze", mark: null },
   { key: "one_year_member_v1", name: "One Year Strong", description: "Be a member for one year.", family: "member", tier: "platinum", mark: "1" },
+  // Awarded by the community module (src/lib/community/challenges.ts), not by evaluateBadges.
+  { key: "challenge_complete_v1", name: "Challenge Finisher", description: "Complete a team challenge.", family: "challenge", tier: "silver", mark: null },
+  { key: "challenge_3_v1", name: "3 Challenges", description: "Complete three team challenges.", family: "challenge", tier: "gold", mark: "3" },
 ];
 
 const BY_KEY = new Map(BADGES.map((b) => [b.key, b]));
