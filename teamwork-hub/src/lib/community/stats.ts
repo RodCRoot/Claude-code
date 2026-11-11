@@ -88,7 +88,7 @@ export async function loadMeasuredMaxes(tx: Tx, orgId: string): Promise<{ rows: 
     tx,
     sql`select m.id, m.athlete_id, m.exercise_id, m.value, m.unit, m.kind, m.recorded_on, m.created_at, e.name
         from maxes m join exercises e on e.id = m.exercise_id
-        where m.org_id = ${orgId} and m.kind <> 'estimated' and m.unit in ('lb','kg')`,
+        where m.org_id = ${orgId} and m.kind <> 'estimated' and m.source <> 'vbt_bar_speed' and m.unit in ('lb','kg')`,
   );
   const exerciseNames = new Map<string, string>();
   const rows: MeasuredMax[] = [];

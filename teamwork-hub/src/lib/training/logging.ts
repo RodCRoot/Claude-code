@@ -1,11 +1,16 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Tx } from "@/db";
-import { activitySessions, exercises, setLogs, workoutItems, workouts } from "@/db/schema";
+import { activitySessions, exercises, setLogs, vbtReadings, workoutItems, workouts } from "@/db/schema";
 import { AuthzError, canOnAthlete, requireOnAthlete, type Viewer } from "@/lib/authz/policy";
 import { audit } from "@/lib/audit";
 import { actor, athleteNames, itemForViewer, num, TrainingError, workoutForViewer } from "./common";
 import { expandSets, type ExpandedSet, type ResolvedSetGroup } from "./formulas";
+import { vbtLiftKey, vbtReadyLifts, type VbtLiftInfo } from "./vbt-maxes";
+
+/** vbt_readings.device for a bar speed typed next to a logged set (not a device connection). */
+export const MANUAL_VBT_DEVICE = "manual entry";
+const setLogReadingId = (setLogId: string) => `setlog:${setLogId}`;
 
 export const setMutationSchema = z.object({
   clientMutationId: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/, "Invalid client mutation id"),
@@ -18,6 +23,11 @@ export const setMutationSchema = z.object({
   durationS: z.number().min(0).max(36000).nullable().optional(),
   distanceM: z.number().min(0).max(100000).nullable().optional(),
   rpe: z.number().min(0).max(10).nullable().optional(),
+  /**
+   * Mean bar speed for the set (m/s), read off a velocity device and typed in. Omitted = leave
+   * any stored reading alone; null = clear it. Never 0: a missing speed is missing.
+   */
+  meanVelocityMs: z.number().gt(0).max(10).nullable().optional(),
   completed: z.boolean().default(true),
   /** Client time the entry was made (ms since epoch). Later entries win per slot. */
   loggedAt: z.number().int().positive().optional(),
@@ -105,8 +115,32 @@ export async function applySetMutation(tx: Tx, v: Viewer, raw: SetMutation, via:
   if (workout.status === "scheduled") {
     await tx.update(workouts).set({ status: "in_progress", startedAt: new Date(), updatedAt: new Date() }).where(eq(workouts.id, workout.id));
   }
+  // Bar speed typed with the set is kept as a vbt_reading tied to this set log (one per set).
+  if (m.meanVelocityMs !== undefined) {
+    const sourceRecordId = setLogReadingId(row.id);
+    if (m.meanVelocityMs === null || !ex) {
+      await tx.delete(vbtReadings).where(and(eq(vbtReadings.orgId, v.orgId), eq(vbtReadings.sourceRecordId, sourceRecordId)));
+    } else {
+      const reading = {
+        orgId: v.orgId,
+        athleteId: workout.athleteId,
+        exerciseId: ex.id,
+        setLogId: row.id,
+        performedAt: clientTs,
+        load: values.load,
+        loadUnit: values.loadUnit,
+        meanVelocityMs: m.meanVelocityMs,
+        device: MANUAL_VBT_DEVICE,
+        sourceRecordId,
+      };
+      await tx
+        .insert(vbtReadings)
+        .values(reading)
+        .onConflictDoUpdate({ target: vbtReadings.sourceRecordId, set: { exerciseId: reading.exerciseId, performedAt: reading.performedAt, load: reading.load, loadUnit: reading.loadUnit, meanVelocityMs: reading.meanVelocityMs } });
+    }
+  }
   await audit(tx, actor(v), "training.set.log", "set_log", row.id, {
-    summary: `Set ${m.setIndex + 1}${m.side !== "both" ? ` (${m.side})` : ""}: ${m.reps ?? "—"} reps${m.load != null ? ` @ ${m.load} ${m.loadUnit}` : ""} via ${via}`,
+    summary: `Set ${m.setIndex + 1}${m.side !== "both" ? ` (${m.side})` : ""}: ${m.reps ?? "—"} reps${m.load != null ? ` @ ${m.load} ${m.loadUnit}` : ""}${m.meanVelocityMs != null ? ` at ${m.meanVelocityMs} m/s` : ""} via ${via}`,
   });
   return { clientMutationId: m.clientMutationId, status: "applied", setLogId: row.id };
 }
@@ -207,12 +241,31 @@ export async function workoutsWithItems(tx: Tx, orgId: string, ws: (typeof worko
   if (!ws.length) return [];
   const items = await tx.select().from(workoutItems).where(inArray(workoutItems.workoutId, ws.map((w) => w.id))).orderBy(asc(workoutItems.sortOrder));
   const logs = items.length ? await tx.select().from(setLogs).where(inArray(setLogs.workoutItemId, items.map((i) => i.id))) : [];
+  const speedRows = logs.length
+    ? await tx
+        .select({ setLogId: vbtReadings.setLogId, v: vbtReadings.meanVelocityMs })
+        .from(vbtReadings)
+        .where(and(eq(vbtReadings.orgId, orgId), inArray(vbtReadings.setLogId, logs.map((l) => l.id))))
+    : [];
+  const speedBySet = new Map(speedRows.map((r) => [r.setLogId, r.v]));
   const exIds = [...new Set(items.flatMap((i) => [i.exerciseId, ...(i.substitutedExerciseId ? [i.substitutedExerciseId] : [])]))];
   const exRows = exIds.length ? await tx.select().from(exercises).where(inArray(exercises.id, exIds)) : [];
   const subIds = [...new Set(exRows.flatMap((e) => e.substitutionIds))];
   const subRows = subIds.length ? await tx.select({ id: exercises.id, name: exercises.name }).from(exercises).where(and(eq(exercises.orgId, orgId), inArray(exercises.id, subIds))) : [];
   const exMap = new Map(exRows.map((e) => [e.id, e]));
   const names = await athleteNames(tx, orgId, ws.map((w) => w.athleteId));
+  const athleteOf = new Map(ws.map((w) => [w.id, w.athleteId]));
+  // Live %1RM is offered only for lifts where this athlete has enough bar-speed data.
+  const vbtReady = await vbtReadyLifts(
+    tx,
+    orgId,
+    items.flatMap((i) => {
+      const p = exMap.get(i.substitutedExerciseId ?? i.exerciseId);
+      return p && p.trackingType === "weight_reps" ? [{ athleteId: athleteOf.get(i.workoutId)!, exerciseId: p.id, exerciseName: p.name }] : [];
+    }),
+    // The data window ends on the workout date (today for the logger and the weight room).
+    { today: ws.map((w) => w.scheduledDate).sort().at(-1) },
+  );
   return ws.map((w) => ({
     ...w,
     athleteName: names.get(w.athleteId) ?? "Athlete",
@@ -232,10 +285,12 @@ export async function workoutsWithItems(tx: Tx, orgId: string, ws: (typeof worko
           substituted: !!i.substitutedExerciseId,
           substitutionOptions: ex.substitutionIds.map((sid) => subRows.find((s) => s.id === sid)).filter(Boolean) as { id: string; name: string }[],
           groups,
+          /** Set only when the athlete has enough bar-speed data for this lift; otherwise null (show nothing). */
+          vbt: (vbtReady.get(vbtLiftKey(w.athleteId, performed.id)) ?? null) as VbtLiftInfo | null,
           sets: expandSets(groups) as ExpandedSet[],
           logs: logs
             .filter((l) => l.workoutItemId === i.id)
-            .map((l) => ({ id: l.id, setIndex: l.setIndex, side: l.side, reps: l.reps, load: num(l.load), loadUnit: l.loadUnit, rpe: num(l.rpe), durationS: num(l.durationS), distanceM: num(l.distanceM), completed: l.completed, loggedAt: l.loggedAt.toISOString() }))
+            .map((l) => ({ id: l.id, setIndex: l.setIndex, side: l.side, reps: l.reps, load: num(l.load), loadUnit: l.loadUnit, rpe: num(l.rpe), durationS: num(l.durationS), distanceM: num(l.distanceM), meanVelocityMs: speedBySet.get(l.id) ?? null, completed: l.completed, loggedAt: l.loggedAt.toISOString() }))
             .sort((a, b) => a.setIndex - b.setIndex),
         };
       }),

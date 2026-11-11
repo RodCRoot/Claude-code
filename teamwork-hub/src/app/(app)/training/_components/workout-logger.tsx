@@ -7,6 +7,7 @@ import { cn } from "@/lib/cn";
 import { buttonClass } from "@/components/ui";
 import type { WorkoutDetail } from "@/lib/training/logging";
 import { describePrescription, type ExpandedSet } from "@/lib/training/formulas";
+import { pctFromVelocity, VBT_METHOD_LABEL } from "@/lib/training/vbt";
 import { enqueue, flush, retryNow, useSetQueue, type QueuedSet } from "./set-queue";
 import { ProgressBar } from "./tb";
 
@@ -14,6 +15,8 @@ type FullItem = WorkoutDetail["items"][number];
 /** What the logger needs from an item (the offline copy carries only this). */
 export type LoggerItem = Pick<FullItem, "id" | "blockLabel" | "notes" | "athleteModification" | "performed" | "substituted" | "groups" | "sets" | "logs"> & {
   exercise: Pick<FullItem["exercise"], "name" | "videoUrl" | "coachingNotes">;
+  /** Present only when the athlete has enough bar-speed data for this lift (never in the offline copy). */
+  vbt?: FullItem["vbt"];
 };
 type Item = LoggerItem;
 type Side = "both" | "left" | "right";
@@ -108,6 +111,11 @@ function SetRow({
   const [reps, setReps] = useState(String(src?.reps ?? s.reps ?? ""));
   const [load, setLoad] = useState(String(src?.load ?? s.targetLoad ?? ""));
   const [rpe, setRpe] = useState(src?.rpe != null ? String(src.rpe) : "");
+  const [speed, setSpeed] = useState(src?.meanVelocityMs != null ? String(src.meanVelocityMs) : "");
+  const speedNum = toNum(speed);
+  const speedOk = speedNum != null && speedNum > 0 && speedNum <= 10;
+  // Live estimate only where the server says this athlete has enough data for the lift.
+  const livePct = showLoad && item.vbt && speedOk ? pctFromVelocity(speedNum, item.vbt.profile, item.vbt.mvtMs) : null;
   const [dur, setDur] = useState(String(src?.durationS ?? s.durationS ?? ""));
   const [dist, setDist] = useState(String(src?.distanceM ?? s.distanceM ?? ""));
   const id = `${item.id}-${s.setIndex}-${side}`;
@@ -124,6 +132,7 @@ function SetRow({
       load: showLoad ? toNum(load) : null,
       loadUnit: showLoad && toNum(load) != null ? unit : null,
       rpe: toNum(rpe),
+      ...(showLoad ? { meanVelocityMs: speedOk ? speedNum : null } : {}),
       durationS: showTime ? toNum(dur) : null,
       distanceM: showDist ? toNum(dist) : null,
       completed: true,
@@ -186,6 +195,12 @@ function SetRow({
               <input id={`${id}-dist`} inputMode="decimal" type="number" step="0.1" min={0} value={dist} onChange={(e) => setDist(e.target.value)} className={input} />
             </label>
           ) : null}
+          {showLoad ? (
+            <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-3" htmlFor={`${id}-speed`}>
+              Speed (m/s)
+              <input id={`${id}-speed`} inputMode="decimal" type="number" step="0.01" min={0.01} max={10} placeholder="–" value={speed} onChange={(e) => setSpeed(e.target.value)} className={input} aria-describedby={livePct != null ? `${id}-pct` : undefined} />
+            </label>
+          ) : null}
           <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-3" htmlFor={`${id}-rpe`}>
             RPE
             <input id={`${id}-rpe`} inputMode="decimal" type="number" step="0.5" min={0} max={10} placeholder="–" value={rpe} onChange={(e) => setRpe(e.target.value)} className={input} />
@@ -193,6 +208,11 @@ function SetRow({
           <button type="button" onClick={log} className={buttonClass(status === "open" ? "primary" : "secondary", big ? "lg" : "md", "min-h-11 w-full")} aria-label={`${status === "open" ? "Log" : "Update"} ${item.performed.name} ${label}`}>
             {status === "open" ? "Log" : "Update"}
           </button>
+          {livePct != null && item.vbt ? (
+            <p id={`${id}-pct`} role="status" className="col-span-full text-xs text-ink-2" data-testid="vbt-pct">
+              About <strong className="tabular">{livePct}%</strong> of 1RM at this speed. An estimate, not a tested max. Method: {VBT_METHOD_LABEL[item.vbt.method]} ({item.vbt.method}).
+            </p>
+          ) : null}
         </div>
       ) : logged ? (
         <p className="mt-1 pl-9 text-sm font-semibold tabular">
@@ -200,6 +220,7 @@ function SetRow({
           {logged.durationS != null ? ` · ${logged.durationS}s` : ""}
           {logged.distanceM != null ? ` · ${logged.distanceM} m` : ""}
           {logged.rpe != null ? ` · RPE ${logged.rpe}` : ""}
+          {logged.meanVelocityMs != null ? ` · ${logged.meanVelocityMs} m/s` : ""}
         </p>
       ) : (
         <p className="mt-1 pl-9 text-xs text-ink-3">Not logged</p>

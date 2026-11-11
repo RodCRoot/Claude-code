@@ -111,6 +111,57 @@ media here are original; no licensed videos are copied):
   `bulkEditScheme` (sets/reps/rep text/load/rest/tempo on working or all set groups; validated; one bump).
 - Assignments stay snapshots: none of these touch `workouts`/`workout_items` or assignment versions.
 
+### Bar speed (velocity-based training)
+
+Math lives in `lib/training/vbt.ts` (pure) and is surfaced in four places. Every number shown names
+its method and version. Missing values are `null`, never 0. No device connection exists or is claimed.
+
+| Method key | What it is | Where it shows |
+| --- | --- | --- |
+| `lv_profile_v1` | Least-squares line through the athlete's own (load, mean velocity) points at 2+ distinct loads in the last 120 days, extended to the lift's minimum velocity threshold (squat 0.30, bench 0.17, deadlift 0.15, press 0.19, other 0.30 m/s). Rejected when velocity does not fall with load or the answer is under 0.8x or over 2.5x the heaviest load. | "Estimated max from bar speed" card |
+| `mpv_squat_v1`, `mpv_bench_v1`, `mpv_generic_v1` | Published velocity to %1RM curves (squat line, bench quadratic, generic line anchored at the lift's threshold), clamped 5 to 100. | Live line next to "Speed (m/s)" in the logger and weight room |
+| `rel_strength_v1` | Current max in kg divided by body mass in kg, with guideline tiers per lift family. | "Relative strength" card (staff) |
+
+- **Estimated max from bar speed** (`/training/athletes/[id]`, `vbt-maxes.ts`): staff with `training.write`
+  on the athlete see one suggestion per lift (`pendingVbtSuggestions`). **Confirm** recomputes on the
+  server (`confirmVbtMax`; the form sends only ids) and appends a max with `kind = estimated`,
+  `method = lv_profile_v1`, `source = vbt_bar_speed`, then refreshes unstarted % loads and writes audit
+  `training.max.confirm_bar_speed`. **Dismiss** (`dismissVbtMax`) stores no max: it records the dismissed
+  value in `vbt_max_dismissals` (audit `training.max.dismiss_bar_speed`) and the suggestion stays hidden
+  until new readings change the estimate. Nothing is ever applied automatically. The card lists recent
+  decisions.
+  - The estimate is stored in the unit the athlete's max for that lift is already kept in (else the
+    exercise's unit, else kg), so % loads never switch units. lb = kg / 0.45359237, rounded to 0.1,
+    shown on the card and written to the audit entry.
+  - A confirmed estimate is the dated max for % loading like any other max (that is what confirming
+    means) and is always labelled "estimated from bar speed" in max history and the load note.
+  - It is never a measured max: leaderboards and the TV board (`community/stats.ts`), Showcase lifts,
+    monthly recaps, PR detection and XP (`engagement/sync.ts`), goals and the family "best max" table
+    (`science/kpis.ts` `strengthPrs`) all skip `source = vbt_bar_speed`.
+- **Bar speed in the logger** (`workout-logger.tsx`, used by Today, the workout page and the weight room):
+  weight-and-reps sets have an optional "Speed (m/s)" field. A typed speed is stored as a `vbt_readings`
+  row tied to the set (`set_log_id`, device "manual entry", one per set; omitted = unchanged, cleared =
+  deleted; 0 is refused). The live "About N% of 1RM" line appears only when `workoutsWithItems` marks the
+  item with `vbt` (the athlete has a valid `lv_profile_v1` fit for that lift in the 120 days up to the
+  workout date). Otherwise nothing is shown. The offline copy of Today has the field but not the line.
+- **Relative strength** (`rel-strength.ts`): staff holding both `training.read` and `health.read` on
+  the athlete (owner, admin, assigned coaches; not operations). Body mass is the latest included Hawkin
+  force-plate body-weight value (metric keys `body_weight__kg`, `body_weight__lb`, `system_weight__n`;
+  lb and N converted explicitly), else `athletes.body_mass_kg`, else null and nothing is calculated.
+  Guardians (with or without health access), athletes, boards and public pages never receive it.
+- **CSV import** (Reports, `importVbtCsv`; header rules in `vbt-csv.ts`): unit suffixes such as
+  `Mean Velocity (m/s)` are stripped, the load unit is read from headers like `Weight (kg)` when there is
+  no unit column, separate `Date` and `Time` columns are joined, and times without an offset are
+  facility-local. A velocity header in a unit other than m/s is refused. A blank or 0 velocity is rejected,
+  never stored as 0. Rows that name the athlete **by name only** are never matched: for owner/admin they
+  are put in an import batch of schema `vbt.readings` and wait in the import wizard's identity review
+  (`/imports/[id]`), exactly like Hawkin CSV rows; a coach without `imports.manage` gets a per-row message
+  instead. A staff-confirmed name is remembered as an alias (`external_ids`, source `vbt_csv`,
+  `athlete_name`) and links directly next time. The same schema is in the upload wizard for files that
+  need column mapping. Fixtures: `fixtures/vbt/` (synthetic names; header style not checked against a
+  real GymAware export).
+- Demo seed: `scripts/seed/vbt.ts` (synthetic readings for Maya's Back Squat and Bench Press).
+
 ### Permissions
 All checks go through `policy.ts`: reads need `training.read` on the athlete (guardians only when
 `can_view_training`), logging needs `training.log` (athlete self, coach for assigned athletes,
@@ -133,6 +184,10 @@ with session RPE and duration, for the Sports Science module's sRPE load calcula
 - `<TodayTrainingCard viewer date? />`, `<CoachTrainingFeedCard viewer limit? />`, `<PrAlertsCard viewer since? />`.
 
 ## Tests
+- `tests/training-vbt-surfaces.test.ts` (suggest/dismiss/confirm with every role, estimates kept out of boards,
+  Showcase, recap, PRs and the family strength table, live %1RM gating, typed speeds, relative strength
+  permissions and body-mass sources, GymAware-style headers, name-only rows to identity review).
+  `e2e/vbt.spec.ts` (coach dismiss + confirm, families see no card or body weight, weight-room live %1RM).
 - `pnpm test` — `tests/training.test.ts` (formulas, dated % loads + rounding, kg handling, max-source,
   template edit isolation + apply-to-unstarted, idempotent set retries incl. stale/concurrent, coach
   scope in weight room and logging, guardian `can_view_training`, substitutions, single activity
@@ -159,6 +214,7 @@ with session RPE and duration, for the Sports Science module's sRPE load calcula
   no calendar-wide drag-and-drop or day-stacking across weeks.
 - No athlete video upload, questionnaires/readiness surveys, whiteboard/TV timer, or payments marketplace.
 - Leaderboards are per-lift e1RM only (no custom metrics/tests); reports are a focused subset.
-- VBT data comes from CSV file import only; no live device integration.
+- VBT data comes from CSV file import or a speed typed next to a set; no live device integration. The live %1RM uses
+  the published curves, not the athlete's own profile. No FMS movement screen (see `NEXT_STEPS.md`).
 - Program templates are versioned by counter only (assignments reference the version number; the
   template content of older versions isn't stored separately — workouts themselves are the frozen record).

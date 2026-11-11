@@ -32,6 +32,7 @@ import {
 } from "@/lib/training/programs";
 import { applyTemplateToUnstarted, assignProgram, cancelAssignment, syncAssignment } from "@/lib/training/assignments";
 import { confirmEstimatedMax, recordMax } from "@/lib/training/maxes";
+import { confirmVbtMax, dismissVbtMax } from "@/lib/training/vbt-maxes";
 import { setWorkoutStatus, substituteItem } from "@/lib/training/logging";
 import { reviewWorkout } from "@/lib/training/review";
 import { createPlanBlock, deletePlanBlock, importVbtCsv, setLeaderboardOptIn } from "@/lib/training/reports";
@@ -304,6 +305,24 @@ export const confirmEstimateAction = safeAction(async (_p: ActionState, fd: Form
   return { ok: true, message: "Estimated max saved." };
 });
 
+/** Coach confirms a bar-speed estimate. The value is recomputed on the server, never taken from the form. */
+export const confirmVbtMaxAction = safeAction(async (_p: ActionState, fd: FormData) => {
+  const athleteId = str(fd, "athleteId");
+  const r = await run((tx, v) => confirmVbtMax(tx, v, { athleteId, exerciseId: str(fd, "exerciseId") }));
+  revalidatePath(`/training/athletes/${athleteId}`);
+  return {
+    ok: true,
+    message: `Saved ${r.suggestion.store.value} ${r.suggestion.store.unit} for ${r.suggestion.exerciseName} as an estimate from bar speed (not a tested max).${r.refreshed ? ` Updated % loads on ${r.refreshed} upcoming exercise${r.refreshed > 1 ? "s" : ""}.` : ""}`,
+  };
+});
+
+export const dismissVbtMaxAction = safeAction(async (_p: ActionState, fd: FormData) => {
+  const athleteId = str(fd, "athleteId");
+  await run((tx, v) => dismissVbtMax(tx, v, { athleteId, exerciseId: str(fd, "exerciseId") }));
+  revalidatePath(`/training/athletes/${athleteId}`);
+  return { ok: true, message: "Suggestion dismissed. Nothing was stored. It comes back only if new bar-speed data changes the estimate." };
+});
+
 // --- Workouts -------------------------------------------------------------------------------
 
 export const reviewWorkoutAction = safeAction(async (_p: ActionState, fd: FormData) => {
@@ -370,7 +389,9 @@ export const importVbtAction = safeAction(async (_p: ActionState, fd: FormData) 
   const errs = r.errors.slice(0, 8).map((e) => `row ${e.row}: ${e.message}`).join("; ");
   return {
     ok: true,
-    message: `Imported ${r.imported} readings from "${f.name}" (${r.duplicates} already imported, ${r.errors.length} rejected).${errs ? ` ${errs}${r.errors.length > 8 ? " …" : ""}` : ""}`,
+    message: `Imported ${r.imported} readings from "${f.name}" (${r.duplicates} already imported, ${r.errors.length} rejected).${
+      r.review ? ` ${r.review.rows} row${r.review.rows === 1 ? " names" : "s name"} the athlete by name only: nothing was matched or stored for ${r.review.rows === 1 ? "it" : "them"}. Review the identity under Imports (open the newest "name-only rows" import), then commit.` : ""
+    }${errs ? ` ${errs}${r.errors.length > 8 ? " …" : ""}` : ""}`,
   };
 });
 

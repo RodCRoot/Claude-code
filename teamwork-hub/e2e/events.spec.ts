@@ -54,7 +54,7 @@ test("a parent finds a camp, registers an athlete, and lands on an unpaid invoic
   await noSideScroll(page);
 
   // The invoice is a normal open invoice in the existing billing flow.
-  await page.getByRole("link", { name: /Continue to payment|View invoice/ }).first().click();
+  await page.getByRole("link", { name: /Continue to payment|View bill/ }).first().click();
   await expect(page).toHaveURL(/\/billing\/invoices\/[0-9a-f-]{36}/);
   await expect(page.getByText(new RegExp(`${eventName}: Maya Parker`)).first()).toBeVisible();
   await expect(page.getByText(/open/i).first()).toBeVisible();
