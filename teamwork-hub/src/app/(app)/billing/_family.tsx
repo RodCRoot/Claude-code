@@ -389,7 +389,7 @@ export async function FamilyMemberships({ v }: { v: Viewer }) {
                   <dt className="text-ink-3">Begin date</dt>
                   <dd>{fmtDate(m.startDate)}</dd>
                   <dt className="text-ink-3">{ends ? "End date" : "Renews"}</dt>
-                  <dd>{ends ? fmtDate(ends) : ended || external || !m.nextBillDate ? "—" : fmtDate(m.nextBillDate)}</dd>
+                  <dd>{ends ? fmtDate(ends) : ended || external || !m.nextBillDate ? "Not set" : fmtDate(m.nextBillDate)}</dd>
                   <dt className="text-ink-3">Price</dt>
                   <dd className="tabular">
                     {price && version ? (
@@ -399,7 +399,7 @@ export async function FamilyMemberships({ v }: { v: Viewer }) {
                         {price.discount ? <span className="text-xs text-ink-3"> after discount</span> : null}
                       </>
                     ) : (
-                      "—"
+                      "Not set"
                     )}
                   </dd>
                   <dt className="text-ink-3">Billing day</dt>
@@ -412,10 +412,10 @@ export async function FamilyMemberships({ v }: { v: Viewer }) {
                           ? `Day ${m.billingAnchorDay} of each month`
                           : version?.interval === "week"
                             ? "Weekly"
-                            : "—"}
+                            : "Not set"}
                   </dd>
                   <dt className="text-ink-3">Includes</dt>
-                  <dd>{version?.classesPerWeek ? `${version.classesPerWeek} classes per week` : version?.unlimited ? "Unlimited classes" : version?.creditsPerPeriod ? `${version.creditsPerPeriod} session credits per ${INTERVAL[version.interval] ?? "period"}` : "—"}</dd>
+                  <dd>{version?.classesPerWeek ? `${version.classesPerWeek} classes per week` : version?.unlimited ? "Unlimited classes" : version?.creditsPerPeriod ? `${version.creditsPerPeriod} session credits per ${INTERVAL[version.interval] ?? "period"}` : "Not set"}</dd>
                   {!version?.unlimited && !version?.classesPerWeek ? (
                     <>
                       <dt className="text-ink-3">Sessions remaining</dt>

@@ -118,3 +118,18 @@ Code: `src/lib/locations.ts`; UI: Schedule settings → **Locations** (CRUD + ki
 
 ## Seed
 Resources (Turf, Weight Room, Assessment Room — exclusive), a SAMPLE policy, four services, five weekly series (Marcus HS 6 AM M/W/F and Tu/Th 4:30 PM; Tess Youth Tu/Th 5:30 PM and Sat 9 AM; a sample Speed Camp), sessions from today−28 to today+21, an evening session today for the kiosk, a full class with a waitlist, a staff-cancelled session, private sessions and a comped assessment, ~290 bookings with attendance history (no-shows, late cancels) on a consistent credit ledger, coach availability and time off. Ethan, Sofia, Liam, Harper and Ava are left without credits/bookings (ledger tests rely on clean slates; Ava demonstrates the "needs credits" path).
+
+## Family screens (words and shape families already know)
+See `docs/modules/zp-parity.md` for the full checklist and the list of renamed labels. Presentation only: every action still goes through `bookAction` / `batchBookAction` / `cancelBookingAction` / `rescheduleAction` / `bookSlotAction`, which re-check `booking.create` per athlete.
+
+| Route | What |
+|---|---|
+| `/schedule` (families) | Day list by default (`view=day` unless `?view=`): date header with arrows, week strip, "Go to date", optional `program` / `location` / `instructor` filters, then `ClassRow`s. Staff keep the week grid. |
+| `/schedule/classes/<id>` | Family class detail. Visible under the same rule as the calendar (open scheduled classes, plus any session the family is already in); staff are redirected to `/schedule/sessions/<id>`. |
+| `/schedule/reservations` | My Reservations: upcoming reservations and waitlist spots for every family member, Cancel reservation, Reschedule, and a card per family member (credits, membership, check-in PIN). |
+| `/schedule/attendance` | My Attendance by month (`?athlete=&month=YYYY-MM`). Uses `attendanceHistory` (enforces `profile.read`). |
+| `/schedule/book` (families) | Appointments: appointment type, family member, staff member, date, open times. |
+
+- `ReserveControl` (`_components/reserve-control.tsx`) is the single action for a class for the whole family: one eligible person → direct Reserve; several → a `<details>` "Who is this for?" checklist (`ReservePicker`, posts `batchBookAction` with `mode=partial`, `weeks=1`, and `waitlist=on` only when the class is full). Guardians without `can_book` get no button and the existing explanation.
+- The late-cancel rule (`lateCancelRule`) is built from the service's configured cancellation policy and shown in the cancel confirm, on the class detail and on My Reservations.
+- The old `?athlete=` parameter on `/schedule` is ignored (links that carry it still work).

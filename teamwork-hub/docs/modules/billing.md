@@ -289,3 +289,16 @@ verification answered by a mocked verify-webhook-signature call).
 - `webhook_events` has no `org_id`. Events are attributed through payment attempts. Payout routing assumes one org per provider account. Unmatched and rejected events are visible to every org's billing staff (they hold no customer data beyond the type and the claimed id).
 - Tax is always 0. Partial refunds of ACH are not supported by Stripe; this is not enforced locally.
 - Families cannot request holds or cancellations in-app (staff-only actions).
+
+## Family "My Profile" screens
+See `docs/modules/zp-parity.md`. Families see the same records under the words they know; staff views are unchanged. Tabs: Family (`/billing`), Memberships, Bills (`/billing/invoices`), Payment Methods (`/billing/payment-methods`), Payment History (`/billing/history`), Documents, Attendance.
+
+Read helpers added to `src/lib/billing/queries.ts` (read-only, scoped by `viewablePayerIds`):
+- `billExtras(tx, v, invoiceIds)` → one-line description from the bill's lines and whether the latest online attempt failed (drives the "Failed" status).
+- `scheduledBills(tx, v)` → preview of each membership's next bill (date = `next_bill_date`, amount = `periodPrice` net). Only `active`/`trialing` memberships billed by `manual`/`stripe`/`paypal`; skipped when the membership ends or is cancelled on or before that date or a hold covers it. Nothing is created.
+- `listPayments(tx, v)` → payments and refunds without staff notes or recorder.
+- `listPaymentMethods(tx, v)` → brand, last four, expiry, default from `payment_methods` (never the provider method id).
+
+Bill status shown to families: Paid, Unpaid, Unpaid · past due, Failed (latest attempt failed), Processing (money in flight, not counted as paid), Scheduled (upcoming), Void, Closed (uncollectible). Pay Now appears only when the viewer has `can_pay` on the account, the balance is above 0 and nothing is pending.
+
+Not built: self-service payment method update (no provider portal/setup flow exists; the tab says so), family-editable contact profile.
