@@ -489,7 +489,7 @@ describe("TV board access and payload", () => {
   });
 
   it("building the payload writes nothing", async () => {
-    const count = async () => (await db.execute(sql`select (select count(*) from xp_events) + (select count(*) from athlete_badges) + (select count(*) from community_challenge_completions) + (select count(*) from audit_events) as n`)).rows[0] as { n: string };
+    const count = async () => (await db.execute(sql`select (select count(*) from xp_events where org_id = ${ctx.orgId}) + (select count(*) from athlete_badges where org_id = ${ctx.orgId}) + (select count(*) from community_challenge_completions where org_id = ${ctx.orgId}) + (select count(*) from audit_events where org_id = ${ctx.orgId}) as n`)).rows[0] as { n: string };
     const before = await count();
     await board();
     await board();
