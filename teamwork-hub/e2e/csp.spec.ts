@@ -101,11 +101,11 @@ const ROLES: { name: string; email?: string; starts: string[] }[] = [
       "/performance", "/messages", "/messages/new", "/messages/outbox", "/messages/templates", "/messages/automations", "/documents", "/documents/archive",
       "/reports", "/settings", "/settings/audit", "/settings/integrations", "/settings/security", "/settings/users", "/imports", "/imports/exports", "/imports/hawkin", "/settings/engagement", "/settings/showcase", "/settings/community", "/leaderboards", "/display", "/people/showcases", "/training/recaps",
       "/people/requests", "/people/retention", "/people/retention/winback", "/reports/retention-saves", "/reports/session-feedback", "/reports/membership-audit", "/payroll", "/payroll/staff", "/payroll/import", "/payroll/settings", "/time",
-      "/people/referrals", "/billing/opportunities", "/settings/growth", "/reports/growth-referrals", "/reports/growth-shop-sales", "/reports/growth-offers", "/reports/growth-trial-passes",
+      "/events", "/events/new", "/people/referrals", "/billing/opportunities", "/settings/growth", "/reports/growth-referrals", "/reports/growth-shop-sales", "/reports/growth-offers", "/reports/growth-trial-passes",
     ],
   },
   { name: "coach", email: USERS.marcus, starts: ["/today", "/training/today", "/training/weight-room", "/science", "/schedule", "/people/retention", "/reports/session-feedback", "/time", "/training/recaps", "/people/showcases", "/leaderboards"] },
-  { name: "guardian", email: USERS.alex, starts: ["/today", "/schedule", "/schedule/book", "/billing/invoices", "/documents", "/messages", "/performance", "/goals", "/shop", "/refer", "/anywhere", "/anywhere/season", "/showcase", "/recap", "/leaderboards"] },
+  { name: "guardian", email: USERS.alex, starts: ["/today", "/schedule", "/schedule/book", "/billing/invoices", "/documents", "/messages", "/performance", "/goals", "/shop", "/shop/camps", "/refer", "/anywhere", "/anywhere/season", "/showcase", "/recap", "/leaderboards"] },
   { name: "athlete", email: USERS.maya, starts: ["/today", "/training/today", "/science/body-map", "/goals", "/anywhere", "/anywhere/season", "/showcase", "/recap", "/leaderboards"] },
   { name: "kiosk", email: USERS.kiosk, starts: ["/kiosk", "/kiosk/clock"] },
 ];

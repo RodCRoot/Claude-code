@@ -96,7 +96,7 @@ export async function UpcomingEventsCard({ v, className }: { v: Viewer; classNam
                 </span>
                 <span className="shrink-0 text-right">
                   <span className="block text-sm font-bold tabular">{priceLabel(e)}</span>
-                  <span className="block text-[11px] text-ink-2">{e.mine.length ? "You are signed up" : e.spotsLeft === 0 ? "Full" : e.spotsLeft === 1 ? "1 spot left" : `${e.spotsLeft} spots left`}</span>
+                  <span className="block text-[11px] text-ink-2">{e.mine.some((m) => m.status === "held") ? "Awaiting payment" : e.mine.length ? "Registered" : e.spotsLeft === 0 ? "Full" : e.spotsLeft === 1 ? "1 spot left" : `${e.spotsLeft} spots left`}</span>
                 </span>
               </Link>
             </li>
