@@ -84,3 +84,15 @@ CREATE UNIQUE INDEX "community_display_tokens_hash_uq" ON "community_display_tok
 CREATE INDEX "community_display_tokens_org_idx" ON "community_display_tokens" USING btree ("org_id");--> statement-breakpoint
 CREATE INDEX "community_shoutouts_athlete_idx" ON "community_shoutouts" USING btree ("org_id","athlete_id","created_at");--> statement-breakpoint
 CREATE INDEX "community_shoutouts_author_day_idx" ON "community_shoutouts" USING btree ("org_id","author_user_id","local_date");
+--> statement-breakpoint
+-- ===== Hand-written community constraints (re-append after regenerating this file) =====
+ALTER TABLE "xp_events" DROP CONSTRAINT "xp_events_kind_ck";--> statement-breakpoint
+ALTER TABLE "xp_events" ADD CONSTRAINT "xp_events_kind_ck" CHECK ("kind" IN ('session_attended','workout_completed','wellness_checkin','pr_set','goal_achieved','form_signed','on_your_own_completed','coach_shoutout'));--> statement-breakpoint
+ALTER TABLE "community_display_prefs" ADD CONSTRAINT "community_display_prefs_mode_ck" CHECK ("mode" IN ('first_last_initial','first_name_only','hidden'));--> statement-breakpoint
+ALTER TABLE "community_shoutouts" ADD CONSTRAINT "community_shoutouts_template_ck" CHECK ("template" IN ('great_effort','leader_today','new_pr','consistency'));--> statement-breakpoint
+ALTER TABLE "community_shoutouts" ADD CONSTRAINT "community_shoutouts_note_ck" CHECK ("note" IS NULL OR char_length("note") BETWEEN 1 AND 140);--> statement-breakpoint
+ALTER TABLE "community_challenges" ADD CONSTRAINT "community_challenges_mode_ck" CHECK ("mode" IN ('individual','group_total'));--> statement-breakpoint
+ALTER TABLE "community_challenges" ADD CONSTRAINT "community_challenges_metric_ck" CHECK ("metric" IN ('attendance','workouts','streak_weeks'));--> statement-breakpoint
+ALTER TABLE "community_challenges" ADD CONSTRAINT "community_challenges_status_ck" CHECK ("status" IN ('active','archived'));--> statement-breakpoint
+ALTER TABLE "community_challenges" ADD CONSTRAINT "community_challenges_dates_ck" CHECK ("ends_on" >= "starts_on");--> statement-breakpoint
+ALTER TABLE "community_challenges" ADD CONSTRAINT "community_challenges_target_ck" CHECK ("target" BETWEEN 1 AND 100000);
