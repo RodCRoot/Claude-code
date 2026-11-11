@@ -108,12 +108,20 @@ export default async function ReferPage() {
                   </li>
                 </ol>
                 {view.referredRewardText ? (
-                  <p>
-                    Your friend receives <strong>{view.referredRewardText}</strong> too.
+                  <p data-testid="friend-reward">
+                    {view.referredIsDiscount ? (
+                      <>
+                        Your friend gets <strong>{view.referredRewardText}</strong>. It comes off automatically when their first invoice is created. It is for families who are new to Teamwork, once per family.
+                      </>
+                    ) : (
+                      <>
+                        Your friend receives <strong>{view.referredRewardText}</strong> too.
+                      </>
+                    )}
                   </p>
                 ) : null}
                 <Callout tone="info">
-                  A staff member reviews each reward before it is added, so it can take a few days to appear. Referrals count for families who are new to Teamwork and live in a different household.
+                  A staff member reviews your reward before it is added, so it can take a few days to appear. Referrals count for families who are new to Teamwork and live in a different household. If your friend&apos;s first payment is refunded, the reward is not added.
                 </Callout>
               </CardBody>
             </Card>

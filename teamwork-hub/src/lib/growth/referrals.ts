@@ -23,8 +23,8 @@ import { UserError } from "@/lib/billing/errors";
 import { invoiceMoney, settleInvoiceIfCovered } from "@/lib/billing/invoices";
 import { actorOf, int } from "@/lib/billing/util";
 import { grantCredits } from "@/lib/credits";
-import { addDaysYmd } from "@/lib/time";
-import { describeReward, growthSettings, type GrowthSettings, type RewardSpec } from "./settings";
+import { DEFAULT_TZ, addDaysYmd, todayLocal } from "@/lib/time";
+import { describeReferredSide, describeReward, growthSettings, type GrowthSettings, type RewardSpec } from "./settings";
 
 // ---------------------------------------------------------------------------
 // Codes
@@ -247,24 +247,198 @@ function rewardRow(spec: RewardSpec, currency: string) {
   return null;
 }
 
+const SYSTEM = (orgId: string) => ({ orgId, actorUserId: null, actorRole: "system" });
+export const REFUND_WITHHOLD_REASON = "First payment was refunded";
+
+/** True when the invoice had settled money and all of it was refunded. */
+async function fullyRefunded(tx: Tx, invoiceId: string | null): Promise<boolean> {
+  if (!invoiceId) return false;
+  const m = await invoiceMoney(tx, invoiceId);
+  return m.settledMinor > 0 && m.refundedMinor >= m.settledMinor;
+}
+
+/** Has this payer account ever had an invoice above $0 paid? (Then there is no "first invoice" left to discount.) */
+async function payerHasPaidInvoice(tx: Tx, orgId: string, payerAccountId: string): Promise<boolean> {
+  const [row] = await tx
+    .select({ id: invoices.id })
+    .from(invoices)
+    .where(and(eq(invoices.orgId, orgId), eq(invoices.payerAccountId, payerAccountId), eq(invoices.status, "paid"), gt(invoices.totalMinor, 0)))
+    .limit(1);
+  return !!row;
+}
+
+/**
+ * New-family discount, step 1: reserve it (a `pending` invoice_discount reward) once the referred
+ * athlete has started. Always requires a NEW payer account, whatever "the referred family must be
+ * new" says in Settings:
+ * - the account is not the referrer's (self-referral is already rejected at conversion);
+ * - nobody on it (the athlete or the people who pay) had a membership before the inquiry;
+ * - the account had no invoice before the inquiry (a returning family is not new);
+ * - one live new-family reward per payer account and per referral (unique indexes), so two
+ *   referrals of the same family, or a second child, never stack.
+ */
+async function reserveNewFamilyDiscount(tx: Tx, orgId: string, ref: typeof referrals.$inferSelect, settings: GrowthSettings, currency: string): Promise<boolean> {
+  const amount = settings.referral.newFamilyDiscountMinor;
+  if (!settings.referral.enabled || !amount || amount <= 0) return false;
+  const payerId = ref.convertedPayerAccountId;
+  if (!payerId || payerId === ref.referrerPayerAccountId || !ref.convertedAthleteId) return false;
+  const [have] = await tx.select({ id: referralRewards.id }).from(referralRewards).where(and(eq(referralRewards.referralId, ref.id), eq(referralRewards.beneficiary, "referred")));
+  if (have) return false;
+  const [lead] = await tx.select({ createdAt: leads.createdAt }).from(leads).where(eq(leads.id, ref.leadId));
+  const since = lead?.createdAt ?? ref.createdAt;
+  const [ath] = await tx.select({ personId: athletes.personId }).from(athletes).where(eq(athletes.id, ref.convertedAthleteId));
+  const payers = (await tx.execute(sql`select person_id from payer_authorizations where payer_account_id = ${payerId}`)).rows.map((r) => (r as { person_id: string }).person_id);
+  if (await hasPriorMembership(tx, orgId, [...new Set([ath?.personId, ...payers].filter((x): x is string => !!x))], since)) return false;
+  const [older] = await tx
+    .select({ id: invoices.id })
+    .from(invoices)
+    .where(and(eq(invoices.orgId, orgId), eq(invoices.payerAccountId, payerId), sql`${invoices.createdAt} < ${since.toISOString()}::timestamptz`))
+    .limit(1);
+  if (older) return false;
+  const ins = await tx
+    .insert(referralRewards)
+    .values({ orgId, referralId: ref.id, beneficiary: "referred", payerAccountId: payerId, kind: "invoice_discount", amountMinor: amount, currency, isDemo: ref.isDemo })
+    .onConflictDoNothing()
+    .returning({ id: referralRewards.id });
+  if (!ins.length) return false;
+  await audit(tx, SYSTEM(orgId), "growth.new_family_discount.reserve", "referral_reward", ins[0].id, {
+    summary: `New family discount of ${amount} ${currency} reserved for the first invoice`,
+    after: { referralId: ref.id, payerAccountId: payerId, amountMinor: amount },
+  });
+  return true;
+}
+
+/**
+ * New-family discount, steps 2 and 3. Safe to run any number of times and concurrently (the reward
+ * row and the invoice are locked).
+ *
+ * - Release: a discount that sat on an invoice which was then voided unpaid goes back to pending.
+ * - Apply: a pending discount goes onto the payer account's first OPEN invoice above $0 created
+ *   since the referral, as an invoice discount (the total goes down; nothing is recorded as a
+ *   payment, and no money ever leaves). Not on invoices a provider subscription or Zen Planner
+ *   bills, and not while a checkout or bank payment is in flight (it waits for the next run).
+ *   The discount is capped at the balance due; any remainder is not carried over.
+ * - Convert: if the account already has a paid invoice above $0 (the first invoice was paid before
+ *   the discount could apply), the reward becomes a pending ACCOUNT CREDIT. That is money-like, so
+ *   it takes the same staff approval as the referring family's credit.
+ * A refund of the discounted invoice returns only what the family paid, so the discount reverses
+ * itself. Staff can decline a pending discount (it then never applies).
+ */
+export async function applyNewFamilyDiscounts(tx: Tx, orgId: string, opts: { referralIds?: string[]; now?: Date } = {}) {
+  const out = { applied: 0, released: 0, converted: 0 };
+  if (opts.referralIds && !opts.referralIds.length) return out;
+  const now = opts.now ?? new Date();
+  const scope = and(eq(referralRewards.orgId, orgId), eq(referralRewards.kind, "invoice_discount"), opts.referralIds ? inArray(referralRewards.referralId, opts.referralIds) : undefined);
+
+  const applied = await tx.select().from(referralRewards).where(and(scope, eq(referralRewards.status, "approved"))).for("update");
+  for (const rw of applied) {
+    if (!rw.appliedInvoiceId) continue;
+    const [inv] = await tx.select({ status: invoices.status, number: invoices.number }).from(invoices).where(eq(invoices.id, rw.appliedInvoiceId));
+    if (inv?.status !== "void") continue;
+    await tx.update(referralRewards).set({ status: "pending", appliedInvoiceId: null, appliedMinor: null, decidedAt: null }).where(eq(referralRewards.id, rw.id));
+    await audit(tx, SYSTEM(orgId), "growth.new_family_discount.release", "referral_reward", rw.id, { summary: `New family discount released: ${inv.number} was voided before payment`, before: { appliedInvoiceId: rw.appliedInvoiceId } });
+    out.released++;
+  }
+
+  const settings = await growthSettings(tx, orgId);
+  if (!settings.referral.enabled) return out;
+  const pending = await tx.select().from(referralRewards).where(and(scope, eq(referralRewards.status, "pending"))).orderBy(referralRewards.createdAt).for("update");
+  for (const rw of pending) {
+    const [ref] = await tx.select().from(referrals).where(eq(referrals.id, rw.referralId));
+    if (!ref || ref.status === "rejected" || ref.status === "inquired") continue;
+    if (await payerHasPaidInvoice(tx, orgId, rw.payerAccountId)) {
+      await tx.update(referralRewards).set({ kind: "account_credit" }).where(eq(referralRewards.id, rw.id));
+      await audit(tx, SYSTEM(orgId), "growth.new_family_discount.convert", "referral_reward", rw.id, {
+        summary: "New family discount could not go on the first invoice (already paid); converted to account credit waiting for staff approval",
+        before: { kind: "invoice_discount" },
+        after: { kind: "account_credit", amountMinor: rw.amountMinor },
+      });
+      out.converted++;
+      continue;
+    }
+    const candidates = await tx
+      .select({ id: invoices.id })
+      .from(invoices)
+      .where(and(eq(invoices.orgId, orgId), eq(invoices.payerAccountId, rw.payerAccountId), eq(invoices.status, "open"), gt(invoices.totalMinor, 0), sql`${invoices.createdAt} >= ${ref.createdAt.toISOString()}::timestamptz`))
+      .orderBy(invoices.createdAt);
+    for (const c of candidates) {
+      const [inv] = await tx.select().from(invoices).where(eq(invoices.id, c.id)).for("update");
+      if (!inv || inv.status !== "open" || inv.totalMinor <= 0) continue;
+      if (inv.membershipId) {
+        const [m] = await tx.select({ bp: memberships.billingProvider }).from(memberships).where(eq(memberships.id, inv.membershipId));
+        if (m && m.bp !== "manual" && m.bp !== "none") continue;
+      }
+      const money = await invoiceMoney(tx, inv.id);
+      const inFlight = await tx
+        .select({ id: paymentAttempts.id })
+        .from(paymentAttempts)
+        .where(and(eq(paymentAttempts.invoiceId, inv.id), inArray(paymentAttempts.status, ["created", "requires_action", "processing", "pending"]), gt(paymentAttempts.createdAt, new Date(now.getTime() - 24 * 3_600_000))));
+      // A payment is on its way for this invoice: changing the total now could mismatch it. Try again next run.
+      if (money.pendingMinor > 0 || inFlight.length) break;
+      if (money.balanceMinor <= 0) continue;
+      const amount = Math.min(rw.amountMinor!, money.balanceMinor);
+      await tx.update(invoices).set({ discountMinor: inv.discountMinor + amount, totalMinor: inv.totalMinor - amount, updatedAt: now }).where(eq(invoices.id, inv.id));
+      await tx.update(referralRewards).set({ status: "approved", appliedInvoiceId: inv.id, appliedMinor: amount, decidedAt: now }).where(eq(referralRewards.id, rw.id));
+      await audit(tx, SYSTEM(orgId), "growth.new_family_discount.apply", "invoice", inv.id, {
+        summary: `New family referral discount of ${amount} ${inv.currency} applied to ${inv.number}`,
+        before: { discountMinor: inv.discountMinor, totalMinor: inv.totalMinor },
+        after: { discountMinor: inv.discountMinor + amount, totalMinor: inv.totalMinor - amount, rewardId: rw.id, referralId: rw.referralId },
+      });
+      await settleInvoiceIfCovered(tx, inv.id, SYSTEM(orgId));
+      out.applied++;
+      break;
+    }
+  }
+  return out;
+}
+
+/**
+ * Withhold rewards whose qualifying first payment was fully refunded: every still-pending reward
+ * of that referral (either side) is declined by the system with a reason. Rewards a staff member
+ * already approved are left alone (credit may have been used); the staff page flags them.
+ */
+async function withholdRefunded(tx: Tx, orgId: string, referralIds?: string[]): Promise<number> {
+  if (referralIds && !referralIds.length) return 0;
+  const rows = await tx
+    .select({ rw: referralRewards, invoiceId: referrals.qualifyingInvoiceId })
+    .from(referralRewards)
+    .innerJoin(referrals, eq(referrals.id, referralRewards.referralId))
+    .where(and(eq(referralRewards.orgId, orgId), eq(referralRewards.status, "pending"), inArray(referralRewards.kind, ["account_credit", "session_credits"]), sql`${referrals.qualifyingInvoiceId} is not null`, referralIds ? inArray(referralRewards.referralId, referralIds) : undefined))
+    .for("update", { of: referralRewards });
+  let n = 0;
+  for (const r of rows) {
+    if (!(await fullyRefunded(tx, r.invoiceId))) continue;
+    await tx.update(referralRewards).set({ status: "declined", decidedAt: new Date(), declineReason: REFUND_WITHHOLD_REASON }).where(eq(referralRewards.id, r.rw.id));
+    await audit(tx, SYSTEM(orgId), "growth.reward.withhold", "referral_reward", r.rw.id, { summary: `Referral reward withheld: ${REFUND_WITHHOLD_REASON.toLowerCase()}`, before: { status: "pending" }, after: { status: "declined" } });
+    n++;
+  }
+  return n;
+}
+
 /**
  * Moves referrals forward from what the rest of the system recorded. Safe to run any number of
- * times and concurrently (rows are locked; reward rows are unique per referral and side).
+ * times and concurrently (rows are locked; reward rows are unique per referral and side). The same
+ * function runs on page load (/refer, People > Referrals), when an invoice is created, and from the
+ * nightly job (one referral per transaction there, so one bad row cannot stop the rest).
  * - started: the lead was converted to an athlete (rules re-checked against the real family);
+ *   the new-family discount is reserved here and applied to the first open invoice;
  * - earned: per Settings → Growth, the referred member's first invoice above $0 is PAID (which only
  *   happens after a verified provider webhook or a staff-recorded payment), or a membership has
  *   been active for the configured days. Earning creates PENDING rewards; nothing is issued here.
+ * - a pending reward whose qualifying payment was fully refunded is withheld.
  */
-export async function syncReferrals(tx: Tx, orgId: string, today: string, now = new Date()) {
+export async function syncReferrals(tx: Tx, orgId: string, today: string, now = new Date(), opts: { referralIds?: string[] } = {}) {
+  const out = { started: 0, earned: 0, rejected: 0, rewards: 0, discountsApplied: 0, discountsReleased: 0, discountsConverted: 0, withheld: 0 };
+  if (opts.referralIds && !opts.referralIds.length) return out;
   const settings = await growthSettings(tx, orgId);
   const [org] = await tx.select({ currency: organizations.currency }).from(organizations).where(eq(organizations.id, orgId));
+  const currency = org?.currency ?? "USD";
   const open = await tx
     .select()
     .from(referrals)
-    .where(and(eq(referrals.orgId, orgId), inArray(referrals.status, ["inquired", "started"])))
+    .where(and(eq(referrals.orgId, orgId), inArray(referrals.status, ["inquired", "started"]), opts.referralIds ? inArray(referrals.id, opts.referralIds) : undefined))
     .orderBy(referrals.createdAt)
     .for("update");
-  const out = { started: 0, earned: 0, rejected: 0, rewards: 0 };
   for (const r of open) {
     let cur = r;
     if (cur.status === "inquired") {
@@ -280,7 +454,7 @@ export async function syncReferrals(tx: Tx, orgId: string, today: string, now = 
       else if (settings.referral.requireNewFamily && (await hasPriorMembership(tx, orgId, [ath.personId], lead.createdAt))) rejection = "existing_member";
       if (rejection) {
         await tx.update(referrals).set({ status: "rejected", rejectionReason: rejection, convertedAthleteId: ath.id, updatedAt: now }).where(eq(referrals.id, cur.id));
-        await audit(tx, { orgId, actorUserId: null, actorRole: "system" }, "growth.referral.reject", "referral", cur.id, { summary: `Referral not counted at conversion (${rejection.replaceAll("_", " ")})` });
+        await audit(tx, SYSTEM(orgId), "growth.referral.reject", "referral", cur.id, { summary: `Referral not counted at conversion (${rejection.replaceAll("_", " ")})` });
         out.rejected++;
         continue;
       }
@@ -292,12 +466,22 @@ export async function syncReferrals(tx: Tx, orgId: string, today: string, now = 
       cur = upd;
       out.started++;
     }
-    if (cur.status !== "started" || !cur.convertedAthleteId || !settings.referral.enabled) continue;
+    if (cur.status !== "started" || !cur.convertedAthleteId) continue;
+    if (!cur.convertedPayerAccountId) {
+      // The billing account was linked after conversion.
+      const [p] = await tx.select({ id: payerBeneficiaries.payerAccountId }).from(payerBeneficiaries).where(eq(payerBeneficiaries.athleteId, cur.convertedAthleteId)).limit(1);
+      if (p && p.id !== cur.referrerPayerAccountId) {
+        const [upd] = await tx.update(referrals).set({ convertedPayerAccountId: p.id, updatedAt: now }).where(eq(referrals.id, cur.id)).returning();
+        cur = upd;
+      }
+    }
+    if (!settings.referral.enabled) continue;
+    await reserveNewFamilyDiscount(tx, orgId, cur, settings, currency);
 
     const [m] = await tx
       .select({ id: memberships.id, status: memberships.status, startDate: memberships.startDate })
       .from(memberships)
-      .where(and(eq(memberships.orgId, orgId), eq(memberships.athleteId, cur.convertedAthleteId)))
+      .where(and(eq(memberships.orgId, orgId), eq(memberships.athleteId, cur.convertedAthleteId!)))
       .orderBy(memberships.createdAt)
       .limit(1);
     let qualifyingInvoiceId: string | null = null;
@@ -309,8 +493,13 @@ export async function syncReferrals(tx: Tx, orgId: string, today: string, now = 
           and i.created_at >= ${cur.createdAt.toISOString()}::timestamptz
           and (exists (select 1 from invoice_lines l where l.invoice_id = i.id and l.athlete_id = ${cur.convertedAthleteId})
                or i.membership_id in (select id from memberships where athlete_id = ${cur.convertedAthleteId}))
-        order by i.paid_at asc limit 1`);
-      qualifyingInvoiceId = (res.rows[0] as { id: string } | undefined)?.id ?? null;
+        order by i.paid_at asc`);
+      // A first payment that was refunded in full does not earn; a later paid invoice can.
+      for (const row of res.rows as { id: string }[]) {
+        if (await fullyRefunded(tx, row.id)) continue;
+        qualifyingInvoiceId = row.id;
+        break;
+      }
       earned = !!qualifyingInvoiceId;
     } else if (settings.referral.daysActive) {
       const res = await tx.execute(sql`
@@ -326,10 +515,11 @@ export async function syncReferrals(tx: Tx, orgId: string, today: string, now = 
     out.earned++;
     const sides: { beneficiary: "referrer" | "referred"; payerAccountId: string | null; spec: RewardSpec }[] = [
       { beneficiary: "referrer", payerAccountId: cur.referrerPayerAccountId, spec: settings.referral.reward },
+      // Legacy referred-side reward. Skipped by the unique index when a new-family discount row exists.
       { beneficiary: "referred", payerAccountId: cur.convertedPayerAccountId, spec: settings.referral.referredReward },
     ];
     for (const side of sides) {
-      const row = rewardRow(side.spec, org?.currency ?? "USD");
+      const row = rewardRow(side.spec, currency);
       if (!row || !side.payerAccountId) continue;
       const ins = await tx
         .insert(referralRewards)
@@ -338,12 +528,36 @@ export async function syncReferrals(tx: Tx, orgId: string, today: string, now = 
         .returning({ id: referralRewards.id });
       out.rewards += ins.length;
     }
-    await audit(tx, { orgId, actorUserId: null, actorRole: "system" }, "growth.referral.earned", "referral", cur.id, {
+    await audit(tx, SYSTEM(orgId), "growth.referral.earned", "referral", cur.id, {
       summary: `Referral reward earned (${settings.referral.earnedWhen === "first_paid_invoice" ? "first paid invoice" : `${settings.referral.daysActive} days active`}); waiting for staff approval`,
       after: { qualifyingInvoiceId },
     });
   }
+  const d = await applyNewFamilyDiscounts(tx, orgId, { referralIds: opts.referralIds, now });
+  out.discountsApplied = d.applied;
+  out.discountsReleased = d.released;
+  out.discountsConverted = d.converted;
+  out.withheld = await withholdRefunded(tx, orgId, opts.referralIds);
   return out;
+}
+
+/**
+ * Called by billing when an invoice becomes open, so the new-family discount lands on the first
+ * invoice at once instead of at the next page load or nightly run. Cheap when the payer account
+ * has no referral (one indexed query). Returns true when the invoice total may have changed.
+ */
+export async function syncReferralsForPayer(tx: Tx, orgId: string, payerAccountId: string, now = new Date()): Promise<boolean> {
+  const rows = (
+    await tx.execute(sql`
+      select r.id from referrals r join leads l on l.id = r.lead_id
+      where r.org_id = ${orgId} and r.status in ('inquired','started','earned')
+        and (r.converted_payer_account_id = ${payerAccountId}
+             or l.converted_athlete_id in (select athlete_id from payer_beneficiaries where payer_account_id = ${payerAccountId}))`)
+  ).rows as { id: string }[];
+  if (!rows.length) return false;
+  const [org] = await tx.select({ tz: organizations.timezone }).from(organizations).where(eq(organizations.id, orgId));
+  const res = await syncReferrals(tx, orgId, todayLocal(org?.tz || DEFAULT_TZ, now), now, { referralIds: rows.map((r) => r.id) });
+  return res.discountsApplied > 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -361,10 +575,13 @@ export async function approveReward(tx: Tx, v: Viewer, input: { rewardId: string
   if (!rw) throw new UserError("Reward not found.");
   if (rw.status === "approved") return { reward: rw, alreadyApproved: true };
   if (rw.status === "declined") throw new UserError("This reward was declined and cannot be approved.");
+  if (rw.kind === "invoice_discount") throw new UserError("The new family discount is applied automatically to the family's first invoice. It does not need approval.");
+  const [ref] = await tx.select({ qualifyingInvoiceId: referrals.qualifyingInvoiceId }).from(referrals).where(eq(referrals.id, rw.referralId));
+  if (await fullyRefunded(tx, ref?.qualifyingInvoiceId ?? null)) throw new UserError("The new family's first payment was refunded, so this reward cannot be approved. Decline it instead.");
 
   let athleteId: string | null = null;
   let creditBucketId: string | null = null;
-  if (rw.kind === "account_credit") {
+  if (rw.kind !== "session_credits") {
     await tx
       .insert(accountCreditLedger)
       .values({
@@ -531,7 +748,9 @@ export async function familyReferralView(tx: Tx, v: Viewer, appUrl: string) {
     currency: org?.currency ?? "USD",
     howItWorks: settings.referral.howItWorks,
     rewardText: describeReward(settings.referral.reward, org?.currency ?? "USD"),
-    referredRewardText: describeReward(settings.referral.referredReward, org?.currency ?? "USD"),
+    referredRewardText: describeReferredSide(settings.referral, org?.currency ?? "USD"),
+    /** True when the new family's side is the automatic first-invoice discount. */
+    referredIsDiscount: !!settings.referral.newFamilyDiscountMinor,
     earnedWhen: settings.referral.earnedWhen,
     daysActive: settings.referral.daysActive,
     accounts,
@@ -564,11 +783,15 @@ export async function staffReferralOverview(tx: Tx, v: Viewer) {
   const rewards = (
     await tx.execute(sql`
       select rw.id, rw.beneficiary, rw.kind, rw.amount_minor, rw.currency, rw.credits, rw.status, rw.created_at, rw.decided_at, rw.payer_account_id,
+        rw.applied_minor, rw.decline_reason, ai.number as applied_invoice_number, ai.id as applied_invoice_id,
+        (r.qualifying_invoice_id is not null and exists (
+          select 1 from transactions t where t.invoice_id = r.qualifying_invoice_id and t.kind = 'refund' and t.status = 'settled')) as first_payment_refunded,
         pa.name as payer_name, lp.first_name as lead_first, lp.last_name as lead_last, r.lead_id
       from referral_rewards rw join referrals r on r.id = rw.referral_id join payer_accounts pa on pa.id = rw.payer_account_id
         join leads l on l.id = r.lead_id join people lp on lp.id = l.person_id
+        left join invoices ai on ai.id = rw.applied_invoice_id
       where rw.org_id = ${orgId} order by (rw.status = 'pending') desc, rw.created_at desc limit 50`)
-  ).rows as { id: string; beneficiary: string; kind: string; amount_minor: string | null; currency: string | null; credits: number | null; status: string; created_at: Date; decided_at: Date | null; payer_account_id: string; payer_name: string; lead_first: string; lead_last: string; lead_id: string }[];
+  ).rows as { applied_minor: string | null; decline_reason: string | null; applied_invoice_number: string | null; applied_invoice_id: string | null; first_payment_refunded: boolean; id: string; beneficiary: string; kind: string; amount_minor: string | null; currency: string | null; credits: number | null; status: string; created_at: Date; decided_at: Date | null; payer_account_id: string; payer_name: string; lead_first: string; lead_last: string; lead_id: string }[];
   const payerIds = [...new Set(rewards.filter((r) => r.kind === "session_credits" && r.status === "pending").map((r) => r.payer_account_id))];
   const athleteOptions = payerIds.length
     ? ((

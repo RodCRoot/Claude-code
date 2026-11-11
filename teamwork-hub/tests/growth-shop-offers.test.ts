@@ -483,7 +483,9 @@ describe("demo seed", () => {
     expect(G.parkerCode).toMatch(/^[a-z0-9]{8,16}$/);
     const rewards = await db.select().from(referralRewards).where(eq(referralRewards.orgId, demo.orgId));
     expect(rewards.length).toBeGreaterThanOrEqual(1);
-    expect(rewards.every((r) => r.status === "pending" && r.isDemo)).toBe(true);
+    expect(rewards.every((r) => r.isDemo)).toBe(true);
+    // The referring family's credit waits for approval; the new family's $50 is already on their first invoice.
+    expect(rewards.map((r) => [r.beneficiary, r.kind, r.status]).sort()).toEqual([["referred", "invoice_discount", "approved"], ["referrer", "account_credit", "pending"]]);
     const items = await shopItems(db, demo.orgId, T);
     expect(items).toHaveLength(2);
     expect(items.every((i) => i.name.startsWith("Sample"))).toBe(true);
