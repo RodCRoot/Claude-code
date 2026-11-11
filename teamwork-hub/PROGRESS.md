@@ -120,3 +120,15 @@ Also in this wave:
 Verified on 16.4.6: `pnpm test` 908/908 (65 files); typecheck and lint clean; migration drift check clean; Playwright full run with one worker 401 passed, 1 skipped (the mobile staff-MFA case, skipped by design), 0 failed; CSP crawl 0 findings for every role (owner 237 pages, coach 116, guardian 85); training offline 4/4.
 
 Not verified: any provider in a sandbox; anything against real Zen Planner, TeamBuildr or Hawkin data. See the "athlete experience wave" list in DECISIONS.md for choices waiting on Rod.
+
+## Checkpoint 10 — Parent screens, camps, bar speed, nightly jobs (2026-11-11)
+Four more pieces built in parallel and merged (migrations 0024 events, 0025 vbt, 0026 jobs):
+- **Family scheduling and billing in the layout parents know** (`docs/modules/zp-parity.md`): day-first Calendar with week strip, Reserve with a "Who is this for?" checklist, My Reservations, My Attendance, Appointments; My Profile tabs Family, Memberships, Bills (Pay Now, upcoming, history), Payment Methods, Payment History. Presentation only; no business rule changed. Parity is from memory, not checked against the real member site; the checklist of details to verify is in that doc.
+- **Camps and clinics sold online** (`docs/modules/events.md`): staff events with sessions, capacity, early-bird and sibling pricing; family registration creates a bill and holds the spot (48 h default); confirmed only when the bill is paid; roster CSV and revenue per event. No waitlist yet.
+- **Bar-speed tools** (`docs/modules/training.md`): coach-confirmed estimated maxes, live estimated %1RM in the logger, relative strength for staff with health access, GymAware-style CSV import through identity review. Estimates never appear as measured maxes on boards, showcases or recaps. FMS screen skipped.
+- **Nightly jobs** (`/settings/jobs`): referral progress, challenge completion and engagement refresh run from the worker at 2:00 AM facility time; no worker is deployed, so this has only run in tests and by hand.
+- **Rod's decisions built:** the new family also gets $50 off their first bill (automatic, one per new account, refund-aware); parents with training and booking access can log at-home sessions for athletes under 13; one TV board for the business.
+
+Verified: `pnpm test` 990/990 (71 files); typecheck, lint, drift check clean; Playwright full run 447 passed, 2 skipped, 3 failed, 10 not run. The 3 failures: two were the CSP crawl following the roster CSV download link (crawl now ignores `a[download]`; rerun 243 pages, 0 findings on both projects) and one login timeout in `anywhere.spec.ts` that passed on rerun (whole spec 8/8, which covers the 10 not run). Training offline 4/4 on a fresh seed. A second uninterrupted full run after these fixes has not been done.
+
+Note: the training offline suite needs a fresh `pnpm db:fresh`; the main e2e run logs Maya's workout for today.

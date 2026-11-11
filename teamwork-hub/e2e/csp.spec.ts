@@ -69,7 +69,7 @@ async function crawl(first: Page, starts: string[], findings: Finding[]) {
     if (res && res.status() >= 500) findings.push({ url: path, kind: "http", detail: String(res.status()) });
     const violations = await page.evaluate(() => (window as unknown as { __csp?: string[] }).__csp ?? []).catch(() => []);
     for (const v of violations) findings.push({ url: path, kind: "violation", detail: v });
-    const hrefs = await page.$$eval("a[href]", (as) => as.map((a) => (a as HTMLAnchorElement).href)).catch(() => [] as string[]);
+    const hrefs = await page.$$eval("a[href]:not([download])", (as) => as.map((a) => (a as HTMLAnchorElement).href)).catch(() => [] as string[]);
     for (const href of hrefs) {
       const u = new URL(href);
       if (u.origin !== origin) continue;
