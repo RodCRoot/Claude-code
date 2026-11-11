@@ -54,8 +54,8 @@ async function crawl(first: Page, starts: string[], findings: Finding[]) {
     seen.add(path);
     if (visited > 0 && visited % PAGES_PER_TAB === 0) await freshTab();
     let res = await page.goto(path, { waitUntil: "load" }).catch((e: Error) => e);
-    if (res instanceof Error && /crash/i.test(res.message)) {
-      // A renderer crash is not a CSP result: retry the same path once in a new tab.
+    if (res instanceof Error && /crash|detached|ERR_ABORTED|closed/i.test(res.message)) {
+      // A renderer crash or an aborted navigation is not a CSP result: retry the same path once in a new tab.
       await freshTab();
       res = await page.goto(path, { waitUntil: "load" }).catch((e: Error) => e);
     }
