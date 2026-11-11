@@ -29,6 +29,7 @@ const PATHS = {
   shield: "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z",
   shop: "M5 8h14l-1 13H6zM9 8V6a3 3 0 016 0v2",
   gift: "M4 11h16v10H4zM3 7h18v4H3zM12 7v14M12 7c-2-4-6-3-4.5-1 .8 1.2 3 1 4.5 1M12 7c2-4 6-3 4.5-1-.8 1.2-3 1-4.5 1",
+  trophy: "M8 4h8v5a4 4 0 01-8 0zM8 6H5v1.5A3 3 0 008 10.5M16 6h3v1.5a3 3 0 01-3 3M12 13v4M8.5 20h7M10 17h4",
 } as const;
 
 export type IconName = keyof typeof PATHS;

@@ -234,6 +234,20 @@ Security review: see `docs/SECURITY-REVIEW.md` (10 findings fixed with regressio
 | Recap snapshot: finalized once under `tw_recap_v1`, immutable by database trigger; guardian flags and coach scope respected; no health values | verified locally | `showcase-recap.test.ts` | |
 | Coach queue `/training/recaps` for notes before the month closes; monthly job `recap.monthly` creates the record and an in-app notice only | verified locally | `showcase-recap.test.ts` (job, idempotency, no deliveries or jobs created) | No email is sent for a recap (by design; delivery stays off). The notice is a card on Athlete Home, not a push |
 
+## Community: gym TV board, leaderboards, shoutouts, challenges (proposed Teamwork functionality, built; see `docs/modules/community.md`)
+
+| Feature | Status | Evidence | Gaps |
+|---|---|---|---|
+| Display consent per athlete (first name + last initial, first name only, hidden); one resolver (`publicName`) for every board, leaderboard, shoutout and challenge; org default | verified locally | `community-pure.test.ts`, `community.test.ts` (hidden athlete absent from every payload while a PR, shoutout, badge and streak exist) | |
+| Who may change it: guardian with profile access for a minor, adult athlete for themselves, staff with a required "who asked" note; audited | verified locally | `community.test.ts` (unrelated guardian, revoked guardianship, minor, coach, other org all refused) | Staff request is a typed note, not a signed consent form |
+| Gym TV board `/display`: nine panels, cut rotation, in-place refresh, last data kept offline, facility clock, no sound | verified locally | `community.test.ts` (payload: no ids, last names, birthdays, body mass, rosters; writes nothing), e2e `community.spec.ts` (cuts, offline note), axe on every panel, CSP sweep, screenshots in `docs/screenshots/community/` | One board per organization (not per location). No animation by design |
+| Board access: revocable display token (hash stored), httpOnly cookie read by the board page and `GET /api/display/board` only; owner/admin preview | verified locally | `community.test.ts` (create, resolve, revoke, malformed, cross-org), e2e `community.spec.ts` (19 app routes bounce to login, other APIs refuse, non-GET 405, revoke kills it) | Token has no expiry: it lives until revoked |
+| Leaderboards `/leaderboards` by age band and training group: sessions this month, weekly streaks, most improved (90 days), measured maxes, pound for pound (order only) | verified locally | `community.test.ts` (age bands never mixed, no birthday = not ranked, estimated maxes excluded, no weight or ratio output), `community-pure.test.ts` (ranking, ties, improvement math) | Mixed lb/kg boards rank by exact conversion but print each athlete's own unit |
+| Own rank always shown, also when hidden; small boards (<5 visible) rank visible athletes only and withhold totals | verified locally | `community-pure.test.ts`, `community.test.ts`, e2e `community.spec.ts` | |
+| Coach shoutouts: four chips + optional 140-character note, staff only, coach scope, family-style lint, per-author daily limit, XP kind `coach_shoutout`, audited removal | verified locally | `community.test.ts` | XP stays after a removal (append-only ledger). No notification is sent |
+| Team challenges: individual or team total; sessions, workouts or weeks trained; facility-timezone window; completion badge + audit | verified locally | `community.test.ts` (11:30 PM edge cases, idempotent completion, group scope, who may create/archive), `community-pure.test.ts` | Completion is recorded on the next Athlete Home or leaderboards load, not by a scheduled job. No prizes by design |
+| Settings → Community: feature switch, default display mode, panels, rotation seconds, shoutout limit, gym message, screens | verified locally | `community.test.ts`, e2e `a11y` + `csp` | |
+
 ## Cross-module acceptance paths (brief §13)
 
 | Path | Status | Evidence |

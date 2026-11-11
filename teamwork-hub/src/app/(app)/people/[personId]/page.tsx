@@ -1,3 +1,4 @@
+import { CommunityProfileCard } from "@/components/community/profile-card";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
@@ -391,6 +392,7 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
       {tab === "overview" ? (
         <div className="space-y-4">
           {athlete ? <OpportunitiesCard viewer={v} athleteId={athlete.id} /> : null}
+          {athlete && staff ? <CommunityProfileCard v={v} athleteId={athlete.id} /> : null}
           {staff ? (
             <Card>
               <CardHeader title="Follow-ups" kicker={`${d.tasks.length} open task${d.tasks.length === 1 ? "" : "s"}`} />

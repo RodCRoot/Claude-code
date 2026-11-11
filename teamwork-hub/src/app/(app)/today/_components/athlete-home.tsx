@@ -11,6 +11,7 @@ import { fmt, fmtDate, fmtTime, localToUtc, localYmd } from "@/lib/time";
 import { ShowcaseHomeCards } from "@/components/showcase/home-cards";
 import { PrBadge, ProgressBar } from "../../training/_components/tb";
 import { AnywhereGameDay, AnywhereHomeCards } from "@/components/anywhere/home-cards";
+import { CommunityHomeCards } from "@/components/community/home-cards";
 
 /**
  * Athlete Home: the athlete and guardian view of /today. Mobile-first. Everything shown comes
@@ -159,6 +160,7 @@ export async function AthleteHomeView({ v, tz, dateLabel, greeting, selected }: 
                 </CardBody>
               </Card>
             ) : null}
+            <CommunityHomeCards v={v} athleteId={home.athleteId} firstName={home.firstName} tz={tz} />
             <ShowcaseHomeCards v={v} athleteId={home.athleteId} firstName={home.firstName} />
             {isAthlete ? <PaymentsCard billing={billing} /> : null}
             <Card>

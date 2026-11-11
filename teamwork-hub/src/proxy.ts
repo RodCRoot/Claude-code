@@ -6,7 +6,7 @@ import { showcaseRateOk } from "@/lib/showcase/rate-limit";
  * redirect for signed-out users on app routes. Real authorization happens server-side in every
  * page, action, and route handler.
  */
-const APP_PREFIXES = ["/today", "/people", "/schedule", "/billing", "/training", "/science", "/performance", "/messages", "/documents", "/reports", "/settings", "/imports", "/kiosk", "/payroll", "/time", "/shop", "/refer", "/showcase", "/recap"];
+const APP_PREFIXES = ["/today", "/people", "/schedule", "/billing", "/training", "/science", "/performance", "/messages", "/documents", "/reports", "/settings", "/imports", "/kiosk", "/payroll", "/time", "/shop", "/refer", "/showcase", "/recap", "/leaderboards"];
 
 /**
  * Hosted checkout pages a payment form may be redirected to (Stripe Checkout / PayPal approval).
