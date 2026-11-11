@@ -17,7 +17,11 @@ import {
   workoutItems,
   workouts,
 } from "@/db/schema";
-import { accessibleAthleteIds, assertCan, athleteScopeFilter, AuthzError, canOnAthlete, requireOnAthlete, type Viewer } from "@/lib/authz/policy";
+import { accessibleAthleteIds, assertCan, athleteScopeFilter, AuthzError, can, canOnAthlete, requireOnAthlete, type Viewer } from "@/lib/authz/policy";
+import { createBatch, orgTimezone, validateBatch } from "@/lib/imports/batches";
+import { parseDateTime } from "@/lib/imports/normalize";
+import { ParseError, parseCsvText } from "@/lib/imports/parse";
+import { loadUnitFromHeaders, normalizeVbtHeader, vbtSourceRecordId, wrongVelocityUnits } from "./vbt-csv";
 import { audit } from "@/lib/audit";
 import { todayLocal } from "@/lib/time";
 import { actor, athleteNames, num, TrainingError } from "./common";
@@ -208,7 +212,7 @@ export async function exportCsv(tx: Tx, v: Viewer, kind: "workouts" | "sets", f:
 const vbtRow = z.object({
   athlete: z.string().trim().min(1),
   exercise: z.string().trim().min(1),
-  timestamp: z.string().trim().refine((s) => !Number.isNaN(Date.parse(s)), "Unreadable timestamp"),
+  timestamp: z.string().trim().min(1, "Timestamp is required"),
   load: z.coerce.number().min(0).max(5000).nullable(),
   unit: z.enum(["lb", "kg"]).nullable(),
   rep: z.coerce.number().int().min(1).max(100).nullable(),
@@ -226,13 +230,44 @@ const pick = (r: Record<string, string>, ...keys: string[]) => {
   return null;
 };
 
-export type VbtImportResult = { batchId: string; imported: number; duplicates: number; errors: { row: number; message: string }[] };
+export type VbtImportResult = {
+  batchId: string;
+  imported: number;
+  duplicates: number;
+  errors: { row: number; message: string }[];
+  /** Rows that name the athlete only by name: held in an import batch for identity review, never matched here. */
+  review: { batchId: string; rows: number } | null;
+};
+
+const NAME_ONLY_HELP = "Athlete is given by name only. Names are never matched automatically; use the athlete's email or external id, or have an owner or admin import the file so the identity can be reviewed.";
 
 export async function importVbtCsv(tx: Tx, v: Viewer, file: { name: string; text: string }): Promise<VbtImportResult> {
   assertCan(v, "training.manage");
   if (file.text.length > 5_000_000) throw new TrainingError("File too large (5 MB max).");
-  const parsed = Papa.parse<Record<string, string>>(file.text.trim(), { header: true, skipEmptyLines: true, transformHeader: (h) => h.trim().toLowerCase().replace(/[\s-]+/g, "_") });
-  if (!parsed.data.length) throw new TrainingError("No rows found. Expected a header row with athlete, exercise, timestamp, load, unit, rep, mean_velocity, peak_velocity, power, device.");
+  let csv: ReturnType<typeof parseCsvText>;
+  try {
+    csv = parseCsvText(file.text.trim());
+  } catch (e) {
+    if (e instanceof ParseError) throw new TrainingError(e.message);
+    throw e;
+  }
+  if (!csv.rows.length) throw new TrainingError("No rows found. Expected a header row with athlete, exercise, timestamp, load, unit, rep, mean_velocity, peak_velocity, power, device.");
+  // Device exports put units in the header ("Mean Velocity (m/s)", "Weight (kg)"): strip them to
+  // recognize the column, and read the load unit from the load header when there is no unit column.
+  const badVelocity = wrongVelocityUnits(csv.headers);
+  if (badVelocity.length) throw new TrainingError(`Column "${badVelocity[0]}" is not in m/s. Velocities are not converted; export the file in m/s.`);
+  const headerUnit = loadUnitFromHeaders(csv.headers);
+  const keyOf = new Map(csv.headers.map((h) => [h, normalizeVbtHeader(h).key]));
+  const parsed = {
+    data: csv.rows.map((raw) => {
+      const r: Record<string, string> = {};
+      for (const [h, val] of Object.entries(raw)) {
+        const k = keyOf.get(h)!;
+        if (val != null && !(k in r)) r[k] = val;
+      }
+      return r;
+    }),
+  };
   const checksum = createHash("sha256").update(file.text).digest("hex");
   const batchId = randomUUID();
 
@@ -248,35 +283,53 @@ export async function importVbtCsv(tx: Tx, v: Viewer, file: { name: string; text
   for (const p of peopleRows) if (p.email) byEmail.set(p.email.toLowerCase(), [...(byEmail.get(p.email.toLowerCase()) ?? []), p.athleteId]);
   const ext = await tx.select().from(externalIds).where(and(eq(externalIds.orgId, v.orgId), eq(externalIds.localEntityType, "athlete")));
   const byExt = new Map(ext.map((e) => [e.sourceId, e.localId]));
+  // Names a staff member already confirmed in identity review (import wizard) link from then on.
+  const aliasRows = await tx
+    .select({ name: externalIds.sourceId, athleteId: athletes.id })
+    .from(externalIds)
+    .innerJoin(athletes, and(eq(athletes.personId, externalIds.localId), eq(athletes.orgId, v.orgId)))
+    .where(and(eq(externalIds.orgId, v.orgId), eq(externalIds.source, "vbt_csv"), eq(externalIds.sourceEntityType, "athlete_name"), eq(externalIds.localEntityType, "person")));
+  const byAlias = new Map(aliasRows.map((a) => [a.name, a.athleteId]));
 
   const errors: VbtImportResult["errors"] = [];
   const values: (typeof vbtReadings.$inferInsert)[] = [];
+  const nameOnly: number[] = [];
+  // Times without an offset are facility-local (same rule as the import wizard).
+  const tz = await orgTimezone(tx, v.orgId);
+  const zeroAsMissing = (s: string | null) => (s != null && Number(s) === 0 ? null : s); // a 0 speed is a missing speed
   parsed.data.forEach((r, i) => {
     const rowNo = i + 2;
+    const dateTime = pick(r, "timestamp", "performed_at", "date_time", "datetime") ?? ([pick(r, "date"), pick(r, "time")].filter(Boolean).join(" ") || null);
+    const unitCell = pick(r, "unit", "load_unit", "weight_unit")?.toLowerCase() ?? null;
     const res = vbtRow.safeParse({
-      athlete: pick(r, "athlete_external_id", "external_id", "athlete_id", "athlete_email", "email", "athlete") ?? "",
-      exercise: pick(r, "exercise", "exercise_name") ?? "",
-      timestamp: pick(r, "timestamp", "performed_at", "date") ?? "",
-      load: pick(r, "load", "weight"),
-      unit: pick(r, "unit", "load_unit")?.toLowerCase() ?? null,
-      rep: pick(r, "rep", "rep_number"),
-      mean_velocity: pick(r, "mean_velocity", "mean_velocity_ms", "mean_velocity_m_s"),
-      peak_velocity: pick(r, "peak_velocity", "peak_velocity_ms", "peak_velocity_m_s"),
-      power: pick(r, "power", "mean_power", "power_w"),
-      device: pick(r, "device"),
+      athlete: pick(r, "athlete_external_id", "external_id", "athlete_id", "athlete_email", "email", "athlete", "athlete_name", "name") ?? "",
+      exercise: pick(r, "exercise", "exercise_name", "lift", "movement") ?? "",
+      timestamp: dateTime ?? "",
+      load: pick(r, "load", "weight", "bar_weight"),
+      unit: unitCell === "lbs" ? "lb" : unitCell === "kgs" ? "kg" : (unitCell ?? headerUnit),
+      rep: pick(r, "rep", "rep_number", "rep_no"),
+      mean_velocity: zeroAsMissing(pick(r, "mean_velocity", "mean_velocity_ms", "mean_velocity_m_s", "avg_velocity", "average_velocity", "mean_concentric_velocity")),
+      peak_velocity: zeroAsMissing(pick(r, "peak_velocity", "peak_velocity_ms", "peak_velocity_m_s")),
+      power: zeroAsMissing(pick(r, "power", "mean_power", "avg_power", "power_w")),
+      device: pick(r, "device", "sensor"),
     });
     if (!res.success) return errors.push({ row: rowNo, message: res.error.issues.map((x) => `${x.path.join(".")}: ${x.message}`).join("; ") });
     const d = res.data;
     if (d.load != null && !d.unit) return errors.push({ row: rowNo, message: "Load given without unit (lb or kg); not converted or guessed." });
     const key = d.athlete.toLowerCase();
-    const matches = byExt.has(d.athlete) ? [byExt.get(d.athlete)!] : byEmail.get(key) ?? [];
+    const alias = byAlias.get(key.replace(/\s+/g, " "));
+    const matches = byExt.has(d.athlete) ? [byExt.get(d.athlete)!] : alias ? [alias] : byEmail.get(key) ?? [];
+    if (!matches.length && !d.athlete.includes("@") && /\S\s+\S/.test(d.athlete)) return nameOnly.push(i);
     if (matches.length !== 1) return errors.push({ row: rowNo, message: matches.length ? "Email matches more than one athlete" : `No athlete with external id or email "${d.athlete}"` });
     const athleteId = matches[0];
     if (scope !== "all" && !scope.includes(athleteId)) return errors.push({ row: rowNo, message: "Athlete is outside your coaching scope" });
     const exerciseId = exByName.get(d.exercise.toLowerCase());
     if (!exerciseId) return errors.push({ row: rowNo, message: `Unknown exercise "${d.exercise}" (must match the exercise library name)` });
-    const performedAt = new Date(d.timestamp);
-    const sourceRecordId = `vbtcsv:${v.orgId}:${createHash("sha256").update([athleteId, exerciseId, performedAt.toISOString(), d.rep ?? "", d.load ?? ""].join("|")).digest("hex").slice(0, 32)}`;
+    const at = parseDateTime(d.timestamp, tz).value;
+    if (!at) return errors.push({ row: rowNo, message: `timestamp: unreadable date/time "${d.timestamp}"` });
+    if (d.mean_velocity == null && d.peak_velocity == null) return errors.push({ row: rowNo, message: "No velocity in this row (blank or 0). A missing speed is never stored as 0, so there is nothing to import." });
+    const performedAt = new Date(at.iso);
+    const sourceRecordId = vbtSourceRecordId(v.orgId, athleteId, exerciseId, performedAt.toISOString(), d.rep, d.load);
     values.push({
       orgId: v.orgId,
       athleteId,
@@ -306,14 +359,31 @@ export async function importVbtCsv(tx: Tx, v: Viewer, file: { name: string; text
     status: "committed",
     originalFilename: file.name.slice(0, 200),
     checksum,
-    stats: { rows: parsed.data.length, imported, duplicates: values.length - imported, errors: errors.length },
+    stats: { rows: parsed.data.length, imported, duplicates: values.length - imported, errors: errors.length + (can(v, "imports.manage") ? 0 : nameOnly.length), nameOnly: nameOnly.length },
     limitations: "Imported file (VBT export). No device connectivity; values as exported by the device software.",
     createdBy: v.userId,
     committedAt: new Date(),
     committedBy: v.userId,
   });
-  await audit(tx, actor(v), "training.vbt.import", "import_batch", batchId, { summary: `VBT CSV ${file.name}: ${imported} imported, ${values.length - imported} duplicates, ${errors.length} errors` });
-  return { batchId, imported, duplicates: values.length - imported, errors };
+  // Name-only rows go through the same identity review as Hawkin files (import wizard, step 5):
+  // a person is linked only by a staff decision, and nothing is stored for them until then.
+  let review: VbtImportResult["review"] = null;
+  if (nameOnly.length) {
+    if (can(v, "imports.manage")) {
+      const text = Papa.unparse({ fields: csv.headers, data: nameOnly.map((i) => csv.headers.map((h) => csv.rows[i][h] ?? "")) });
+      const { batch } = await createBatch(tx, v, { filename: `${file.name.replace(/\.csv$/i, "").slice(0, 150)} (name-only rows).csv`, bytes: new TextEncoder().encode(text), schemaId: "vbt.readings" });
+      await validateBatch(tx, v, batch.id);
+      review = { batchId: batch.id, rows: nameOnly.length };
+    } else {
+      for (const i of nameOnly) errors.push({ row: i + 2, message: NAME_ONLY_HELP });
+      errors.sort((a, b) => a.row - b.row);
+    }
+  }
+  await audit(tx, actor(v), "training.vbt.import", "import_batch", batchId, {
+    summary: `VBT CSV ${file.name}: ${imported} imported, ${values.length - imported} duplicates, ${errors.length} errors${review ? `, ${review.rows} name-only rows sent to identity review` : ""}`,
+    after: review ? { reviewBatchId: review.batchId } : undefined,
+  });
+  return { batchId, imported, duplicates: values.length - imported, errors, review };
 }
 
 export async function recentVbt(tx: Tx, v: Viewer, athleteId: string, limit = 20) {

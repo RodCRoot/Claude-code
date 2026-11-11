@@ -26,11 +26,13 @@ import {
   testSessions,
   testTypes,
   trials,
+  vbtReadings,
   wearableObservations,
   workoutItems,
   workouts,
   type QuestionDef,
 } from "@/db/schema";
+import { vbtSourceRecordId } from "@/lib/training/vbt-csv";
 import type { Viewer } from "@/lib/authz/policy";
 import { saveObject } from "@/lib/storage";
 import { DEFAULT_TZ, localToUtc } from "@/lib/time";
@@ -790,7 +792,51 @@ const commitWearable: Committer = async (c, row, out) => {
   out.action = "create";
 };
 
+/** Bar-speed reading for a person staff already resolved (never matched by name alone). */
+const commitVbtReading: Committer = async (c, row, out) => {
+  const n = row.normalized as Record<string, unknown>;
+  const { athleteId } = await ensurePerson(c, row, out);
+  const name = String(n.exercise ?? "");
+  const [ex] = await c.tx.select({ id: exercises.id }).from(exercises).where(and(eq(exercises.orgId, c.orgId), sql`lower(${exercises.name}) = ${name.toLowerCase()}`));
+  if (!ex) {
+    out.warnings.push(`Unknown exercise "${name}" (must match the exercise library name); reading not imported.`);
+    out.action = "skip";
+    return;
+  }
+  const performedAt = new Date(String(n.performedAt));
+  const load = (n.load as number | null) ?? null;
+  const rep = (n.rep as number | null) ?? null;
+  const [r] = await c.tx
+    .insert(vbtReadings)
+    .values({
+      orgId: c.orgId,
+      athleteId: athleteId!,
+      exerciseId: ex.id,
+      performedAt,
+      load: load != null ? String(load) : null,
+      loadUnit: (n.loadUnit as string | null) ?? null,
+      repNumber: rep,
+      meanVelocityMs: (n.meanVelocity as number | null) ?? null,
+      peakVelocityMs: (n.peakVelocity as number | null) ?? null,
+      meanPowerW: (n.power as number | null) ?? null,
+      device: (n.device as string | null) ?? null,
+      importBatchId: c.batchId,
+      sourceRecordId: vbtSourceRecordId(c.orgId, athleteId!, ex.id, performedAt.toISOString(), rep, load),
+    })
+    .onConflictDoNothing({ target: vbtReadings.sourceRecordId })
+    .returning({ id: vbtReadings.id });
+  if (!r) {
+    out.warnings.push("This reading was already imported.");
+    out.action = "skip";
+    return;
+  }
+  out.created.push({ type: "vbt_reading", id: r.id });
+  await linkExternal(c, c.schema.recordEntityType, row.sourceRecordId!, "vbt_reading", r.id);
+  out.action = "create";
+};
+
 export const COMMITTERS: Record<string, Committer> = {
+  "vbt.readings": commitVbtReading,
   "zenplanner.members": commitPerson,
   "generic.people": commitPerson,
   "zenplanner.family_links": commitFamilyLink,

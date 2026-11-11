@@ -263,6 +263,8 @@ export async function workoutsWithItems(tx: Tx, orgId: string, ws: (typeof worko
       const p = exMap.get(i.substitutedExerciseId ?? i.exerciseId);
       return p && p.trackingType === "weight_reps" ? [{ athleteId: athleteOf.get(i.workoutId)!, exerciseId: p.id, exerciseName: p.name }] : [];
     }),
+    // The data window ends on the workout date (today for the logger and the weight room).
+    { today: ws.map((w) => w.scheduledDate).sort().at(-1) },
   );
   return ws.map((w) => ({
     ...w,

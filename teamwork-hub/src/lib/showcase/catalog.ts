@@ -8,7 +8,8 @@
  * Callers check access first (./access.ts). `includeTraining` is false for an editor without
  * training access, so test results, maxes and consistency are simply absent.
  */
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, eq, gte, ne, sql } from "drizzle-orm";
+import { BAR_SPEED_SOURCE } from "@/lib/training/vbt";
 import type { Tx } from "@/db";
 import { athletes, bookings, exercises, maxes, memberships, organizations, people, scheduleSessions } from "@/db/schema";
 import type { Viewer } from "@/lib/authz/policy";
@@ -140,11 +141,12 @@ export async function buildCatalog(tx: Tx, orgId: string, athleteId: string, opt
   catalog.metrics = metrics.sort((x, y) => x.name.localeCompare(y.name));
 
   // --- Lift maxes: best measured max per lift, else the latest estimate (never mixed) --------
+  // Maxes estimated from bar speed never leave the staff training pages, so they are not read here.
   const maxRows = await tx
     .select({ m: maxes, name: exercises.name, role: sql<string | null>`(select u.role from users u where u.id = ${maxes.enteredBy} and u.org_id = ${maxes.orgId})` })
     .from(maxes)
     .innerJoin(exercises, eq(exercises.id, maxes.exerciseId))
-    .where(and(eq(maxes.orgId, orgId), eq(maxes.athleteId, athleteId)));
+    .where(and(eq(maxes.orgId, orgId), eq(maxes.athleteId, athleteId), ne(maxes.source, BAR_SPEED_SOURCE)));
   const byEx = new Map<string, CatalogLift & { kg: number; measured: boolean }>();
   for (const { m, name, role } of maxRows.sort((x, y) => x.m.recordedOn.localeCompare(y.m.recordedOn))) {
     if (unitFamily(m.unit) !== "mass" || m.recordedOn > today) continue;

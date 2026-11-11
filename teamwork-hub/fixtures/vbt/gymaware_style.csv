@@ -1,0 +1,6 @@
+Athlete Email,Exercise,Date,Time,Weight (kg),Rep #,Mean Velocity (m/s),Peak Velocity (m/s),Mean Power (W),Device
+dana.brooks@example.test,Back Squat,2026-02-26,16:05:00,60,1,0.82,1.21,512,Synthetic sensor A
+dana.brooks@example.test,Back Squat,2026-02-26,16:05:08,60,2,0.80,1.18,498,Synthetic sensor A
+dana.brooks@example.test,Back Squat,2026-02-26,16:12:00,80,1,0.61,0.94,470,Synthetic sensor A
+dana.brooks@example.test,Back Squat,2026-02-26,16:20:00,95,1,0.47,0.75,431,Synthetic sensor A
+dana.brooks@example.test,Back Squat,2026-02-26,16:27:00,100,1,0,0,0,Synthetic sensor A

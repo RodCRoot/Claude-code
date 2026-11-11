@@ -1,4 +1,5 @@
-import { and, asc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte, ne, or, sql } from "drizzle-orm";
+import { BAR_SPEED_SOURCE } from "@/lib/training/vbt";
 import { z } from "zod";
 import type { Tx } from "@/db";
 import { athletes, bookings, exercises, groupMembers, kpiTargets, maxes, metricDefinitions, metricValues, scheduleSessions, testSessions, testTypes, trials } from "@/db/schema";
@@ -410,7 +411,8 @@ export async function strengthPrs(tx: Tx, v: Viewer, athleteId: string, opts: { 
     .select({ m: maxes, name: exercises.name })
     .from(maxes)
     .innerJoin(exercises, eq(exercises.id, maxes.exerciseId))
-    .where(and(eq(maxes.orgId, v.orgId), eq(maxes.athleteId, athleteId), opts.to ? lte(maxes.recordedOn, opts.to) : undefined))
+    // Family-facing "best max": estimates from bar speed are left out so one is never read as a lift.
+    .where(and(eq(maxes.orgId, v.orgId), eq(maxes.athleteId, athleteId), ne(maxes.source, BAR_SPEED_SOURCE), opts.to ? lte(maxes.recordedOn, opts.to) : undefined))
     .orderBy(asc(maxes.recordedOn));
   const byEx = new Map<string, { exercise: string; best: { value: number; unit: string; date: string; kind: string; method: string }; first: { value: number; unit: string; date: string }; inPeriod: boolean }>();
   for (const { m, name } of rows) {

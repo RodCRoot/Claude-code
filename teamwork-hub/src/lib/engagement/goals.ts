@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { BAR_SPEED_SOURCE } from "@/lib/training/vbt";
 import { z } from "zod";
 import type { Tx } from "@/db";
 import { athleteGoals, athletes, exercises, maxes, metricDefinitions, metricValues, type GoalBaselineContext, type GoalDirection } from "@/db/schema";
@@ -70,7 +71,7 @@ async function measure(tx: Tx, orgId: string, g: Goal): Promise<Measured> {
     const rows = await tx
       .select({ value: maxes.value, unit: maxes.unit, kind: maxes.kind, recordedOn: maxes.recordedOn })
       .from(maxes)
-      .where(and(eq(maxes.orgId, orgId), eq(maxes.athleteId, g.athleteId), eq(maxes.exerciseId, g.exerciseId)))
+      .where(and(eq(maxes.orgId, orgId), eq(maxes.athleteId, g.athleteId), eq(maxes.exerciseId, g.exerciseId), ne(maxes.source, BAR_SPEED_SOURCE)))
       .orderBy(asc(maxes.recordedOn), asc(maxes.createdAt));
     let best: { value: number; date: string } | null = null;
     let otherBasis = false;
@@ -145,7 +146,7 @@ export async function createGoal(tx: Tx, v: Viewer, raw: unknown, today = todayL
       const [latest] = await tx
         .select({ unit: maxes.unit, kind: maxes.kind })
         .from(maxes)
-        .where(and(eq(maxes.orgId, v.orgId), eq(maxes.athleteId, athlete.id), eq(maxes.exerciseId, ex.id)))
+        .where(and(eq(maxes.orgId, v.orgId), eq(maxes.athleteId, athlete.id), eq(maxes.exerciseId, ex.id), ne(maxes.source, BAR_SPEED_SOURCE)))
         .orderBy(desc(maxes.recordedOn), desc(maxes.createdAt))
         .limit(1);
       const unit = input.targetUnit || latest?.unit || (unitFamily(ex.defaultUnit) === "mass" ? ex.defaultUnit : "lb");

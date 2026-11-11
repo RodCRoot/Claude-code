@@ -389,7 +389,9 @@ export const importVbtAction = safeAction(async (_p: ActionState, fd: FormData) 
   const errs = r.errors.slice(0, 8).map((e) => `row ${e.row}: ${e.message}`).join("; ");
   return {
     ok: true,
-    message: `Imported ${r.imported} readings from "${f.name}" (${r.duplicates} already imported, ${r.errors.length} rejected).${errs ? ` ${errs}${r.errors.length > 8 ? " …" : ""}` : ""}`,
+    message: `Imported ${r.imported} readings from "${f.name}" (${r.duplicates} already imported, ${r.errors.length} rejected).${
+      r.review ? ` ${r.review.rows} row${r.review.rows === 1 ? " names" : "s name"} the athlete by name only: nothing was matched or stored for ${r.review.rows === 1 ? "it" : "them"}. Review the identity under Imports (open the newest "name-only rows" import), then commit.` : ""
+    }${errs ? ` ${errs}${r.errors.length > 8 ? " …" : ""}` : ""}`,
   };
 });
 

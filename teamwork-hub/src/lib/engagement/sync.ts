@@ -9,7 +9,8 @@
  * the athlete first (see ./access.ts). Health VALUES are never read: only the fact and date of a
  * check-in.
  */
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
+import { BAR_SPEED_SOURCE } from "@/lib/training/vbt";
 import type { Tx } from "@/db";
 import { anywhereCompletions, athleteBadges, athleteGoals, athletes, bookings, formRequests, maxes, membershipHolds, memberships, organizations, questionnaireResponses, scheduleSessions, workouts, xpEvents, type XpKind } from "@/db/schema";
 import { DEFAULT_TZ, addDaysYmd, fmt, localToUtc, localYmd, todayLocal } from "@/lib/time";
@@ -57,7 +58,8 @@ export async function loadActivity(tx: Tx, orgId: string, athleteId: string, tz 
   const maxRows = await tx
     .select({ id: maxes.id, exerciseId: maxes.exerciseId, value: maxes.value, unit: maxes.unit, kind: maxes.kind, recordedOn: maxes.recordedOn, createdAt: maxes.createdAt })
     .from(maxes)
-    .where(and(eq(maxes.orgId, orgId), eq(maxes.athleteId, athleteId)));
+    // Bar-speed estimates earn no PR, XP or recap line: they are a coaching aid, not a lift.
+    .where(and(eq(maxes.orgId, orgId), eq(maxes.athleteId, athleteId), ne(maxes.source, BAR_SPEED_SOURCE)));
   const holdRows = await tx
     .select({ start: membershipHolds.startDate, end: membershipHolds.endDate })
     .from(membershipHolds)

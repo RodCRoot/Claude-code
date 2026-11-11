@@ -191,6 +191,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               Columns: <code>athlete</code> (external id or email), <code>exercise</code> (library name), <code>timestamp</code>, <code>load</code>, <code>unit</code> (lb/kg), <code>rep</code>, <code>mean_velocity</code>, <code>peak_velocity</code> (m/s),{" "}
               <code>power</code> (W), <code>device</code>. Each reading records the file it came from. Re-importing the same rows is skipped.
             </p>
+            <p className="mb-3 text-sm text-ink-2">
+              Device exports with units in the header also work, for example <code>Weight (kg)</code> and <code>Mean Velocity (m/s)</code> (GymAware-style; the load unit is read from the header). Velocities must be in m/s and nothing is converted. Rows that
+              name the athlete by name only are never matched automatically: they are held for identity review under Imports, the same way Hawkin files are.
+            </p>
             <ActionForm action={importVbtAction} className="flex flex-wrap items-end gap-3">
               <Field label="CSV file" htmlFor="vbt-f">
                 <Input id="vbt-f" name="file" type="file" accept=".csv,text/csv" required />

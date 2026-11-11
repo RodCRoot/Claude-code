@@ -3,6 +3,7 @@ import { genericMetricValues, genericPeople, wearableDaily } from "./generic";
 import { hawkinApi, hawkinCsv } from "./hawkin";
 import { tbMaxes, tbQuestionnaire, tbWorkoutLog } from "./teambuildr";
 import { ghlContacts } from "./gohighlevel";
+import { vbtReadingsCsv } from "./vbt";
 import { zpAttendance, zpDocumentsIndex, zpFamilyLinks, zpMembers, zpMemberships } from "./zenplanner";
 
 /** Registry of every import schema, in wizard order. */
@@ -19,6 +20,7 @@ export const IMPORT_SCHEMAS: ImportSchemaDef[] = [
   genericPeople,
   genericMetricValues,
   wearableDaily,
+  vbtReadingsCsv,
   ghlContacts,
   hawkinApi,
 ];
