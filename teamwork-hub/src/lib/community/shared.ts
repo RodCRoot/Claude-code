@@ -11,8 +11,8 @@ export const DISPLAY_MODE_LABEL: Record<DisplayNameMode, string> = {
 };
 
 export const DISPLAY_MODE_HINT: Record<DisplayNameMode, string> = {
-  first_last_initial: 'Shown as "Maya P." on the gym TV, leaderboards and shoutouts.',
-  first_name_only: 'Shown as "Maya" only.',
+  first_last_initial: 'For example "Sam T." on the gym TV, leaderboards and shoutouts.',
+  first_name_only: 'For example "Sam", with no initial.',
   hidden: "Never shown to other families. The athlete still sees their own rank.",
 };
 
@@ -140,6 +140,8 @@ export type BoardPayload = {
   /** False when community features are turned off: the board shows a neutral holding screen. */
   enabled: boolean;
   rotationSeconds: number;
+  /** Facility timezone (IANA): the board clock shows gym time whatever the TV is set to. */
+  timeZone: string;
   dateLabel: string;
   panels: BoardPanel[];
 };

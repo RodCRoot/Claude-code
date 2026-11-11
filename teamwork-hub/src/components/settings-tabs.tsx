@@ -13,6 +13,7 @@ export function SettingsTabs({ current }: { current: string }) {
           { key: "engagement", href: "/settings/engagement", label: "Engagement" },
           { key: "growth", href: "/settings/growth", label: "Growth" },
           { key: "showcase", href: "/settings/showcase", label: "Showcase & recaps" },
+          { key: "community", href: "/settings/community", label: "Community" },
           { key: "security", href: "/settings/security", label: "My security" },
           { key: "integrations", href: "/settings/integrations", label: "Integrations" },
           { key: "payroll", href: "/payroll", label: "Payroll" },

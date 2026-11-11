@@ -102,7 +102,7 @@ export async function boardPayload(tx: Tx, orgId: string, opts: { now?: Date } =
   const now = opts.now ?? new Date();
   const tz = org.tz;
   const today = todayLocal(tz, now);
-  const base: BoardPayload = { generatedAt: now.toISOString(), orgName: org.name, enabled: org.settings.enabled, rotationSeconds: org.settings.rotationSeconds, dateLabel: fmt(now, "EEEE, MMMM d", tz), panels: [] };
+  const base: BoardPayload = { generatedAt: now.toISOString(), orgName: org.name, enabled: org.settings.enabled, rotationSeconds: org.settings.rotationSeconds, timeZone: tz, dateLabel: fmt(now, "EEEE, MMMM d", tz), panels: [] };
   if (!org.settings.enabled) return base;
   const on = org.settings.panels;
   const roster = await communityRoster(tx, orgId, { today, defaultMode: org.settings.defaultDisplayMode });
