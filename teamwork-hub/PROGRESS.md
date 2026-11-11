@@ -101,3 +101,22 @@ Rod's planning brief was checked against the build. Most of it was already imple
 - Code: performance trends exclude and disclose points from a different protocol, device, unit or aggregation (`science/comparability.ts`); staff MFA policy extracted and tested, fixing a blank page after login when MFA is required; Hawkin assessment-date, explicit-window, includeInactive and in-place-update behaviour now asserted by tests.
 
 Verified: `pnpm test` 611/611; typecheck, lint, build clean; Playwright 253/253 (now including `staff-mfa.spec.ts`); training offline/builder 4/4.
+
+## Checkpoint 9 — Athlete experience, retention and growth wave (2026-11-11)
+Six modules built in parallel worktrees and merged (migrations 0018 to 0023), each with its own `docs/modules/<name>.md`:
+- **Retention** (`/people/retention`, win-back, session feedback, milestones): at-risk list with reasons, next steps and an audit of what staff did.
+- **Engagement** (Athlete Home on `/today`, `/goals`): XP ledger, levels, weekly streaks in facility-local weeks (holds skipped), badges, goals linked to measured results.
+- **Growth** (`/refer`, `/shop`, `/people/referrals`, `/billing/opportunities`): referrals with staff-approved account credit ($50, Rod's decision), shop listings, revenue opportunities.
+- **Anywhere** (`/anywhere`, My Season, coach library): at-home sessions that count toward streaks and load; load chart split by origin.
+- **Showcase** (`/showcase`, public `/s/[token]`, PDF, `/recap`): consented recruiting page from an allowlist of verified metrics; monthly recaps.
+- **Community** (`/display` gym TV board, `/leaderboards`, coach shoutouts, team challenges): display-name consent, revocable TV tokens that can read only the board.
+
+Also in this wave:
+- Next.js 16.2.12 to 16.4.6. On 16.2.12 a form could stay on its pending label on phone-size screens after the server had answered (reproduced 4 runs in 5 on "Revoke screen"; the server response was correct every time). 16.4.6 passes 5 of 5; the mobile skip on that test was removed.
+- CSP crawl opens a fresh tab every 40 pages and retries an aborted or crashed navigation once.
+- `scripts/setup-dev.sh` rebuilds a machine from nothing (verified after a container restart).
+- Walkthrough for Rod: https://claude.ai/artifact/QNvGMDEQfbdPhhTUkQrR9h (private to him).
+
+Verified on 16.4.6: `pnpm test` 908/908 (65 files); typecheck and lint clean; migration drift check clean; Playwright full run with one worker 401 passed, 1 skipped (the mobile staff-MFA case, skipped by design), 0 failed; CSP crawl 0 findings for every role (owner 237 pages, coach 116, guardian 85); training offline 4/4.
+
+Not verified: any provider in a sandbox; anything against real Zen Planner, TeamBuildr or Hawkin data. See the "athlete experience wave" list in DECISIONS.md for choices waiting on Rod.

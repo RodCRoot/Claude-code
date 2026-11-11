@@ -11,6 +11,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
 Package manager: **pnpm** (npm 10 crashes on vitest's peer graph). Run `pnpm install`.
 
 ## Commands
+- `bash scripts/setup-dev.sh` — new machine: PostgreSQL role `teamwork`, databases `teamwork_hub` and `teamwork_hub_test` (with `btree_gist`), `.env`, install, seed. Safe to rerun.
+- Browser tests need a production build: `pnpm build && PORT=3000 pnpm start`, then `PW_CHROMIUM=<chromium path> npx playwright test --workers=1 --trace off` (cloud sessions: `/opt/pw-browsers/chromium`). The demo role switcher `/dev/switch` only exists under `pnpm dev`; e2e signs in through `/login`.
+- Stop a running server by process name `next-server` (read `/proc/<pid>/comm`); matching on the command line kills your own shell.
 - `pnpm db:fresh` — reset + migrate + seed the dev DB (APP_MODE=demo only)
 - `pnpm dev` — http://localhost:3000 ; demo logins at `/dev/switch` (password `teamwork-demo-1`)
 - `pnpm test` — vitest against `TEST_DATABASE_URL` (schema recreated each run; each test file seeds its own isolated org via `seedOrg()`)
@@ -36,3 +39,8 @@ Package manager: **pnpm** (npm 10 crashes on vitest's peer graph). Run `pnpm ins
 - `scripts/seed/core.ts` builds the synthetic identity graph (keys in `ctx.users/people/athletes/payers/groups`). Module seeds live in `scripts/seed/<module>.ts` and are registered in `scripts/seed/modules.ts`.
 - Tests live in `tests/<module>*.test.ts`; use `seedOrg()` / `viewerFor(ctx, "alex")` from `tests/helpers/db.ts`.
 - Demo users: rod (owner), erin (operations), marcus & tess (coaches), alex & jordan (guardians of maya+eli; jordan has no health access and can view but not pay invoices), chris (unrelated Parker, guardian of ava), sam & casey (separated co-parents of leo; casey cannot book or pay), dana (adult athlete, self-pay), maya (athlete login), kiosk.
+
+## Working in parallel
+- Several sessions push to `claude/teamwork-hub`. Before every push: `git fetch origin claude/teamwork-hub && git merge --no-edit origin/claude/teamwork-hub`.
+- Migrations are numbered in merge order. When two branches both add one: keep the main journal and snapshot, delete the branch's migration, run `pnpm db:generate --name <x>`, re-append any hand-written SQL, and confirm a second generate reports no changes.
+- A migration that rewrites the XP kind CHECK constraint must list every existing kind.
