@@ -74,6 +74,8 @@ test("without a token, or with a made-up one, there is no board", async ({ page 
 test("an admin adds a screen, the TV connects, and revoking it kills the token", async ({ page, browser }) => {
   await login(page, USERS.rod);
   await page.goto("/settings/community");
+  // Let the form hydrate: the one-time link is shown by client state, not by a page reload.
+  await page.waitForLoadState("networkidle");
   const label = `E2E TV ${Date.now().toString().slice(-6)}`;
   await page.getByLabel("Screen name").fill(label);
   await page.getByRole("button", { name: "Create screen link" }).click();

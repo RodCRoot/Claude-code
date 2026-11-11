@@ -31,7 +31,7 @@ const T = {
   small: "text-[clamp(0.875rem,2.4vh,1.8rem)] leading-snug",
   kicker: "text-[clamp(0.8rem,2.1vh,1.6rem)] font-bold uppercase tracking-[0.18em] text-[#7fd3f7]",
 };
-const ROW = "flex min-h-0 flex-1 items-center gap-[2.2vw] rounded-[1.6vh] bg-white/[0.055] px-[2.2vw] py-[1vh] ring-1 ring-white/10";
+const ROW = "flex max-h-[19vh] min-h-0 flex-1 items-center gap-[2.2vw] rounded-[1.6vh] bg-white/[0.055] px-[2.2vw] py-[1vh] ring-1 ring-white/10";
 const MUTED = "text-[#b9c6da]";
 
 export function DisplayBoard({ initial, pinned, preview }: { initial: BoardPayload; pinned: number | null; preview: boolean }) {
