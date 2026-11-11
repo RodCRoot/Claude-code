@@ -37,6 +37,8 @@ export default async function ReservationsPage() {
   const byId = new Map(members.map((m) => [m.id, m]));
   const several = members.length > 1;
   const shown = upcoming.slice(0, MAX);
+  // The late-cancel rule is stated once when every reservation shares it, otherwise on each row (and always in the confirm).
+  const rules_ = [...new Set(shown.filter((x) => x.booking.status === "booked").map((x) => lateCancelRule(policies.get(x.session.serviceTypeId))).filter((x): x is string => !!x))];
   // Other open times of the same program, for Reschedule (one lookup per program, not per reservation).
   const altByService = new Map<string, Awaited<ReturnType<typeof listSessions>>>();
   for (const { booking, session } of shown) {
@@ -65,6 +67,11 @@ export default async function ReservationsPage() {
             <h2 id="upcoming-h" className="border-b border-edge bg-th px-3 py-2.5 text-xs font-bold uppercase tracking-wide text-ink-2">
               Upcoming reservations <span className="tabular text-ink-3">({upcoming.length})</span>
             </h2>
+            {rules_.length === 1 ? (
+              <p className="border-b border-edge px-3 py-2 text-xs text-ink-2">
+                <span className="font-semibold">Cancellation policy.</span> {rules_[0]}
+              </p>
+            ) : null}
             {shown.length === 0 ? (
               <div className="p-4">
                 <EmptyState title="No upcoming reservations" action={<ButtonLink href="/schedule" variant="secondary" className="min-h-11">Open the calendar</ButtonLink>}>
@@ -100,7 +107,7 @@ export default async function ReservationsPage() {
                             ) : null}
                             {waitlisted ? <Badge variant="yellow">Waitlist #{booking.waitlistPosition}</Badge> : <Badge variant="green">Reserved</Badge>}
                           </div>
-                          {canChange && !waitlisted && rule ? <p className="mt-1 text-xs text-ink-3">{rule}</p> : null}
+                          {canChange && !waitlisted && rule && rules_.length > 1 ? <p className="mt-1 text-xs text-ink-3">{rule}</p> : null}
                         </div>
                       </div>
                       {canChange ? (
@@ -117,7 +124,7 @@ export default async function ReservationsPage() {
                             </SubmitButton>
                           </ActionForm>
                           {alternatives.length ? (
-                            <details className="w-full sm:w-auto">
+                            <details className="open:w-full sm:open:w-auto">
                               <summary className="inline-flex min-h-11 cursor-pointer items-center px-1 text-sm font-medium text-brand">
                                 Reschedule<span className="sr-only">: {label}</span>
                               </summary>

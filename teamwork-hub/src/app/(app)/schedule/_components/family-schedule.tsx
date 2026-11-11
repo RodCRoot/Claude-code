@@ -128,7 +128,6 @@ export async function FamilySchedule({ viewer, params, range, tz, today }: { vie
 
   return (
     <div className="space-y-4">
-      <SessionFeedbackCard viewer={viewer} />
       {noneCanReserve ? (
         <Callout tone="info">
           You can view {members.map((m) => m.first).join(" and ")}&apos;s schedule, but reservations are managed by another guardian or the front desk.
@@ -313,6 +312,7 @@ export async function FamilySchedule({ viewer, params, range, tz, today }: { vie
           </div>
         )}
       </section>
+      <SessionFeedbackCard viewer={viewer} />
     </div>
   );
 }

@@ -91,7 +91,7 @@ export function ReserveControl({
   const waitOpen = s.waitlisted < s.waitlistCapacity;
   const cutoffAt = s.startsAt.getTime() - (rules.familyBookingCutoffMinutes ?? 0) * 60_000;
   const opensAt = rules.bookingWindowDays != null ? s.startsAt.getTime() - rules.bookingWindowDays * 86_400_000 : null;
-  const note = "text-xs text-ink-3";
+  const note = cn("text-xs text-ink-3", align === "end" && "sm:text-right");
 
   let closed: string | null = null;
   if (s.status === "cancelled") closed = "";
@@ -121,7 +121,7 @@ export function ReserveControl({
       <details className="group w-full">
         <summary
           className={cn(
-            buttonClass(full ? "secondary" : "primary", "md", "min-h-11 w-full cursor-pointer list-none sm:ml-auto sm:w-auto sm:min-w-32 [&::-webkit-details-marker]:hidden"),
+            buttonClass(full ? "secondary" : "primary", "md", "min-h-11 w-full cursor-pointer list-none sm:ml-auto sm:flex sm:w-fit sm:min-w-32 [&::-webkit-details-marker]:hidden"),
             align === "start" && "sm:ml-0",
           )}
         >

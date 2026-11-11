@@ -134,7 +134,7 @@ export async function FamilyBills({ v }: { v: Viewer }) {
   const several = accounts.length > 1;
   const payerName = (id: string | null) => (several ? accounts.find((a) => a.payer.id === id)?.payer.name : undefined);
   const unpaid = rows.filter((r) => r.invoice.status === "open").sort((a, b) => (a.invoice.dueDate ?? "9").localeCompare(b.invoice.dueDate ?? "9"));
-  const history = rows.filter((r) => r.invoice.status !== "open");
+  const history = rows.filter((r) => r.invoice.status !== "open").sort((a, b) => (b.invoice.dueDate ?? "").localeCompare(a.invoice.dueDate ?? ""));
   const currencies = new Set(unpaid.map((r) => r.invoice.currency));
   const totalDue = unpaid.reduce((s, r) => s + r.money.balanceMinor, 0);
   const viewOnly = accounts.filter((a) => !a.canPay);
@@ -286,7 +286,7 @@ export async function FamilyHome({ v }: { v: Viewer }) {
                     </ButtonLink>
                   )}
                 </div>
-                {due.length > 1 ? (
+                {due.length ? (
                   <ul className="divide-y divide-edge rounded-md border border-edge text-sm">
                     {due.map((r) => (
                       <li key={r.invoice.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">

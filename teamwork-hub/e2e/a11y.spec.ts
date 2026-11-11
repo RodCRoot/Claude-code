@@ -119,7 +119,7 @@ const STAFF = [
   "/settings/audit",
 ];
 const COACH = ["/today", "/people", "/people/tasks", "/schedule", "/training", "/training/today", "/training/weight-room", "/training/review", "/science", "/science/load", "/performance", "/messages", "/documents", "/reports", "/reports/attendance", "/reports/utilization", "/people/retention", "/reports/session-feedback", "/settings/security", "/time", "/training/anywhere", "/training/recaps", "/people/showcases", "/leaderboards"];
-const FAMILY = ["/today", "/schedule", "/schedule/book", "/billing", "/training", "/science", "/science/wellness", "/science/body-map", "/performance", "/messages", "/documents", "/goals", "/shop", "/refer", "/anywhere", "/anywhere/season", "/showcase", "/recap", "/leaderboards"];
+const FAMILY = ["/today", "/schedule", "/schedule/book", "/schedule/reservations", "/schedule/attendance", "/billing", "/billing/invoices", "/billing/memberships", "/billing/payment-methods", "/billing/history", "/training", "/science", "/science/wellness", "/science/body-map", "/performance", "/messages", "/documents", "/goals", "/shop", "/refer", "/anywhere", "/anywhere/season", "/showcase", "/recap", "/leaderboards"];
 
 type Role = { name: string; email?: string; routes: string[]; dynamic?: [string, RegExp][] };
 const ROLES: Role[] = [
@@ -149,6 +149,8 @@ const ROLES: Role[] = [
       ["/today", /^\/people\/[0-9a-f-]{36}$/],
       ["/performance", /^\/performance\/[0-9a-f-]{36}$/],
       ["/schedule", /^\/feedback\/[0-9a-f-]{36}$/],
+      ["/schedule/reservations", /^\/schedule\/classes\/[0-9a-f-]{36}$/],
+      ["/billing/memberships", /^\/billing\/memberships\/[0-9a-f-]{36}$/],
       ["/recap", /^\/recap\/\d{4}-\d{2}\?athlete=[0-9a-f-]{36}$/],
     ],
   },
