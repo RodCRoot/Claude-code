@@ -16,6 +16,7 @@ import { assertCan, type Viewer } from "@/lib/authz/policy";
 import { audit, type AuditActor } from "@/lib/audit";
 import { UserError } from "./errors";
 import { grantCredits } from "@/lib/credits";
+import { confirmEventRegistration } from "@/lib/events/confirm";
 import { addDaysYmd, localToUtc, todayLocal } from "@/lib/time";
 import { assertCanViewPayer } from "./access";
 import { actorOf, assertMinor, billingSettings, int } from "./util";
@@ -377,6 +378,8 @@ export async function applyInvoiceEntitlements(tx: Tx, invoiceId: string, actor:
       if (r.created) granted += e.credits * line.quantity;
     }
     if (e.activateMembershipId) await activateMembership(tx, e.activateMembershipId, inv.id, actor);
+    // Camp / clinic seat: confirmed only when this invoice is paid (the callee re-checks the status).
+    if (e.eventRegistrationId) await confirmEventRegistration(tx, e.eventRegistrationId, inv.id, actor);
   }
   return { granted };
 }

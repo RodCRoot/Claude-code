@@ -93,6 +93,8 @@ const STAFF = [
   "/people/referrals",
   "/billing/opportunities",
   "/settings/growth",
+  "/events",
+  "/events/new",
   "/reports/growth-referrals",
   "/payroll",
   "/payroll/staff",
@@ -119,7 +121,7 @@ const STAFF = [
   "/settings/audit",
 ];
 const COACH = ["/today", "/people", "/people/tasks", "/schedule", "/training", "/training/today", "/training/weight-room", "/training/review", "/science", "/science/load", "/performance", "/messages", "/documents", "/reports", "/reports/attendance", "/reports/utilization", "/people/retention", "/reports/session-feedback", "/settings/security", "/time", "/training/anywhere", "/training/recaps", "/people/showcases", "/leaderboards"];
-const FAMILY = ["/today", "/schedule", "/schedule/book", "/schedule/reservations", "/schedule/attendance", "/billing", "/billing/invoices", "/billing/memberships", "/billing/payment-methods", "/billing/history", "/training", "/science", "/science/wellness", "/science/body-map", "/performance", "/messages", "/documents", "/goals", "/shop", "/refer", "/anywhere", "/anywhere/season", "/showcase", "/recap", "/leaderboards"];
+const FAMILY = ["/today", "/schedule", "/schedule/book", "/schedule/reservations", "/schedule/attendance", "/billing", "/billing/invoices", "/billing/memberships", "/billing/payment-methods", "/billing/history", "/training", "/science", "/science/wellness", "/science/body-map", "/performance", "/messages", "/documents", "/goals", "/shop", "/shop/camps", "/refer", "/anywhere", "/anywhere/season", "/showcase", "/recap", "/leaderboards"];
 
 type Role = { name: string; email?: string; routes: string[]; dynamic?: [string, RegExp][] };
 const ROLES: Role[] = [
@@ -137,6 +139,7 @@ const ROLES: Role[] = [
       ["/performance", /^\/performance\/[0-9a-f-]{36}$/],
       ["/people/retention", /^\/people\/retention\/feedback\/[0-9a-f-]{36}$/],
       ["/training/anywhere", /^\/training\/anywhere\/[0-9a-f-]{36}$/],
+      ["/events", /^\/events\/[0-9a-f-]{36}$/],
     ],
   },
   { name: "coach", email: USERS.marcus, routes: COACH, dynamic: [["/people", /^\/people\/[0-9a-f-]{36}$/]] },
@@ -151,6 +154,7 @@ const ROLES: Role[] = [
       ["/schedule", /^\/feedback\/[0-9a-f-]{36}$/],
       ["/schedule/reservations", /^\/schedule\/classes\/[0-9a-f-]{36}$/],
       ["/billing/memberships", /^\/billing\/memberships\/[0-9a-f-]{36}$/],
+      ["/shop/camps", /^\/shop\/camps\/[0-9a-f-]{36}$/],
       ["/recap", /^\/recap\/\d{4}-\d{2}\?athlete=[0-9a-f-]{36}$/],
     ],
   },

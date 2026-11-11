@@ -10,6 +10,7 @@ export * from "./payroll";
 export * from "./retention";
 export * from "./engagement";
 export * from "./growth";
+export * from "./events";
 export * from "./anywhere";
 export * from "./showcase";
 export * from "./community";

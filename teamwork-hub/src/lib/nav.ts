@@ -21,6 +21,7 @@ const ALL: Role[] = [...STAFF, ...FAMILY];
 export const NAV: NavItem[] = [
   { key: "today", href: "/today", label: "Dashboard", roles: ALL, icon: "today", group: "front" },
   { key: "schedule", href: "/schedule", label: "Calendar", roles: ALL, icon: "schedule", group: "front" },
+  { key: "events", href: "/events", label: "Camps & clinics", roles: ["owner", "admin", "operations"], icon: "trophy", group: "front" },
   { key: "messages", href: "/messages", label: "Messages", roles: ALL, icon: "messages", group: "front" },
   { key: "people", href: "/people", label: "People", roles: ["owner", "admin", "operations", "coach"], icon: "people", group: "members" },
   { key: "billing", href: "/billing", label: "Memberships & Billing", familyLabel: "My Profile", roles: ["owner", "admin", "operations", "guardian", "athlete"], icon: "billing", group: "members" },

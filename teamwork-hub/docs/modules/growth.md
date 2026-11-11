@@ -95,8 +95,9 @@ have no link.
 - A product appears only when staff tick **Sellable online** under Billing → Products (stored in
   `shop_listings`, default off, audited). Staff can add a short "what it includes" text.
 - Sellable kinds: session packs, single sessions (drop-in), assessments and one-time add-ons.
-  **Camps and clinics are not sellable online**: catalog products are not linked to scheduled
-  sessions today, so a seat cannot be held atomically at checkout. The Products page says so.
+  **Camps and clinics are not shop products**: they are sold as events with their own seat count
+  (`docs/modules/events.md`, family page `/shop/camps`, linked from the shop). Catalog `camp`
+  products are not linked to scheduled sessions and stay off the shop; the Products page says so.
   Memberships use the membership flow; retail uses the point of sale (stock); free items are never listed.
 - Each card shows the name, what it includes, facts from the catalog version (credits, expiry) and
   the price in effect today. Product names and descriptions are shown without em dashes.
@@ -182,7 +183,7 @@ waiting for approval, two referrals at the inquiry stage, a nearly used sample p
 ## Not done / follow-ups
 
 - Referral progress is evaluated on page load, not by a scheduled job. A daily job on the existing queue would make "earned" appear without anyone opening the page.
-- Camps and clinics cannot be sold online until catalog products are linked to sessions.
+- Camps and clinics are sold as events (`docs/modules/events.md`), not through the shop. Catalog `camp` products stay off the shop.
 - Account credit is applied by staff only and shows on the invoice as a discount, not as a named line.
 - Families cannot regenerate their own referral code (staff can).
 - The trial pass form exists on the lead page only.

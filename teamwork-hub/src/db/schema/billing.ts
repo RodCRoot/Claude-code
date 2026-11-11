@@ -230,6 +230,8 @@ export type EntitlementSpec = {
   serviceTypeIds?: string[];
   creditExpiryDays?: number;
   bookingId?: string;
+  /** Camp / clinic registration: confirmed (and booked into its sessions) once the invoice is paid. */
+  eventRegistrationId?: string;
 };
 
 export const invoiceLines = pgTable("invoice_lines", {
