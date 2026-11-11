@@ -19,7 +19,7 @@ function RankDot({ n }: { n: number }) {
   );
 }
 
-export function RankRows({ rows, empty }: { rows: BoardRow[]; empty: string }) {
+export function RankRows({ rows, empty, isAthlete }: { rows: BoardRow[]; empty: string; isAthlete: boolean }) {
   if (!rows.length) return <p className="text-sm text-ink-3">{empty}</p>;
   return (
     <ol className="divide-y divide-edge">
@@ -29,7 +29,7 @@ export function RankRows({ rows, empty }: { rows: BoardRow[]; empty: string }) {
           <span className="min-w-0 flex-1">
             <span className="block truncate font-semibold">
               {r.name}
-              {r.you ? <span className="ml-1.5 text-xs font-bold text-brand">You</span> : null}
+              {r.you ? <span className="ml-1.5 text-xs font-bold text-brand">{isAthlete ? "You" : "Yours"}</span> : null}
             </span>
             {r.detail ? <span className="block truncate text-xs text-ink-3">{r.detail}</span> : null}
           </span>
@@ -52,7 +52,7 @@ export function LeaderboardCard({ board, isAthlete }: { board: Board; isAthlete:
     <Card>
       <CardHeader title={board.title} kicker={board.kind === "max" ? "Strength" : board.kind === "relative" ? "Pound for pound" : board.kind === "improved" ? "Progress" : "Showing up"} action={<Badge variant="neutral">{board.band === "Adult" ? "Adults" : board.band}</Badge>} />
       <CardBody>
-        <RankRows rows={board.rows} empty="No names on this board yet." />
+        <RankRows rows={board.rows} isAthlete={isAthlete} empty="No names on this board yet." />
         {board.you.length ? (
           <ul className="mt-3 space-y-1 rounded-md border border-brand/30 bg-brand/5 px-3 py-2 text-sm font-semibold">
             {board.you.map((y) => (
@@ -77,8 +77,7 @@ export function ChallengeProgress({ c, isAthlete, compact = false }: { c: Challe
         <div className="min-w-0">
           <p className="font-bold leading-snug">{c.title}</p>
           <p className="text-xs text-ink-3">
-            {c.mode === "group_total" ? `Team total: ${plural(c.target, unit)}` : `${plural(c.target, unit)} each`} · {CHALLENGE_METRIC_LABEL[c.metric].toLowerCase()}
-            {c.groupName ? ` · ${c.groupName}` : ""}
+            {c.mode === "group_total" ? `${CHALLENGE_METRIC_LABEL[c.metric]}, all together` : `${plural(c.target, unit)} each`} · {c.groupName ?? "Everyone at the gym"}
           </p>
         </div>
         <Badge variant={c.ended ? "neutral" : "yellow"}>{when}</Badge>
@@ -118,7 +117,7 @@ export function ChallengeProgress({ c, isAthlete, compact = false }: { c: Challe
       ) : null}
       {!compact ? (
         <div className="mt-3">
-          <RankRows rows={c.leaders} empty="Nobody is on the board yet. The first session gets it started." />
+          <RankRows rows={c.leaders} isAthlete={isAthlete} empty="Nobody is on the board yet. The first session gets it started." />
           <p className="mt-2 text-xs text-ink-3">
             {c.mode === "individual" && c.finishers > 0 ? `${c.finishers} finished so far. ` : ""}Counted from check-ins and logged workouts. Finishing earns the Challenge Finisher badge.
           </p>

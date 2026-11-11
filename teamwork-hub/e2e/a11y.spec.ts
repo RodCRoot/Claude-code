@@ -25,7 +25,12 @@ const DISABLED_RULES: string[] = [];
 
 /** Demo share token from scripts/seed/showcase.ts (synthetic data only). */
 const SHOWCASE = "/s/TeamworkDemoShowcaseMayaP000000000000000000";
-const PUBLIC = ["/", "/classes", "/programs", "/inquire", "/login", "/r/parkerdemo26", SHOWCASE, "/s/not-a-real-showcase-link"];
+/** Demo display token from scripts/seed/community.ts (synthetic data only). The link connects this browser as a gym TV. */
+const DISPLAY_LINK = "/display/link/TeamworkDemoDisplayBoardTV00000000000000000";
+// Signed out, "/display" is the "not connected" screen; the link lands on the live board as a TV would.
+const PUBLIC = ["/", "/classes", "/programs", "/inquire", "/login", "/r/parkerdemo26", SHOWCASE, "/s/not-a-real-showcase-link", "/display", DISPLAY_LINK];
+/** The owner's board preview with each panel pinned in turn (every panel type gets audited). */
+const BOARD_PANELS = Array.from({ length: 18 }, (_, i) => `/display?panel=${i + 1}`);
 const STAFF = [
   "/today",
   "/people",
@@ -102,14 +107,19 @@ const STAFF = [
   "/settings/custom-fields",
   "/settings/engagement",
   "/settings/showcase",
+  "/settings/community",
+  "/leaderboards",
+  "/leaderboards?band=U14",
+  "/display",
+  ...BOARD_PANELS,
   "/people/showcases",
   "/training/recaps",
   "/settings/security",
   "/settings/integrations",
   "/settings/audit",
 ];
-const COACH = ["/today", "/people", "/people/tasks", "/schedule", "/training", "/training/today", "/training/weight-room", "/training/review", "/science", "/science/load", "/performance", "/messages", "/documents", "/reports", "/reports/attendance", "/reports/utilization", "/people/retention", "/reports/session-feedback", "/settings/security", "/time", "/training/anywhere", "/training/recaps", "/people/showcases"];
-const FAMILY = ["/today", "/schedule", "/schedule/book", "/billing", "/training", "/science", "/science/wellness", "/science/body-map", "/performance", "/messages", "/documents", "/goals", "/shop", "/refer", "/anywhere", "/anywhere/season", "/showcase", "/recap"];
+const COACH = ["/today", "/people", "/people/tasks", "/schedule", "/training", "/training/today", "/training/weight-room", "/training/review", "/science", "/science/load", "/performance", "/messages", "/documents", "/reports", "/reports/attendance", "/reports/utilization", "/people/retention", "/reports/session-feedback", "/settings/security", "/time", "/training/anywhere", "/training/recaps", "/people/showcases", "/leaderboards"];
+const FAMILY = ["/today", "/schedule", "/schedule/book", "/billing", "/training", "/science", "/science/wellness", "/science/body-map", "/performance", "/messages", "/documents", "/goals", "/shop", "/refer", "/anywhere", "/anywhere/season", "/showcase", "/recap", "/leaderboards"];
 
 type Role = { name: string; email?: string; routes: string[]; dynamic?: [string, RegExp][] };
 const ROLES: Role[] = [

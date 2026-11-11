@@ -13,7 +13,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Tx } from "@/db";
 import { groups } from "@/db/schema";
 import { accessibleAthleteIds, AuthzError, isStaff, type Viewer } from "@/lib/authz/policy";
-import { addDaysYmd, fmt, localToUtc, todayLocal } from "@/lib/time";
+import { fmt, localToUtc, todayLocal } from "@/lib/time";
 import { communityRoster, type RosterEntry } from "./display-name";
 import { communityOrg } from "./settings";
 import { AGE_BANDS, type AgeBand, type Board, type BoardKind, type BoardRow, type YouLine } from "./shared";

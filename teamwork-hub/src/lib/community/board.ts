@@ -20,12 +20,12 @@ import { audit } from "@/lib/audit";
 import { badgeDef } from "@/lib/engagement/badges";
 import { levelFor } from "@/lib/engagement/levels";
 import { milestonesFor } from "@/lib/retention/milestones";
-import { addDaysYmd, fmt, fmtTime, localDayBounds, localToUtc, startOfWeekYmd, todayLocal } from "@/lib/time";
+import { fmt, fmtTime, localDayBounds, localToUtc, startOfWeekYmd, todayLocal } from "@/lib/time";
 import { challengeView, currentChallenges } from "./challenges";
 import { communityRoster } from "./display-name";
 import { buildBoards, loadCommunityStats } from "./leaderboards";
 import { actorOf, communityOrg } from "./settings";
-import { AGE_BANDS, SHOUTOUT_LABEL, type BoardPanel, type BoardPayload } from "./shared";
+import { AGE_BANDS, SHOUTOUT_LABEL, type BoardPanel, type BoardPayload, type ChallengeView } from "./shared";
 import { recentShoutoutRows } from "./shoutouts";
 import { fmtLoad, measuredPrs } from "./stats";
 
@@ -152,7 +152,7 @@ export async function boardPayload(tx: Tx, orgId: string, opts: { now?: Date } =
       }
     }
     items.sort((a, b) => b.on.localeCompare(a.on) || a.name.localeCompare(b.name));
-    if (items.length) panels.push({ key: "pr_bell", title: "PR Bell", items: items.slice(0, MAX_ITEMS).map(({ on: _on, ...rest }) => rest) });
+    if (items.length) panels.push({ key: "pr_bell", title: "PR Bell", items: items.slice(0, MAX_ITEMS).map((i) => ({ name: i.name, lift: i.lift, value: i.value, delta: i.delta, when: i.when })) });
   }
 
   if (on.shoutouts) {
@@ -219,8 +219,11 @@ export async function boardPayload(tx: Tx, orgId: string, opts: { now?: Date } =
     const gids = [...new Set(challenges.flatMap((c) => (c.groupId ? [c.groupId] : [])))];
     const names = gids.length ? await rowsOf<{ id: string; name: string }>(tx, sql`select id, name from groups where org_id = ${orgId} and id in (${sql.join(gids.map((g) => sql`${g}`), sql`, `)})`) : [];
     for (const c of challenges.slice(0, 3)) {
-      const { id: _id, you: _you, ...view } = challengeView(c, roster, stats.activity, today, new Set(), names.find((g) => g.id === c.groupId)?.name ?? null, { leaders: 5 });
-      panels.push({ key: "challenges", title: "Team challenge", challenge: view });
+      const view: Partial<ChallengeView> = challengeView(c, roster, stats.activity, today, new Set(), names.find((g) => g.id === c.groupId)?.name ?? null, { leaders: 5 });
+      // The TV gets no ids and no per-viewer lines.
+      delete view.id;
+      delete view.you;
+      panels.push({ key: "challenges", title: "Team challenge", challenge: view as Omit<ChallengeView, "id" | "you"> });
     }
   }
 
