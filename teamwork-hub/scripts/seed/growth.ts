@@ -50,7 +50,6 @@ export async function seedGrowth(ctx: SeedCtx) {
   const productByName = async (name: string) => (await tx.select().from(products).where(and(eq(products.orgId, orgId), eq(products.name, name))))[0];
   const pack = await productByName("Sample — 10-Session Pack");
   const assessment = await productByName("Sample — Performance Assessment");
-  const dropIn = await productByName("Sample — Drop-in Session");
   await setShopListing(tx, rod, { productId: pack.id, sellableOnline: true, includes: "Sample description: ten group training sessions to use at your own pace." });
   await setShopListing(tx, rod, { productId: assessment.id, sellableOnline: true, includes: "Sample description: a one hour baseline test with a coach and a written summary." });
 

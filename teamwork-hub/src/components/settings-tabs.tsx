@@ -16,6 +16,7 @@ export function SettingsTabs({ current }: { current: string }) {
           { key: "community", href: "/settings/community", label: "Community" },
           { key: "security", href: "/settings/security", label: "My security" },
           { key: "integrations", href: "/settings/integrations", label: "Integrations" },
+          { key: "jobs", href: "/settings/jobs", label: "Scheduled jobs" },
           { key: "payroll", href: "/payroll", label: "Payroll" },
           { key: "audit", href: "/settings/audit", label: "Audit log" },
         ]}

@@ -6,8 +6,10 @@
  *   pnpm jobs:work --once     # one pass (cron-friendly), exits non-zero if any job died
  *
  * Options: --limit N (jobs per claim, default 10), --interval MS (idle poll, default 2000).
- * Each pass also re-queues jobs stuck in `running` (crashed worker) and enqueues an hourly
- * `automation.evaluate` scan per organization (deduped per hour).
+ * Each pass also re-queues jobs stuck in `running` (crashed worker), enqueues an hourly
+ * `automation.evaluate` scan per organization (deduped per hour) and creates the scheduled jobs
+ * (nightly referral progress, challenge completions, goals/XP/badges and the daily recap job;
+ * one per organization per facility-local date, see src/lib/scheduled/jobs.ts).
  */
 import "dotenv/config";
 import { hostname } from "node:os";
@@ -16,7 +18,7 @@ import { db, getPool } from "../src/db";
 import { organizations } from "../src/db/schema";
 import { enqueue, runJobs } from "../src/lib/jobs";
 import { jobHandlers } from "../src/lib/jobs-registry";
-import { enqueueRecapJobs } from "../src/lib/showcase/jobs";
+import { enqueueScheduledJobs } from "../src/lib/scheduled/jobs";
 import { flushMonitoring, initMonitoring, log as olog, reportError } from "../src/lib/observability";
 
 const args = process.argv.slice(2);
@@ -41,7 +43,9 @@ async function housekeeping() {
     where status = 'running' and locked_at < now() - make_interval(mins => ${STALE_MINUTES})
     returning id`);
   if (res.rows.length) log("requeued_stale", { count: res.rows.length });
-  await enqueueRecapJobs(db); // monthly recaps: one deduped job per organization per day
+  // Nightly jobs (after 2:00 AM facility time) and monthly recaps: one deduped job per organization per local day.
+  const scheduled = await enqueueScheduledJobs(db);
+  if (scheduled) log("scheduled_jobs_enqueued", { count: scheduled });
   const hour = new Date().toISOString().slice(0, 13);
   const orgs = await db.select({ id: organizations.id }).from(organizations);
   for (const o of orgs) {
