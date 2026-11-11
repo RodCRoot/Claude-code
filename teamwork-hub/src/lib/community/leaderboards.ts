@@ -72,7 +72,10 @@ export type CommunityStats = {
 };
 
 export async function loadCommunityStats(tx: Tx, orgId: string, opts: { today: string; tz: string }): Promise<CommunityStats> {
-  const [activity, holds, maxes] = await Promise.all([loadActivityDates(tx, orgId, opts.tz), loadHolds(tx, orgId), loadMeasuredMaxes(tx, orgId)]);
+  // Sequential on purpose: these often run inside one transaction (a single connection).
+  const activity = await loadActivityDates(tx, orgId, opts.tz);
+  const holds = await loadHolds(tx, orgId);
+  const maxes = await loadMeasuredMaxes(tx, orgId);
   const streaks = new Map<string, number>();
   for (const [id, a] of activity) streaks.set(id, streakOf(a, holds.get(id), opts.today));
   const maxesByAthlete = new Map<string, MeasuredMax[]>();

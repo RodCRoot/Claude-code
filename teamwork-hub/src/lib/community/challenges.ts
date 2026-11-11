@@ -154,7 +154,8 @@ async function load(tx: Tx, orgId: string, today?: string): Promise<Loaded | nul
   const day = today ?? todayLocal(org.tz);
   const challenges = await currentChallenges(tx, orgId, day);
   if (!challenges.length) return { today: day, roster: new Map(), activity: new Map(), challenges, groupNames: new Map() };
-  const [roster, activity] = await Promise.all([communityRoster(tx, orgId, { today: day, defaultMode: org.settings.defaultDisplayMode }), loadActivityDates(tx, orgId, org.tz)]);
+  const roster = await communityRoster(tx, orgId, { today: day, defaultMode: org.settings.defaultDisplayMode });
+  const activity = await loadActivityDates(tx, orgId, org.tz);
   const gids = [...new Set(challenges.flatMap((c) => (c.groupId ? [c.groupId] : [])))];
   const gs = gids.length ? await tx.select({ id: groups.id, name: groups.name }).from(groups).where(and(eq(groups.orgId, orgId), inArray(groups.id, gids))) : [];
   return { today: day, roster, activity, challenges, groupNames: new Map(gs.map((g) => [g.id, g.name])) };
