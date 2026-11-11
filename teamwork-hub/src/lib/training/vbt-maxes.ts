@@ -215,6 +215,31 @@ export async function dismissVbtMax(tx: Tx, v: Viewer, input: { athleteId: strin
   return d;
 }
 
+/** What staff already decided for this athlete's bar-speed suggestions (newest first), for the card. */
+export async function vbtDecisions(tx: Tx, v: Viewer, athleteId: string, limit = 6) {
+  await requireOnAthlete(tx, v, athleteId, "training.write");
+  const confirmed = await tx
+    .select({ id: maxes.id, exerciseName: exercises.name, value: maxes.value, unit: maxes.unit, on: maxes.recordedOn, at: maxes.createdAt })
+    .from(maxes)
+    .innerJoin(exercises, eq(exercises.id, maxes.exerciseId))
+    .where(and(eq(maxes.orgId, v.orgId), eq(maxes.athleteId, athleteId), eq(maxes.source, BAR_SPEED_SOURCE)))
+    .orderBy(desc(maxes.createdAt))
+    .limit(limit);
+  const dismissed = await tx
+    .select({ id: vbtMaxDismissals.id, exerciseName: exercises.name, e1rmKg: vbtMaxDismissals.e1rmKg, at: vbtMaxDismissals.createdAt })
+    .from(vbtMaxDismissals)
+    .innerJoin(exercises, eq(exercises.id, vbtMaxDismissals.exerciseId))
+    .where(and(eq(vbtMaxDismissals.orgId, v.orgId), eq(vbtMaxDismissals.athleteId, athleteId)))
+    .orderBy(desc(vbtMaxDismissals.createdAt))
+    .limit(limit);
+  return [
+    ...confirmed.map((c) => ({ id: c.id, kind: "confirmed" as const, exerciseName: c.exerciseName, text: `${Number(c.value)} ${c.unit}`, at: c.at })),
+    ...dismissed.map((d) => ({ id: d.id, kind: "dismissed" as const, exerciseName: d.exerciseName, text: `${Number(d.e1rmKg)} kg`, at: d.at })),
+  ]
+    .sort((a, b) => b.at.getTime() - a.at.getTime())
+    .slice(0, limit);
+}
+
 export type VbtLiftInfo = { profile: LiftProfile; mvtMs: number; method: "mpv_squat_v1" | "mpv_bench_v1" | "mpv_generic_v1" };
 export const vbtLiftKey = (athleteId: string, exerciseId: string) => `${athleteId}:${exerciseId}`;
 

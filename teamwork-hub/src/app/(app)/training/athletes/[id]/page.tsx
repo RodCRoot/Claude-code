@@ -6,7 +6,7 @@ import { addDaysYmd, fmt, fmtDate, todayLocal } from "@/lib/time";
 import { athleteNames } from "@/lib/training/common";
 import { adherence, METHOD_LABEL } from "@/lib/training/formulas";
 import { maxHistory, suggestEstimatedMaxes } from "@/lib/training/maxes";
-import { pendingVbtSuggestions } from "@/lib/training/vbt-maxes";
+import { pendingVbtSuggestions, vbtDecisions } from "@/lib/training/vbt-maxes";
 import { canSeeRelativeStrength, relativeStrengthFor } from "@/lib/training/rel-strength";
 import { VBT_METHOD_LABEL } from "@/lib/training/vbt";
 import { MANUAL_VBT_DEVICE } from "@/lib/training/logging";
@@ -55,6 +55,7 @@ export default async function AthleteTraining({ params, searchParams }: { params
   const exercises = canWrite ? await listExercises(db, viewer) : [];
   // Bar-speed suggestions and relative strength are staff tools; families never load them.
   const vbtSuggestions = canWrite && isStaff(viewer) ? await pendingVbtSuggestions(db, viewer, id, { today }) : [];
+  const vbtDone = canWrite && isStaff(viewer) ? await vbtDecisions(db, viewer, id) : [];
   const rel = (await canSeeRelativeStrength(db, viewer, id)) ? await relativeStrengthFor(db, viewer, id) : null;
   const lbOf = (kg: number) => Math.round((kg / 0.45359237) * 10) / 10;
   const vbt = await recentVbt(db, viewer, id, 15);
@@ -285,6 +286,18 @@ export default async function AthleteTraining({ params, searchParams }: { params
                   ))}
                 </ul>
               )}
+              {vbtDone.length ? (
+                <div className="mt-3 border-t border-edge pt-3" data-testid="vbt-decisions">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-3">Recent decisions</h3>
+                  <ul className="mt-1 space-y-0.5 text-xs text-ink-2">
+                    {vbtDone.map((d) => (
+                      <li key={d.id}>
+                        {d.kind === "confirmed" ? "Confirmed" : "Dismissed"}: {d.exerciseName}, {d.text} {d.kind === "confirmed" ? "saved as an estimate from bar speed" : "estimate, nothing stored"} ({fmt(d.at)})
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </CardBody>
           </Card>
         ) : null}
@@ -309,28 +322,20 @@ export default async function AthleteTraining({ params, searchParams }: { params
                     Body weight used: <strong className="tabular">{rel.bodyMass.kg} kg</strong> ({lbOf(rel.bodyMass.kg)} lb),{" "}
                     {rel.bodyMass.source === "hawkin_trial" ? `from a Hawkin force-plate trial on ${fmtDate(rel.bodyMass.measuredOn)}` : "recorded on the athlete profile (no date kept)"}.
                   </p>
-                  <Table caption="Relative strength by lift">
-                    <thead>
-                      <tr>
-                        <Th>Lift</Th>
-                        <Th align="right">Max used</Th>
-                        <Th align="right">× body weight</Th>
-                        <Th>Guideline tier</Th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rel.rows.map((r) => (
-                        <tr key={r.exerciseId}>
-                          <Td>{r.exerciseName}</Td>
-                          <Td align="right">
-                            {r.max.value} {r.max.unit} <Badge variant={r.max.kind === "tested" ? "green" : r.estimated ? "blue" : "neutral"}>{r.fromBarSpeed ? "estimated from bar speed" : r.max.kind}</Badge>
-                          </Td>
-                          <Td align="right">{r.xbw != null ? `${r.xbw.toFixed(2)}×` : "—"}</Td>
-                          <Td>{r.tier ?? "—"}</Td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </Table>
+                  <ul className="divide-y divide-edge border-t border-edge" aria-label="Relative strength by lift">
+                    {rel.rows.map((r) => (
+                      <li key={r.exerciseId} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-2 text-sm">
+                        <span className="font-semibold">{r.exerciseName}</span>
+                        <span className="tabular">
+                          <strong>{r.xbw != null ? `${r.xbw.toFixed(2)}× body weight` : "not calculated"}</strong>
+                          {r.tier ? <span className="text-ink-2"> · {r.tier} (guideline)</span> : null}
+                        </span>
+                        <span className="w-full text-xs text-ink-3">
+                          Max used: {r.max.value} {r.max.unit} <Badge variant={r.max.kind === "tested" ? "green" : r.estimated ? "blue" : "neutral"}>{r.fromBarSpeed ? "estimated from bar speed" : r.max.kind}</Badge> {fmtDate(r.max.recordedOn)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 </>
               )}
             </CardBody>

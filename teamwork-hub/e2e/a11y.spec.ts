@@ -139,7 +139,7 @@ const ROLES: Role[] = [
       ["/training/anywhere", /^\/training\/anywhere\/[0-9a-f-]{36}$/],
     ],
   },
-  { name: "coach", email: USERS.marcus, routes: COACH, dynamic: [["/people", /^\/people\/[0-9a-f-]{36}$/]] },
+  { name: "coach", email: USERS.marcus, routes: COACH, dynamic: [["/people", /^\/people\/[0-9a-f-]{36}$/], ["/training/athletes", /^\/training\/athletes\/[0-9a-f-]{36}$/]] },
   {
     name: "guardian",
     email: USERS.alex,

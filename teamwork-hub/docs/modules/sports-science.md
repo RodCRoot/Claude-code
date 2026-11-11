@@ -45,6 +45,8 @@ All formulas are pure functions, and each one has a version key that is shown in
 | `attendance_rate_v1` | attended ÷ (attended + no-show) bookings × 100. Cancellations are excluded, and the rate is null if there are no eligible bookings. | % |
 | `load_origin_v1` | `srpe_load_v1` summed per ISO week and split by where the session happened: gym (Hub workouts, manual training), sport (My Season logs with source `sport`, manual practice or game), on your own (finished On Your Own sessions with source `on_your_own`), other. A display split only: ACWR, monotony and strain use the same total as before. See `docs/modules/anywhere.md`. | AU |
 
+Bar-speed and relative-strength calculations live in the training module (`src/lib/training/vbt.ts`) and follow the same rules (named, versioned, null when not calculable): `lv_profile_v1`, `mpv_squat_v1` / `mpv_bench_v1` / `mpv_generic_v1` and `rel_strength_v1`. Their definitions and where each is shown are in `docs/modules/training.md` → "Bar speed". Relative strength needs `health.read` as well as `training.read`, because it reveals body weight.
+
 **Unit conversion** (`convertUnit`) uses exact constants: 1 lb = 0.45359237 kg and 1 in = 2.54 cm. Units in different families, such as cm and s, return `null` and are never compared.
 
 **Dates and time zones.** Daily buckets are local calendar dates in America/Indiana/Indianapolis. A workout's load is assigned to the local date of its `completed_at` (`workoutLoadDate`), so it is DST-correct: 23:30 EDT on 2026-03-08 is bucketed to 03-08. Date arithmetic uses UTC-noon, so a DST change never skips or duplicates a day. Derived load metrics are anchored to today only if today's load is known; otherwise they use yesterday, and the UI says so.
