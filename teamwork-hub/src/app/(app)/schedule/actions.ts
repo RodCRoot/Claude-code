@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { formToObject, safeAction, UserError, type ActionState } from "@/lib/actions";
 import { requireViewer } from "@/lib/auth/viewer";
+import { isStaff } from "@/lib/authz/policy";
 import {
   addAvailability,
   addTimeOff,
@@ -57,7 +58,7 @@ export async function bookAction(_prev: ActionState, fd: FormData): Promise<Acti
       bookSession(tx, v, { sessionId: reqId(fd, "sessionId"), athleteId: reqId(fd, "athleteId"), idempotencyKey: str(fd, "idem") || null, comp, override, capOverride }),
     );
     refresh();
-    return { ok: true, message: r.status === "booked" ? "Booked." : `Added to the waitlist (#${r.booking.waitlistPosition}).` };
+    return { ok: true, message: r.status === "booked" ? (isStaff(v) ? "Booked." : "Reserved.") : `Added to the waitlist (#${r.booking.waitlistPosition}).` };
   });
 }
 
@@ -70,7 +71,7 @@ export async function cancelBookingAction(_prev: ActionState, fd: FormData): Pro
     const credit = r.creditOutcome === "release" ? " The credit was returned." : r.creditOutcome === "forfeit" ? " Per the cancellation policy the credit was used." : "";
     const fee = r.penalty === "fee" ? " A cancellation fee was flagged for billing." : "";
     const promo = r.promoted.length ? ` ${r.promoted.length} athlete(s) promoted from the waitlist.` : "";
-    return { ok: true, message: `${r.late ? "Late cancellation recorded." : "Cancelled."}${credit}${fee}${promo}` };
+    return { ok: true, message: `${r.late ? "Late cancellation recorded." : isStaff(v) ? "Cancelled." : "Reservation cancelled."}${credit}${fee}${promo}` };
   });
 }
 
@@ -142,7 +143,7 @@ export async function bookSlotAction(_prev: ActionState, fd: FormData): Promise<
       }),
     );
     refresh();
-    return { ok: true, message: "Booked. You'll find it under upcoming bookings." };
+    return { ok: true, message: isStaff(v) ? "Booked. You'll find it under upcoming bookings." : "Reserved. You'll find it under My Reservations." };
   });
 }
 
@@ -288,7 +289,7 @@ export async function batchBookAction(_prev: ActionState, fd: FormData): Promise
   return run(async () => {
     const v = await requireViewer();
     const athleteIds = fd.getAll("athleteId").map((x) => uuid.safeParse(x));
-    if (!athleteIds.length) throw new UserError("Choose at least one athlete.", { athleteId: "Required" });
+    if (!athleteIds.length) throw new UserError("Choose at least one family member.", { athleteId: "Required" });
     if (athleteIds.some((x) => !x.success)) throw new UserError("Missing or invalid reference. Reload the page and try again.");
     const weeks = Number(str(fd, "weeks") || "1");
     const mode = str(fd, "mode") === "partial" ? "partial" : "all_or_nothing";
@@ -309,8 +310,8 @@ export async function batchBookAction(_prev: ActionState, fd: FormData): Promise
       error: x.error,
     }));
     const summary = !r.committed
-      ? `Nothing was booked: ${r.failed} of ${r.results.length} couldn't be booked, and you chose all-or-nothing.`
-      : `${r.booked} booked${r.waitlisted ? `, ${r.waitlisted} waitlisted` : ""}${r.failed ? `, ${r.failed} not booked` : ""}.`;
+      ? `Nothing was reserved: ${r.failed} of ${r.results.length} couldn't be reserved, and you chose all or nothing.`
+      : `${r.booked} reserved${r.waitlisted ? `, ${r.waitlisted} waitlisted` : ""}${r.failed ? `, ${r.failed} not reserved` : ""}.`;
     return r.committed && r.failed === 0 ? { ok: true, message: summary, data: { results } } : { ok: false, error: summary, data: { results, committed: r.committed } };
   });
 }

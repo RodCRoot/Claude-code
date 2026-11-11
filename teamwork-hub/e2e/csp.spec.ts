@@ -105,7 +105,7 @@ const ROLES: { name: string; email?: string; starts: string[] }[] = [
     ],
   },
   { name: "coach", email: USERS.marcus, starts: ["/today", "/training/today", "/training/weight-room", "/science", "/schedule", "/people/retention", "/reports/session-feedback", "/time", "/training/recaps", "/people/showcases", "/leaderboards"] },
-  { name: "guardian", email: USERS.alex, starts: ["/today", "/schedule", "/schedule/book", "/billing/invoices", "/documents", "/messages", "/performance", "/goals", "/shop", "/refer", "/anywhere", "/anywhere/season", "/showcase", "/recap", "/leaderboards"] },
+  { name: "guardian", email: USERS.alex, starts: ["/today", "/schedule", "/schedule/book", "/schedule/reservations", "/schedule/attendance", "/billing", "/billing/invoices", "/billing/memberships", "/billing/payment-methods", "/billing/history", "/documents", "/messages", "/performance", "/goals", "/shop", "/refer", "/anywhere", "/anywhere/season", "/showcase", "/recap", "/leaderboards"] },
   { name: "athlete", email: USERS.maya, starts: ["/today", "/training/today", "/science/body-map", "/goals", "/anywhere", "/anywhere/season", "/showcase", "/recap", "/leaderboards"] },
   { name: "kiosk", email: USERS.kiosk, starts: ["/kiosk", "/kiosk/clock"] },
 ];

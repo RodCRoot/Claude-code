@@ -13,6 +13,7 @@ import { fmtDate, todayLocal } from "@/lib/time";
 import { createMembershipAction } from "../actions";
 import { BillingTabs, Money, PROVIDER_LABEL, requireBillingViewer } from "../_components";
 import { MemberAvatar, Segmented } from "@/components/profile/studio";
+import { FamilyMemberships } from "../_family";
 
 export const metadata = { title: "Memberships" };
 
@@ -35,6 +36,7 @@ type Search ={ status?: string; athletePayer?: string; productVersionId?: string
 export default async function MembershipsPage({ searchParams }: { searchParams: Promise<Search> }) {
   const v = await requireBillingViewer();
   const staff = isBillingStaff(v);
+  if (!staff) return <FamilyMemberships v={v} />;
   const sp = await searchParams;
   const status = sp.status ?? "all";
   const rows = await listMemberships(db, v, { status });

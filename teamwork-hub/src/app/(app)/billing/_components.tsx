@@ -30,9 +30,14 @@ export function BillingTabs({ current, staff }: { current: string; staff: boolea
         { key: "providers", href: "/billing/providers", label: "Payment providers" },
       ]
     : [
-        { key: "overview", href: "/billing", label: "Overview" },
-        { key: "invoices", href: "/billing/invoices", label: "Invoices & receipts" },
+        // Families: the order they know from their previous member site's profile area.
+        { key: "overview", href: "/billing", label: "Family" },
         { key: "memberships", href: "/billing/memberships", label: "Memberships" },
+        { key: "invoices", href: "/billing/invoices", label: "Bills" },
+        { key: "methods", href: "/billing/payment-methods", label: "Payment Methods" },
+        { key: "history", href: "/billing/history", label: "Payment History" },
+        { key: "documents", href: "/documents", label: "Documents" },
+        { key: "attendance", href: "/schedule/attendance", label: "Attendance" },
       ];
   return <Tabs tabs={tabs} current={current} />;
 }

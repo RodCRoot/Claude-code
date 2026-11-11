@@ -304,7 +304,7 @@ function NextSessionCard({ home, tz }: { home: AthleteHome; tz?: string }) {
         action={
           home.upcomingCount > 1 ? (
             <Link href="/schedule" className="text-sm font-semibold text-brand underline">
-              {home.upcomingCount - 1} more booked
+              {home.upcomingCount - 1} more reserved
             </Link>
           ) : null
         }
@@ -328,14 +328,14 @@ function NextSessionCard({ home, tz }: { home: AthleteHome; tz?: string }) {
             </div>
             {home.canBook ? (
               <ButtonLink href={bookHref} variant="secondary" className="w-full sm:w-auto">
-                Book another
+                Reserve another
               </ButtonLink>
             ) : null}
           </div>
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-ink-2">Nothing booked yet.</p>
-            {home.canBook ? <ButtonLink href={bookHref}>Book a session</ButtonLink> : null}
+            <p className="text-sm text-ink-2">Nothing reserved yet.</p>
+            {home.canBook ? <ButtonLink href={bookHref}>Reserve a class</ButtonLink> : null}
           </div>
         )}
       </CardBody>
@@ -359,7 +359,7 @@ function WeekCard({ home }: { home: AthleteHome }) {
           {w.weeklyCap ? <ProgressBar done={w.attended} total={w.weeklyCap} size="lg" className="mt-2" /> : null}
           <p className="mt-1.5 text-xs text-ink-3">
             {w.weeklyCap ? `Your plan includes ${w.weeklyCap} a week. ` : ""}
-            {w.booked ? `${w.booked} more booked this week.` : w.attended ? "" : "Nothing booked for the rest of this week yet."}
+            {w.booked ? `${w.booked} more reserved this week.` : w.attended ? "" : "Nothing reserved for the rest of this week yet."}
           </p>
         </div>
         {hasWorkouts ? (
@@ -401,7 +401,7 @@ function PaymentsCard({ billing }: { billing: Billing }) {
   if (!billing.open.length) return null;
   return (
     <Card>
-      <CardHeader title="Payments" action={<Link href="/billing" className="text-sm font-semibold text-brand underline">Billing</Link>} />
+      <CardHeader title="Unpaid bills" action={<Link href="/billing/invoices" className="text-sm font-semibold text-brand underline">Bills</Link>} />
       <CardBody>
         <InvoiceList billing={billing} />
       </CardBody>
@@ -441,7 +441,7 @@ function FamilyCard({ family, billing, tz }: { family: { child: FamilyChild; sum
         <div>
           <h3 className="kicker mb-1.5">Upcoming sessions</h3>
           {sessions.length === 0 ? (
-            <p className="text-sm text-ink-3">Nothing booked in the next two weeks.</p>
+            <p className="text-sm text-ink-3">Nothing reserved in the next two weeks.</p>
           ) : (
             <ul className="space-y-1.5 text-sm">
               {sessions.map((s) => (
@@ -458,10 +458,10 @@ function FamilyCard({ family, billing, tz }: { family: { child: FamilyChild; sum
         </div>
         {showBilling ? (
           <div>
-            <h3 className="kicker mb-1.5">Open invoices</h3>
+            <h3 className="kicker mb-1.5">Unpaid bills</h3>
             {billing.open.length === 0 ? <p className="text-sm text-ink-3">Nothing due.</p> : <InvoiceList billing={billing} />}
-            <Link href="/billing" className="mt-1.5 inline-block text-sm font-semibold text-brand underline">
-              Billing
+            <Link href="/billing/invoices" className="mt-1.5 inline-block text-sm font-semibold text-brand underline">
+              Bills
             </Link>
           </div>
         ) : null}

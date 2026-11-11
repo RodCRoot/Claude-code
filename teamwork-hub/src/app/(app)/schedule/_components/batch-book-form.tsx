@@ -9,10 +9,10 @@ type Athlete = { id: string; name: string; credits: number };
 type Result = { athlete: string; session: string; when: string; outcome: "booked" | "waitlisted" | "failed" | "rolled_back"; waitlistPosition: number | null; error: string | null };
 
 const OUTCOME: Record<Result["outcome"], { label: string; variant: "green" | "yellow" | "red" | "neutral" }> = {
-  booked: { label: "Booked", variant: "green" },
+  booked: { label: "Reserved", variant: "green" },
   waitlisted: { label: "Waitlist", variant: "yellow" },
-  failed: { label: "Not booked", variant: "red" },
-  rolled_back: { label: "Not booked (all-or-nothing)", variant: "neutral" },
+  failed: { label: "Not reserved", variant: "red" },
+  rolled_back: { label: "Not reserved (all or nothing)", variant: "neutral" },
 };
 
 /** Book several children into one session, and/or the next N weeks of a series, in one action. */
@@ -59,11 +59,11 @@ export function BatchBookForm({
         ))}
       </fieldset>
       {inSeries ? (
-        <Field label="How many weeks?" htmlFor="bb-weeks" hint="Books this session and the same class on the following weeks.">
+        <Field label="How many weeks?" htmlFor="bb-weeks" hint="Reserves this class and the same class on the following weeks.">
           <Select id="bb-weeks" name="weeks" defaultValue="1" className="h-11">
             {Array.from({ length: maxWeeks }, (_, i) => i + 1).map((n) => (
               <option key={n} value={n}>
-                {n === 1 ? "Just this session" : `The next ${n} weeks`}
+                {n === 1 ? "Just this class" : `The next ${n} weeks`}
               </option>
             ))}
           </Select>
@@ -72,25 +72,25 @@ export function BatchBookForm({
         <input type="hidden" name="weeks" value="1" />
       )}
       <fieldset className="space-y-1">
-        <legend className="mb-1 text-sm font-medium text-ink-2">If some can&apos;t be booked</legend>
+        <legend className="mb-1 text-sm font-medium text-ink-2">If some can&apos;t be reserved</legend>
         <label className="flex min-h-11 items-start gap-2 text-sm">
           <input type="radio" name="mode" value="all_or_nothing" defaultChecked className="mt-0.5 size-5 shrink-0" />
-          Book nothing (all or nothing)
+          Reserve nothing (all or nothing)
         </label>
         <label className="flex min-h-11 items-start gap-2 text-sm">
           <input type="radio" name="mode" value="partial" className="mt-0.5 size-5 shrink-0" />
-          Book the ones that can be booked
+          Reserve the ones that can be reserved
         </label>
       </fieldset>
       <label className="flex min-h-11 items-center gap-2 text-sm">
-        <input type="checkbox" name="waitlist" className="size-5" /> Join the waitlist when a session is full
+        <input type="checkbox" name="waitlist" className="size-5" /> Join the waitlist when a class is full
       </label>
       <button type="submit" disabled={pending} className={buttonClass("primary", "lg", "min-h-12 w-full sm:w-auto")}>
-        {pending ? "Booking…" : "Book"}
+        {pending ? "Reserving…" : "Reserve"}
       </button>
       <FormMessage state={state} />
       {results.length ? (
-        <ul className="divide-y divide-edge rounded-lg border border-edge" aria-label="Booking results">
+        <ul className="divide-y divide-edge rounded-lg border border-edge" aria-label="Reservation results">
           {results.map((r, i) => (
             <li key={i} className="flex flex-wrap items-start justify-between gap-2 px-3 py-2.5 text-sm">
               <div className="min-w-0">

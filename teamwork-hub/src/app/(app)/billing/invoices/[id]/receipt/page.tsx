@@ -26,10 +26,10 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
       <header className="flex flex-wrap items-start justify-between gap-4 border-b border-edge pb-4">
         <div>
           <h1 className="text-xl font-bold">{org?.branding?.displayName ?? org?.name ?? "Teamwork"}</h1>
-          {org?.isDemo ? <p className="text-xs font-semibold text-warn">DEMO DATA — not a real receipt</p> : null}
+          {org?.isDemo ? <p className="text-xs font-semibold text-warn">DEMO DATA, not a real receipt</p> : null}
         </div>
         <div className="text-right text-sm">
-          <div className="text-lg font-semibold">{paid ? "Receipt" : "Invoice"} {inv.number}</div>
+          <div className="text-lg font-semibold">{paid ? "Receipt" : d.staff ? "Invoice" : "Bill"} {inv.number}</div>
           <div>Issued {fmtDate(inv.issuedAt ? inv.issuedAt.toISOString().slice(0, 10) : null)}</div>
           {paid ? <div>Paid {fmt(inv.paidAt)}</div> : <div>Due {fmtDate(inv.dueDate)}</div>}
         </div>
@@ -40,7 +40,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
         <tbody>
           {d.lines.map(({ line, athleteFirst, athleteLast }) => (
             <tr key={line.id} className="border-b border-edge/60">
-              <td className="py-1.5">{line.description}{athleteFirst ? <span className="text-ink-3"> — {athleteFirst} {athleteLast}</span> : null}</td>
+              <td className="py-1.5">{line.description}{athleteFirst ? <span className="text-ink-3"> · {athleteFirst} {athleteLast}</span> : null}</td>
               <td className="py-1.5 text-right">{line.quantity}</td>
               <td className="py-1.5 text-right"><Money minor={line.amountMinor} currency={inv.currency} /></td>
             </tr>
@@ -59,7 +59,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
         <ul className="mt-1 space-y-1">
           {d.transactions.filter(({ t }) => t.status !== "failed").map(({ t }) => (
             <li key={t.id}>
-              {fmt(t.occurredAt)} — {t.kind.replaceAll("_", " ")} via {PROVIDER_LABEL[t.provider]} ({METHOD_LABEL[t.methodType ?? ""] ?? t.methodType ?? "—"}) —{" "}
+              {fmt(t.occurredAt)} · {t.kind.replaceAll("_", " ")} via {PROVIDER_LABEL[t.provider]} ({METHOD_LABEL[t.methodType ?? ""] ?? t.methodType ?? "method not recorded"}) ·{" "}
               <Money minor={t.amountMinor} currency={t.currency} /> · {t.status === "pending" ? "PENDING (not settled)" : t.verification === "staff_attested" ? "recorded by staff" : "confirmed by provider"}
             </li>
           ))}

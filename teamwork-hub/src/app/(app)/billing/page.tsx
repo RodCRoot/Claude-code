@@ -1,21 +1,21 @@
 import Link from "next/link";
 import { db } from "@/db";
 import { ActionForm, SubmitButton } from "@/components/forms";
-import { Badge, ButtonLink, Callout, Card, CardBody, CardHeader, EmptyState, PageHeader, StatusBadge } from "@/components/ui";
+import { Badge, ButtonLink, EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 import { isBillingStaff } from "@/lib/billing/access";
-import { listInvoices, listMemberships, myPayerAccounts, staffOverview } from "@/lib/billing/queries";
+import { staffOverview } from "@/lib/billing/queries";
 import { paymentExceptions } from "@/lib/billing/reconciliation";
-import { fmtDate, todayLocal } from "@/lib/time";
+import { todayLocal } from "@/lib/time";
 import { runRenewalsAction } from "./actions";
 import { KpiTile, Widget } from "@/components/profile/studio";
-import { FamilySuggestion } from "@/components/growth/family-suggestion";
-import { BillingTabs, InvoiceStatus, Money, PROVIDER_LABEL, requireBillingViewer } from "./_components";
+import { BillingTabs, Money, requireBillingViewer } from "./_components";
+import { FamilyHome } from "./_family";
 
 export const metadata = { title: "Memberships & Billing" };
 
 export default async function BillingHome() {
   const v = await requireBillingViewer();
-  return isBillingStaff(v) ? <StaffOverview orgId={v.orgId} /> : <FamilyOverview />;
+  return isBillingStaff(v) ? <StaffOverview orgId={v.orgId} /> : <FamilyHome v={v} />;
 }
 
 async function StaffOverview({ orgId }: { orgId: string }) {
@@ -115,99 +115,6 @@ async function StaffOverview({ orgId }: { orgId: string }) {
             </ActionForm>
           </div>
         </Widget>
-      </div>
-    </>
-  );
-}
-
-async function FamilyOverview() {
-  const v = await requireBillingViewer();
-  const today = todayLocal();
-  const accounts = await myPayerAccounts(db, v);
-  const invs = await listInvoices(db, v, { limit: 50 });
-  const ms = await listMemberships(db, v);
-  return (
-    <>
-      <PageHeader kicker="Billing" title="Your memberships & billing" description="Invoices, receipts, memberships and session credits for the accounts you're authorized on." />
-      <BillingTabs current="overview" staff={false} />
-      <FamilySuggestion viewer={v} className="mb-5" />
-      {accounts.length === 0 ? (
-        <EmptyState title="No billing accounts">You aren&apos;t listed on a billing account. If you expected to see one, please contact the front desk.</EmptyState>
-      ) : null}
-      <div className="grid gap-6 [&>*]:min-w-0">
-        {accounts.map((a) => {
-          const mine = invs.filter((r) => r.invoice.payerAccountId === a.payer.id);
-          const due = mine.filter((r) => r.invoice.status === "open");
-          return (
-            <Card key={a.payer.id}>
-              <CardHeader
-                title={a.payer.name}
-                kicker="Billing account"
-                action={a.canPay ? <Badge variant="green">You can pay</Badge> : <Badge title="You can view invoices on this account but not pay them">View only</Badge>}
-              />
-              <CardBody className="space-y-5">
-                {!a.canPay ? <Callout tone="info">You can view this account&apos;s invoices and receipts. Payments are made by another authorized person on the account.</Callout> : null}
-                <section>
-                  <h3 className="mb-2 text-sm font-semibold">Session credits</h3>
-                  <ul className="grid gap-2 sm:grid-cols-2">
-                    {a.athletes.map((ath) => (
-                      <li key={ath.athleteId} className="rounded-lg border border-edge px-3 py-2 text-sm">
-                        <span className="font-medium">{ath.first} {ath.last}</span>
-                        <span className="float-right tabular">{ath.summary.available} available{ath.summary.reserved ? ` · ${ath.summary.reserved} booked` : ""}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-                <section>
-                  <h3 className="mb-2 text-sm font-semibold">Amount due</h3>
-                  {due.length === 0 ? (
-                    <p className="text-sm text-ink-3">Nothing due. Thank you!</p>
-                  ) : (
-                    <ul className="divide-y divide-edge rounded-lg border border-edge">
-                      {due.map((r) => (
-                        <li key={r.invoice.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
-                          <div>
-                            <Link className="font-medium hover:underline" href={`/billing/invoices/${r.invoice.id}`}>{r.invoice.number}</Link>
-                            <span className="ml-2 text-xs text-ink-3">due {fmtDate(r.invoice.dueDate)}</span>
-                            {r.money.pendingMinor > 0 ? <Badge variant="yellow" className="ml-2">Payment processing</Badge> : null}
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <InvoiceStatus status={r.invoice.status} dueDate={r.invoice.dueDate} today={today} />
-                            <Money minor={r.money.balanceMinor} currency={r.invoice.currency} className="font-semibold" />
-                            <ButtonLink size="sm" href={`/billing/invoices/${r.invoice.id}`} variant={a.canPay ? "primary" : "secondary"}>{a.canPay ? "Pay" : "View"}</ButtonLink>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-                <section>
-                  <h3 className="mb-2 text-sm font-semibold">Memberships</h3>
-                  {ms.filter((m) => m.m.payerAccountId === a.payer.id).length === 0 ? (
-                    <p className="text-sm text-ink-3">No memberships.</p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {ms
-                        .filter((m) => m.m.payerAccountId === a.payer.id)
-                        .map((m) => (
-                          <li key={m.m.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                            <Link href={`/billing/memberships/${m.m.id}`} className="hover:underline">
-                              {m.first} {m.last} — {m.productName}
-                            </Link>
-                            <span className="flex items-center gap-2">
-                              <StatusBadge status={m.m.status} />
-                              {m.m.billingProvider === "external_zenplanner" ? <Badge>{PROVIDER_LABEL.external_zenplanner}</Badge> : null}
-                            </span>
-                          </li>
-                        ))}
-                    </ul>
-                  )}
-                </section>
-                <ButtonLink href="/billing/invoices" variant="ghost" size="sm">All invoices & receipts →</ButtonLink>
-              </CardBody>
-            </Card>
-          );
-        })}
       </div>
     </>
   );

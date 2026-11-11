@@ -61,11 +61,16 @@ export default async function MembershipPage({ params }: { params: Promise<{ id:
     <>
       <PageHeader
         kicker={`Membership · ${d.payerName ?? "no payer"}`}
-        title={`${d.first} ${d.last} — ${d.productName}`}
-        actions={<><StatusBadge status={d.m.status} /><Badge>{PROVIDER_LABEL[d.m.billingProvider]}</Badge></>}
+        title={`${d.first} ${d.last} · ${d.productName}`}
+        actions={<><StatusBadge status={d.m.status} /><Badge>{ext && !staff ? "Billed in the previous system" : PROVIDER_LABEL[d.m.billingProvider]}</Badge></>}
       />
       <BillingTabs current="memberships" staff={staff} />
-      {ext ? (
+      {ext && !staff ? (
+        <Callout tone="info" title="Billed in the previous system for now" className="mb-4">
+          This membership is still charged where it was set up before Teamwork Hub. It is not billed here until the front desk moves it over, so it is never charged twice. For changes, holds or cancellations, please contact the front desk.
+        </Callout>
+      ) : null}
+      {ext && staff ? (
         <Callout tone="warn" title="Billed by Zen Planner until cutover" className="mb-4">
           This membership was imported. Zen Planner still charges it, so Teamwork Hub never invoices or charges it (prevents double billing). Changes, holds and cancellations must be made in Zen Planner until the cutover date.
           {manage ? (
@@ -88,7 +93,7 @@ export default async function MembershipPage({ params }: { params: Promise<{ id:
               <dt className="text-ink-3">Type</dt><dd>{d.m.kind === "in_season" ? <Badge variant="blue">In Season (fixed term, never renews)</Badge> : "Regular"}</dd>
               <dt className="text-ink-3">Start</dt><dd>{fmtDate(d.m.startDate)}</dd>
               <dt className="text-ink-3">Anchor day</dt><dd>{d.m.billingAnchorDay ?? "—"}</dd>
-              <dt className="text-ink-3">Next bill</dt><dd>{ext ? "Zen Planner" : providerBilled ? `${PROVIDER_LABEL[d.m.billingProvider]} subscription` : fmtDate(d.m.nextBillDate)}</dd>
+              <dt className="text-ink-3">Next bill</dt><dd>{ext ? (staff ? "Zen Planner" : "Previous system") : providerBilled ? `${PROVIDER_LABEL[d.m.billingProvider]} subscription` : fmtDate(d.m.nextBillDate)}</dd>
               <dt className="text-ink-3">Commitment</dt><dd>{d.version.commitmentMonths ? `${d.version.commitmentMonths} months` : "None (month-to-month)"}</dd>
               <dt className="text-ink-3">Notice</dt><dd>{effectiveNoticeDays(d.version.cancellationNoticeDays, policy)} days</dd>
               <dt className="text-ink-3">Discount</dt><dd>{net.discount ? <>−<Money minor={net.discount} currency={d.version.currency} /> (family)</> : "—"}</dd>
@@ -101,7 +106,7 @@ export default async function MembershipPage({ params }: { params: Promise<{ id:
           <CardHeader title="Session credits" />
           <CardBody>
             <p className="text-3xl font-bold tabular">{d.version.unlimited ? "Unlimited" : d.credits.available}</p>
-            <p className="text-sm text-ink-3">{d.version.unlimited ? "while active and paid" : `available · ${d.credits.reserved} reserved for bookings`}</p>
+            <p className="text-sm text-ink-3">{d.version.unlimited ? "while active and paid" : `available · ${d.credits.reserved} ${staff ? "reserved for bookings" : "held for reservations"}`}</p>
             {d.credits.buckets.length ? (
               <ul className="mt-3 space-y-1 text-xs">
                 {d.credits.buckets.map((b) => (

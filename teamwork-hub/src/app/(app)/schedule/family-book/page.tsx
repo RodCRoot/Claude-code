@@ -11,7 +11,7 @@ import { familyAthletes } from "@/lib/scheduling/queries";
 import { fmt, fmtTime } from "@/lib/time";
 import { BatchBookForm } from "../_components/batch-book-form";
 
-export const metadata = { title: "Book for the family" };
+export const metadata = { title: "Reserve for the family" };
 
 export default async function FamilyBookPage({ searchParams }: { searchParams: Promise<{ session?: string; athlete?: string }> }) {
   const v = await requireViewer();
@@ -33,20 +33,20 @@ export default async function FamilyBookPage({ searchParams }: { searchParams: P
     <>
       <PageHeader
         kicker={`${row.serviceName} · ${fmt(s.startsAt, "EEEE, MMM d", tz)}`}
-        title={`Book ${s.title}`}
-        description={`${fmtTime(s.startsAt, tz)} – ${fmtTime(s.endsAt, tz)}. Book several of your athletes at once${s.seriesId ? ", or the same class for several weeks" : ""}.`}
+        title={`Reserve ${s.title}`}
+        description={`${fmtTime(s.startsAt, tz)} – ${fmtTime(s.endsAt, tz)}. Reserve for several family members at once${s.seriesId ? ", or the same class for several weeks" : ""}.`}
         actions={
           <ButtonLink href={back} variant="outline" className="min-h-11">
-            ← Schedule
+            ← Calendar
           </ButtonLink>
         }
       />
       <div className="max-w-xl">
         {athletes.length === 0 ? (
-          <Callout tone="info">Booking isn&apos;t enabled for any athlete on your account. Please contact the front desk.</Callout>
+          <Callout tone="info">Reserving isn&apos;t enabled for any family member on your account. Please contact the front desk.</Callout>
         ) : (
           <Card>
-            <CardHeader title="Choose athletes" kicker={row.creditCost > 0 ? `Each booking uses ${row.creditCost} credit${row.creditCost === 1 ? "" : "s"} unless covered by a membership` : undefined} />
+            <CardHeader title="Choose family members" kicker={row.creditCost > 0 ? `Each reservation uses ${row.creditCost} credit${row.creditCost === 1 ? "" : "s"} unless covered by a membership` : undefined} />
             <CardBody>
               <BatchBookForm
                 sessionId={s.id}
@@ -59,7 +59,7 @@ export default async function FamilyBookPage({ searchParams }: { searchParams: P
             </CardBody>
           </Card>
         )}
-        <p className="mt-3 text-xs text-ink-3">Each athlete and date is checked on its own (booking window, eligibility, space, credits). You&apos;ll see the result for every one.</p>
+        <p className="mt-3 text-xs text-ink-3">Each family member and date is checked on its own (reservation window, eligibility, space, credits). You&apos;ll see the result for every one.</p>
       </div>
     </>
   );

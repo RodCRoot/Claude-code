@@ -10,6 +10,7 @@ import {
   payerAccounts,
   payerAuthorizations,
   payerBeneficiaries,
+  paymentMethods,
   people,
   products,
   productVersions,
@@ -21,7 +22,7 @@ import { AuthzError, type Viewer } from "@/lib/authz/policy";
 import { creditSummary } from "@/lib/credits";
 import { inScope, isBillingStaff, loadInvoiceForViewer, payablePayerIds, viewablePayerIds } from "./access";
 import { invoiceMoney, invoiceMoneyMany } from "./invoices";
-import { holdsFor } from "./memberships";
+import { holdsFor, periodPrice } from "./memberships";
 import { int } from "./util";
 
 function payerFilter(scope: string[] | "all", col: Parameters<typeof inArray>[0]): SQL {
@@ -218,4 +219,106 @@ export async function membershipPlanOptions(tx: Tx, orgId: string, today: string
       ),
     )
     .orderBy(asc(products.name), asc(productVersions.version));
+}
+
+// ---------------------------------------------------------------------------
+// Family "My Profile" read models (Bills, Payment History, Payment Methods). Read-only; every
+// function scopes to the payer accounts the viewer is authorised to see.
+// ---------------------------------------------------------------------------
+
+/** For bills the viewer already listed: a one-line description and whether the latest online attempt failed. */
+export async function billExtras(tx: Tx, v: Viewer, invoiceIds: string[]) {
+  const out: Record<string, { description: string; lastAttemptFailed: boolean }> = {};
+  if (!invoiceIds.length) return out;
+  const lines = await tx
+    .select({ invoiceId: invoiceLines.invoiceId, description: invoiceLines.description })
+    .from(invoiceLines)
+    .innerJoin(invoices, eq(invoices.id, invoiceLines.invoiceId))
+    .where(and(eq(invoices.orgId, v.orgId), inArray(invoiceLines.invoiceId, invoiceIds)))
+    .orderBy(asc(invoiceLines.id));
+  const attempts = await tx
+    .select({ invoiceId: paymentAttempts.invoiceId, status: paymentAttempts.status })
+    .from(paymentAttempts)
+    .where(inArray(paymentAttempts.invoiceId, invoiceIds))
+    .orderBy(desc(paymentAttempts.createdAt));
+  for (const id of invoiceIds) {
+    const mine = lines.filter((l) => l.invoiceId === id);
+    const latest = attempts.find((a) => a.invoiceId === id);
+    out[id] = {
+      description: mine.length === 0 ? "" : mine.length === 1 ? mine[0].description : `${mine[0].description} + ${mine.length - 1} more`,
+      lastAttemptFailed: latest?.status === "failed",
+    };
+  }
+  return out;
+}
+
+/** Payments and refunds on the viewer's payer accounts, newest first (no staff notes or recorders). */
+export async function listPayments(tx: Tx, v: Viewer, limit = 200) {
+  const scope = await viewablePayerIds(tx, v);
+  return tx
+    .select({
+      id: transactions.id,
+      occurredAt: transactions.occurredAt,
+      kind: transactions.kind,
+      status: transactions.status,
+      amountMinor: transactions.amountMinor,
+      currency: transactions.currency,
+      provider: transactions.provider,
+      methodType: transactions.methodType,
+      verification: transactions.verification,
+      invoiceId: transactions.invoiceId,
+      invoiceNumber: invoices.number,
+      payerName: payerAccounts.name,
+    })
+    .from(transactions)
+    .innerJoin(payerAccounts, eq(payerAccounts.id, transactions.payerAccountId))
+    .leftJoin(invoices, eq(invoices.id, transactions.invoiceId))
+    .where(and(eq(transactions.orgId, v.orgId), payerFilter(scope, transactions.payerAccountId)))
+    .orderBy(desc(transactions.occurredAt))
+    .limit(limit);
+}
+
+/** Tokenised cards / bank accounts on file for the viewer's payer accounts (brand, last four, expiry only). */
+export async function listPaymentMethods(tx: Tx, v: Viewer) {
+  const scope = await viewablePayerIds(tx, v);
+  return tx
+    .select({
+      id: paymentMethods.id,
+      payerAccountId: paymentMethods.payerAccountId,
+      provider: paymentMethods.provider,
+      type: paymentMethods.type,
+      brand: paymentMethods.brand,
+      last4: paymentMethods.last4,
+      expMonth: paymentMethods.expMonth,
+      expYear: paymentMethods.expYear,
+      isDefault: paymentMethods.isDefault,
+    })
+    .from(paymentMethods)
+    .innerJoin(payerAccounts, eq(payerAccounts.id, paymentMethods.payerAccountId))
+    .where(and(eq(payerAccounts.orgId, v.orgId), payerFilter(scope, paymentMethods.payerAccountId)))
+    .orderBy(desc(paymentMethods.isDefault), desc(paymentMethods.createdAt));
+}
+
+/**
+ * The next bill of each membership billed through Teamwork Hub or a connected provider: the date it is
+ * scheduled for and the regular period price after any discount. Memberships billed elsewhere, ending
+ * before the date, or on hold over it are left out. Nothing is created; this is a preview.
+ */
+export async function scheduledBills(tx: Tx, v: Viewer) {
+  const rows = await listMemberships(tx, v);
+  const out = [];
+  for (const r of rows) {
+    const m = r.m;
+    const due = m.nextBillDate;
+    if (!due || !["active", "trialing"].includes(m.status)) continue;
+    if (!["manual", "stripe", "paypal"].includes(m.billingProvider)) continue;
+    if (m.cancelAt && m.cancelAt <= due) continue;
+    if (m.endDate && m.endDate <= due) continue;
+    if ((await holdsFor(tx, m.id)).some((h) => h.startDate <= due && h.endDate >= due)) continue;
+    const [version] = await tx.select().from(productVersions).where(eq(productVersions.id, m.productVersionId));
+    if (!version) continue;
+    const price = await periodPrice(tx, m, version);
+    out.push({ membershipId: m.id, payerAccountId: m.payerAccountId, dueDate: due, description: `${r.productName}, ${r.first} ${r.last}`, amountMinor: price.net, currency: version.currency });
+  }
+  return out.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 }

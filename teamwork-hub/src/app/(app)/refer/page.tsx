@@ -47,7 +47,7 @@ export default async function ReferPage() {
                       {a.creditBalanceMinor > 0 ? (
                         <p className="text-sm">
                           Account credit from referrals: <span className="font-semibold tabular">{formatMoney(a.creditBalanceMinor, view.currency)}</span>
-                          <span className="block text-xs text-ink-3">The front desk applies it to an invoice for you.</span>
+                          <span className="block text-xs text-ink-3">The front desk applies it to a bill for you.</span>
                         </p>
                       ) : null}
                     </div>

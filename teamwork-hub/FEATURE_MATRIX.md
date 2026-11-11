@@ -257,3 +257,20 @@ Security review: see `docs/SECURITY-REVIEW.md` (10 findings fixed with regressio
 | 3. Wellness/body map/habits → scoped coach dashboard + review task | verified locally | `science.test.ts`, `connected-flows.test.ts` |
 | 4. Historical import → identity review → commit → performance chart → export/reconciliation | verified locally (fixtures) | `imports.test.ts`, `hawkin.test.ts`, `exports.test.ts` |
 | 5. Lead inquiry → assessment → task/inbox → conversion | verified locally | `crm.test.ts`, `connected-flows.test.ts` |
+
+## Family scheduling and billing in the previous member site's shape (`docs/modules/zp-parity.md`)
+
+Reference evidence: **from memory of the public member experience** only (the vendor help centre was unreachable from the build machine; no account access). Parity itself is therefore unverified until checked against the owner's screenshots.
+
+| Feature | Status | Evidence | Notes |
+|---|---|---|---|
+| Family calendar: day list with week strip, date jump, program / location / instructor filters, Reserve / Join waitlist / Cancel reservation per class | verified locally | `e2e/family-reserve-bills.spec.ts` (desktop + 390 px), axe guardian + athlete groups | Booking rules unchanged |
+| Family-member checklist at the moment of reserving | verified locally | same spec (reserves Eli from the checklist, then cancels) | Uses the existing batch booking (partial mode) |
+| Class detail for families (`/schedule/classes/<id>`) | verified locally | same spec, axe dynamic route | Shows only the viewer's own family |
+| My Reservations, My Attendance by month | verified locally | same spec (reservations), axe (both) | Attendance is a list, not a calendar grid |
+| Appointments entry (private sessions, assessments) | verified locally | axe; labels only | Slot logic unchanged |
+| My Profile tabs: Family, Memberships, Bills, Payment Methods, Payment History, Documents, Attendance | verified locally | same spec (tab order), `tests/billing-family-views.test.ts` | |
+| Bills: unpaid with Pay Now, upcoming (Scheduled), history with receipts | verified locally | same spec (Pay Now for Alex, none for Jordan), `tests/billing-family-views.test.ts` | Online payment itself still needs provider configuration |
+| Payment Methods: card on file, which memberships it pays for | verified locally (read model); update flow **not implemented** | `tests/billing-family-views.test.ts` | No self-service update; the tab says to contact the front desk |
+| Parity with the previous member site's exact layout and words | not verified | none | Checklist in `zp-parity.md` |
+

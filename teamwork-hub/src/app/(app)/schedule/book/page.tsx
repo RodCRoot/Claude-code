@@ -14,7 +14,7 @@ import { bookSlotAction } from "../actions";
 import { dayLabel, ScheduleTabs } from "../_components/calendar";
 import { flatParams } from "../_components/nav";
 
-export const metadata = { title: "Book a private session" };
+export const metadata = { title: "Appointments" };
 
 export default async function BookPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const v = await requireViewer();
@@ -63,22 +63,23 @@ export default async function BookPage({ searchParams }: { searchParams: Promise
 
   return (
     <>
-      <PageHeader kicker="Schedule" title={staff ? "Private sessions & assessments" : "Book a private session or assessment"} description="Open times come from each coach's availability, minus booked sessions, buffers, and time off." />
+      <PageHeader kicker="Schedule" title={staff ? "Private sessions & assessments" : "Appointments"}
+        description={staff ? "Open times come from each coach's availability, minus booked sessions, buffers, and time off." : "Private sessions and assessments. Choose the appointment type and staff member, then a date and an open time."} />
       <ScheduleTabs current="book" staff={staff} manager={manager} />
 
       {offered.length === 0 ? (
         <EmptyState title="Nothing to book online right now">
-          {staff ? "Create a private or assessment service in Schedule settings." : "Private sessions are booked by the front desk. Please contact us."}
+          {staff ? "Create a private or assessment service in Schedule settings." : "Appointments are reserved by the front desk. Please contact us."}
         </EmptyState>
       ) : athletes.length === 0 ? (
-        <EmptyState title="No athletes you can book for">{staff ? "No active athletes are in your scope." : "Ask the front desk to link an athlete to your account."}</EmptyState>
+        <EmptyState title={staff ? "No athletes you can book for" : "No family members you can reserve for"}>{staff ? "No active athletes are in your scope." : "Reserving appointments isn't enabled on your account. Another guardian or the front desk manages them."}</EmptyState>
       ) : (
         <>
           <Card className="mb-5">
-            <CardHeader kicker={staff ? "Staff booking" : "Step 1"} title="Find open times" />
+            <CardHeader kicker={staff ? "Staff booking" : "Step 1"} title={staff ? "Find open times" : "Choose an appointment"} />
             <CardBody className="pt-4">
               <form method="get" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Find open times">
-                <Field label="Service" htmlFor="service">
+                <Field label={staff ? "Service" : "Appointment type"} htmlFor="service">
                   <Select id="service" name="service" defaultValue={serviceId} className="h-11">
                     {offered.map((s) => (
                       <option key={s.id} value={s.id}>
@@ -87,7 +88,7 @@ export default async function BookPage({ searchParams }: { searchParams: Promise
                     ))}
                   </Select>
                 </Field>
-                <Field label="Athlete" htmlFor="athlete">
+                <Field label={staff ? "Athlete" : "Family member"} htmlFor="athlete">
                   <Select id="athlete" name="athlete" defaultValue={athleteId} className="h-11">
                     {athletes.map((a) => (
                       <option key={a.id} value={a.id}>
@@ -96,9 +97,9 @@ export default async function BookPage({ searchParams }: { searchParams: Promise
                     ))}
                   </Select>
                 </Field>
-                <Field label="Coach" htmlFor="coach">
+                <Field label={staff ? "Coach" : "Staff member"} htmlFor="coach">
                   <Select id="coach" name="coach" defaultValue={coachId ?? ""} className="h-11">
-                    <option value="">Any coach</option>
+                    <option value="">{staff ? "Any coach" : "Any staff member"}</option>
                     {coaches.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
@@ -106,7 +107,7 @@ export default async function BookPage({ searchParams }: { searchParams: Promise
                     ))}
                   </Select>
                 </Field>
-                <Field label="Week starting" htmlFor="from">
+                <Field label={staff ? "Week starting" : "Date"} htmlFor="from" hint={staff ? undefined : "Shows open times for 7 days from this date."}>
                   <Input id="from" name="from" type="date" min={today} defaultValue={from} className="h-11" />
                 </Field>
                 {staff ? (
@@ -142,14 +143,14 @@ export default async function BookPage({ searchParams }: { searchParams: Promise
           {error ? <Callout tone="bad">{error}</Callout> : null}
           {searched && !error ? (
             slots.length === 0 ? (
-              <EmptyState title="No open times that week">
-                Try another week or coach. {staff ? "Coach availability and time off are managed in Schedule settings → Availability." : ""}
+              <EmptyState title={staff ? "No open times that week" : "No open times in those 7 days"}>
+                Try another {staff ? "week or coach" : "date or staff member"}. {staff ? "Coach availability and time off are managed in Schedule settings → Availability." : ""}
               </EmptyState>
             ) : (
               <div className="space-y-4">
                 {svc && svc.creditCost > 0 && !comp ? (
                   <p className="text-sm text-ink-3">
-                    Booking uses {svc.creditCost} credit{svc.creditCost === 1 ? "" : "s"} (or an unlimited membership that covers {svc.name}).
+                    {staff ? "Booking" : "Reserving"} uses {svc.creditCost} credit{svc.creditCost === 1 ? "" : "s"} (or an unlimited membership that covers {svc.name}).
                   </p>
                 ) : null}
                 {[...grouped.entries()].map(([d, list]) => (
@@ -178,12 +179,12 @@ export default async function BookPage({ searchParams }: { searchParams: Promise
                                 <input type="hidden" name="compReason" value={p.compReason ?? ""} />
                               </>
                             ) : null}
-                            <SubmitButton variant="secondary" className="min-h-12 w-full justify-between gap-2 px-3" pendingText="Booking…">
+                            <SubmitButton variant="secondary" className="min-h-12 w-full justify-between gap-2 px-3" pendingText={staff ? "Booking…" : "Reserving…"}>
                               <span className="min-w-0 text-left">
                                 <span className="block font-bold tabular text-ink">{fmt(s.startsAt, "h:mm a", tz)}</span>
                                 <span className="block truncate text-xs font-normal text-ink-3">{s.coachName}</span>
                               </span>
-                              <span className="rounded-md bg-brand px-2.5 py-1 text-xs font-semibold text-brand-ink">Book</span>
+                              <span className="rounded-md bg-brand px-2.5 py-1 text-xs font-semibold text-brand-ink">{staff ? "Book" : "Reserve"}</span>
                             </SubmitButton>
                           </ActionForm>
                         </li>
