@@ -36,7 +36,7 @@ function writeProgress(sessionId: string, ids: string[] | null) {
  * Ticks are kept on the device (step ids only) so a reload or a dropped connection loses nothing.
  * Finishing is saved on the device first and sent with an idempotency key (see anywhere-queue.ts).
  */
-export function SessionPlayer({ athleteId, sessionId, plannedMinutes, steps, canLog, backHref }: { athleteId: string; sessionId: string; plannedMinutes: number; steps: PlayerStep[]; canLog: boolean; backHref: string }) {
+export function SessionPlayer({ athleteId, sessionId, plannedMinutes, steps, canLog, backHref, onBehalfOf = null }: { athleteId: string; sessionId: string; plannedMinutes: number; steps: PlayerStep[]; canLog: boolean; backHref: string; /** Set when a parent is logging for an athlete under 13: the child's first name. */ onBehalfOf?: string | null }) {
   const router = useRouter();
   const queue = useAnywhereQueue();
   const [done, setDone] = useState<string[]>([]);
@@ -87,7 +87,9 @@ export function SessionPlayer({ athleteId, sessionId, plannedMinutes, steps, can
           {rejected
             ? rejected.error
             : saved
-              ? "Saved. It counts toward your weekly streak, and your coach can see it."
+              ? onBehalfOf
+                ? `Saved for ${onBehalfOf}. It counts toward ${onBehalfOf}'s weekly streak, and the coach can see that a parent logged it.`
+                : "Saved. It counts toward your weekly streak, and your coach can see it."
               : queue.lastError ?? "Saving..."}
         </p>
         {waiting && queue.lastError ? <p className="mt-1 text-xs text-ink-3">You can close this page. It will send the next time you open On Your Own with a connection.</p> : null}
@@ -153,10 +155,16 @@ export function SessionPlayer({ athleteId, sessionId, plannedMinutes, steps, can
           <h2 id="finish-h" className="text-[15px] font-semibold">
             Finish
           </h2>
-          <p className="mt-0.5 text-sm text-ink-2">Both questions are optional. Answer both and it counts in your training load.</p>
+          {onBehalfOf ? (
+            <p className="mt-0.5 text-sm text-ink-2" data-testid="parent-logging-note">
+              You are logging this for {onBehalfOf}. Tick the steps {onBehalfOf} did and answer for {onBehalfOf}. The coach will see it as logged by a parent. Both questions are optional. Answer both and it counts in {onBehalfOf}&apos;s training load.
+            </p>
+          ) : (
+            <p className="mt-0.5 text-sm text-ink-2">Both questions are optional. Answer both and it counts in your training load.</p>
+          )}
           <div className="mt-3">
             <label htmlFor="own-min" className="block text-sm font-medium text-ink-2">
-              How many minutes did it take?
+              {onBehalfOf ? `How many minutes did it take ${onBehalfOf}?` : "How many minutes did it take?"}
             </label>
             <input
               id="own-min"
@@ -171,7 +179,7 @@ export function SessionPlayer({ athleteId, sessionId, plannedMinutes, steps, can
             />
           </div>
           <fieldset className="mt-4">
-            <legend className="text-sm font-medium text-ink-2">How hard did it feel? (0 is rest, 10 is all out)</legend>
+            <legend className="text-sm font-medium text-ink-2">{onBehalfOf ? `How hard did it feel for ${onBehalfOf}? Ask them. (0 is rest, 10 is all out)` : "How hard did it feel? (0 is rest, 10 is all out)"}</legend>
             <div className="mt-2 grid grid-cols-6 gap-1.5 sm:grid-cols-11">
               {Array.from({ length: 11 }, (_, n) => (
                 <label key={n} className={`flex min-h-12 cursor-pointer flex-col items-center justify-center rounded-md border text-base font-bold tabular focus-within:outline-2 focus-within:outline-offset-1 focus-within:outline-brand ${rpe === n ? "border-brand bg-brand text-brand-ink" : "border-edge bg-surface text-ink hover:bg-surface-2"}`}>
@@ -193,7 +201,7 @@ export function SessionPlayer({ athleteId, sessionId, plannedMinutes, steps, can
           {done.length === 0 ? <p className="mt-1.5 text-center text-xs text-ink-3">Tick at least one step to finish.</p> : null}
         </section>
       ) : (
-        <p className="rounded-md border border-edge bg-surface-2 px-4 py-3 text-sm text-ink-2">Athletes tick steps and finish sessions from their own login.</p>
+        <p className="rounded-md border border-edge bg-surface-2 px-4 py-3 text-sm text-ink-2">Athletes tick steps and finish sessions from their own login. A parent with training and booking access can log for an athlete under 13 with a birthday on file.</p>
       )}
     </div>
   );

@@ -4,6 +4,8 @@ Staff-facing retention tools plus the athlete / parent feedback loop. Code lives
 
 Nothing in this module sends a message to a family. Every action is a staff task, a link, or a log entry.
 
+No scheduled job: the radar, the winback list and milestones are worked out live from other tables on every view and store no score, so there is nothing for a nightly job to refresh (checked 2026-11; see `docs/modules/scheduled-jobs.md`).
+
 | Screen | Path | Who |
 |---|---|---|
 | Retention radar | `/people/retention` (People → Retention) | owner, admin, operations; coaches see assigned athletes only |

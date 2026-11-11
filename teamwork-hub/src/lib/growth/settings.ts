@@ -26,8 +26,18 @@ export type GrowthSettings = {
   referral: {
     enabled: boolean;
     reward: RewardSpec;
-    /** Optional reward for the referred family too. */
+    /**
+     * Legacy "reward for the referred family" (pending, staff-approved at earn time). No longer
+     * offered in Settings: the new family's reward is `newFamilyDiscountMinor`. Still honoured if
+     * an organization has one saved and no discount set.
+     */
     referredReward: RewardSpec;
+    /**
+     * Owner decision 2026-11-11: money off the referred family's FIRST invoice, in minor units.
+     * Null = off (the default in a real organization). Applied automatically as an invoice
+     * discount; see `applyNewFamilyDiscounts` in referrals.ts for the exact rules.
+     */
+    newFamilyDiscountMinor: number | null;
     earnedWhen: "first_paid_invoice" | "days_active";
     /** Only with earnedWhen = days_active. */
     daysActive: number | null;
@@ -60,6 +70,7 @@ export const DEFAULT_GROWTH: GrowthSettings = {
     enabled: false,
     reward: NO_REWARD,
     referredReward: NO_REWARD,
+    newFamilyDiscountMinor: null,
     earnedWhen: "first_paid_invoice",
     daysActive: null,
     requireNewFamily: true,
@@ -104,6 +115,17 @@ export function describeReward(r: RewardSpec, currency = "USD"): string | null {
   return null;
 }
 
+/** "$50.00 off their first invoice", or null when no new-family discount is set. Family-safe. */
+export function describeNewFamilyDiscount(amountMinor: number | null | undefined, currency = "USD"): string | null {
+  if (!amountMinor || amountMinor <= 0) return null;
+  return `${new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amountMinor / 100)} off their first invoice`;
+}
+
+/** The new family's side in plain words: the first-invoice discount, else a legacy reward, else null. */
+export function describeReferredSide(r: GrowthSettings["referral"], currency = "USD"): string | null {
+  return describeNewFamilyDiscount(r.newFamilyDiscountMinor, currency) ?? describeReward(r.referredReward, currency);
+}
+
 const s = (raw: Record<string, unknown>, k: string) => (typeof raw[k] === "string" ? (raw[k] as string).trim() : "");
 const on = (raw: Record<string, unknown>, k: string) => raw[k] === true || raw[k] === "on" || raw[k] === "true";
 
@@ -138,11 +160,19 @@ function intIn(raw: Record<string, unknown>, k: string, min: number, max: number
 export function parseGrowthSettings(raw: Record<string, unknown>): { settings: GrowthSettings; errors: Record<string, string> } {
   const errors: Record<string, string> = {};
   const earnedWhen = s(raw, "earnedWhen") === "days_active" ? ("days_active" as const) : ("first_paid_invoice" as const);
+  const discountRaw = s(raw, "newFamilyDiscount");
+  let newFamilyDiscountMinor: number | null = null;
+  if (discountRaw !== "") {
+    const amount = parseMoneyToMinor(discountRaw);
+    if (amount == null || amount <= 0 || amount > 100_000_00) errors.newFamilyDiscount = "Enter the discount amount, e.g. 50.00, or leave it empty for none";
+    else newFamilyDiscountMinor = amount;
+  }
   const settings: GrowthSettings = {
     referral: {
       enabled: on(raw, "referralEnabled"),
       reward: parseReward(raw, "reward", errors),
       referredReward: parseReward(raw, "referredReward", errors),
+      newFamilyDiscountMinor,
       earnedWhen,
       daysActive: earnedWhen === "days_active" ? intIn(raw, "daysActive", 1, 365, errors) : null,
       requireNewFamily: on(raw, "requireNewFamily"),

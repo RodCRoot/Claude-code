@@ -63,7 +63,19 @@ export default async function GrowthSettingsPage() {
               </span>
             </label>
             <RewardFields prefix="reward" legend="Reward for the referring family" spec={g.referral.reward} />
-            <RewardFields prefix="referredReward" legend="Reward for the new family (optional)" spec={g.referral.referredReward} />
+            <fieldset className="space-y-3 rounded-lg border border-edge p-3">
+              <legend className="px-1 text-sm font-semibold">Discount for the new family (optional)</legend>
+              <Field
+                label="Off the new family's first invoice ($)"
+                htmlFor="newFamilyDiscount"
+                hint="Leave empty for none. Applied automatically to the referred family's first open invoice as a discount. One per new billing account, never for existing or returning families."
+              >
+                <Input id="newFamilyDiscount" name="newFamilyDiscount" inputMode="decimal" className="max-w-40" defaultValue={g.referral.newFamilyDiscountMinor != null ? (g.referral.newFamilyDiscountMinor / 100).toFixed(2) : ""} />
+              </Field>
+              <p className="text-xs text-ink-3">
+                It needs no approval because it only lowers an invoice the family still has to pay: no money is paid out, and a refund returns only what they paid. If their first invoice was already paid before the discount could apply, it becomes an account credit that waits for staff approval like any other reward.
+              </p>
+            </fieldset>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="A reward is earned when" htmlFor="earnedWhen">
                 <Select id="earnedWhen" name="earnedWhen" defaultValue={g.referral.earnedWhen}>
@@ -92,7 +104,7 @@ export default async function GrowthSettingsPage() {
             <Field label="How it works (shown to families)" htmlFor="howItWorks" hint="Plain text in your own words. Keep it friendly and short.">
               <Textarea id="howItWorks" name="howItWorks" rows={4} maxLength={1200} defaultValue={g.referral.howItWorks} />
             </Field>
-            <p className="text-xs text-ink-3">An earned reward is created as pending. Staff approve it in People → Referrals; only then is account credit or session credit issued.</p>
+            <p className="text-xs text-ink-3">An earned reward for the referring family is created as pending. Staff approve it in People → Referrals; only then is account credit or session credit issued. A pending reward is withheld if the new family&apos;s first payment is refunded in full.</p>
           </CardBody>
         </Card>
         <Card>

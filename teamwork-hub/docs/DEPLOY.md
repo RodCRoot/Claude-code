@@ -89,7 +89,10 @@ is a deliberate click.
    password, then enrol MFA (Settings → Security). It refuses if any organization already exists.
    Invite everyone else from Settings → Users.
 7. Worker check: worker service → **Logs** should show JSON lines `{"msg":"start",…}` and, hourly,
-   `automation.evaluate` jobs. No `"level":"error"` lines.
+   `automation.evaluate` jobs. No `"level":"error"` lines. After 2:00 AM facility time there is one
+   `scheduled_jobs_enqueued` line and three nightly `job` lines per organization
+   (`growth.referrals.nightly`, `community.challenges.nightly`, `engagement.refresh.nightly`).
+   Settings → Scheduled jobs shows the same per organization.
 8. Monitoring check (if `SENTRY_DSN` set): web service → **Shell** → `pnpm monitoring:check` → a
    synthetic "Monitoring check (synthetic)" issue appears in Sentry with `[email]`/`[REDACTED]` in
    place of the test values.
@@ -226,3 +229,26 @@ Do not flip `APP_MODE=production` until every box is checked.
 - [ ] `APP_MODE=production`, `STAGING_BASIC_AUTH_*` removed, custom domain added in Render, DNS switched, HTTPS verified.
 - [ ] `APP_URL` = the production domain (payment return URLs and links depend on it).
 - [ ] Rollback plan written down: previous Render deploy + last verified backup.
+
+## Scheduled jobs (how the nightly schedule is triggered)
+
+There is no cron entry and no separate scheduler. **The background worker is the scheduler.**
+
+- The worker service runs `pnpm jobs:work` continuously. On every pass it asks, for each
+  organization, "is it past 2:00 AM in this facility's timezone, and do today's jobs exist yet?"
+  and, if not, puts them on the job queue with a dedupe key per organization, job and local date.
+  A second worker, a restart or a redeploy cannot create a second set.
+- So the only deployment requirement is: **keep one worker running** (the `teamwork-hub-staging-worker`
+  service in `render.yaml`). Nothing has been deployed yet; this has been verified locally and in
+  tests only.
+- If the worker is down at 2:00 AM, that day's jobs are created when it comes back the same local
+  day. If it is down for whole days, nothing is lost: each run evaluates current data, and every
+  page still brings its own data up to date when opened.
+- If the host cannot run a long-lived worker, run one pass from the host's cron instead, at least
+  hourly: `pnpm jobs:work --once` (exits non-zero if a job ran out of retries). The same dedupe
+  keys apply, so hourly passes still produce one nightly run per day.
+- The facility timezone is `organizations.timezone` (default `America/Indiana/Indianapolis`). The
+  server's own timezone does not matter.
+- These jobs send no email or text. To check them: Settings → Scheduled jobs (owner or admin), or
+  `select type, status, finished_at, result from jobs where type like '%.nightly' order by created_at desc limit 10;`
+- Details and the list of jobs: `docs/modules/scheduled-jobs.md`.

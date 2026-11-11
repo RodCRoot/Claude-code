@@ -183,6 +183,13 @@
       "when": 1794413632459,
       "tag": "0025_vbt",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1794413680331,
+      "tag": "0026_jobs",
+      "breakpoints": true
     }
   ]
 }

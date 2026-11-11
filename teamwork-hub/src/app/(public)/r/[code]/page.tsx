@@ -1,6 +1,11 @@
 import { StableForm, StableSubmit } from "@/app/(app)/messages/_components/stable-form";
 import { InquiryFields } from "@/app/(public)/inquire/_components/inquiry-fields";
 import { Callout, Card, CardBody } from "@/components/ui";
+import { db } from "@/db";
+import { organizations } from "@/db/schema";
+import { publicOrg } from "@/lib/crm/public";
+import { describeNewFamilyDiscount, growthFromSettings } from "@/lib/growth/settings";
+import { eq } from "drizzle-orm";
 import { submitReferredInquiry } from "./actions";
 
 export const metadata = { title: "A friend invited you", robots: { index: false, follow: false } };
@@ -15,6 +20,12 @@ export default async function ReferralLanding({ params }: { params: Promise<{ co
   const { code } = await params;
   // Carry at most 16 URL-safe characters into the form; anything else is dropped.
   const ref = /^[A-Za-z0-9]{1,16}$/.test(code) ? code.toLowerCase() : "";
+  // The offer text depends only on the organization's settings, never on the code, so the page
+  // still looks the same for real, revoked and made-up codes.
+  const org = await publicOrg(db, null);
+  const [row] = org ? await db.select({ settings: organizations.settings, currency: organizations.currency }).from(organizations).where(eq(organizations.id, org.id)) : [];
+  const growth = growthFromSettings(row?.settings);
+  const discount = growth.referral.enabled ? describeNewFamilyDiscount(growth.referral.newFamilyDiscountMinor, row?.currency ?? "USD") : null;
   return (
     <>
       <h1 className="text-2xl font-bold tracking-tight">A friend thought you would like it here</h1>
@@ -24,6 +35,13 @@ export default async function ReferralLanding({ params }: { params: Promise<{ co
       <Callout tone="info" className="mt-4">
         You opened a referral link. If it belongs to a Teamwork family, we will let them know a friend got in touch. We never share your contact details with them.
       </Callout>
+      {discount ? (
+        <Callout tone="ok" className="mt-3" title="A welcome from us">
+          <span data-testid="new-family-offer">
+            Families who join through a Teamwork family&apos;s link get <strong>{discount}</strong>. It comes off automatically when your first invoice is created. It is for families who are new to Teamwork, once per family, and cannot be combined with another referral.
+          </span>
+        </Callout>
+      ) : null}
       <Card className="mt-6">
         <CardBody className="pt-5">
           <StableForm action={submitReferredInquiry}>

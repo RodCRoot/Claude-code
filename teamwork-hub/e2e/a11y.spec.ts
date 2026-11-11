@@ -118,6 +118,7 @@ const STAFF = [
   "/training/recaps",
   "/settings/security",
   "/settings/integrations",
+  "/settings/jobs",
   "/settings/audit",
 ];
 const COACH = ["/today", "/people", "/people/tasks", "/schedule", "/training", "/training/today", "/training/weight-room", "/training/review", "/science", "/science/load", "/performance", "/messages", "/documents", "/reports", "/reports/attendance", "/reports/utilization", "/people/retention", "/reports/session-feedback", "/settings/security", "/time", "/training/anywhere", "/training/recaps", "/people/showcases", "/leaderboards"];

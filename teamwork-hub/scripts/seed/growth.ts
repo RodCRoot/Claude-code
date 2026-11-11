@@ -37,8 +37,9 @@ export async function seedGrowth(ctx: SeedCtx) {
       ...DEFAULT_GROWTH.referral,
       enabled: true,
       reward: { type: "account_credit", amountMinor: 5000, credits: null, creditExpiryDays: null },
-      referredReward: { type: "session_credits", amountMinor: null, credits: 1, creditExpiryDays: 30 },
-      howItWorks: "Thank you for telling friends about us. The $50 account credit is our thank you. The friend's session credit shown here is a sample for the demo.",
+      // Owner decision 2026-11-11: the new family also gets $50 off (their first invoice).
+      newFamilyDiscountMinor: 5000,
+      howItWorks: "Thank you for telling friends about us. When a new family joins through your link, you get a $50 account credit and they get $50 off their first invoice. (Sample wording for the demo.)",
     },
     offers: DEFAULT_GROWTH.offers,
   };
@@ -49,7 +50,6 @@ export async function seedGrowth(ctx: SeedCtx) {
   const productByName = async (name: string) => (await tx.select().from(products).where(and(eq(products.orgId, orgId), eq(products.name, name))))[0];
   const pack = await productByName("Sample — 10-Session Pack");
   const assessment = await productByName("Sample — Performance Assessment");
-  const dropIn = await productByName("Sample — Drop-in Session");
   await setShopListing(tx, rod, { productId: pack.id, sellableOnline: true, includes: "Sample description: ten group training sessions to use at your own pace." });
   await setShopListing(tx, rod, { productId: assessment.id, sellableOnline: true, includes: "Sample description: a one hour baseline test with a coach and a written summary." });
 
@@ -75,14 +75,15 @@ export async function seedGrowth(ctx: SeedCtx) {
     { isDemo: true },
   );
   const conv = await convertLead(tx, erin, { leadId: won.leadId, household: "new", payer: "new", dateOfBirth: `${Number(T.slice(0, 4)) - 13}-01-15`, sport: "Soccer" });
-  const [dropVer] = await tx.select().from(productVersions).where(eq(productVersions.productId, dropIn.id));
+  const [firstPackVer] = await tx.select().from(productVersions).where(eq(productVersions.id, B.packVersionId));
   const inv = await createInvoiceRecord(tx, { orgId, actorUserId: erin.userId, actorRole: "operations" }, {
     orgId,
     payerAccountId: conv.payerAccountId,
     source: "teamwork",
     isDemo: true,
-    lines: [{ description: dropIn.name, unitAmountMinor: dropVer.priceMinor, productVersionId: dropVer.id, athleteId: conv.athleteId, entitlement: { credits: 1, creditExpiryDays: dropVer.creditExpiryDays ?? undefined } }],
+    lines: [{ description: pack.name, unitAmountMinor: firstPackVer.priceMinor, productVersionId: firstPackVer.id, athleteId: conv.athleteId, entitlement: { credits: 10, creditExpiryDays: firstPackVer.creditExpiryDays ?? undefined } }],
   });
+  // createInvoiceRecord applied the $50 new-family discount to this first invoice; the family pays the rest.
   await recordManualPayment(tx, erin, { invoiceId: inv.invoice.id, amountMinor: inv.invoice.totalMinor, method: "cash", reference: "SAMPLE-CASH-REFERRAL", notes: "Sample payment", isDemo: true });
   // 2) and 3) Still at the inquiry stage.
   const open1 = await createReferredInquiry(

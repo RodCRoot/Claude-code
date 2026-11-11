@@ -23,6 +23,7 @@ import { billingJobHandlers } from "@/lib/billing/jobs";
 import { calendarJobHandlers } from "@/lib/calendar/sync";
 import { exportJobHandlers } from "@/lib/exports/jobs";
 import { recapJobHandlers } from "@/lib/showcase/jobs";
+import { scheduledJobHandlers } from "@/lib/scheduled/jobs";
 
 const str = (v: unknown, name: string): string => {
   if (typeof v !== "string" || !v) throw new Error(`payload.${name} is required`);
@@ -52,6 +53,8 @@ export const jobHandlers: Record<string, JobHandler> = {
   ...calendarJobHandlers(db),
   ...exportJobHandlers,
   ...recapJobHandlers,
+  // Nightly referral progress, challenge completions and goals/XP/badges (src/lib/scheduled/jobs.ts).
+  ...scheduledJobHandlers(db),
   [JOB_TYPES.NOTIFY_SESSION_CANCELLED]: (p) =>
     db.transaction((tx) => notifySession(tx, "session_cancelled", { sessionId: str(p.sessionId, "sessionId"), version: typeof p.version === "number" ? p.version : undefined })),
 

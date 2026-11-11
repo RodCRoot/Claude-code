@@ -51,6 +51,8 @@ export default async function AnywherePage({ searchParams }: { searchParams: Pro
     );
   }
 
+  // A parent who may log for an athlete under 13 gets the same "Start" buttons the athlete does.
+  const canStart = isAthlete || access.canFinishSession;
   const time = TIMES.includes(Number(sp.time)) ? Number(sp.time) : null;
   const eq = (ANYWHERE_EQUIPMENT as readonly string[]).includes(sp.eq ?? "") ? (sp.eq as AnywhereEquipment) : null;
   const cat = (ANYWHERE_CATEGORIES as readonly string[]).includes(sp.cat ?? "") ? (sp.cat as AnywhereCategory) : null;
@@ -77,7 +79,7 @@ export default async function AnywherePage({ searchParams }: { searchParams: Pro
     <div className="mx-auto max-w-5xl">
       {hero}
       <AnywhereTabs current="sessions" athleteId={child.athleteId} multi={multi} />
-      {access.canLog ? <AnywherePending /> : null}
+      {access.canFinishSession ? <AnywherePending /> : null}
 
       {assignments.length ? (
         <Card className="mb-4 border-l-4 border-l-brand">
@@ -98,8 +100,8 @@ export default async function AnywherePage({ searchParams }: { searchParams: Pro
                   {a.complete ? (
                     <span className="text-sm font-bold text-ok">Done</span>
                   ) : (
-                    <ButtonLink href={a.sessionId ? sessionHref(a.sessionId) : href({ cat: a.category, time: null, eq: null })} variant={isAthlete ? "primary" : "secondary"} className="h-11! w-full sm:w-auto">
-                      {a.sessionId ? (isAthlete ? "Start" : "View") : "Pick a session"}
+                    <ButtonLink href={a.sessionId ? sessionHref(a.sessionId) : href({ cat: a.category, time: null, eq: null })} variant={canStart ? "primary" : "secondary"} className="h-11! w-full sm:w-auto">
+                      {a.sessionId ? (canStart ? "Start" : "View") : "Pick a session"}
                     </ButtonLink>
                   )}
                 </li>
@@ -169,8 +171,8 @@ export default async function AnywherePage({ searchParams }: { searchParams: Pro
               <p className="mt-2 text-xs text-ink-3">
                 {s.stepCount} step{s.stepCount === 1 ? "" : "s"}. {SAFETY_COPY}
               </p>
-              <ButtonLink href={sessionHref(s.id)} variant={isAthlete ? "primary" : "secondary"} size="lg" className="mt-3 w-full">
-                {isAthlete ? "Start" : "View"}
+              <ButtonLink href={sessionHref(s.id)} variant={canStart ? "primary" : "secondary"} size="lg" className="mt-3 w-full">
+                {canStart ? "Start" : "View"}
                 <span className="sr-only">: {s.title}</span>
               </ButtonLink>
             </li>
@@ -190,6 +192,7 @@ export default async function AnywherePage({ searchParams }: { searchParams: Pro
                     {fmtDate(c.localDate)} · {c.stepsDone} of {c.stepsTotal} steps
                     {c.durationMinutes != null ? ` · ${c.durationMinutes} min` : ""}
                     {c.rpe != null ? ` · effort ${c.rpe}` : ""}
+                    {c.loggedAs === "guardian" ? " · logged by a parent" : ""}
                   </span>
                 </li>
               ))}

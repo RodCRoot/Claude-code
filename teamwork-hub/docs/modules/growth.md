@@ -22,7 +22,8 @@ predicts behaviour, or uses pressure tactics.
   "Sample".
 - **No money without staff approval.** An earned reward is a pending row. Account credit or session
   credits exist only after a staff member approves it. Account credit is applied to an invoice by
-  staff, never automatically.
+  staff, never automatically. The one automatic step is the new family's first-invoice discount
+  (section 1b): it lowers an invoice the family still has to pay and never pays anything out.
 - **No external messages.** Nothing in this module emails or texts anyone.
 
 ## 1. Referral program
@@ -66,8 +67,51 @@ a code to a lead by hand (same rules, recorded as "code added by staff").
 - `started` → `earned` per Settings → Growth: the referred member's first invoice above $0 is **paid**, or a membership has been active for N days. A $0 invoice, an open invoice or a pending bank payment never earns.
 - Earning inserts pending `referral_rewards` rows (unique per referral and side) with a snapshot of the configured reward.
 
-`syncReferrals` runs when staff open People → Referrals and when a family opens Refer a friend.
-It is not on the job queue yet (see "Not done").
+`syncReferrals` runs when staff open People → Referrals, when a family opens Refer a friend, when
+billing creates or issues an invoice for a referred family (`syncReferralsForPayer`, in a savepoint
+so it can never block an invoice), and every night from the job queue (`growth.referrals.nightly`,
+one referral per transaction; see `docs/modules/scheduled-jobs.md`).
+
+**Refunds.** A first payment that was refunded in full does not earn. If the refund comes after
+earning, the next evaluation declines every still-pending reward of that referral with the reason
+"First payment was refunded" (`growth.reward.withhold`, system actor), and `approveReward` refuses
+in the meantime. Credit that staff already approved is not taken back automatically; the Referrals
+page marks it "First payment was refunded after approval. Review this credit." A partial refund
+changes nothing (the page shows a note).
+
+### 1b. New family discount (owner decision 2026-11-11)
+
+Settings → Growth → "Discount for the new family": one amount (`referral.newFamilyDiscountMinor`,
+null = off, the default; the demo seed uses $50.00). It replaces the old optional "reward for the
+new family" in the form (a saved legacy value is still honoured when no discount is set).
+
+| Step | What happens | Reward row (`referral_rewards`, beneficiary `referred`) |
+|---|---|---|
+| Reserve | The referred lead is converted to an athlete on a billing account that is new | `kind = invoice_discount`, `pending` |
+| Apply | The account's first open invoice above $0 (created since the referral) gets the amount as an invoice discount, capped at the balance due | `approved`, `applied_invoice_id`, `applied_minor` |
+| Release | That invoice is voided before payment | back to `pending`; lands on the next invoice |
+| Convert | The account already has a paid invoice above $0, so there is no first invoice left | `kind = account_credit`, `pending`: needs staff approval like any credit |
+| Decline | Staff decline a reserved discount with a reason | `declined`; never applies |
+
+Why no approval for the discount: it is not money out. The invoice total goes down, nothing is
+written to `transactions`, the family still pays the rest through the normal checkout, and a refund
+can only return what they paid. The converted account credit is money-like, so it does need approval.
+
+Guards (all tested in `tests/growth-new-family.test.ts`):
+- one live new-family reward per payer account (`referral_rewards_referred_payer_uq`) and per
+  referral (`referral_rewards_uq`): a sibling or a second referral never stacks;
+- new accounts only, even with "the referred family must be new" off: nobody on the account (athlete
+  or payers) had a membership before the inquiry, and the account had no invoice before the inquiry;
+- self-referral and a lead placed on the referrer's own account are rejected before any reservation;
+- not applied while a checkout or bank payment is in flight (retried next run), and never to an
+  invoice billed by a provider subscription or Zen Planner;
+- a discount that covers the whole invoice makes it a $0 invoice, which does not earn the referrer's
+  reward (same rule as before); the unused part is not carried over (open question for Rod);
+- concurrent evaluations apply it once (reward row and invoice are locked).
+
+Family wording: `/refer` says what the friend gets and that it comes off automatically;
+`/r/<code>` shows the offer from the organization's settings only, so the page is still identical
+for real, revoked and made-up codes. The demo "how it works" text is labelled sample wording.
 
 **Approval** (`approveReward`, needs `billing.manage`): locks the reward row, so concurrent clicks
 issue once and later clicks report "already approved". Account credit → one `account_credit_ledger`
@@ -174,16 +218,18 @@ Every query filters on `org_id`; ids from forms are re-checked against the viewe
 
 ## Demo data
 
-`pnpm db:fresh` seeds: sample growth settings (a sample $25.00 account credit and one session credit
-for the new family, both labelled sample), two sellable sample products, referral codes for the
-Parker and Rivera demo families (`/r/parkerdemo26`), one converted and paid referral with rewards
-waiting for approval, two referrals at the inquiry stage, a nearly used sample pack for Maya
+`pnpm db:fresh` seeds: growth settings with Rod's decided values ($50.00 account credit for the
+referring family, $50.00 off the new family's first invoice; the "how it works" text is labelled
+sample wording), two sellable sample products, referral codes for the
+Parker and Rivera demo families (`/r/parkerdemo26`), one converted and paid referral (the new family's first invoice shows the $50.00 discount; the
+referring family's credit waits for approval), two referrals at the inquiry stage, a nearly used sample pack for Maya
 (suggestion on Alex's shop and billing pages) and a sample 1x per week plan for Ella.
 
 ## Not done / follow-ups
 
-- Referral progress is evaluated on page load, not by a scheduled job. A daily job on the existing queue would make "earned" appear without anyone opening the page.
 - Camps and clinics are sold as events (`docs/modules/events.md`), not through the shop. Catalog `camp` products stay off the shop.
+- An approved referrer credit is not reversed automatically when the first payment is refunded later (it is flagged for staff).
+- The new family discount shows on the invoice as part of the discount total, not as a named line.
 - Account credit is applied by staff only and shows on the invoice as a discount, not as a named line.
 - Families cannot regenerate their own referral code (staff can).
 - The trial pass form exists on the lead page only.

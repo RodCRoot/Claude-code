@@ -49,6 +49,14 @@ export type AnywhereAccess = {
   canSeeTraining: boolean;
   /** Finish a session, log practice or a game, tick a habit: same as logging load. */
   canLog: boolean;
+  /**
+   * Finish an On Your Own session and enter its effort rating: anyone who can log, plus a
+   * guardian with training and booking access when the athlete is under 13 by the birthday on
+   * file (policy.ts `training.log_at_home`). An athlete with no birthday does not qualify.
+   */
+  canFinishSession: boolean;
+  /** True when finishing is allowed only through the guardian rule (shown as "logged by parent"). */
+  finishesAsGuardian: boolean;
   /** See the season calendar. */
   canSeeSeason: boolean;
   /** Add or change the season and its events. */
@@ -67,7 +75,7 @@ export async function anywhereAccess(tx: Tx, v: Viewer, athleteId: string, today
     .innerJoin(people, eq(people.id, athletes.personId))
     .where(and(eq(athletes.id, athleteId), eq(athletes.orgId, v.orgId)));
   if (!who) return null;
-  const caps = await athleteCapabilities(tx, v, athleteId);
+  const caps = await athleteCapabilities(tx, v, athleteId, { today });
   const age = ageOn(who.dob, today);
   return {
     caps,
@@ -75,6 +83,8 @@ export async function anywhereAccess(tx: Tx, v: Viewer, athleteId: string, today
     restricted: age === null || age < UNDER_13_AGE,
     canSeeTraining: caps.has("training.read"),
     canLog: caps.has("training.log"),
+    canFinishSession: caps.has("training.log") || caps.has("training.log_at_home"),
+    finishesAsGuardian: !caps.has("training.log") && caps.has("training.log_at_home"),
     canSeeSeason: caps.has("profile.read"),
     canEditSeason: caps.has("profile.read") && caps.has("booking.create"),
   };

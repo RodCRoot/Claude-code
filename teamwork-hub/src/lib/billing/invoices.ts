@@ -145,7 +145,28 @@ export async function createInvoiceRecord(tx: Tx, actor: AuditActor, input: Crea
   await audit(tx, actor, "billing.invoice.create", "invoice", inv.id, { summary: `Invoice ${number} for ${total} ${currency} (${status})`, after: { number, total, status } });
   // A $0 invoice is settled immediately (e.g. 100% discount / comp).
   if (total === 0 && status === "open") await settleInvoiceIfCovered(tx, inv.id, actor);
+  if (total > 0 && status === "open" && (await referralHook(tx, input.orgId, inv.payerAccountId))) {
+    // A new-family referral discount was applied: hand callers the invoice as it now stands.
+    const [fresh] = await tx.select().from(invoices).where(eq(invoices.id, inv.id));
+    return { invoice: fresh ?? inv, lines: insertedLines, created: true };
+  }
   return { invoice: inv, lines: insertedLines, created: true };
+}
+
+/**
+ * Growth hook: when an invoice becomes open, a referred family's new-family discount is applied
+ * to it straight away (see growth/referrals.ts). Runs in a savepoint so a problem there can never
+ * stop an invoice from being created; the nightly referral job picks it up later.
+ */
+async function referralHook(tx: Tx, orgId: string, payerAccountId: string): Promise<boolean> {
+  try {
+    const { syncReferralsForPayer } = await import("@/lib/growth/referrals");
+    return await tx.transaction((sp) => syncReferralsForPayer(sp, orgId, payerAccountId));
+  } catch (e) {
+    const { reportError } = await import("@/lib/observability");
+    reportError(e, { where: "billing:referralHook", orgId });
+    return false;
+  }
 }
 
 /** Staff-created manual invoice. */
@@ -177,6 +198,7 @@ export async function issueInvoice(tx: Tx, v: Viewer, invoiceId: string) {
     .set({ status: "open", issuedAt: new Date(), dueDate: inv.dueDate ?? addDaysYmd(todayLocal(), invoiceDueDays), updatedAt: new Date() })
     .where(eq(invoices.id, inv.id));
   await audit(tx, actorOf(v), "billing.invoice.issue", "invoice", inv.id, { summary: `Issued ${inv.number}` });
+  if (inv.totalMinor > 0) await referralHook(tx, v.orgId, inv.payerAccountId);
 }
 
 export async function voidInvoice(tx: Tx, v: Viewer, invoiceId: string, reason: string) {

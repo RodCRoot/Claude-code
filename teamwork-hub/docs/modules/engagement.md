@@ -220,8 +220,9 @@ filled bar; that edit exists only in the seed.
 - XP is never reversed. A corrected attendance, a deleted max or a reopened goal leaves the
   earlier award in the ledger. A reversal entry would need a new event kind.
 - XP, badges and auto-achieved goals are brought up to date when Athlete Home, `/goals` or the
-  athlete's performance page is opened (and by the seed). There is no background job yet, so a
-  badge earned at the gym appears the next time one of those pages loads, with the correct date.
+  athlete's performance page is opened (and by the seed), and every night by the scheduled job
+  `engagement.refresh.nightly` for every active athlete (same functions; see
+  `docs/modules/scheduled-jobs.md`). Streaks are computed from attendance when shown and store nothing.
 - "Profile complete" in the checklist means a birthday and a sport are on file. Families cannot
   edit those themselves yet, so the item points them to Messages.
 - No notifications are sent for new badges or levels.

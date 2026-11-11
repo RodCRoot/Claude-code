@@ -28,7 +28,12 @@ export default async function ReferralsPage() {
   const pending = o.rewards.filter((r) => r.status === "pending");
   const decided = o.rewards.filter((r) => r.status !== "pending").slice(0, 8);
   const reward = describeReward(settings.referral.reward);
-  const rewardLabel = (r: (typeof o.rewards)[number]) => (r.kind === "account_credit" ? `${formatMoney(Number(r.amount_minor), r.currency ?? "USD")} account credit` : `${r.credits} session credit${r.credits === 1 ? "" : "s"}`);
+  const rewardLabel = (r: (typeof o.rewards)[number]) =>
+    r.kind === "account_credit"
+      ? `${formatMoney(Number(r.amount_minor), r.currency ?? "USD")} account credit`
+      : r.kind === "invoice_discount"
+        ? `${formatMoney(Number(r.applied_minor ?? r.amount_minor), r.currency ?? "USD")} off first invoice`
+        : `${r.credits} session credit${r.credits === 1 ? "" : "s"}`;
   const max = Math.max(1, o.funnel.inquired);
   return (
     <>
@@ -84,9 +89,13 @@ export default async function ReferralsPage() {
                       </div>
                       <Badge variant="yellow">{rewardLabel(r)}</Badge>
                     </div>
+                    {r.first_payment_refunded ? <p className="text-xs font-semibold text-bad">A refund was recorded on the new family&apos;s first payment. A full refund withholds this reward automatically.</p> : null}
+                    {r.kind === "invoice_discount" ? (
+                      <p className="text-xs text-ink-2">New family discount. It is applied automatically to this family&apos;s first open invoice and needs no approval. Decline it here if it should not apply.</p>
+                    ) : null}
                     {canApprove ? (
                       <div className="flex flex-wrap items-end gap-2">
-                        <ActionForm action={approveRewardAction} className="flex flex-wrap items-end gap-2">
+                        <ActionForm action={approveRewardAction} className={r.kind === "invoice_discount" ? "hidden" : "flex flex-wrap items-end gap-2"}>
                           <input type="hidden" name="rewardId" value={r.id} />
                           {r.kind === "session_credits" && options.length > 1 ? (
                             <div>
@@ -141,8 +150,18 @@ export default async function ReferralsPage() {
                   <li key={r.id} className="flex flex-wrap items-center justify-between gap-2">
                     <span>
                       {r.payer_name} <span className="text-ink-3">· {rewardLabel(r)}</span>
+                      {r.applied_invoice_id ? (
+                        <>
+                          {" "}
+                          <Link href={`/billing/invoices/${r.applied_invoice_id}`} className="text-xs underline">
+                            on {r.applied_invoice_number}
+                          </Link>
+                        </>
+                      ) : null}
+                      {r.status === "declined" && r.decline_reason ? <span className="block text-xs text-ink-3">{r.decline_reason}</span> : null}
+                      {r.status === "approved" && r.kind !== "invoice_discount" && r.first_payment_refunded ? <span className="block text-xs font-semibold text-bad">First payment was refunded after approval. Review this credit.</span> : null}
                     </span>
-                    <Badge variant={r.status === "approved" ? "green" : "neutral"}>{r.status === "approved" ? "Approved" : "Declined"}</Badge>
+                    <Badge variant={r.status === "approved" ? "green" : "neutral"}>{r.status === "approved" ? (r.kind === "invoice_discount" ? "Applied" : "Approved") : "Declined"}</Badge>
                   </li>
                 ))}
               </ul>
