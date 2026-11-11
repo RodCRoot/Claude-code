@@ -269,7 +269,34 @@ export const maxes = pgTable(
   ],
 );
 
-/** Velocity-based training readings, imported from files (no device connectivity claimed). */
+/**
+ * A coach dismissed a bar-speed max suggestion. The suggestion stays hidden while the
+ * recomputed estimate equals the dismissed one; new readings that move it bring it back.
+ */
+export const vbtMaxDismissals = pgTable(
+  "vbt_max_dismissals",
+  {
+    id: id(),
+    orgId: orgId(),
+    athleteId: uuid("athlete_id")
+      .notNull()
+      .references(() => athletes.id),
+    exerciseId: uuid("exercise_id")
+      .notNull()
+      .references(() => exercises.id),
+    method: text("method").notNull(),
+    e1rmKg: numeric("e1rm_kg", { precision: 8, scale: 2 }).notNull(),
+    readingsUsed: integer("readings_used").notNull(),
+    dismissedBy: uuid("dismissed_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("vbt_max_dismissals_idx").on(t.orgId, t.athleteId, t.exerciseId, t.createdAt)],
+);
+
+/**
+ * Velocity-based training readings: imported from device files, or typed next to a logged set
+ * (set_log_id set, device "manual entry"). No device connectivity is claimed.
+ */
 export const vbtReadings = pgTable("vbt_readings", {
   id: id(),
   orgId: orgId(),

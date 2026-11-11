@@ -6,6 +6,10 @@ import { addDaysYmd, fmt, fmtDate, todayLocal } from "@/lib/time";
 import { athleteNames } from "@/lib/training/common";
 import { adherence, METHOD_LABEL } from "@/lib/training/formulas";
 import { maxHistory, suggestEstimatedMaxes } from "@/lib/training/maxes";
+import { pendingVbtSuggestions } from "@/lib/training/vbt-maxes";
+import { canSeeRelativeStrength, relativeStrengthFor } from "@/lib/training/rel-strength";
+import { VBT_METHOD_LABEL } from "@/lib/training/vbt";
+import { MANUAL_VBT_DEVICE } from "@/lib/training/logging";
 import { athleteWorkouts, e1rmSeries, leaderboardOptIn, liftsWithData, recentVbt } from "@/lib/training/reports";
 import { listExercises } from "@/lib/training/exercises";
 import { ActionForm, SubmitButton } from "@/components/forms";
@@ -13,7 +17,7 @@ import { Badge, Button, buttonClass, Card, CardBody, CardHeader, EmptyState, Fie
 import { TrainingNav } from "../../_components/training-nav";
 import { AthleteSeasonCard } from "@/components/anywhere/coach-cards";
 import { E1rmChart } from "../../_components/e1rm-chart";
-import { confirmEstimateAction, leaderboardOptInAction, recordMaxAction } from "../../actions";
+import { confirmEstimateAction, confirmVbtMaxAction, dismissVbtMaxAction, leaderboardOptInAction, recordMaxAction } from "../../actions";
 import { guarded, isYmd, sp } from "../../_lib/helpers";
 
 export const metadata = { title: "Athlete training" };
@@ -49,6 +53,10 @@ export default async function AthleteTraining({ params, searchParams }: { params
 
   const suggestions = canWrite ? await suggestEstimatedMaxes(db, viewer, id, "epley_v1", today) : [];
   const exercises = canWrite ? await listExercises(db, viewer) : [];
+  // Bar-speed suggestions and relative strength are staff tools; families never load them.
+  const vbtSuggestions = canWrite && isStaff(viewer) ? await pendingVbtSuggestions(db, viewer, id, { today }) : [];
+  const rel = (await canSeeRelativeStrength(db, viewer, id)) ? await relativeStrengthFor(db, viewer, id) : null;
+  const lbOf = (kg: number) => Math.round((kg / 0.45359237) * 10) / 10;
   const vbt = await recentVbt(db, viewer, id, 15);
   const optedIn = await leaderboardOptIn(db, viewer.orgId, id);
   const canOptIn = viewer.role === "athlete" || viewer.role === "guardian";
@@ -231,6 +239,104 @@ export default async function AthleteTraining({ params, searchParams }: { params
           </Card>
         ) : null}
 
+        {canWrite && isStaff(viewer) ? (
+          <Card id="vbt-max-card">
+            <CardHeader title="Estimated max from bar speed" kicker="Coach confirms or dismisses" />
+            <CardBody>
+              <p className="mb-3 text-xs text-ink-3">
+                Method: {VBT_METHOD_LABEL.lv_profile_v1} (lv_profile_v1). A straight line is fitted to this athlete&apos;s own bar speeds at two or more loads from the last 120 days and extended to the lift&apos;s minimum velocity threshold. This is an estimate, never a
+                tested max. Nothing is stored until you confirm, and a confirmed value is saved and labelled as estimated from bar speed.
+              </p>
+              {vbtSuggestions.length === 0 ? (
+                <p className="text-sm text-ink-3">No bar-speed suggestions to review. A lift needs bar speeds at two or more loads.</p>
+              ) : (
+                <ul className="divide-y divide-edge">
+                  {vbtSuggestions.map((s) => (
+                    <li key={s.exerciseId} className="py-3 text-sm" data-testid={`vbt-suggestion-${s.exerciseName}`}>
+                      <p>
+                        <strong>{s.exerciseName}</strong>: about{" "}
+                        <strong className="tabular">
+                          {s.store.value} {s.store.unit}
+                        </strong>{" "}
+                        <Badge variant="blue">estimate</Badge>
+                        {s.store.unit === "lb" ? <span className="text-xs text-ink-3"> ({s.e1rmKg} kg ÷ 0.45359237)</span> : null}
+                      </p>
+                      <p className="mt-1 text-xs text-ink-3">
+                        From {s.readingsUsed} readings at {s.points.length} loads ({s.points.map((p) => `${p.loadKg} kg at ${p.velocityMs.toFixed(2)} m/s`).join(", ")}), threshold {s.mvtMs} m/s. Current max:{" "}
+                        {s.current ? `${s.current.value} ${s.current.unit} (${s.current.kind}, ${fmtDate(s.current.recordedOn)})` : "none"}.
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <ActionForm action={confirmVbtMaxAction}>
+                          <input type="hidden" name="athleteId" value={id} />
+                          <input type="hidden" name="exerciseId" value={s.exerciseId} />
+                          <SubmitButton size="sm">
+                            Confirm as estimated max<span className="sr-only"> for {s.exerciseName}</span>
+                          </SubmitButton>
+                        </ActionForm>
+                        <ActionForm action={dismissVbtMaxAction}>
+                          <input type="hidden" name="athleteId" value={id} />
+                          <input type="hidden" name="exerciseId" value={s.exerciseId} />
+                          <SubmitButton size="sm" variant="secondary">
+                            Dismiss<span className="sr-only"> suggestion for {s.exerciseName}</span>
+                          </SubmitButton>
+                        </ActionForm>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardBody>
+          </Card>
+        ) : null}
+
+        {rel ? (
+          <Card id="rel-strength-card">
+            <CardHeader title="Relative strength" kicker="Staff only" />
+            <CardBody>
+              <p className="mb-3 text-xs text-ink-3">
+                Method: {VBT_METHOD_LABEL.rel_strength_v1} (rel_strength_v1). The current max for each lift divided by body weight. Tiers are coaching guidelines, not norms. Body weight is sensitive: this card is shown only to staff with health access for
+                this athlete and is never shown to families, on leaderboards or on the TV board.
+              </p>
+              {!rel.bodyMass ? (
+                <p className="text-sm text-ink-3" data-testid="rel-strength-missing">
+                  No body weight on file (no Hawkin body-weight trial and none recorded), so relative strength is not calculated.
+                </p>
+              ) : rel.rows.length === 0 ? (
+                <p className="text-sm text-ink-3">No lb or kg maxes recorded yet.</p>
+              ) : (
+                <>
+                  <p className="mb-2 text-sm">
+                    Body weight used: <strong className="tabular">{rel.bodyMass.kg} kg</strong> ({lbOf(rel.bodyMass.kg)} lb),{" "}
+                    {rel.bodyMass.source === "hawkin_trial" ? `from a Hawkin force-plate trial on ${fmtDate(rel.bodyMass.measuredOn)}` : "recorded on the athlete profile (no date kept)"}.
+                  </p>
+                  <Table caption="Relative strength by lift">
+                    <thead>
+                      <tr>
+                        <Th>Lift</Th>
+                        <Th align="right">Max used</Th>
+                        <Th align="right">× body weight</Th>
+                        <Th>Guideline tier</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rel.rows.map((r) => (
+                        <tr key={r.exerciseId}>
+                          <Td>{r.exerciseName}</Td>
+                          <Td align="right">
+                            {r.max.value} {r.max.unit} <Badge variant={r.max.kind === "tested" ? "green" : r.estimated ? "blue" : "neutral"}>{r.fromBarSpeed ? "estimated from bar speed" : r.max.kind}</Badge>
+                          </Td>
+                          <Td align="right">{r.xbw != null ? `${r.xbw.toFixed(2)}×` : "—"}</Td>
+                          <Td>{r.tier ?? "—"}</Td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </>
+              )}
+            </CardBody>
+          </Card>
+        ) : null}
+
         {canOptIn ? (
           <Card>
             <CardHeader title="Group leaderboard" />
@@ -248,10 +354,10 @@ export default async function AthleteTraining({ params, searchParams }: { params
         ) : null}
 
         <Card>
-          <CardHeader title="Velocity (VBT) readings" kicker="Imported files only" />
+          <CardHeader title="Velocity (VBT) readings" kicker="Imported files and logged sets" />
           <CardBody>
             {vbt.length === 0 ? (
-              <p className="text-sm text-ink-3">No imported VBT readings. Staff can import device CSV exports in Reports. No live device connection is used.</p>
+              <p className="text-sm text-ink-3">No bar-speed readings yet. Speeds can be typed next to a set in the workout logger, and staff can import device CSV exports in Reports. No live device connection is used.</p>
             ) : (
               <Table caption="VBT readings">
                 <thead>
@@ -274,7 +380,7 @@ export default async function AthleteTraining({ params, searchParams }: { params
                       <Td align="right">
                         {r.meanVelocityMs ?? "—"} / {r.peakVelocityMs ?? "—"}
                       </Td>
-                      <Td className="text-xs">Imported file: {fileName ?? "unknown"}{r.device ? ` (${r.device})` : ""}</Td>
+                      <Td className="text-xs">{r.setLogId && r.device === MANUAL_VBT_DEVICE ? "Typed in the workout logger" : `Imported file: ${fileName ?? "unknown"}${r.device ? ` (${r.device})` : ""}`}</Td>
                     </tr>
                   ))}
                 </tbody>

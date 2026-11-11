@@ -144,6 +144,12 @@ export function relStrengthTier(xbw: number, profile: LiftProfile): RelStrengthT
   return "developing";
 }
 
+/** maxes.source for a max a coach confirmed from bar-speed data. Its kind is always "estimated". */
+export const BAR_SPEED_SOURCE = "vbt_bar_speed";
+
+/** True for maxes derived from bar speed. These are estimates and never count as measured. */
+export const isBarSpeedMethod = (method: string | null | undefined) => !!method && /^(lv_profile|mpv_[a-z]+)_v\d+$/.test(method);
+
 export const VBT_METHOD_LABEL: Record<string, string> = {
   lv_profile_v1: "Load–velocity profile v1 (own data → MVT)",
   mpv_squat_v1: "Velocity estimate v1 (squat curve)",

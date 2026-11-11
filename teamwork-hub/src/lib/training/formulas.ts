@@ -45,6 +45,7 @@ export const METHOD_LABEL: Record<string, string> = {
   tested: "Tested 1RM",
   manual: "Coach entered",
   imported: "Imported",
+  lv_profile_v1: "Estimated from bar speed (load–velocity profile v1), not a tested max",
 };
 
 /** Explicit unit conversion. Returns the same value when units match. */

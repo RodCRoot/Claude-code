@@ -32,6 +32,7 @@ import {
 } from "@/lib/training/programs";
 import { applyTemplateToUnstarted, assignProgram, cancelAssignment, syncAssignment } from "@/lib/training/assignments";
 import { confirmEstimatedMax, recordMax } from "@/lib/training/maxes";
+import { confirmVbtMax, dismissVbtMax } from "@/lib/training/vbt-maxes";
 import { setWorkoutStatus, substituteItem } from "@/lib/training/logging";
 import { reviewWorkout } from "@/lib/training/review";
 import { createPlanBlock, deletePlanBlock, importVbtCsv, setLeaderboardOptIn } from "@/lib/training/reports";
@@ -302,6 +303,24 @@ export const confirmEstimateAction = safeAction(async (_p: ActionState, fd: Form
   await run((tx, v) => confirmEstimatedMax(tx, v, str(fd, "setLogId"), method));
   revalidatePath(`/training/athletes/${str(fd, "athleteId")}`);
   return { ok: true, message: "Estimated max saved." };
+});
+
+/** Coach confirms a bar-speed estimate. The value is recomputed on the server, never taken from the form. */
+export const confirmVbtMaxAction = safeAction(async (_p: ActionState, fd: FormData) => {
+  const athleteId = str(fd, "athleteId");
+  const r = await run((tx, v) => confirmVbtMax(tx, v, { athleteId, exerciseId: str(fd, "exerciseId") }));
+  revalidatePath(`/training/athletes/${athleteId}`);
+  return {
+    ok: true,
+    message: `Saved ${r.suggestion.store.value} ${r.suggestion.store.unit} for ${r.suggestion.exerciseName} as an estimate from bar speed (not a tested max).${r.refreshed ? ` Updated % loads on ${r.refreshed} upcoming exercise${r.refreshed > 1 ? "s" : ""}.` : ""}`,
+  };
+});
+
+export const dismissVbtMaxAction = safeAction(async (_p: ActionState, fd: FormData) => {
+  const athleteId = str(fd, "athleteId");
+  await run((tx, v) => dismissVbtMax(tx, v, { athleteId, exerciseId: str(fd, "exerciseId") }));
+  revalidatePath(`/training/athletes/${athleteId}`);
+  return { ok: true, message: "Suggestion dismissed. Nothing was stored. It comes back only if new bar-speed data changes the estimate." };
 });
 
 // --- Workouts -------------------------------------------------------------------------------

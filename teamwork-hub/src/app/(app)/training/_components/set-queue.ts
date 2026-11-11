@@ -18,6 +18,8 @@ export type QueuedSet = {
   load: number | null;
   loadUnit: "lb" | "kg" | null;
   rpe: number | null;
+  /** Mean bar speed (m/s). Absent on older queued entries and on "Done as prescribed" (leave as is). */
+  meanVelocityMs?: number | null;
   durationS: number | null;
   distanceM: number | null;
   completed: boolean;
@@ -63,6 +65,7 @@ function sanitize(x: unknown): QueuedSet | null {
     load: n(o.load),
     loadUnit: o.loadUnit === "kg" ? "kg" : o.loadUnit === "lb" ? "lb" : null,
     rpe: n(o.rpe),
+    ...(o.meanVelocityMs === undefined ? {} : { meanVelocityMs: n(o.meanVelocityMs) }),
     durationS: n(o.durationS),
     distanceM: n(o.distanceM),
     completed: o.completed !== false,

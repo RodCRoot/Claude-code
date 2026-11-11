@@ -8,7 +8,8 @@ let ctx: Awaited<ReturnType<typeof seedOrg>>;
 const TODAY = "2026-03-02"; // seedOrg default (a Monday)
 
 beforeAll(async () => {
-  ctx = await seedOrg(TODAY);
+  // Without the demo bar-speed seed ("vbt"), so the numbers below are the only readings.
+  ctx = await seedOrg(TODAY, { modules: ["training"] });
 });
 afterAll(closeTestDb);
 
@@ -60,14 +61,16 @@ describe("lv_profile_v1 maxes from vbt_readings", () => {
     expect(s!.e1rmKg).toBeLessThan(185);
   });
 
-  it("confirm recomputes server-side and appends an estimated max in kg", async () => {
+  it("confirm recomputes server-side and appends an estimated max in the athlete's working unit", async () => {
     const squat = await exerciseByName("Back Squat");
     const marcus = await viewerFor(ctx, "marcus");
     const r = await tx((t) => confirmVbtMax(t, marcus, { athleteId: ctx.athletes.maya, exerciseId: squat.id, today: TODAY }));
     expect(r.max.kind).toBe("estimated");
     expect(r.max.method).toBe("lv_profile_v1");
-    expect(r.max.unit).toBe("kg");
-    expect(Number(r.max.value)).toBeCloseTo(r.suggestion.e1rmKg, 1);
+    // Maya's squat max is kept in lb, so the estimate is stored in lb (kg ÷ 0.45359237) and %-loads keep their unit.
+    expect(r.max.unit).toBe("lb");
+    expect(r.max.source).toBe("vbt_bar_speed");
+    expect(Number(r.max.value)).toBeCloseTo(r.suggestion.e1rmKg / 0.45359237, 1);
     const rows = await testDb()
       .select()
       .from(maxes)

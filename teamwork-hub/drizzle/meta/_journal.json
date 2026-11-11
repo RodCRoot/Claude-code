@@ -169,6 +169,13 @@
       "when": 1794367517637,
       "tag": "0023_community",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794410685527,
+      "tag": "0024_vbt",
+      "breakpoints": true
     }
   ]
 }
