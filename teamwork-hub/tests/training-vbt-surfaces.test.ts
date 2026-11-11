@@ -132,8 +132,8 @@ describe("estimates never appear as measured maxes", () => {
     for (const who of ["rod", "alex", "chris"]) {
       const view = await tx(async (t) => leaderboardsFor(t, await viewerFor(ctx, who), { today: TODAY }));
       const json = JSON.stringify(view);
-      expect(json, who).not.toContain("999");
-      expect(json, who).not.toContain("888");
+      expect(json, who).not.toMatch(/(^|[^0-9a-f-])999(\.0+)?([^0-9a-f-]|$)/);
+      expect(json, who).not.toMatch(/(^|[^0-9a-f-])888(\.0+)?([^0-9a-f-]|$)/);
       expect(json, who).not.toMatch(/bodyMass|body_mass|61\.2/); // body weight never reaches a board payload
     }
 
@@ -148,7 +148,7 @@ describe("estimates never appear as measured maxes", () => {
     const activity = await tx((t) => loadActivity(t, ctx.orgId, ctx.athletes.maya));
     expect(activity.prs.some((p) => ids.has(p.maxId))).toBe(false);
     const recap = await tx((t) => computeRecap(t, ctx.orgId, ctx.athletes.maya, TODAY.slice(0, 7), { today: TODAY }));
-    expect(JSON.stringify(recap)).not.toMatch(/999|888/);
+    expect(JSON.stringify(recap)).not.toMatch(/(^|[^0-9a-f-])(999|888)(\.0+)?([^0-9a-f-]|$)/);
 
     const alex = await viewerFor(ctx, "alex");
     const prs = await tx((t) => strengthPrs(t, alex, ctx.athletes.maya, {}));
