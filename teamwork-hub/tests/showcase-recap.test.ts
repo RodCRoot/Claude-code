@@ -281,7 +281,7 @@ describe("the monthly job", () => {
     const a = await newAthlete();
     await addSession(a, "2026-02-17");
     const idle = await newAthlete(); // no activity in February: no recap is made for them
-    const deliveries = async () => Number(((await db.execute(sql`select count(*)::int as n from message_deliveries`)).rows[0] as { n: number }).n);
+    const deliveries = async () => Number(((await db.execute(sql`select count(*)::int as n from message_deliveries d join people p on p.id = d.recipient_person_id where p.org_id = ${ctx.orgId}`)).rows[0] as { n: number }).n);
     const jobCount = async () => Number(((await db.execute(sql`select count(*)::int as n from jobs where org_id = ${ctx.orgId}`)).rows[0] as { n: number }).n);
     const d0 = await deliveries();
     const j0 = await jobCount();
