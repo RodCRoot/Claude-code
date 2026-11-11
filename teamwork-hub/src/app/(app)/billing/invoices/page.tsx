@@ -10,6 +10,7 @@ import { fmtDate, todayLocal } from "@/lib/time";
 import { createInvoiceAction } from "../actions";
 import { BillingTabs, InvoiceStatus, Money, requireBillingViewer } from "../_components";
 import { Segmented } from "@/components/profile/studio";
+import { FamilyBills } from "../_family";
 
 export const metadata = { title: "Invoices" };
 
@@ -19,6 +20,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
   const v = await requireBillingViewer();
   const { status = "all" } = await searchParams;
   const staff = isBillingStaff(v);
+  if (!staff) return <FamilyBills v={v} />;
   const today = todayLocal();
   const rows = await listInvoices(db, v, { status });
   return (

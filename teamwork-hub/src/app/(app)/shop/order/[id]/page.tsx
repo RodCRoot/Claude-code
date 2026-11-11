@@ -18,7 +18,7 @@ export default async function ShopOrderPage({ params }: { params: Promise<{ id: 
   const open = o.invoice.status === "open";
   return (
     <>
-      <PageHeader kicker="Shop" title={paid ? "Thank you, this order is paid" : "Your order is ready for payment"} description={`Invoice ${o.invoice.number}`} />
+      <PageHeader kicker="Shop" title={paid ? "Thank you, this order is paid" : "Your order is ready for payment"} description={`Bill ${o.invoice.number}`} />
       <div className="max-w-2xl space-y-4">
         <Card>
           <CardHeader title={o.productName} kicker={`For ${o.athleteFirst}`} action={<StatusBadge status={o.invoice.status} />} />
@@ -38,14 +38,14 @@ export default async function ShopOrderPage({ params }: { params: Promise<{ id: 
             ) : !o.canPay ? (
               <Callout tone="info">You can view this order. Payment is made by another adult on the billing account.</Callout>
             ) : o.onlinePayment ? (
-              <Callout tone="info">Nothing has been charged yet. Continue to the invoice to pay securely with our payment provider. Sessions are added once the payment is confirmed.</Callout>
+              <Callout tone="info">Nothing has been charged yet. Continue to the bill to pay securely with our payment provider. Sessions are added once the payment is confirmed.</Callout>
             ) : (
               <Callout tone="warn" title="Online payment is not set up yet">
-                Nothing has been charged. Please pay this invoice at the front desk (cash, check or card). Sessions are added to {o.athleteFirst}&apos;s account as soon as staff record the payment.
+                Nothing has been charged. Please pay this bill at the front desk (cash, check or card). Sessions are added to {o.athleteFirst}&apos;s account as soon as staff record the payment.
               </Callout>
             )}
             <div className="flex flex-wrap gap-2">
-              {open && o.canPay && o.onlinePayment ? <ButtonLink href={`/billing/invoices/${o.invoice.id}`}>Continue to payment</ButtonLink> : <ButtonLink href={`/billing/invoices/${o.invoice.id}`} variant="secondary">View invoice</ButtonLink>}
+              {open && o.canPay && o.onlinePayment ? <ButtonLink href={`/billing/invoices/${o.invoice.id}`}>Continue to payment</ButtonLink> : <ButtonLink href={`/billing/invoices/${o.invoice.id}`} variant="secondary">View bill</ButtonLink>}
               <ButtonLink href="/shop" variant="ghost">
                 Back to the shop
               </ButtonLink>

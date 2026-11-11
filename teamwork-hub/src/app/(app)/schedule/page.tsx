@@ -25,15 +25,16 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const org = await getOrg(v.orgId);
   const tz = org?.timezone ?? DEFAULT_TZ;
   const today = todayLocal(tz);
-  const view = parseView(params.view);
-  const range = calendarRange(view, parseYmd(params.date, today), tz);
   const staff = isStaff(v);
+  // Families land on a single day (what they know from their previous member site); staff on the week grid.
+  const view = !staff && !params.view ? "day" : parseView(params.view);
+  const range = calendarRange(view, parseYmd(params.date, today), tz);
   const manager = can(v, "schedule.manage");
 
   if (!staff) {
     return (
       <>
-        <PageHeader kicker="Schedule" title="Book sessions" description="Pick an athlete, then book classes, camps, and assessments. Times are shown in the facility's local time." />
+        <PageHeader kicker="Schedule" title="Calendar" description="Pick a day, then reserve a class. Tap a class for details." />
         <ScheduleTabs current="calendar" staff={false} manager={false} />
         <FamilySchedule viewer={v} params={params} range={range} tz={tz} today={today} />
       </>

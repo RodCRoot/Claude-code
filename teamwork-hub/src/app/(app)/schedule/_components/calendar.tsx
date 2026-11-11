@@ -299,12 +299,21 @@ export function MonthView({
   );
 }
 
-export function ScheduleTabs({ current, staff, manager }: { current: "calendar" | "book" | "settings"; staff: boolean; manager: boolean }) {
-  const tabs = [
-    { key: "calendar", href: "/schedule", label: "Calendar" },
-    { key: "book", href: "/schedule/book", label: staff ? "Private sessions" : "Book a private / assessment" },
-    ...(staff ? [{ key: "settings", href: manager ? "/schedule/settings" : "/schedule/settings?tab=availability", label: manager ? "Schedule settings" : "My availability" }] : []),
-  ];
+export type ScheduleTab = "calendar" | "reservations" | "book" | "attendance" | "settings";
+
+export function ScheduleTabs({ current, staff, manager }: { current: ScheduleTab; staff: boolean; manager: boolean }) {
+  const tabs = staff
+    ? [
+        { key: "calendar", href: "/schedule", label: "Calendar" },
+        { key: "book", href: "/schedule/book", label: "Private sessions" },
+        { key: "settings", href: manager ? "/schedule/settings" : "/schedule/settings?tab=availability", label: manager ? "Schedule settings" : "My availability" },
+      ]
+    : [
+        { key: "calendar", href: "/schedule", label: "Calendar" },
+        { key: "reservations", href: "/schedule/reservations", label: "My Reservations" },
+        { key: "book", href: "/schedule/book", label: "Appointments" },
+        { key: "attendance", href: "/schedule/attendance", label: "My Attendance" },
+      ];
   return (
     <nav aria-label="Schedule sections" className="mb-4 flex gap-1 overflow-x-auto rounded-t-md border-b border-edge">
       {tabs.map((t) => (

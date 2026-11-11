@@ -31,7 +31,7 @@ export default async function ShopPage() {
         </Callout>
       ) : !online ? (
         <Callout tone="info" className="mb-5" title="Pay at the front desk for now">
-          Online payment is not set up yet. You can still place an order here. It creates an invoice, and you can pay it at the front desk. Sessions are added to your athlete once payment is recorded.
+          Online payment is not set up yet. You can still place an order here. It creates a bill, and you can pay it at the front desk. Sessions are added to your athlete once payment is recorded.
         </Callout>
       ) : null}
       {items.length === 0 ? (
@@ -95,7 +95,7 @@ export default async function ShopPage() {
         </ul>
       )}
       <p className="mt-5 max-w-3xl text-xs text-ink-3">
-        Ordering creates an invoice on your billing account. Nothing is charged on this page. Sessions and credits are added only after your payment is confirmed. Camps, clinics and memberships are arranged with the front desk.
+        Ordering creates a bill on your billing account. Nothing is charged on this page. Sessions and credits are added only after your payment is confirmed. Camps, clinics and memberships are arranged with the front desk.
       </p>
     </>
   );

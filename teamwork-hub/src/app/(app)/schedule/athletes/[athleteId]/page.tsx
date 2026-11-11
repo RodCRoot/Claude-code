@@ -32,10 +32,10 @@ export default async function AthleteAttendancePage({ params }: { params: Promis
       <PageHeader
         kicker="Attendance"
         title={data.athlete.name}
-        description="Every booking, check-in, no-show and cancellation, with attendance milestones."
+        description={isStaff(v) ? "Every booking, check-in, no-show and cancellation, with attendance milestones." : "Every reservation, check-in, no-show and cancellation, with attendance milestones."}
         actions={
-          <ButtonLink href={isStaff(v) ? "/schedule" : `/schedule?athlete=${athleteId}`} variant="outline" className="min-h-11">
-            ← Schedule
+          <ButtonLink href={isStaff(v) ? "/schedule" : `/schedule/attendance?athlete=${athleteId}`} variant="outline" className="min-h-11">
+            {isStaff(v) ? "← Schedule" : "← My Attendance"}
           </ButtonLink>
         }
       />

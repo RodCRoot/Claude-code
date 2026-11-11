@@ -25,17 +25,18 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
   const providers = providerStatuses().filter((p) => p.name !== "manual");
   const latest = d.attempts[0];
   const returned = sp.checkout === "returned";
+  const noun = d.staff ? "invoice" : "bill";
   const canPayOnline = d.canPay && inv.status === "open" && money.balanceMinor > 0 && money.pendingMinor === 0;
   return (
     <>
       <PageHeader
-        kicker={`Invoice · ${d.payer.name}`}
+        kicker={`${d.staff ? "Invoice" : "Bill"} · ${d.payer.name}`}
         title={inv.number}
         description={inv.memo ?? undefined}
         actions={
           <>
             <InvoiceStatus status={inv.status} dueDate={inv.dueDate} today={today} />
-            <ButtonLink href={`/billing/invoices/${inv.id}/receipt`} variant="secondary" size="sm">{inv.status === "paid" ? "Receipt" : "Printable invoice"}</ButtonLink>
+            <ButtonLink href={`/billing/invoices/${inv.id}/receipt`} variant="secondary" size="sm">{inv.status === "paid" ? "Receipt" : d.staff ? "Printable invoice" : "Print bill"}</ButtonLink>
           </>
         }
       />
@@ -44,10 +45,10 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
       {returned && inv.status !== "paid" ? (
         <Callout tone="info" title="We're confirming your payment" className="mb-4">
           {latest?.status === "processing" || money.pendingMinor > 0
-            ? "Your bank payment is processing. Bank (ACH) payments can take a few business days; we'll mark this invoice paid when the provider confirms it."
+            ? "Your bank payment is processing. Bank (ACH) payments can take a few business days; we'll mark this bill paid when the provider confirms it."
             : latest?.status === "failed"
               ? "The provider reported a problem with this payment. Nothing was charged by us; please try again or contact the front desk."
-              : "Thanks! We update this invoice only after the payment provider confirms the payment to us directly. This usually takes a moment — refresh to check."}
+              : "Thanks! We update this bill only after the payment provider confirms the payment to us directly. This usually takes a moment. Refresh to check."}
         </Callout>
       ) : null}
       {returned && inv.status === "paid" ? <Callout tone="ok" title="Payment confirmed" className="mb-4">The provider confirmed your payment. A receipt is available.</Callout> : null}
@@ -55,10 +56,10 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
 
       <div className="grid gap-6 lg:grid-cols-3 [&>*]:min-w-0">
         <Card className="lg:col-span-2">
-          <CardHeader title="Lines" />
+          <CardHeader title={d.staff ? "Lines" : "Bill details"} />
           <CardBody>
-            <Table caption="Invoice lines">
-              <thead><tr><Th>Description</Th><Th>Athlete</Th><Th align="right">Qty</Th><Th align="right">Unit</Th><Th align="right">Amount</Th></tr></thead>
+            <Table caption={d.staff ? "Invoice lines" : "Bill details"}>
+              <thead><tr><Th>Description</Th><Th>{d.staff ? "Athlete" : "Family member"}</Th><Th align="right">Qty</Th><Th align="right">Unit</Th><Th align="right">Amount</Th></tr></thead>
               <tbody>
                 {d.lines.map(({ line, athleteFirst, athleteLast }) => (
                   <tr key={line.id}>
@@ -92,15 +93,15 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
           </CardBody>
         </Card>
 
-        <Card>
-          <CardHeader title="Pay" />
+        <Card id="pay">
+          <CardHeader title={d.staff ? "Pay" : "Pay Now"} />
           <CardBody className="space-y-3">
             {inv.status !== "open" ? (
-              <p className="text-sm text-ink-3">This invoice is {inv.status}. Nothing to pay.</p>
+              <p className="text-sm text-ink-3">This {noun} is {inv.status}. Nothing to pay.</p>
             ) : !d.canPay ? (
-              <Callout tone="info">You can view this invoice but you are not authorized to pay it.</Callout>
+              <Callout tone="info">You can view this {noun} but you are not authorized to pay it.</Callout>
             ) : money.pendingMinor > 0 ? (
-              <Callout tone="info" title="Payment processing">A payment of {formatMoney(money.pendingMinor)} is in flight. We&apos;ll update this invoice when the provider confirms it.</Callout>
+              <Callout tone="info" title="Payment processing">A payment of {formatMoney(money.pendingMinor)} is in flight. We&apos;ll update this {noun} when the provider confirms it.</Callout>
             ) : canPayOnline ? (
               <>
                 <p className="text-sm">Pay <strong><Money minor={money.balanceMinor} currency={inv.currency} /></strong> securely on the provider&apos;s hosted page. We never see your card or bank numbers.</p>
@@ -108,7 +109,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
                   p.configured && p.name === "venmo" ? (
                     inv.currency === "USD" ? (
                       <div key={p.name}>
-                        <ButtonLink href={`/billing/invoices/${inv.id}/venmo`} variant="secondary" className="w-full">Pay with Venmo</ButtonLink>
+                        <ButtonLink href={`/billing/invoices/${inv.id}/venmo`} variant="secondary" className="w-full">{d.staff ? "Pay" : "Pay Now"} with Venmo</ButtonLink>
                         <p className="mt-1 text-xs text-ink-3">Venmo: US buyers, USD, Venmo app required. One-time payments only.</p>
                       </div>
                     ) : null
@@ -117,7 +118,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
                       <input type="hidden" name="invoiceId" value={inv.id} />
                       <input type="hidden" name="provider" value={p.name} />
                       <SubmitButton className="w-full" variant={p.name === "stripe" ? "primary" : "secondary"} pendingText="Opening checkout…">
-                        Pay with {PROVIDER_LABEL[p.name]}
+                        {d.staff ? "Pay" : "Pay Now"} with {PROVIDER_LABEL[p.name]}
                       </SubmitButton>
                       {p.name === "venmo" ? <p className="mt-1 text-xs text-ink-3">Venmo: US buyers, USD, Venmo app required. One-time payments only.</p> : null}
                     </ActionForm>

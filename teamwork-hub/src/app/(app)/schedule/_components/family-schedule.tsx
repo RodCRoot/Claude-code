@@ -1,318 +1,316 @@
-import { randomUUID } from "node:crypto";
 import Link from "next/link";
-import { eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { cancellationPolicies, serviceTypes } from "@/db/schema";
-import { ActionForm, SubmitButton } from "@/components/forms";
-import { Badge, ButtonLink, Callout, Card, CardBody, CardHeader, EmptyState } from "@/components/ui";
+import { serviceTypes } from "@/db/schema";
+import { Badge, buttonClass, Callout, EmptyState } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { Viewer } from "@/lib/authz/policy";
-import { upcomingBookingsFor } from "@/lib/scheduling/booking";
+import { listCoaches } from "@/lib/scheduling/availability";
 import type { calendarRange } from "@/lib/scheduling/calendar-range";
 import { bookingSettings } from "@/lib/scheduling/common";
-import { resolveEntitlement } from "@/lib/scheduling/eligibility";
 import { athleteBookingsIn, familyAthletes, listSessions, type SessionListItem } from "@/lib/scheduling/queries";
-import { addDaysYmd, fmt, fmtDate, localToUtc } from "@/lib/time";
+import { addDaysYmd, fmt, startOfWeekYmd } from "@/lib/time";
 import { listLocations, parseLocationParam } from "@/lib/locations";
-import { bookAction, cancelBookingAction, rescheduleAction } from "../actions";
-import { capacityText, DaysView, MonthView, SessionRow } from "./calendar";
-import { CalendarToolbar, hrefWith, rangeLabel, type Params } from "./nav";
+import { byDay, dayLabel, MonthView } from "./calendar";
+import { hrefWith, rangeLabel, type Params } from "./nav";
+import { coachShort, svcStyle } from "./time-grid";
+import { liveBySession, policiesByService, ReserveControl, spotsText, type BookingRules, type FamilyBooking, type FamilyMember } from "./reserve-control";
 import { SessionFeedbackCard } from "@/components/retention/feedback-card";
 
 type Range = ReturnType<typeof calendarRange>;
-const ANY_SERVICE = "00000000-0000-0000-0000-000000000000";
+type Policies = Awaited<ReturnType<typeof policiesByService>>;
 
+const selectCls = "h-11 w-full rounded-md border border-edge bg-surface px-2.5 text-sm text-ink focus:outline-2 focus:outline-offset-1 focus:outline-brand";
+const navBtn = "inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-edge bg-surface text-xl leading-none text-ink-2 hover:bg-surface-2 hover:text-ink";
+
+/** Class detail URL that remembers the day the family came from. */
+export function classHref(s: Pick<SessionListItem, "id">) {
+  return `/schedule/classes/${s.id}`;
+}
+
+/** One class in the family day list: time and length, name, instructor, location, spots, and the one action. */
+export function ClassRow({
+  s,
+  tz,
+  members,
+  bookings,
+  rules,
+  policies,
+  now,
+}: {
+  s: SessionListItem;
+  tz: string;
+  members: FamilyMember[];
+  bookings: Map<string, FamilyBooking> | undefined;
+  rules: BookingRules;
+  policies: Policies;
+  now: Date;
+}) {
+  const cancelled = s.status === "cancelled";
+  const minutes = Math.round((s.endsAt.getTime() - s.startsAt.getTime()) / 60_000);
+  const where = [s.locationName, s.resourceName].filter(Boolean).join(" · ");
+  return (
+    <div className="flex flex-col gap-3 border-l-[3px] border-l-[var(--svc)] px-3 py-3 text-sm sm:flex-row sm:items-start" style={svcStyle(s.color)}>
+      <div className="flex min-w-0 flex-1 gap-3">
+        <div className="w-[4.75rem] shrink-0 tabular">
+          <div className="font-bold text-ink">{fmt(s.startsAt, "h:mm a", tz)}</div>
+          <div className="text-xs text-ink-3">{minutes} min</div>
+        </div>
+        <div className="min-w-0 flex-1">
+          <Link href={classHref(s)} className={cn("font-semibold leading-snug break-words hover:underline", cancelled && "text-ink-3 line-through")}>
+            {s.title}
+          </Link>
+          {cancelled ? (
+            <Badge variant="red" className="ml-2">
+              Cancelled
+            </Badge>
+          ) : null}
+          <div className="mt-0.5 text-xs text-ink-2">
+            {coachShort(s.coachName)}
+            {s.originalCoachUserId && s.originalCoachUserId !== s.coachUserId ? " (sub)" : ""}
+          </div>
+          {where ? <div className="text-xs text-ink-3">{where}</div> : null}
+          {!cancelled ? <div className={cn("mt-1 text-xs font-semibold tabular", s.booked >= s.capacity ? "text-bad" : "text-ink-2")}>{spotsText(s)}</div> : null}
+        </div>
+      </div>
+      <div className="sm:w-60 sm:shrink-0">
+        <ReserveControl s={s} members={members} bookings={bookings} rules={rules} policy={policies.get(s.serviceTypeId)} now={now} tz={tz} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Family calendar: a single day by default (date header with arrows, jump to a date, the week's days),
+ * optional program / location / instructor filters, then the day's classes in time order.
+ */
 export async function FamilySchedule({ viewer, params, range, tz, today }: { viewer: Viewer; params: Params; range: Range; tz: string; today: string }) {
-  const athletes = await familyAthletes(db, viewer);
-  if (!athletes.length) {
+  const members = await familyAthletes(db, viewer);
+  if (!members.length) {
     return (
-      <EmptyState title="No athletes linked to your account yet">
-        Ask the front desk to link your child (or your own athlete profile) to this login. Nothing can be booked until then.
+      <EmptyState title="No family members linked to your account yet">
+        Ask the front desk to link your child (or your own athlete profile) to this login. Nothing can be reserved until then.
       </EmptyState>
     );
   }
-  const selected = athletes.find((a) => a.id === params.athlete) ?? athletes[0];
-  const bookableCount = athletes.filter((a) => a.canBook && a.active).length;
   const now = new Date();
-  const settings = await bookingSettings(db, viewer.orgId);
-  const locs = await listLocations(db, viewer.orgId, { activeOnly: true });
   const locationId = parseLocationParam(params.location);
-  const [sessions, ent, upcoming, policies] = await Promise.all([
-    listSessions(db, viewer, { from: range.from, to: range.to, familyAthleteIds: athletes.map((a) => a.id), filters: { locationId } }),
-    resolveEntitlement(db, { orgId: viewer.orgId, athleteId: selected.id, serviceType: { id: ANY_SERVICE, eligibility: {}, creditCost: 1 }, at: now }),
-    upcomingBookingsFor(db, viewer.orgId, [selected.id], now),
+  const [rules, locs, staffList, programs, policies] = await Promise.all([
+    bookingSettings(db, viewer.orgId),
+    listLocations(db, viewer.orgId, { activeOnly: true }),
+    listCoaches(db, viewer.orgId),
     db
-      .select({ serviceTypeId: serviceTypes.id, policy: cancellationPolicies })
+      .select({ id: serviceTypes.id, name: serviceTypes.name })
       .from(serviceTypes)
-      .leftJoin(cancellationPolicies, eq(cancellationPolicies.id, serviceTypes.cancellationPolicyId))
-      .where(eq(serviceTypes.orgId, viewer.orgId)),
+      .where(and(eq(serviceTypes.orgId, viewer.orgId), eq(serviceTypes.active, true)))
+      .orderBy(asc(serviceTypes.name)),
+    policiesByService(viewer.orgId),
   ]);
-  const policyBy = new Map(policies.map((p) => [p.serviceTypeId, p.policy]));
-  const mine = await athleteBookingsIn(db, viewer.orgId, [selected.id], sessions.map((s) => s.id));
-  const mineBy = new Map(mine.filter((b) => b.status === "booked" || b.status === "waitlisted" || b.status === "attended").map((b) => [b.sessionId, b]));
-  const dayHref = (d: string) => hrefWith("/schedule", params, { view: "day", date: d, athlete: selected.id });
-  const p = { ...params, athlete: selected.id };
-
-  const cancelNote = (serviceTypeId: string) => {
-    const pol = policyBy.get(serviceTypeId);
-    if (!pol || pol.lateCancelPenalty === "none") return "Cancel this booking?";
-    const hrs = Math.round((pol.lateCancelWindowMinutes / 60) * 10) / 10;
-    return `Cancel this booking? Cancelling within ${hrs} hours of the start ${pol.lateCancelPenalty === "fee" ? "may incur a fee" : "uses the session credit"} under the current policy.`;
-  };
-
-  const render = (s: SessionListItem) => {
-    const b = mineBy.get(s.id);
-    const cap = capacityText(s);
-    let action: React.ReactNode;
-    if (b?.status === "booked" || b?.status === "attended") {
-      action = (
-        <div className="mt-2 flex flex-wrap items-center gap-2 sm:mt-0 sm:justify-end">
-          <Badge variant="green">{b.status === "attended" ? "Attended" : `Booked: ${selected.first}`}</Badge>
-          {b.status === "booked" && s.startsAt > now && selected.canBook ? (
-            <ActionForm action={cancelBookingAction}>
-              <input type="hidden" name="bookingId" value={b.id} />
-              <SubmitButton variant="ghost" className="min-h-11" pendingText="Cancelling…" confirm={cancelNote(s.serviceTypeId)}>
-                Cancel
-              </SubmitButton>
-            </ActionForm>
-          ) : null}
-        </div>
-      );
-    } else if (b?.status === "waitlisted") {
-      action = (
-        <div className="mt-2 flex flex-wrap items-center gap-2 sm:mt-0 sm:justify-end">
-          <Badge variant="yellow">Waitlist #{b.waitlistPosition}</Badge>
-          {selected.canBook ? (
-            <ActionForm action={cancelBookingAction}>
-              <input type="hidden" name="bookingId" value={b.id} />
-              <SubmitButton variant="ghost" className="min-h-11" pendingText="Leaving…">
-                Leave waitlist
-              </SubmitButton>
-            </ActionForm>
-          ) : null}
-        </div>
-      );
-    } else if (s.status === "cancelled") {
-      action = null;
-    } else if (!selected.canBook) {
-      action = <p className="mt-2 sm:mt-0 text-xs text-ink-3">Booking for {selected.first} isn&apos;t enabled on your account.</p>;
-    } else {
-      const cutoffAt = s.startsAt.getTime() - (settings.familyBookingCutoffMinutes ?? 0) * 60_000;
-      const opensAt = settings.bookingWindowDays != null ? s.startsAt.getTime() - settings.bookingWindowDays * 86_400_000 : null;
-      const waitOpen = s.waitlisted < s.waitlistCapacity;
-      if (now >= s.endsAt) action = <p className="mt-2 sm:mt-0 text-xs text-ink-3">Ended.</p>;
-      else if (now.getTime() > cutoffAt) action = <p className="mt-2 sm:mt-0 text-xs text-ink-3">Online booking closed{now < s.startsAt ? ". Please call the front desk" : ""}.</p>;
-      else if (opensAt && now.getTime() < opensAt) action = <p className="mt-2 sm:mt-0 text-xs text-ink-3">Booking opens {fmt(new Date(opensAt), "MMM d", tz)}.</p>;
-      else if (cap.full && !waitOpen) action = <p className="mt-2 sm:mt-0 text-xs font-medium text-ink-3">Full</p>;
-      else
-        action = (
-          <ActionForm action={bookAction} className="mt-2 sm:mt-0">
-            <input type="hidden" name="sessionId" value={s.id} />
-            <input type="hidden" name="athleteId" value={selected.id} />
-            <input type="hidden" name="idem" value={randomUUID()} />
-            <SubmitButton variant={cap.full ? "secondary" : "primary"} className="min-h-11 w-full sm:w-auto" pendingText="Booking…">
-              {cap.full ? `Join waitlist for ${selected.first}` : `Book ${selected.first}`}
-            </SubmitButton>
-            {s.creditCost > 0 ? <p className="mt-1 text-xs text-ink-3">Uses {s.creditCost} credit{s.creditCost === 1 ? "" : "s"} unless covered by an unlimited membership.</p> : null}
-            {bookableCount > 1 || s.seriesId ? (
-              <Link href={`/schedule/family-book?session=${s.id}&athlete=${selected.id}`} className="mt-1 inline-flex min-h-11 items-center text-sm font-medium text-brand hover:underline">
-                {bookableCount > 1 ? "Book several athletes" : "Book several weeks"}
-                {bookableCount > 1 && s.seriesId ? " or weeks" : ""} →
-              </Link>
-            ) : null}
-          </ActionForm>
-        );
-    }
-    return (
-      <SessionRow s={s} tz={tz}>
-        {action}
-      </SessionRow>
-    );
-  };
+  const coaches = staffList.filter((c) => c.role === "coach");
+  const programId = programs.find((p) => p.id === params.program)?.id ?? null;
+  const instructorId = coaches.find((c) => c.id === params.instructor)?.id ?? null;
+  const sessions = await listSessions(db, viewer, {
+    from: range.from,
+    to: range.to,
+    familyAthleteIds: members.map((a) => a.id),
+    filters: { locationId, serviceTypeId: programId, coachUserId: instructorId },
+  });
+  const live = liveBySession(await athleteBookingsIn(db, viewer.orgId, members.map((a) => a.id), sessions.map((s) => s.id)));
+  const view = range.view;
+  const filtered = !!(locationId || programId || instructorId);
+  const dayHref = (d: string) => hrefWith("/schedule", params, { view: "day", date: d });
+  const weekStart = startOfWeekYmd(range.anchor);
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDaysYmd(weekStart, i));
+  const label = rangeLabel(view, range.first, range.last, range.label);
+  const grouped = byDay(sessions, tz);
+  const row = (s: SessionListItem) => <ClassRow s={s} tz={tz} members={members} bookings={live.get(s.id)} rules={rules} policies={policies} now={now} />;
+  const noneCanReserve = members.every((m) => !m.canBook);
 
   return (
-    <div className="space-y-6">
-      {athletes.length > 1 ? (
-        <nav aria-label="Choose athlete" className="flex flex-wrap gap-2">
-          {athletes.map((a) => (
-            <Link
-              key={a.id}
-              href={hrefWith("/schedule", params, { athlete: a.id })}
-              aria-current={a.id === selected.id ? "true" : undefined}
-              className={cn(
-                "inline-flex min-h-11 items-center gap-2 rounded-full border py-1 pr-4 pl-1.5 text-sm font-semibold",
-                a.id === selected.id ? "border-brand bg-brand text-brand-ink" : "border-edge bg-surface text-ink hover:bg-surface-2",
-              )}
-            >
-              <span aria-hidden className={cn("inline-flex size-8 items-center justify-center rounded-full text-xs font-bold", a.id === selected.id ? "bg-brand-ink text-brand" : "bg-surface-2 text-ink-2")}>
-                {(a.first[0] ?? "").toUpperCase()}
-                {(a.last[0] ?? "").toUpperCase()}
-              </span>
-              {a.first} {a.last}
-            </Link>
-          ))}
-        </nav>
-      ) : null}
-
-      {locs.length > 1 ? (
-        <nav aria-label="Choose location" className="flex flex-wrap gap-2">
-          {[{ id: "", name: "All locations" }, ...locs].map((l) => (
-            <Link
-              key={l.id || "all"}
-              href={hrefWith("/schedule", { ...params, athlete: selected.id }, { location: l.id })}
-              aria-current={(locationId ?? "") === l.id ? "true" : undefined}
-              className={cn(
-                "inline-flex min-h-11 items-center rounded-full border px-4 text-sm font-medium",
-                (locationId ?? "") === l.id ? "border-ink bg-ink text-surface" : "border-edge bg-surface hover:bg-surface-2",
-              )}
-            >
-              {l.name}
-            </Link>
-          ))}
-        </nav>
-      ) : null}
-
+    <div className="space-y-4">
       <SessionFeedbackCard viewer={viewer} />
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-1">
-          <CardHeader kicker="Booking for" title={`${selected.first} ${selected.last}`} />
-          <CardBody className="space-y-2 text-sm">
-            {ent.kind === "unlimited" ? (
-              <p>
-                <Badge variant="green">Unlimited membership</Badge>
-              </p>
-            ) : null}
-            {ent.kind === "weekly" ? (
-              <p>
-                <Badge variant="green">{ent.classesPerWeek}x per week membership</Badge>
-              </p>
-            ) : null}
-            <p>
-              <span className="text-2xl font-bold tabular">{selected.credits}</span> session credit{selected.credits === 1 ? "" : "s"} available
-            </p>
-            {ent.kind !== "unlimited" && ent.kind !== "weekly" && selected.credits === 0 ? (
-              <Callout tone="warn">No membership or credits yet. Buy a package or membership (or ask the front desk) before booking.</Callout>
-            ) : null}
-            {!selected.canBook ? <Callout tone="info">You can view {selected.first}&apos;s schedule, but booking is managed by another guardian or the front desk.</Callout> : null}
-            <div className="flex flex-wrap gap-2 pt-1">
-              <ButtonLink href={`/schedule/athletes/${selected.id}`} variant="outline" className="min-h-11">
-                Attendance history
-              </ButtonLink>
-              {selected.canBook ? (
-                <ButtonLink href={`/schedule/book?athlete=${selected.id}`} variant="outline" className="min-h-11">
-                  Book an assessment
-                </ButtonLink>
-              ) : null}
-              {selected.canBook ? (
-                <ButtonLink href={`/schedule/athletes/${selected.id}#checkin-pin`} variant="outline" className="min-h-11">
-                  Check-in PIN
-                </ButtonLink>
-              ) : null}
-            </div>
-          </CardBody>
-        </Card>
-        <Card className="lg:col-span-2">
-          <CardHeader kicker="Upcoming" title="Upcoming bookings" />
-          <CardBody>
-            {upcoming.length === 0 ? (
-              <p className="text-sm text-ink-3">Nothing booked yet for {selected.first}.</p>
-            ) : (
-              <ul className="divide-y divide-edge">
-                {await Promise.all(
-                  upcoming.slice(0, 10).map(async ({ booking, session }) => {
-                    const alternatives =
-                      booking.status === "booked" && selected.canBook
-                        ? (
-                            await listSessions(db, viewer, {
-                              from: localToUtc(today, "00:00", tz),
-                              to: localToUtc(addDaysYmd(today, (settings.bookingWindowDays ?? 21) + 1), "00:00", tz),
-                              filters: { serviceTypeId: session.serviceTypeId },
-                            })
-                          ).filter(
-                            (x) =>
-                              x.id !== session.id &&
-                              x.visibility !== "private" &&
-                              x.booked < x.capacity &&
-                              x.startsAt.getTime() - (settings.familyBookingCutoffMinutes ?? 0) * 60_000 > now.getTime(),
-                          )
-                        : [];
-                    return (
-                      <li key={booking.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                        <div className="min-w-0">
-                          <div className="font-medium">{session.title}</div>
-                          <div className="text-xs text-ink-3">{fmt(session.startsAt, "EEE MMM d, h:mm a", tz)}</div>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          {booking.status === "waitlisted" ? <Badge variant="yellow">Waitlist #{booking.waitlistPosition}</Badge> : <Badge variant="green">Booked</Badge>}
-                          {selected.canBook && session.startsAt > now ? (
-                            <ActionForm action={cancelBookingAction}>
-                              <input type="hidden" name="bookingId" value={booking.id} />
-                              <SubmitButton variant="ghost" className="min-h-11" pendingText="Cancelling…" confirm={cancelNote(session.serviceTypeId)}>
-                                {booking.status === "waitlisted" ? "Leave waitlist" : "Cancel"}
-                              </SubmitButton>
-                            </ActionForm>
-                          ) : null}
-                          {alternatives.length ? (
-                            <details className="w-full sm:w-auto">
-                              <summary className="inline-flex min-h-11 cursor-pointer items-center text-sm font-medium text-brand">Reschedule</summary>
-                              <ActionForm action={rescheduleAction} className="mt-2 flex flex-wrap items-end gap-2">
-                                <input type="hidden" name="bookingId" value={booking.id} />
-                                <input type="hidden" name="idem" value={randomUUID()} />
-                                <label className="text-sm">
-                                  <span className="mb-1 block text-xs text-ink-3">Move to</span>
-                                  <select name="toSessionId" required className="h-11 max-w-full rounded-lg border border-edge bg-surface px-2 text-sm">
-                                    {alternatives.slice(0, 20).map((x) => (
-                                      <option key={x.id} value={x.id}>
-                                        {fmt(x.startsAt, "EEE MMM d h:mm a", tz)} — {x.title}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                                <SubmitButton className="min-h-11" pendingText="Moving…" confirm={cancelNote(session.serviceTypeId)}>
-                                  Move booking
-                                </SubmitButton>
-                              </ActionForm>
-                            </details>
-                          ) : null}
-                        </div>
-                      </li>
-                    );
-                  }),
-                )}
-              </ul>
-            )}
-          </CardBody>
-        </Card>
-      </div>
+      {noneCanReserve ? (
+        <Callout tone="info">
+          You can view {members.map((m) => m.first).join(" and ")}&apos;s schedule, but reservations are managed by another guardian or the front desk.
+        </Callout>
+      ) : null}
 
       <section aria-labelledby="family-cal" className="overflow-hidden rounded-md border border-edge bg-surface shadow-[0_1px_3px_rgb(16_24_40/0.06)]">
-        <h2 id="family-cal" className="sr-only">
-          Sessions
-        </h2>
-        <CalendarToolbar
-          className="border-b border-edge px-3 py-2.5"
-          params={p}
-          view={range.view}
-          label={rangeLabel(range.view, range.first, range.last, range.label)}
-          prev={range.prev}
-          next={range.next}
-          today={today}
-        />
-        {settings.bookingWindowDays != null ? (
-          <p className="border-b border-edge bg-th px-3 py-2 text-xs text-ink-2">
-            Online booking opens {settings.bookingWindowDays} days ahead
-            {settings.familyBookingCutoffMinutes ? ` and closes ${settings.familyBookingCutoffMinutes} minutes before start` : ""}. Today is {fmtDate(today)}.
+        <div className="flex items-center gap-2 border-b border-edge px-3 py-2.5">
+          <Link href={hrefWith("/schedule", params, { date: range.prev })} className={navBtn} aria-label={`Previous ${view}`}>
+            <span aria-hidden>‹</span>
+          </Link>
+          <h2 id="family-cal" className="min-w-0 flex-1 text-center text-base font-bold tracking-tight tabular sm:text-lg" aria-live="polite">
+            {label}
+            {view === "day" && range.anchor === today ? (
+              <Badge variant="brand" className="ml-2 align-middle">
+                Today
+              </Badge>
+            ) : null}
+          </h2>
+          <Link href={hrefWith("/schedule", params, { date: range.next })} className={navBtn} aria-label={`Next ${view}`}>
+            <span aria-hidden>›</span>
+          </Link>
+        </div>
+
+        {view === "day" ? (
+          <nav aria-label="Days this week" className="grid grid-cols-7 border-b border-edge bg-th">
+            {weekDays.map((d) => {
+              const current = d === range.anchor;
+              return (
+                <Link
+                  key={d}
+                  href={dayHref(d)}
+                  aria-current={current ? "date" : undefined}
+                  aria-label={dayLabel(d, "EEEE, MMMM d")}
+                  className={cn("flex min-h-14 flex-col items-center justify-center gap-0.5 border-b-[3px] text-xs", current ? "border-brand bg-surface" : "border-transparent hover:bg-surface-2")}
+                >
+                  <span className={cn("font-bold uppercase tracking-wide", current ? "text-brand" : "text-ink-2")}>{dayLabel(d, "EEE")}</span>
+                  <span className={cn("inline-flex size-7 items-center justify-center rounded-full text-sm font-bold tabular", d === today ? "bg-brand text-brand-ink" : "text-ink")}>{Number(d.slice(8))}</span>
+                </Link>
+              );
+            })}
+          </nav>
+        ) : null}
+
+        <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2 border-b border-edge px-3 py-2.5">
+          <form method="get" action="/schedule" className="flex items-end gap-2" aria-label="Jump to a date">
+            <input type="hidden" name="view" value={view} />
+            {params.program ? <input type="hidden" name="program" value={params.program} /> : null}
+            {params.location ? <input type="hidden" name="location" value={params.location} /> : null}
+            {params.instructor ? <input type="hidden" name="instructor" value={params.instructor} /> : null}
+            <label className="text-xs font-semibold text-ink-2">
+              <span className="mb-1 block">Go to date</span>
+              <input type="date" name="date" defaultValue={range.anchor} required className="h-11 rounded-md border border-edge bg-surface px-2 text-sm text-ink" />
+            </label>
+            <button type="submit" className={buttonClass("secondary", "md", "h-11 lg:h-11")}>
+              Go
+            </button>
+            <Link href={hrefWith("/schedule", params, { date: today })} className={buttonClass("secondary", "md", "h-11 lg:h-11")}>
+              Today
+            </Link>
+          </form>
+          <div role="group" aria-label="Calendar view" className="inline-flex overflow-hidden rounded-md border border-edge bg-surface">
+            {(["day", "week", "month"] as const).map((v, i) => (
+              <Link
+                key={v}
+                href={hrefWith("/schedule", params, { view: v })}
+                aria-current={v === view ? "page" : undefined}
+                className={cn("inline-flex h-11 items-center px-3.5 text-sm font-semibold capitalize", i > 0 && "border-l border-edge", v === view ? "bg-brand text-brand-ink" : "text-ink-2 hover:bg-surface-2 hover:text-ink")}
+              >
+                {v}
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <details className="border-b border-edge bg-th" open={filtered}>
+          <summary className="flex min-h-11 cursor-pointer items-center gap-2 px-3 text-xs font-bold uppercase tracking-wide text-ink-2">
+            Filters
+            {filtered ? <Badge variant="brand">On</Badge> : <span className="font-medium normal-case tracking-normal text-ink-3">Program, location, instructor</span>}
+          </summary>
+          <form method="get" action="/schedule" className="grid gap-2 px-3 pb-3 sm:grid-cols-4" aria-label="Filter classes">
+            <input type="hidden" name="view" value={view} />
+            <input type="hidden" name="date" value={range.anchor} />
+            <label className="min-w-0 text-xs font-semibold text-ink-2">
+              <span className="mb-1 block">Program</span>
+              <select name="program" defaultValue={programId ?? ""} className={selectCls}>
+                <option value="">All programs</option>
+                {programs.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {locs.length > 1 ? (
+              <label className="min-w-0 text-xs font-semibold text-ink-2">
+                <span className="mb-1 block">Location</span>
+                <select name="location" defaultValue={locationId ?? ""} className={selectCls}>
+                  <option value="">All locations</option>
+                  {locs.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <label className="min-w-0 text-xs font-semibold text-ink-2">
+              <span className="mb-1 block">Instructor</span>
+              <select name="instructor" defaultValue={instructorId ?? ""} className={selectCls}>
+                <option value="">All instructors</option>
+                {coaches.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {coachShort(c.name)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="flex items-end gap-2">
+              <button type="submit" className={buttonClass("secondary", "md", "h-11 flex-1 lg:h-11")}>
+                Apply
+              </button>
+              {filtered ? (
+                <Link href={hrefWith("/schedule", {}, { view, date: range.anchor })} className={buttonClass("ghost", "md", "h-11 lg:h-11")}>
+                  Clear
+                </Link>
+              ) : null}
+            </div>
+          </form>
+        </details>
+
+        {rules.bookingWindowDays != null ? (
+          <p className="border-b border-edge px-3 py-2 text-xs text-ink-2">
+            Reservations open {rules.bookingWindowDays} days ahead
+            {rules.familyBookingCutoffMinutes ? ` and close ${rules.familyBookingCutoffMinutes} minutes before the start` : ""}. Times are the facility&apos;s local time.
           </p>
         ) : null}
-        {sessions.length === 0 ? (
+
+        {view === "month" ? (
+          sessions.length === 0 ? (
+            <div className="p-4">
+              <EmptyState title="No classes this month">{filtered ? "Try clearing the filters." : "Try another month, or contact the front desk."}</EmptyState>
+            </div>
+          ) : (
+            <MonthView days={range.days} sessions={sessions} tz={tz} today={today} monthPrefix={range.monthPrefix!} dayHref={dayHref} sessionHref={classHref} />
+          )
+        ) : view === "day" ? (
+          sessions.length === 0 ? (
+            <div className="p-4">
+              <EmptyState title="No classes on this day">{filtered ? "Try clearing the filters, or pick another day." : "Pick another day above, or contact the front desk."}</EmptyState>
+            </div>
+          ) : (
+            <ul className="divide-y divide-edge" aria-label={`Classes on ${label}`}>
+              {sessions.map((s) => (
+                <li key={s.id}>{row(s)}</li>
+              ))}
+            </ul>
+          )
+        ) : sessions.length === 0 ? (
           <div className="p-4">
-            <EmptyState title="No bookable sessions in this range">Try the next week, or contact the front desk.</EmptyState>
+            <EmptyState title="No classes this week">{filtered ? "Try clearing the filters." : "Try the next week, or contact the front desk."}</EmptyState>
           </div>
-        ) : range.view === "month" ? (
-          <MonthView days={range.days} sessions={sessions} tz={tz} today={today} monthPrefix={range.monthPrefix!} dayHref={dayHref} />
         ) : (
-          <DaysView className="bg-bg p-3" days={range.days} sessions={sessions} tz={tz} today={today} dayHref={dayHref} render={render} />
+          <div>
+            {range.days
+              .filter((d) => (grouped.get(d) ?? []).length)
+              .map((d) => (
+                <section key={d} aria-labelledby={`day-${d}`}>
+                  <h3 id={`day-${d}`} className={cn("flex items-center gap-2 border-y border-edge bg-th px-3 text-xs font-bold uppercase tracking-wide text-ink-2", d === today && "bg-brand/10")}>
+                    <Link href={dayHref(d)} className="inline-flex min-h-10 items-center hover:text-ink hover:underline">
+                      {dayLabel(d, "EEEE, MMM d")}
+                    </Link>
+                    {d === today ? <Badge variant="brand">Today</Badge> : null}
+                  </h3>
+                  <ul className="divide-y divide-edge">
+                    {(grouped.get(d) ?? []).map((s) => (
+                      <li key={s.id}>{row(s)}</li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+          </div>
         )}
       </section>
     </div>

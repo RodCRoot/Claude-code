@@ -3,7 +3,7 @@ import type { Role } from "@/db/schema";
 import type { IconName } from "@/components/icons";
 
 export type NavGroup = "front" | "members" | "coaching" | "business";
-export type NavItem = { href: string; label: string; key: string; roles: Role[]; icon: IconName; group: NavGroup };
+export type NavItem = { href: string; label: string; key: string; roles: Role[]; icon: IconName; group: NavGroup; /** Label families see when it differs from the staff term. */ familyLabel?: string };
 
 /** Sidebar section headings (staff only; families see a flat list). */
 export const NAV_GROUP_LABEL: Record<NavGroup, string> = {
@@ -23,7 +23,7 @@ export const NAV: NavItem[] = [
   { key: "schedule", href: "/schedule", label: "Calendar", roles: ALL, icon: "schedule", group: "front" },
   { key: "messages", href: "/messages", label: "Messages", roles: ALL, icon: "messages", group: "front" },
   { key: "people", href: "/people", label: "People", roles: ["owner", "admin", "operations", "coach"], icon: "people", group: "members" },
-  { key: "billing", href: "/billing", label: "Memberships & Billing", roles: ["owner", "admin", "operations", "guardian", "athlete"], icon: "billing", group: "members" },
+  { key: "billing", href: "/billing", label: "Memberships & Billing", familyLabel: "My Profile", roles: ["owner", "admin", "operations", "guardian", "athlete"], icon: "billing", group: "members" },
   { key: "documents", href: "/documents", label: "Documents", roles: ALL, icon: "documents", group: "members" },
   { key: "shop", href: "/shop", label: "Shop", roles: FAMILY, icon: "shop", group: "members" },
   { key: "refer", href: "/refer", label: "Refer a friend", roles: FAMILY, icon: "gift", group: "members" },
@@ -41,7 +41,8 @@ export const NAV: NavItem[] = [
 ];
 
 export function navFor(role: Role) {
-  return NAV.filter((n) => n.roles.includes(role));
+  const family = FAMILY.includes(role);
+  return NAV.filter((n) => n.roles.includes(role)).map((n) => (family && n.familyLabel ? { ...n, label: n.familyLabel } : n));
 }
 
 export const ROLE_LABEL: Record<Role, string> = {
