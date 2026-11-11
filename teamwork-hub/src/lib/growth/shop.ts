@@ -13,9 +13,10 @@ import { ONLINE_PROVIDERS, getProvider } from "@/lib/payments";
  * Family Shop.
  *
  * Only products staff mark "sellable online" appear, and only kinds that need no seat count:
- * session packs, drop-ins, assessments and one-time add-ons. Catalog products are not linked to
- * scheduled sessions, so a camp or clinic's capacity cannot be held at checkout; those stay with
- * the front desk until they are. Memberships use the membership flow; retail uses the point of sale.
+ * session packs, drop-ins, assessments and one-time add-ons. Camps and clinics are sold as events
+ * (src/lib/events), where a registration holds a seat on the event itself; catalog "camp" products
+ * are not linked to scheduled sessions and stay off the shop. Memberships use the membership flow;
+ * retail uses the point of sale.
  */
 export const SHOP_KINDS: ProductKind[] = ["package", "drop_in", "assessment", "one_time"];
 
@@ -28,7 +29,7 @@ export const SHOP_KIND_LABEL: Partial<Record<ProductKind, string>> = {
 
 export function shopBlockReason(kind: ProductKind): string | null {
   if (SHOP_KINDS.includes(kind)) return null;
-  if (kind === "camp") return "Camps and clinics are not linked to scheduled sessions yet, so a seat cannot be held online. Sell them at the front desk.";
+  if (kind === "camp") return "A catalog camp product is not linked to scheduled sessions, so a seat cannot be held online. Sell camps and clinics as events under Camps & clinics instead.";
   if (kind === "recurring_membership") return "Memberships start from the Memberships page so terms and billing dates are set correctly.";
   if (kind === "retail") return "Retail items are sold at the point of sale, where stock is counted.";
   if (kind === "trial") return "Trials are issued by staff as trial passes.";

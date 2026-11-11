@@ -11,6 +11,7 @@ import { fmt, fmtDate, fmtTime, localToUtc, localYmd } from "@/lib/time";
 import { ShowcaseHomeCards } from "@/components/showcase/home-cards";
 import { PrBadge, ProgressBar } from "../../training/_components/tb";
 import { AnywhereGameDay, AnywhereHomeCards } from "@/components/anywhere/home-cards";
+import { UpcomingEventsCard } from "@/components/events/family";
 import { CommunityHomeCards } from "@/components/community/home-cards";
 
 /**
@@ -85,6 +86,7 @@ export async function AthleteHomeView({ v, tz, dateLabel, greeting, selected }: 
 
           <div className="space-y-4">
             {!isAthlete ? <FamilyCard family={family} billing={billing} tz={tz} /> : null}
+            <UpcomingEventsCard v={v} />
             {home.engagement?.badges ? (
               <Card>
                 <CardHeader title="Badges" kicker={`${home.engagement.badges.length} earned`} action={<Link href={`/goals?athlete=${home.athleteId}#badges`} className="text-sm font-semibold text-brand underline">See all</Link>} />

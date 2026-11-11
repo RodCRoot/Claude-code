@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { ActionForm, SubmitButton } from "@/components/forms";
+import { UpcomingEventsCard } from "@/components/events/family";
 import { FamilySuggestion } from "@/components/growth/family-suggestion";
 import { Badge, Callout, EmptyState, PageHeader, Select } from "@/components/ui";
 import { requireViewer } from "@/lib/auth/viewer";
@@ -23,6 +24,7 @@ export default async function ShopPage() {
     <>
       <PageHeader kicker="Shop" title="Shop" description="Session packs, assessments and add-ons you can order for your athletes. Prices come straight from our current price list." />
       <FamilySuggestion viewer={v} className="mb-5" />
+      <UpcomingEventsCard v={v} className="mb-5" />
       {buyFor.length === 0 ? (
         <Callout tone="info" className="mb-5" title={viewOnly ? "You can browse, and another adult on the account places orders" : "Ordering is not set up for your login"}>
           {viewOnly
@@ -95,7 +97,7 @@ export default async function ShopPage() {
         </ul>
       )}
       <p className="mt-5 max-w-3xl text-xs text-ink-3">
-        Ordering creates an invoice on your billing account. Nothing is charged on this page. Sessions and credits are added only after your payment is confirmed. Camps, clinics and memberships are arranged with the front desk.
+        Ordering creates an invoice on your billing account. Nothing is charged on this page. Sessions and credits are added only after your payment is confirmed. Camps and clinics have their own page with dates and spots left. Memberships are arranged with the front desk.
       </p>
     </>
   );

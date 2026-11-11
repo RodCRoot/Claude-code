@@ -89,7 +89,7 @@ export type FamilyEvent = {
   /** Null when registration is open. */
   closedReason: string | null;
   holdHours: number;
-  mine: { athleteId: string; first: string; status: EventRegistrationStatus; invoiceId: string | null }[];
+  mine: { athleteId: string; first: string; status: EventRegistrationStatus; invoiceId: string | null; holdExpiresAt: Date | null }[];
 };
 
 async function toFamilyEvents(tx: Tx, v: Viewer, rows: EventRow[], now: Date): Promise<FamilyEvent[]> {
@@ -104,7 +104,7 @@ async function toFamilyEvents(tx: Tx, v: Viewer, rows: EventRow[], now: Date): P
   const mineRows =
     athleteIds.length || viewablePayers.length
       ? await tx
-          .select({ eventId: eventRegistrations.eventId, athleteId: eventRegistrations.athleteId, first: people.firstName, status: eventRegistrations.status, invoiceId: eventRegistrations.invoiceId, payerAccountId: eventRegistrations.payerAccountId })
+          .select({ eventId: eventRegistrations.eventId, athleteId: eventRegistrations.athleteId, first: people.firstName, status: eventRegistrations.status, invoiceId: eventRegistrations.invoiceId, payerAccountId: eventRegistrations.payerAccountId, holdExpiresAt: eventRegistrations.holdExpiresAt })
           .from(eventRegistrations)
           .innerJoin(athletes, eq(athletes.id, eventRegistrations.athleteId))
           .innerJoin(people, eq(people.id, athletes.personId))
@@ -142,7 +142,7 @@ async function toFamilyEvents(tx: Tx, v: Viewer, rows: EventRow[], now: Date): P
         spotsLeft: Math.max(0, e.capacity - c.confirmed - c.held),
         closedReason: registrationClosedReason(e, sessions[0]?.startsAt ?? null, now, tz),
         holdHours: e.holdHours,
-        mine: mineRows.filter((m) => m.eventId === e.id).map((m) => ({ athleteId: m.athleteId, first: m.first, status: m.status, invoiceId: viewablePayers.includes(m.payerAccountId) ? m.invoiceId : null })),
+        mine: mineRows.filter((m) => m.eventId === e.id).map((m) => ({ athleteId: m.athleteId, first: m.first, status: m.status, invoiceId: viewablePayers.includes(m.payerAccountId) ? m.invoiceId : null, holdExpiresAt: m.holdExpiresAt })),
       };
     })
     .sort((a, b) => (a.sessions[0]?.startsAt.getTime() ?? Infinity) - (b.sessions[0]?.startsAt.getTime() ?? Infinity));
@@ -171,6 +171,7 @@ export type AthleteOption = {
   state: "registered" | "held" | "open" | "blocked";
   reasons: string[];
   invoiceId: string | null;
+  holdExpiresAt: Date | null;
 };
 
 /** One published (or closed, if the family is already registered) event with the viewer's athletes and what each may do. */
@@ -197,7 +198,7 @@ export async function familyEventDetail(tx: Tx, v: Viewer, eventId: string, now 
     const name = `${a.first} ${a.last}`;
     const mine = event.mine.find((m) => m.athleteId === a.id);
     if (mine) {
-      out.push({ athleteId: a.id, name, first: a.first, state: mine.status === "confirmed" ? "registered" : "held", reasons: [], invoiceId: mine.invoiceId });
+      out.push({ athleteId: a.id, name, first: a.first, state: mine.status === "confirmed" ? "registered" : "held", reasons: [], invoiceId: mine.invoiceId, holdExpiresAt: mine.holdExpiresAt });
       continue;
     }
     const reasons: string[] = [];
@@ -209,7 +210,7 @@ export async function familyEventDetail(tx: Tx, v: Viewer, eventId: string, now 
       const el = await checkEligibility(tx, { orgId: v.orgId, athleteId: a.id, serviceType: eventEligibilitySpec(row), at: firstStart, tz: event.tz });
       reasons.push(...el.reasons.map(familyName));
     }
-    out.push({ athleteId: a.id, name, first: a.first, state: reasons.length ? "blocked" : "open", reasons, invoiceId: null });
+    out.push({ athleteId: a.id, name, first: a.first, state: reasons.length ? "blocked" : "open", reasons, invoiceId: null, holdExpiresAt: null });
   }
   return { event, athletes: out, canRegisterAny: out.some((a) => a.state === "open") };
 }
@@ -225,6 +226,8 @@ export type StaffEventRow = {
   refundedMinor: number;
   /** Paid registrations minus settled refunds on their invoices. */
   netRevenueMinor: number;
+  /** Published or closed, with a session that has not ended. */
+  upcoming: boolean;
 };
 
 async function refundedByEvent(tx: Tx, orgId: string, eventIds: string[]): Promise<Map<string, number>> {
@@ -239,7 +242,7 @@ async function refundedByEvent(tx: Tx, orgId: string, eventIds: string[]): Promi
   return out;
 }
 
-export async function listStaffEvents(tx: Tx, v: Viewer): Promise<{ rows: StaffEventRow[]; tz: string }> {
+export async function listStaffEvents(tx: Tx, v: Viewer, now = new Date()): Promise<{ rows: StaffEventRow[]; tz: string }> {
   assertCan(v, "schedule.manage");
   const all = await tx.select().from(events).where(eq(events.orgId, v.orgId)).orderBy(desc(events.createdAt));
   const ids = all.map((e) => e.id);
@@ -249,7 +252,7 @@ export async function listStaffEvents(tx: Tx, v: Viewer): Promise<{ rows: StaffE
     const sessions = sess.get(event.id) ?? [];
     const c = counts.get(event.id) ?? NO_COUNTS;
     const refundedMinor = refunds.get(event.id) ?? 0;
-    return { event, sessions, dates: dateRangeLabel(sessions.filter((s) => s.status === "scheduled"), tz), counts: c, spotsLeft: Math.max(0, event.capacity - c.confirmed - c.held), refundedMinor, netRevenueMinor: c.paidMinor - refundedMinor };
+    return { event, sessions, dates: dateRangeLabel(sessions.filter((s) => s.status === "scheduled"), tz), counts: c, spotsLeft: Math.max(0, event.capacity - c.confirmed - c.held), refundedMinor, netRevenueMinor: c.paidMinor - refundedMinor, upcoming: event.status !== "draft" && sessions.some((s) => s.status === "scheduled" && s.endsAt > now) };
   });
   rows.sort((a, b) => (b.sessions[0]?.startsAt.getTime() ?? 0) - (a.sessions[0]?.startsAt.getTime() ?? 0));
   return { rows, tz };
@@ -258,6 +261,7 @@ export async function listStaffEvents(tx: Tx, v: Viewer): Promise<{ rows: StaffE
 export type StaffRegistration = {
   id: string;
   athleteId: string;
+  personId: string;
   athleteName: string;
   dateOfBirth: string | null;
   status: EventRegistrationStatus;
@@ -288,6 +292,7 @@ export async function staffEventDetail(tx: Tx, v: Viewer, eventId: string) {
     await tx
       .select({
         reg: eventRegistrations,
+        personId: people.id,
         first: people.firstName,
         last: people.lastName,
         dob: people.dateOfBirth,
@@ -308,6 +313,7 @@ export async function staffEventDetail(tx: Tx, v: Viewer, eventId: string) {
   ).map((r) => ({
     id: r.reg.id,
     athleteId: r.reg.athleteId,
+    personId: r.personId,
     athleteName: `${r.first} ${r.last}`,
     dateOfBirth: r.dob,
     status: r.reg.status,

@@ -1,6 +1,6 @@
 import { and, asc, eq, gt, inArray, like, lte, or, sql } from "drizzle-orm";
 import type { Tx } from "@/db";
-import { athletes, bookings, eventRegistrations, events, invoices, paymentAttempts, payerAccounts, payerBeneficiaries, people, scheduleSessions } from "@/db/schema";
+import { athletes, bookings, eventRegistrations, invoices, paymentAttempts, payerAccounts, payerBeneficiaries, people, scheduleSessions } from "@/db/schema";
 import { UserError } from "@/lib/actions";
 import { audit, type AuditActor } from "@/lib/audit";
 import { assertCan, athleteCapabilities, AuthzError, can, type Viewer } from "@/lib/authz/policy";
@@ -10,7 +10,7 @@ import { familyName, shopAthletes } from "@/lib/growth/shop";
 import { checkEligibility } from "@/lib/scheduling/eligibility";
 import { orgTimezone } from "@/lib/scheduling/common";
 import { fmt, localYmd } from "@/lib/time";
-import { eventSessionRows, lockEvent, seatsTaken, type EventRow, type RegistrationRow } from "./confirm";
+import { eventSessionRows, lockEvent, type EventRow, type RegistrationRow } from "./confirm";
 import { priceSeats } from "./pricing";
 
 const KIND_WORD = { camp: "camp", clinic: "clinic", event: "event" } as const;
