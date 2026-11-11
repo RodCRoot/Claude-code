@@ -118,7 +118,10 @@ Everything goes through `src/lib/authz/policy.ts` (`anywhereAccess` in `common.t
 Notes:
 
 - **RPE mirrors existing load data.** The load module shows sRPE under `training.read`, not `health.read`, so a guardian without health access but with training access (Jordan in the demo) sees logged minutes and effort. A guardian without training access sees the calendar only: logs are withheld, not shown as empty.
-- **Guardians cannot log on a child's behalf.** That is the existing rule for load and habit logging (`training.log`), and this module keeps it. See Gaps.
+- **Guardians and logging (owner decision, 2026-11).** A guardian may finish an On Your Own session and enter its effort rating for an athlete **under 13**, when their link to that child has **both training access and booking access** (`training.log_at_home` in `policy.ts`, computed by `guardianMayLogAtHome`). Booking access is the existing flag for acting on the child's activity (it already gates editing the season); training access is what lets them see the library and logged effort. Health access is not needed. An athlete with **no birthday on file does not qualify**: unknown age always takes the more restrictive reading, and here that means nobody else logs in the athlete's name (the library restriction for unknown age is unchanged). The permission ends on the 13th birthday.
+  - The completion row stores `logged_by` and `logged_as` (`athlete`, `guardian` or `staff`, CHECK constraint). The audit entry reads "Parent logged On Your Own session ... on behalf of an athlete under 13". Coaches see a "Logged by parent: name" badge in the review queue; the family history says "logged by a parent".
+  - It is the same completion row and, with minutes and effort, the same `activity_sessions` row as the athlete's own log, so streaks, XP (`own:<completionId>`) and load are identical.
+  - Everything else under `training.log` (workouts, habits, practice and game logs) still cannot be done by a guardian.
 - Habit values use the existing habit access rules unchanged.
 
 ## 5. Data model
@@ -139,8 +142,9 @@ Changes to other modules (all additive): `XpKind` and XP defaults, `loadActivity
 ## 6. Gaps and assumptions
 
 - No offline first load of the library or a session (no service worker in this module). See the table above.
-- Guardians cannot log effort or finish a session for a child without a login. If Teamwork wants that for younger athletes it is a policy decision in `policy.ts`, not here.
-- An athlete with no birthday on file is treated as under 13.
+- Guardians can finish at-home sessions for athletes under 13 only (see Authorization). They cannot log practice, games or habits for a child.
+- An athlete with no birthday on file is treated as under 13 for the library, and as not eligible for parent logging.
+- Ticks kept on the device are per session, not per child: a parent of two children under 13 doing the same session should finish one before starting the other.
 - Events cannot be edited in place: remove and add again. Only weekly repeats are supported.
 - XP is not removed if a completion is later deleted (same as the rest of the XP ledger).
 - No reminders or notifications are sent for assignments, games or logs.

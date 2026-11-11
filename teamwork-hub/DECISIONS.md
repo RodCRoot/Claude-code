@@ -51,6 +51,7 @@ Reversible implementation choices made autonomously during the build. Newest las
 | D14 | Body-map review tasks carry no symptom details | Operations staff can see tasks but have no health access | Low |
 | D15 | Signer identity step-up on by default for waivers/agreements; staff-witnessed in-person fallback when email isn't configured | Typed name alone is not adequate identity evidence | Low (org setting) |
 | D16 | Google Calendar scope `calendar.app.created` + `calendar.freebusy` (Teamwork-owned calendar per coach) | Narrower than full calendar access | Low |
+| D17 | Scheduled work rides the existing Postgres outbox: the worker creates one job per organization, job type and facility-local date (dedupe key) after 2:00 AM local; each athlete or referral runs in its own transaction; pages keep calling the same evaluators | No second scheduler to deploy; idempotent evaluators make reruns and concurrent page loads safe; one bad record cannot stop a night's run | Low |
 
 ## Open decisions for Rod (from the security review)
 - Which proxy hop to trust for client IP (rate limit + signature evidence) — set at deployment.
@@ -77,18 +78,28 @@ Defaults come from Rod's documented procedures; every value is editable in Setti
 
 ## Open decisions for Rod (athlete experience wave)
 Each one is a setting or a small change, not a rebuild. The current behaviour is listed first.
-1. Parents cannot log an at-home session or effort rating for an athlete under 13; the athlete or a coach does. Allow guardians to log for young athletes?
-2. Any edit to a recruiting showcase pauses its public link until it is published again. Keep links live through small edits?
-3. Left/right asymmetry numbers are kept off showcases and monthly recaps. Show them?
-4. The showcase consent wording and the referral page wording are labelled sample text. Supply the real wording.
-5. Referred family: the demo shows a sample session credit for the new family. Should they get anything, and does "signs up" mean the first settled payment (current) or a number of days active?
-6. Camps and clinics are not sellable online yet: a product is not linked to a specific session series.
-7. XP is never taken back after an attendance correction or a removed shoutout (the ledger is append-only).
-8. Leaderboards: an athlete with no birthday on file is not ranked; staff see the same public rows as families; families only see the age bands their own athletes are in.
-9. Gym TV links never expire; they work until revoked. Add an expiry?
-10. One TV board per organization. Bind screens to a location (West vs East) if the boards should differ?
-11. Operations staff can read session feedback; coaches never see billing signals on the retention board. Confirm both.
+1. Any edit to a recruiting showcase pauses its public link until it is published again. Keep links live through small edits?
+2. Left/right asymmetry numbers are kept off showcases and monthly recaps. Show them?
+3. The showcase consent wording and the referral page wording are labelled sample text. Supply the real wording.
+4. Referral program: does "signs up" mean the first settled payment (current) or a number of days active? And when the new family's first invoice is smaller than their discount, the rest is not carried over to a later invoice (current). Carry it over instead?
+5. Camps and clinics are not sellable online yet: a product is not linked to a specific session series.
+6. XP is never taken back after an attendance correction or a removed shoutout (the ledger is append-only).
+7. Leaderboards: an athlete with no birthday on file is not ranked; staff see the same public rows as families; families only see the age bands their own athletes are in.
+8. Gym TV links never expire; they work until revoked. Add an expiry?
+9. Operations staff can read session feedback; coaches never see billing signals on the retention board. Confirm both.
 
 ## Decisions Rod has made
-- **Referral reward (2026-11-11):** $50 when the referred family signs up. Implemented as a $50 account credit to the referring family, earned when the new family's first payment settles, and issued only after a staff member approves it. The demo seed uses this value. In a real org it is set in Settings → Growth (the program stays off until an owner turns it on). Still open: whether the new family also gets something (the demo shows a sample session credit), and whether "signs up" should mean the first settled payment (current) or a number of days active.
+- **Referral reward (2026-11-11):** $50 when the referred family signs up. Implemented as a $50 account credit to the referring family, earned when the new family's first payment settles, and issued only after a staff member approves it. The demo seed uses this value. In a real org it is set in Settings → Growth (the program stays off until an owner turns it on). Still open: whether "signs up" should mean the first settled payment (current) or a number of days active.
+- **Referral reward for the new family (2026-11-11):** the referred family also gets $50 off. Implemented as a configurable amount in Settings → Growth ("Discount for the new family"; empty, meaning off, in a real org; $50 in the demo seed, replacing the sample session credit).
+  - *When it applies:* it is reserved when the referred lead is converted to an athlete on a new billing account, and it comes off that account's **first open invoice above $0** as an invoice discount. This happens the moment the invoice is created (billing calls the referral evaluator), and also on page load and in the nightly job.
+  - *No staff approval, on purpose:* a discount only lowers an invoice the family still has to pay. Nothing is paid out, nothing is recorded as a payment, and a refund returns only what the family actually paid, so the discount reverses itself. Staff can still decline a reserved discount before it applies (People → Referrals).
+  - *The one case that does need approval:* if the first invoice was already paid before the discount could apply (for example the amount was configured afterwards, or the first invoice is billed by a provider subscription), it becomes a pending **account credit** and waits for the same staff approval as the referring family's credit, because credit is money-like.
+  - *Abuse guards:* one per new payer account and one per referral (database unique indexes), so a second child or a second referral never stacks; never for existing or returning families (nobody on the account had a membership, and the account had no invoice, before the inquiry; enforced even if "the referred family must be new" is switched off); never for self-referrals or leads put on the referrer's own account (rejected at attribution and again at conversion); not applied while a payment is in flight; not on invoices billed by a provider subscription or Zen Planner; capped at the invoice balance with no carry-over; a voided unpaid invoice gives the discount back for the next invoice.
+  - *Refunds, both sides the same:* a first payment refunded in full does not earn; if it is refunded after earning, every reward still pending (the referrer's credit and any converted new-family credit) is withheld automatically with the reason "First payment was refunded", and approval is refused in the meantime. Credit a staff member already approved is not taken back automatically; the Referrals page flags it for review.
+- **Parents can log at-home sessions for athletes under 13 (2026-11):** a guardian may finish an On Your Own session and enter its effort rating for a child.
+  - *Which guardians:* the guardian link must have **both training access and booking access** (new capability `training.log_at_home` in `policy.ts`). Training access because they already see the library and logged effort; booking access because that is the existing flag for acting on the child's activity. A co-parent who cannot book (Casey) or cannot see training cannot log. Health access is not required: effort ratings are training data, as on the load page.
+  - *Which athletes:* under 13 by the birthday on file. **An athlete with no birthday on file does not count as under 13 here.** Elsewhere an unknown age takes the more restrictive reading (the library is limited to under-13 sessions); here the restrictive reading is that nobody else may log in the athlete's name. Staff enter the birthday to enable it. It stops on the 13th birthday.
+  - *Scope:* at-home sessions only. Workouts, habits and practice or game logs stay with the athlete and coaches.
+  - *Record:* the completion stores who logged it and `logged_as = guardian`; the audit entry says a parent logged it on behalf of an athlete under 13; coaches see a "Logged by parent: name" badge in the review queue and families see "logged by a parent" in the history. It counts toward streaks, XP and load exactly like the athlete's own log (same rows).
+- **One gym TV board for the whole business is fine (no per-location boards).** Nothing to build; the board stays one per organization.
 

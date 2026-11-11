@@ -60,6 +60,36 @@ test("guardian can read a session but not finish it; an under-13 athlete only ge
   await expect(page.getByRole("heading", { level: 3, name: "Bodyweight Strength Circuit" })).toHaveCount(0);
 });
 
+test("a parent logs an at-home session and its effort rating for a child under 13; the coach sees it was logged by a parent", async ({ page }) => {
+  await login(page, USERS.alex);
+  await page.goto("/anywhere");
+  // Maya is 15: view only. Eli is 12 and Alex has training and booking access: Start.
+  await page.getByRole("navigation", { name: "Choose athlete" }).getByRole("link", { name: "Eli" }).click();
+  await expect(page.getByRole("heading", { level: 3, name: "Youth Agility Play" })).toBeVisible();
+  await page.getByRole("link", { name: /Start\s*: Youth Agility Play/ }).first().click();
+  await page.waitForURL(/\/anywhere\/sessions\//);
+  await expect(page.getByRole("note").filter({ hasText: SAFETY })).toBeVisible();
+  await expect(page.getByTestId("parent-logging-note")).toContainText("You are logging this for Eli");
+  const finish = page.getByRole("button", { name: "Finish session" });
+  await expect(finish).toBeDisabled();
+  await page.locator("ol input[type=checkbox]").first().check();
+  await page.getByLabel("How many minutes did it take Eli?").fill("14");
+  await page.getByRole("group", { name: /How hard did it feel for Eli/ }).locator('label:has(input[value="4"])').click();
+  await finish.click();
+  await expect(page.getByText("Saved for Eli. It counts toward Eli's weekly streak, and the coach can see that a parent logged it.")).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("link", { name: "Back to On Your Own" }).click();
+  await expect(page.getByRole("heading", { name: "Done recently" })).toBeVisible();
+  await expect(page.getByText(/14 min · effort 4 · logged by a parent/).first()).toBeVisible();
+
+  // Staff review queue shows who logged it.
+  await page.context().clearCookies();
+  await login(page, USERS.rod);
+  await page.goto("/training/anywhere");
+  const row = page.getByRole("row").filter({ hasText: "Youth Agility Play" }).filter({ hasText: "Logged by parent" }).first();
+  await expect(row).toBeVisible();
+  await expect(row).toContainText("Eli");
+});
+
 test("staff are sent to the coach library; signed-out visitors cannot post completions", async ({ page, request }) => {
   const res = await request.post("/api/anywhere/complete", { data: { items: [] } });
   expect(res.status()).toBe(401);

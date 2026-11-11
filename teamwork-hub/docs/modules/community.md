@@ -200,8 +200,9 @@ random.
 ## Not built
 
 - Sound, animations and transitions (deliberately).
-- A per-location board (one board per organization; screens are not bound to a location).
+- A per-location board. Owner decision (2026-11): one board for the whole business is fine, so this is not planned.
 - Photos or avatars on the board.
 - Family-to-family reactions or comments (shoutouts are staff-authored only).
-- A cron for challenge completion: completions are recorded when Athlete Home or `/leaderboards`
-  is next opened, so a badge can land a little after the qualifying session.
+- (Built since: challenge completions are also recorded nightly by `community.challenges.nightly`,
+  the same `syncChallengeCompletions` the pages call. See `docs/modules/scheduled-jobs.md`.)
+- A per-challenge transaction in that job: one organization's challenges are evaluated together.
