@@ -10,6 +10,7 @@ import {
   anywhereSessions,
   athletes,
   exercises,
+  users,
   type AnywhereCategory,
   type AnywhereEquipment,
 } from "@/db/schema";
@@ -239,7 +240,10 @@ export async function completeSession(tx: Tx, v: Viewer, raw: unknown, now = new
   const input = completionInput.parse(raw);
   const { tz } = await orgAnywhere(tx, v.orgId);
   const access = await anywhereAccess(tx, v, input.athleteId, localYmd(now, tz));
-  if (!access?.canLog) throw new AuthzError();
+  // The athlete, a coach or staff member with training.log, or (owner decision 2026-11) a guardian
+  // with training and booking access when the athlete is under 13 by the birthday on file.
+  if (!access?.canFinishSession) throw new AuthzError();
+  const loggedAs = access.finishesAsGuardian ? ("guardian" as const) : isStaff(v) ? ("staff" as const) : ("athlete" as const);
   const [existing] = await tx.select().from(anywhereCompletions).where(and(eq(anywhereCompletions.orgId, v.orgId), eq(anywhereCompletions.clientKey, input.clientKey)));
   if (existing) {
     if (existing.athleteId !== input.athleteId) throw new AuthzError();
@@ -270,6 +274,7 @@ export async function completeSession(tx: Tx, v: Viewer, raw: unknown, now = new
       durationMinutes: input.durationMinutes,
       rpe: input.rpe,
       loggedBy: v.userId,
+      loggedAs,
       isDemo: a?.isDemo ?? false,
     })
     .onConflictDoNothing({ target: [anywhereCompletions.orgId, anywhereCompletions.clientKey] })
@@ -287,7 +292,10 @@ export async function completeSession(tx: Tx, v: Viewer, raw: unknown, now = new
     await tx.update(anywhereCompletions).set({ activitySessionId: act.id }).where(eq(anywhereCompletions.id, row.id));
     loadLogged = true;
   }
-  await audit(tx, actorOf(v), "anywhere.session.complete", "anywhere_completion", row.id, { summary: `Finished On Your Own session "${session.title}"${loadLogged ? " (load logged)" : ""}` });
+  await audit(tx, actorOf(v), "anywhere.session.complete", "anywhere_completion", row.id, {
+    summary: `${loggedAs === "guardian" ? "Parent logged" : "Finished"} On Your Own session "${session.title}"${loggedAs === "guardian" ? " on behalf of an athlete under 13" : ""}${loadLogged ? " (load logged)" : ""}`,
+    after: { athleteId: input.athleteId, loggedAs, loggedBy: v.userId, loadLogged },
+  });
   return { status: "applied", completionId: row.id, loadLogged };
 }
 
@@ -304,6 +312,8 @@ export type CompletionView = {
   durationMinutes: number | null;
   rpe: number | null;
   reviewedAt: Date | null;
+  /** "guardian" = a parent entered it for an athlete under 13. Shown to coaches as "Logged by parent". */
+  loggedAs: "athlete" | "guardian" | "staff";
 };
 
 const view = (c: typeof anywhereCompletions.$inferSelect): CompletionView => ({
@@ -319,6 +329,7 @@ const view = (c: typeof anywhereCompletions.$inferSelect): CompletionView => ({
   durationMinutes: c.durationMinutes,
   rpe: c.rpe,
   reviewedAt: c.reviewedAt,
+  loggedAs: c.loggedAs,
 });
 
 /** An athlete's finished sessions, newest first. Needs training.read (same as load data). */
@@ -334,7 +345,7 @@ export async function completionsForAthlete(tx: Tx, v: Viewer, athleteId: string
 }
 
 /** Coach review queue: finished sessions for athletes in the viewer's scope. Staff only. */
-export async function completionReviewQueue(tx: Tx, v: Viewer, opts: { includeReviewed?: boolean; limit?: number } = {}): Promise<(CompletionView & { athleteName: string })[]> {
+export async function completionReviewQueue(tx: Tx, v: Viewer, opts: { includeReviewed?: boolean; limit?: number } = {}): Promise<(CompletionView & { athleteName: string; /** The parent's name when a guardian logged it. */ loggedByName: string | null })[]> {
   if (!isStaff(v)) throw new AuthzError();
   const scope = await accessibleAthleteIds(tx, v, "training.read");
   const rows = await tx
@@ -344,7 +355,9 @@ export async function completionReviewQueue(tx: Tx, v: Viewer, opts: { includeRe
     .orderBy(desc(anywhereCompletions.completedAt))
     .limit(opts.limit ?? 30);
   const names = await athleteNames(tx, v.orgId, rows.map((r) => r.athleteId));
-  return rows.map((r) => ({ ...view(r), athleteName: names.get(r.athleteId) ?? "Athlete" }));
+  const parentIds = [...new Set(rows.filter((r) => r.loggedAs === "guardian" && r.loggedBy).map((r) => r.loggedBy!))];
+  const parents = parentIds.length ? await tx.select({ id: users.id, name: users.displayName }).from(users).where(and(eq(users.orgId, v.orgId), inArray(users.id, parentIds))) : [];
+  return rows.map((r) => ({ ...view(r), athleteName: names.get(r.athleteId) ?? "Athlete", loggedByName: r.loggedAs === "guardian" ? (parents.find((p) => p.id === r.loggedBy)?.name ?? null) : null }));
 }
 
 export async function markCompletionReviewed(tx: Tx, v: Viewer, completionId: string) {

@@ -44,7 +44,8 @@ export default async function AnywhereSessionPage({ params, searchParams }: { pa
         athleteId={child.athleteId}
         sessionId={session.id}
         plannedMinutes={session.durationMinutes}
-        canLog={access.canLog}
+        canLog={access.canFinishSession}
+        onBehalfOf={access.finishesAsGuardian ? access.firstName : null}
         backHref={back}
         steps={session.steps.map((s) => ({ id: s.id, name: s.exercise.name, prescription: s.prescription, cue: s.cue, notes: s.exercise.coachingNotes, videoUrl: s.exercise.videoUrl }))}
       />

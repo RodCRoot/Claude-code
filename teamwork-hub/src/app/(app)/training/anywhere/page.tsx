@@ -167,7 +167,14 @@ export default async function AnywhereCoachPage() {
                             {c.athleteName}
                           </Link>
                         </Td>
-                        <Td>{c.sessionTitle}</Td>
+                        <Td>
+                          {c.sessionTitle}
+                          {c.loggedAs === "guardian" ? (
+                            <span className="ml-2 inline-block">
+                              <Badge variant="blue">Logged by parent{c.loggedByName ? `: ${c.loggedByName}` : ""}</Badge>
+                            </span>
+                          ) : null}
+                        </Td>
                         <Td>{fmt(c.completedAt, "EEE MMM d, h:mm a", tz)}</Td>
                         <Td align="right">
                           {c.stepsDone}/{c.stepsTotal}

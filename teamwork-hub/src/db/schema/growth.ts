@@ -79,7 +79,14 @@ export const referrals = pgTable(
   (t) => [uniqueIndex("referrals_lead_uq").on(t.leadId), index("referrals_referrer_idx").on(t.orgId, t.referrerPayerAccountId)],
 );
 
-export type RewardKind = "account_credit" | "session_credits";
+/**
+ * `invoice_discount` is the new family's reward (owner decision 2026-11-11): money off the referred
+ * family's FIRST invoice. It is reserved as `pending` when the referred athlete starts, applied
+ * automatically to the first open invoice (`approved`, `applied_invoice_id` set) and never pays
+ * money out. If the first invoice was already paid before it could apply, it is converted to a
+ * pending `account_credit` that needs the usual staff approval.
+ */
+export type RewardKind = "account_credit" | "session_credits" | "invoice_discount";
 
 /**
  * A reward that was earned and waits for staff approval. Nothing is issued until a staff member
@@ -107,13 +114,23 @@ export const referralRewards = pgTable(
     /** Athlete who received session credits (chosen at approval). */
     athleteId: uuid("athlete_id").references(() => athletes.id),
     creditBucketId: uuid("credit_bucket_id").references(() => creditBuckets.id),
+    /** invoice_discount only: the invoice the discount was applied to, and how much of it was used. */
+    appliedInvoiceId: uuid("applied_invoice_id").references(() => invoices.id),
+    appliedMinor: minor("applied_minor"),
     decidedBy: uuid("decided_by").references(() => users.id),
     decidedAt: ts("decided_at"),
     declineReason: text("decline_reason"),
     isDemo: isDemo(),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex("referral_rewards_uq").on(t.referralId, t.beneficiary), index("referral_rewards_status_idx").on(t.orgId, t.status)],
+  (t) => [
+    uniqueIndex("referral_rewards_uq").on(t.referralId, t.beneficiary),
+    index("referral_rewards_status_idx").on(t.orgId, t.status),
+    // One live new-family reward per payer account, whatever referral it came from (not stackable).
+    uniqueIndex("referral_rewards_referred_payer_uq")
+      .on(t.payerAccountId)
+      .where(sql`${t.beneficiary} = 'referred' AND ${t.status} <> 'declined'`),
+  ],
 );
 
 /**

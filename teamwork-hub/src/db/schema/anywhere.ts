@@ -117,6 +117,8 @@ export const anywhereCompletions = pgTable(
     /** Set only when both RPE and duration were given: the load row with source "on_your_own". */
     activitySessionId: uuid("activity_session_id").references(() => activitySessions.id, { onDelete: "set null" }),
     loggedBy: uuid("logged_by").references(() => users.id),
+    /** Who entered it: the athlete, a guardian on behalf of an athlete under 13, or staff. */
+    loggedAs: text("logged_as").$type<"athlete" | "guardian" | "staff">().notNull().default("athlete"),
     reviewedAt: ts("reviewed_at"),
     reviewedBy: uuid("reviewed_by").references(() => users.id),
     isDemo: isDemo(),

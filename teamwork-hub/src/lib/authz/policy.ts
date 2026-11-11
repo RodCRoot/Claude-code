@@ -6,6 +6,7 @@ import {
   groupMembers,
   guardianships,
   payerAuthorizations,
+  people,
   type NoteVisibility,
   type Role,
 } from "@/db/schema";
@@ -34,6 +35,13 @@ export type Capability =
   | "training.read"
   | "training.write"
   | "training.log"
+  /**
+   * Finish an On Your Own (at-home) session and enter its effort rating on behalf of an athlete
+   * under 13. Guardians only, and only with BOTH training access and booking access on that
+   * child (see guardianMayLogAtHome). Never implies training.log: workouts, habits and practice
+   * or game logs stay with the athlete and coaches.
+   */
+  | "training.log_at_home"
   | "health.read"
   | "health.write"
   | "health.review"
@@ -187,6 +195,32 @@ function guardianCaps(g: GuardianLink): Capability[] {
   return caps;
 }
 
+/** Guardians may log at-home sessions only for athletes younger than this. */
+export const GUARDIAN_LOG_UNDER_AGE = 13;
+
+/** Whole years on a calendar date (both `YYYY-MM-DD`). Null when no birthday is on file. */
+export function ageOnDate(dateOfBirth: string | null, on: string): number | null {
+  if (!dateOfBirth) return null;
+  let age = Number(on.slice(0, 4)) - Number(dateOfBirth.slice(0, 4));
+  if (on.slice(5) < dateOfBirth.slice(5)) age--;
+  return age;
+}
+
+/**
+ * May this guardian finish an at-home session for this child (owner decision, 2026-11)?
+ * - the link must carry training access (they can already see the library and logged effort) AND
+ *   booking access (the flag for acting on the child's activity; a co-parent who cannot book,
+ *   or who cannot see training, cannot log);
+ * - the athlete must be under 13 by the birthday on file. NO birthday on file means NO: an
+ *   unknown age always takes the more restrictive reading (it restricts the library elsewhere,
+ *   and here it does not widen what someone else may do in the athlete's name).
+ * Health access is not required: effort ratings are training data (same rule as the load page).
+ */
+export function guardianMayLogAtHome(g: Pick<GuardianLink, "canViewTraining" | "canBook">, dateOfBirth: string | null, on: string): boolean {
+  const age = ageOnDate(dateOfBirth, on);
+  return g.canViewTraining && g.canBook && age !== null && age < GUARDIAN_LOG_UNDER_AGE;
+}
+
 const ATHLETE_SELF_CAPS: Capability[] = [
   "profile.read", "training.read", "training.log", "health.read", "health.write", "booking.create", "messages.send", "forms.sign",
 ];
@@ -195,8 +229,8 @@ const ATHLETE_SELF_CAPS: Capability[] = [
  * The single source of truth for "can this viewer do X to this athlete?".
  * Organization boundaries are always enforced first.
  */
-export async function athleteCapabilities(tx: Tx, v: Viewer, athleteId: string): Promise<Set<Capability>> {
-  const [a] = await tx.select({ orgId: athletes.orgId }).from(athletes).where(eq(athletes.id, athleteId));
+export async function athleteCapabilities(tx: Tx, v: Viewer, athleteId: string, opts: { /** Facility-local date used for age rules. */ today?: string } = {}): Promise<Set<Capability>> {
+  const [a] = await tx.select({ orgId: athletes.orgId, personId: athletes.personId }).from(athletes).where(eq(athletes.id, athleteId));
   if (!a || a.orgId !== v.orgId) return new Set();
 
   switch (v.role) {
@@ -212,6 +246,10 @@ export async function athleteCapabilities(tx: Tx, v: Viewer, athleteId: string):
       const links = await guardianLinks(tx, v);
       const link = links.find((l) => l.athleteId === athleteId);
       const caps = new Set(link ? guardianCaps(link) : []);
+      if (link && link.canViewTraining && link.canBook) {
+        const [p] = await tx.select({ dob: people.dateOfBirth }).from(people).where(eq(people.id, a.personId));
+        if (guardianMayLogAtHome(link, p?.dob ?? null, opts.today ?? today())) caps.add("training.log_at_home");
+      }
       // A guardian might also be the payer; that grants billing.read only.
       if (await isPayerFor(tx, v, athleteId)) caps.add("billing.read");
       return caps;
