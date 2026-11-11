@@ -74,3 +74,7 @@ Defaults come from Rod's documented procedures; every value is editable in Setti
 11. College weekly plan bills every 7 days from start. Align to Mondays instead?
 12. Membership audit: In Season plans are recognised by name ("In Season"); siblings are grouped by payer account; Zen Planner-era amounts are estimates (no ZP billing history imported).
 13. Payroll: flag thresholds (over 12 h, 2.5× usual shift, under 0.5 h, 90 min off usual start) and the flat 17% deduction are placeholders; confirm with the accountant.
+
+## Decisions Rod has made
+- **Referral reward (2026-11-11):** $50 when the referred family signs up. Implemented as a $50 account credit to the referring family, earned when the new family's first payment settles, and issued only after a staff member approves it. The demo seed uses this value. In a real org it is set in Settings → Growth (the program stays off until an owner turns it on). Still open: whether the new family also gets something (the demo shows a sample session credit), and whether "signs up" should mean the first settled payment (current) or a number of days active.
+

@@ -36,9 +36,9 @@ export async function seedGrowth(ctx: SeedCtx) {
     referral: {
       ...DEFAULT_GROWTH.referral,
       enabled: true,
-      reward: { type: "account_credit", amountMinor: 2500, credits: null, creditExpiryDays: null },
+      reward: { type: "account_credit", amountMinor: 5000, credits: null, creditExpiryDays: null },
       referredReward: { type: "session_credits", amountMinor: null, credits: 1, creditExpiryDays: 30 },
-      howItWorks: "Sample text for the demo: thank you for telling friends about us. The reward shown here is a placeholder, not a real Teamwork offer.",
+      howItWorks: "Thank you for telling friends about us. The $50 account credit is our thank you. The friend's session credit shown here is a sample for the demo.",
     },
     offers: DEFAULT_GROWTH.offers,
   };
