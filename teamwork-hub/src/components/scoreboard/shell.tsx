@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { ButtonLink, Select, Tabs } from "@/components/ui";
+import { ButtonLink, Select, Tabs, buttonClass } from "@/components/ui";
 import { formatMoney } from "@/lib/money";
 import { definitionsFor, type DefinitionTab } from "@/lib/scoreboard/definitions";
 
@@ -133,11 +132,23 @@ export function DefinitionsDrawer({ tab }: { tab: DefinitionTab }) {
   );
 }
 
+/**
+ * CSV links are plain anchors on purpose: a Next <Link> would prefetch the route handler, which
+ * runs the whole export (and writes an audit row) every time the page is merely viewed.
+ */
 export function ExportLink({ table, q, children = "Export CSV", extra }: { table: string; q: ScoreboardQuery; children?: React.ReactNode; extra?: Record<string, string | number | null | undefined> }) {
   return (
-    <Link href={`/api/scoreboard/${table}${scoreboardQs(q, extra)}`} download prefetch={false} className="text-xs font-medium text-brand underline">
+    <a href={`/api/scoreboard/${table}${scoreboardQs(q, extra)}`} download className="text-xs font-medium text-brand underline">
       {children}
-    </Link>
+    </a>
+  );
+}
+
+export function ExportButton({ table, q, children = "Export CSV" }: { table: string; q: ScoreboardQuery; children?: React.ReactNode }) {
+  return (
+    <a href={`/api/scoreboard/${table}${scoreboardQs(q)}`} download className={buttonClass("secondary", "md")}>
+      {children}
+    </a>
   );
 }
 

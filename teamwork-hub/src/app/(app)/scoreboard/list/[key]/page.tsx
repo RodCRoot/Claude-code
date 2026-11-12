@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/db";
-import { refHref, scoreboardQs } from "@/components/scoreboard/shell";
+import { ExportButton, refHref, scoreboardQs } from "@/components/scoreboard/shell";
 import { ButtonLink, Callout, Card, CardBody, EmptyState, PageHeader, Stat, Table, Td, Th } from "@/components/ui";
 import { formatMoney } from "@/lib/money";
 import { dailyMetric, metricRows } from "@/lib/scoreboard/daily";
@@ -33,9 +33,7 @@ export default async function ScoreboardListPage({ params, searchParams }: { par
             <ButtonLink href={`/scoreboard${qs}`} variant="ghost">
               Back to scoreboard
             </ButtonLink>
-            <ButtonLink href={`/api/scoreboard/list-${def.key}${qs}`} variant="secondary" download>
-              Export CSV
-            </ButtonLink>
+            <ExportButton table={`list-${def.key}`} q={q}>Export CSV</ExportButton>
           </>
         }
       />

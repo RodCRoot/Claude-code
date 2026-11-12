@@ -2,8 +2,8 @@ import { db } from "@/db";
 import { ChartFigure } from "@/components/charts/chart-figure";
 import { ReportBarChart } from "@/components/charts/report-chart";
 import { ActionForm, SubmitButton } from "@/components/forms";
-import { DefinitionsDrawer, ExportLink, FilterBar, MonthsSelect, ScoreboardTabs, scoreboardQs } from "@/components/scoreboard/shell";
-import { ButtonLink, Callout, Card, CardBody, CardHeader, PageHeader, Stat } from "@/components/ui";
+import { ExportButton, DefinitionsDrawer, ExportLink, FilterBar, MonthsSelect, ScoreboardTabs } from "@/components/scoreboard/shell";
+import { Callout, Card, CardBody, CardHeader, PageHeader, Stat } from "@/components/ui";
 import { formatMoney } from "@/lib/money";
 import { BOTTLENECK_RULES, monthlyScoreboard, type MonthlyRowDef } from "@/lib/scoreboard/monthly";
 import { saveTargetsAction } from "../actions";
@@ -113,9 +113,7 @@ export default async function MonthlyScoreboardPage({ searchParams }: { searchPa
         title="Monthly funnel"
         description="Leads to consults to sales to clients to retention, month by month, against the ideal you set for each row."
         actions={
-          <ButtonLink href={`/api/scoreboard/monthly${scoreboardQs(qm)}`} variant="secondary" download>
-            Export CSV
-          </ButtonLink>
+          <ExportButton table="monthly" q={qm}>Export CSV</ExportButton>
         }
       />
       <ScoreboardTabs current="monthly" q={q} />

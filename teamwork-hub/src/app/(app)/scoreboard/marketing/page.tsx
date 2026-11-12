@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { ActionForm, SubmitButton } from "@/components/forms";
-import { DefinitionsDrawer, ExportLink, MonthsSelect, NA, ScoreboardTabs, money, scoreboardQs } from "@/components/scoreboard/shell";
-import { ButtonLink, Callout, Card, CardBody, CardHeader, EmptyState, Field, Input, PageHeader, Stat, Table, Td, Th } from "@/components/ui";
+import { ExportButton, DefinitionsDrawer, ExportLink, MonthsSelect, NA, ScoreboardTabs, money } from "@/components/scoreboard/shell";
+import { Callout, Card, CardBody, CardHeader, EmptyState, Field, Input, PageHeader, Stat, Table, Td, Th } from "@/components/ui";
 import { formatMoney } from "@/lib/money";
 import { monthLabel } from "@/lib/scoreboard/core";
 import { leadSourceOptions, marketingEconomics } from "@/lib/scoreboard/marketing";
@@ -23,9 +23,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         title="Marketing economics"
         description="What a lead and a new member cost, from the spend you enter here and the lead sources the CRM already stores."
         actions={
-          <ButtonLink href={`/api/scoreboard/marketing-channels${scoreboardQs(q)}`} variant="secondary" download>
-            Export CSV
-          </ButtonLink>
+          <ExportButton table="marketing-channels" q={q}>Export CSV</ExportButton>
         }
       />
       <ScoreboardTabs current="marketing" q={{}} />

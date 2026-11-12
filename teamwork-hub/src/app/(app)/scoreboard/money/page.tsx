@@ -3,8 +3,8 @@ import { ChartFigure } from "@/components/charts/chart-figure";
 import { fmtChartValue } from "@/components/charts/format";
 import { ReportBarChart } from "@/components/charts/report-chart";
 import { ActionForm, SubmitButton } from "@/components/forms";
-import { DefinitionsDrawer, ExportLink, FilterBar, MonthsSelect, NA, ScoreboardTabs, money, pctText, scoreboardQs } from "@/components/scoreboard/shell";
-import { ButtonLink, Callout, Card, CardBody, CardHeader, EmptyState, Field, Input, PageHeader, Select, Stat, Table, Td, Th } from "@/components/ui";
+import { ExportButton, DefinitionsDrawer, ExportLink, FilterBar, MonthsSelect, NA, ScoreboardTabs, money, pctText } from "@/components/scoreboard/shell";
+import { Callout, Card, CardBody, CardHeader, EmptyState, Field, Input, PageHeader, Select, Stat, Table, Td, Th } from "@/components/ui";
 import { SCOREBOARD_EXPENSE_CATEGORIES } from "@/db/schema";
 import { formatMoney } from "@/lib/money";
 import { monthLabel } from "@/lib/scoreboard/core";
@@ -74,9 +74,7 @@ export default async function MoneyPage({ searchParams }: { searchParams: Promis
         title="Money view"
         description="Collected, billed and still owed by month, where the revenue came from, and a simple margin from the expenses you enter."
         actions={
-          <ButtonLink href={`/api/scoreboard/money${scoreboardQs(qm)}`} variant="secondary" download>
-            Export CSV
-          </ButtonLink>
+          <ExportButton table="money" q={qm}>Export CSV</ExportButton>
         }
       />
       <ScoreboardTabs current="money" q={q} />

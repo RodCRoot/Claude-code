@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { db } from "@/db";
-import { DefinitionsDrawer, ExportLink, FilterBar, ScoreboardTabs, refHref, scoreboardQs } from "@/components/scoreboard/shell";
-import { ButtonLink, Card, CardBody, CardHeader, EmptyState, PageHeader, Table, Td, Th } from "@/components/ui";
+import { ExportButton, DefinitionsDrawer, ExportLink, FilterBar, ScoreboardTabs, refHref, scoreboardQs } from "@/components/scoreboard/shell";
+import { Card, CardBody, CardHeader, EmptyState, PageHeader, Table, Td, Th } from "@/components/ui";
 import { formatMoney } from "@/lib/money";
 import { dailyScoreboard, type MetricGroup, type MetricValue } from "@/lib/scoreboard/daily";
 import { fmt, fmtTime } from "@/lib/time";
@@ -65,9 +65,7 @@ export default async function ScoreboardPage({ searchParams }: { searchParams: P
         title="Owner scoreboard"
         description="One page for the morning check. Every number is defined once (see Definitions at the bottom) and opens the list of rows behind it."
         actions={
-          <ButtonLink href={`/api/scoreboard/daily${qs}`} variant="secondary" download>
-            Export CSV
-          </ButtonLink>
+          <ExportButton table="daily" q={q}>Export CSV</ExportButton>
         }
       />
       <ScoreboardTabs current="daily" q={q} />

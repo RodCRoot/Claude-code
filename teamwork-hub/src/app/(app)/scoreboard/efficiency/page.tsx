@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { ActionForm, SubmitButton } from "@/components/forms";
-import { DefinitionsDrawer, ExportLink, FilterBar, MonthsSelect, NA, ScoreboardTabs, money, pctText, scoreboardQs } from "@/components/scoreboard/shell";
-import { Badge, ButtonLink, Callout, Card, CardBody, CardHeader, EmptyState, Field, Input, PageHeader, Select, Table, Td, Th } from "@/components/ui";
+import { ExportButton, DefinitionsDrawer, ExportLink, FilterBar, MonthsSelect, NA, ScoreboardTabs, money, pctText } from "@/components/scoreboard/shell";
+import { Badge, Callout, Card, CardBody, CardHeader, EmptyState, Field, Input, PageHeader, Select, Table, Td, Th } from "@/components/ui";
 import { DEFAULT_THRESHOLDS, THRESHOLD_FIELDS } from "@/lib/scoreboard/core";
 import { payrollByMonth, SLOT_WEEKS, slotUtilisation } from "@/lib/scoreboard/efficiency";
 import { fmtDate } from "@/lib/time";
@@ -31,9 +31,7 @@ export default async function EfficiencyPage({ searchParams }: { searchParams: P
         title="Schedule and payroll"
         description="Which weekly time slots are worth their coaching hours, and what payroll costs against what was collected."
         actions={
-          <ButtonLink href={`/api/scoreboard/slots${scoreboardQs(qx)}`} variant="secondary" download>
-            Export slots CSV
-          </ButtonLink>
+          <ExportButton table="slots" q={qx}>Export slots CSV</ExportButton>
         }
       />
       <ScoreboardTabs current="efficiency" q={q} />
