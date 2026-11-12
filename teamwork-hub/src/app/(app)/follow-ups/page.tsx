@@ -123,7 +123,7 @@ export default async function FollowUpsPage({ searchParams }: { searchParams: Pr
         </div>
 
         <div className="space-y-4">
-          <Card>
+          <Card id="no-shows">
             <CardHeader title="Yesterday's no-shows" kicker={`${lists.noShows.length}`} />
             {lists.noShows.length ? (
               <ul className="divide-y divide-edge">
@@ -135,7 +135,7 @@ export default async function FollowUpsPage({ searchParams }: { searchParams: Pr
               <p className="px-4 py-3 text-sm text-ink-3">No no-shows yesterday.</p>
             )}
           </Card>
-          <Card>
+          <Card id="absent">
             <CardHeader title="Absent members" kicker={`${lists.absent.length}`} />
             <p className="border-b border-edge px-4 py-2 text-xs text-ink-3">
               No visit for {lists.window.from} to {lists.window.to} days, not counting time on hold. Same rule as the retention radar.

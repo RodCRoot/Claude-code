@@ -141,10 +141,10 @@ export async function seedJourney(ctx: SeedCtx) {
   await tx.insert(coachAssignments).values({ orgId, coachUserId: ctx.users.tess, athleteId: sage.athleteId });
   await tx.insert(communityShoutouts).values({ orgId, athleteId: sage.athleteId, authorUserId: ctx.users.tess, template: "consistency", localDate: day(-6), isDemo: true, createdAt: at(-6) });
 
-  // 7. On hold: started six days ago, back in twelve.
+  // 7. On hold: started ten days ago, back in eight (the mid-hold check-in was due yesterday).
   const june = await member("june", "June", "Abara", 150, { status: "on_hold" });
-  for (let d = -60; d <= -8; d += 4) await book(june.athleteId, d, "attended");
-  await tx.insert(membershipHolds).values({ membershipId: june.membershipId, startDate: day(-6), endDate: day(12), reason: "Family travel (sample)", requestedOn: day(-8), requestChannel: "email", createdBy: ctx.users.erin });
+  for (let d = -60; d <= -12; d += 4) await book(june.athleteId, d, "attended");
+  await tx.insert(membershipHolds).values({ membershipId: june.membershipId, startDate: day(-10), endDate: day(8), reason: "Family travel (sample)", requestedOn: day(-12), requestChannel: "email", createdBy: ctx.users.erin });
   await tx.insert(coachAssignments).values({ orgId, coachUserId: ctx.users.marcus, athleteId: june.athleteId });
 
   // 8. Cancellation scheduled for ten days from now, no reason recorded yet.
@@ -176,7 +176,7 @@ export async function seedJourney(ctx: SeedCtx) {
   await done(marcus, theo.athleteId, "next_day_checkin", "Quick text the next morning, all good (sample note).", 7);
   const thanks = await step(theo.athleteId, "thank_you_card");
   if (thanks?.status === "open") await skipStep(tx, erin, { taskId: thanks.taskId, reason: "Out of cards this week (sample reason)" }, { now: at(-1) });
-  await tx.insert(notes).values({ orgId, subjectPersonId: june.personId, authorUserId: ctx.users.marcus, body: "Reach-out: wished them a good trip before the hold started (sample note).", category: "reach_out", visibility: "coaches_assigned", createdAt: at(-7) });
+  await tx.insert(notes).values({ orgId, subjectPersonId: june.personId, authorUserId: ctx.users.marcus, body: "Reach-out: wished them a good trip before the hold started (sample note).", category: "reach_out", visibility: "coaches_assigned", createdAt: at(-11) });
 
   // Sample operations checklist (invented wording) with a week of ticks.
   const items = await tx.insert(opsChecklistItems).values(SAMPLE_OPS_ITEMS.map(([section, label], i) => ({ orgId, section, label, sortOrder: i * 10, isDemo: true }))).returning();
