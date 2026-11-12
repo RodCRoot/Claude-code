@@ -51,7 +51,7 @@ test("owner: daily numbers open the rows behind them and reconcile", async ({ pa
   await expect(page.locator("#def-past_due")).toContainText("v1");
 
   // The filter narrows every tile the same way; lead numbers are withheld, not shown unfiltered.
-  await page.getByLabel("Location").selectOption({ label: "Linton" });
+  await page.locator("#sb-location").selectOption({ label: "Linton" });
   await page.getByRole("button", { name: "Apply" }).click();
   await expect(page).toHaveURL(/location=[0-9a-f-]{36}/);
   await expect(page.getByText(/^Filter on:/)).toBeVisible();

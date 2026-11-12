@@ -278,7 +278,7 @@ const autopayOffRows = (c: Ctx, d: string) => sql`
 
 const expiringRows = (c: Ctx, d: string) => sql`
   select 'membership' as ref_kind, ms.id as ref_id, ms.name, ms.product || ' · ends ' || to_char(coalesce(ms.end_date, ms.cancel_at), 'Mon DD, YYYY') as detail, ms.monthly_minor as amount_minor, coalesce(ms.end_date, ms.cancel_at) as day, ms.athlete_id, ms.product as grp
-  from ms where ${activeOn("ms", d)} and coalesce(ms.end_date, ms.cancel_at) >= ${d} and coalesce(ms.end_date, ms.cancel_at) <= ${addDaysYmd(d, 30)}`;
+  from ms where ${activeOn("ms", d)} and not ${trialOn("ms", d)} and coalesce(ms.end_date, ms.cancel_at) >= ${d} and coalesce(ms.end_date, ms.cancel_at) <= ${addDaysYmd(d, 30)}`;
 
 const duplicateRows = (c: Ctx, d: string) => sql`
   select 'person' as ref_kind, x.person_id as ref_id, x.name, x.n || ' active memberships: ' || x.plans as detail, null::bigint as amount_minor, null::date as day, x.athlete_id, null::text as grp
@@ -695,7 +695,7 @@ export const DAILY_METRICS: MetricDef[] = [
     group: "Membership checks",
     kind: "count",
     version: 1,
-    definition: "Active memberships with an end date or a scheduled cancellation date from today through 30 days from now. Commitment end dates are not expirations (the membership continues month to month).",
+    definition: "Active, non-trial memberships with an end date or a scheduled cancellation date from today through 30 days from now. Commitment end dates are not expirations (the membership continues month to month).",
     filterNote: MEMBERSHIP_FILTER,
     dims: BOTH,
     rows: expiringRows,

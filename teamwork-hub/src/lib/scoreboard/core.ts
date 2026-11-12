@@ -87,7 +87,7 @@ export type Ctx = {
   settings: ScoreboardSettings;
 };
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const parseId = (v: string | undefined | null) => (v && UUID.test(v) ? v : null);
 
 /** Programs offered in the filter: membership and trial products of this org. */

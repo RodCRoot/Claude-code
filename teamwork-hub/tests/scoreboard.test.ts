@@ -18,10 +18,10 @@ import { scoreboardWorld } from "./scoreboard-helpers";
 /**
  * Each describe block builds its own core-only organization and inserts rows by hand, so every
  * expected number below can be counted from the fixture comments. "Today" is Wednesday
- * 2026-03-18 at noon, facility time; next month is April (30 days).
+ * 2026-03-18 at 1 PM, facility time; next month is April (30 days).
  */
 const TODAY = "2026-03-18";
-const NOW = localToUtc(TODAY, "12:00", "America/Indiana/Indianapolis");
+const NOW = localToUtc(TODAY, "13:00", "America/Indiana/Indianapolis");
 const db = () => testDb();
 type Org = Awaited<ReturnType<typeof seedOrg>>;
 const ctxFor = async (org: Org, filter: { locationId?: string; productId?: string } = {}, user = "rod") => scoreboardContext(db(), await viewerFor(org, user), { ...filter, today: TODAY, now: NOW });

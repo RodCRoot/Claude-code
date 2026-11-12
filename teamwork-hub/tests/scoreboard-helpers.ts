@@ -97,11 +97,11 @@ export async function scoreboardWorld(ctx: Ctx, today: string) {
       .values({ orgId, payerAccountId: payerId, number: `T-${++inv}-${orgId.slice(0, 6)}`, status: o.status ?? "open", subtotalMinor: o.total, totalMinor: o.total, issuedAt: issued, dueDate: day(o.due), membershipId: o.membershipId ?? null, periodStart: o.membershipId ? day(o.issued ?? o.due) : null, createdAt: issued })
       .returning();
     if (o.paid) await payment(payerId, i.id, o.paid, o.paidDaysAgo ?? 0);
-    if (o.pending) await db.insert(transactions).values({ orgId, payerAccountId: payerId, invoiceId: i.id, kind: "charge", status: "pending", amountMinor: o.pending, currency: "USD", provider: "manual", verification: "staff_attested", occurredAt: at(day(0), "08:00") });
+    if (o.pending) await db.insert(transactions).values({ orgId, payerAccountId: payerId, invoiceId: i.id, kind: "charge", status: "pending", amountMinor: o.pending, currency: "USD", provider: "manual", verification: "staff_attested", recordedBy: ctx.users.rod, manualReference: "TEST-REF", occurredAt: at(day(0), "08:00") });
     return i;
   }
   const payment = (payerId: string, invoiceId: string | null, amountMinor: number, daysAgo: number, kind: "manual_payment" | "refund" = "manual_payment") =>
-    db.insert(transactions).values({ orgId, payerAccountId: payerId, invoiceId, kind, status: "settled", amountMinor: kind === "refund" ? -Math.abs(amountMinor) : amountMinor, currency: "USD", provider: "manual", verification: "staff_attested", occurredAt: at(day(-daysAgo), "09:00"), settledAt: at(day(-daysAgo), "09:00") });
+    db.insert(transactions).values({ orgId, payerAccountId: payerId, invoiceId, kind, status: "settled", amountMinor: kind === "refund" ? -Math.abs(amountMinor) : amountMinor, currency: "USD", provider: "manual", verification: "staff_attested", recordedBy: ctx.users.rod, manualReference: "TEST-REF", occurredAt: at(day(-daysAgo), "09:00"), settledAt: at(day(-daysAgo), "09:00") });
 
   const [svc] = await db.insert(serviceTypes).values({ orgId, name: "Test Class", kind: "class" }).returning();
   const [assess] = await db.insert(serviceTypes).values({ orgId, name: "Test Assessment", kind: "assessment" }).returning();
