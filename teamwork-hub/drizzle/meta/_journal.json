@@ -190,6 +190,13 @@
       "when": 1794413680331,
       "tag": "0026_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1794503109177,
+      "tag": "0027_scoreboard",
+      "breakpoints": true
     }
   ]
 }
