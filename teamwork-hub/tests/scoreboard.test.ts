@@ -4,7 +4,7 @@ import { auditEvents, membershipEvents, staffPayRates, timeEntries } from "@/db/
 import { UserError } from "@/lib/actions";
 import { AuthzError, can } from "@/lib/authz/policy";
 import { calculatePayroll } from "@/lib/payroll/service";
-import { saveTargets, saveThresholds, scoreboardContext, scoreboardSettingsFrom, type Ctx } from "@/lib/scoreboard/core";
+import { saveTargets, saveThresholds, scoreboardContext, scoreboardSettingsFrom } from "@/lib/scoreboard/core";
 import { AGING_ORDER, activeByLocation, classesToday, DAILY_METRICS, dailyScoreboard, metricRows } from "@/lib/scoreboard/daily";
 import { definitionsFor } from "@/lib/scoreboard/definitions";
 import { payrollByMonth, slotUtilisation } from "@/lib/scoreboard/efficiency";
