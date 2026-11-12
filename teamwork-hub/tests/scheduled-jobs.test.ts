@@ -82,10 +82,15 @@ describe("schedule", () => {
         expect(created).toBeGreaterThanOrEqual(3);
         expect(await rowsFor("2031-07-09")).toEqual([...NIGHTLY_JOB_TYPES.map((t) => key(t, "2031-07-09")), key(RECAP_MONTHLY_JOB, "2031-07-09")].sort());
         // Every later pass that day (and a second worker) adds nothing.
-        expect(await enqueueScheduledJobs(tx, new Date("2031-07-09T06:06:00Z"))).toBe(0);
-        expect(await enqueueScheduledJobs(tx, new Date("2031-07-09T23:00:00Z"))).toBe(0);
+        // (Counted for this organization: other test files create organizations while this runs, and those get their own first jobs.)
+        const mine = async () => (await tx.select().from(jobs).where(eq(jobs.orgId, ctx.orgId))).length;
+        const n = await mine();
+        await enqueueScheduledJobs(tx, new Date("2031-07-09T06:06:00Z"));
+        await enqueueScheduledJobs(tx, new Date("2031-07-09T23:00:00Z"));
+        expect(await mine()).toBe(n);
         // 03:00 UTC on July 10 is still 11 PM on July 9 locally: nothing new. Next local morning: a new set.
-        expect(await enqueueScheduledJobs(tx, new Date("2031-07-10T03:00:00Z"))).toBe(0);
+        await enqueueScheduledJobs(tx, new Date("2031-07-10T03:00:00Z"));
+        expect(await mine()).toBe(n);
         expect(await enqueueScheduledJobs(tx, new Date("2031-07-10T07:00:00Z"))).toBeGreaterThanOrEqual(4);
         const [j] = await tx.select().from(jobs).where(eq(jobs.dedupeKey, key(ENGAGEMENT_NIGHTLY_JOB, "2031-07-10")));
         expect(j).toMatchObject({ orgId: ctx.orgId, status: "pending", payload: { orgId: ctx.orgId, date: "2031-07-10" } });

@@ -12,7 +12,6 @@ import {
   journeys,
   membershipHolds,
   memberships,
-  messageDeliveries,
   messages,
   notes,
   paymentMethods,
@@ -157,7 +156,7 @@ describe("generation is idempotent", () => {
     expect(b).toMatchObject({ date: TODAY, stepsCreated: 0, journeysCreated: 0 });
     expect(await counts()).toEqual(before);
     // Nothing in the module sends anything.
-    expect((await db().select({ n: sql<number>`count(*)::int` }).from(messageDeliveries))[0].n).toBe(0);
+    expect((await db().select({ n: sql<number>`count(*)::int` }).from(messages).innerJoin(threads, eq(threads.id, messages.threadId)).where(eq(threads.orgId, ctx.orgId)))[0].n).toBe(0);
     expect((await db().select().from(jobs).where(and(eq(jobs.orgId, ctx.orgId), eq(jobs.type, "messaging.deliver")))).length).toBe(0);
   });
 });
