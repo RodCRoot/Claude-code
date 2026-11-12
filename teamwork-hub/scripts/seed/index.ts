@@ -3,10 +3,10 @@ import type { Tx } from "../../src/db";
 import { todayLocal, DEFAULT_TZ } from "../../src/lib/time";
 import type { SeedCtx } from "./context";
 import { seedCore } from "./core";
-import { moduleSeeds } from "./modules";
+import { HISTORY_SEEDS, moduleSeeds } from "./modules";
 
 /** Builds the full synthetic demo dataset inside one transaction. */
-export async function seedAll(tx: Tx, opts: { today?: string; slug?: string; modules?: string[] } = {}): Promise<SeedCtx> {
+export async function seedAll(tx: Tx, opts: { today?: string; slug?: string; modules?: string[]; /** Also run the opt-in history seeds (demo database). */ history?: boolean } = {}): Promise<SeedCtx> {
   const [org] = await tx
     .insert(organizations)
     .values({
@@ -41,6 +41,7 @@ export async function seedAll(tx: Tx, opts: { today?: string; slug?: string; mod
   await seedCore(ctx);
   for (const [name, fn] of moduleSeeds) {
     if (opts.modules && !opts.modules.includes(name)) continue;
+    if (HISTORY_SEEDS.includes(name) && !(opts.modules ? opts.modules.includes(name) : opts.history)) continue;
     await fn(ctx);
     if (process.env.SEED_VERBOSE) console.log(`  seeded ${name}`);
   }

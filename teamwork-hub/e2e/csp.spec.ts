@@ -101,6 +101,7 @@ const ROLES: { name: string; email?: string; starts: string[] }[] = [
       "/performance", "/messages", "/messages/new", "/messages/outbox", "/messages/templates", "/messages/automations", "/documents", "/documents/archive",
       "/reports", "/settings", "/settings/audit", "/settings/integrations", "/settings/security", "/settings/users", "/imports", "/imports/exports", "/imports/hawkin", "/settings/engagement", "/settings/showcase", "/settings/community", "/leaderboards", "/display", "/people/showcases", "/training/recaps",
       "/people/requests", "/people/retention", "/people/retention/winback", "/reports/retention-saves", "/reports/session-feedback", "/reports/membership-audit", "/payroll", "/payroll/staff", "/payroll/import", "/payroll/settings", "/time",
+      "/scoreboard", "/scoreboard/monthly", "/scoreboard/efficiency", "/scoreboard/marketing", "/scoreboard/money", "/scoreboard/list/past_due",
       "/events", "/events/new", "/people/referrals", "/billing/opportunities", "/settings/growth", "/settings/jobs", "/reports/growth-referrals", "/reports/growth-shop-sales", "/reports/growth-offers", "/reports/growth-trial-passes",
     ],
   },

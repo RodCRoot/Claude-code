@@ -18,7 +18,7 @@ async function main() {
     await pool.end();
     return;
   }
-  const ctx = await db.transaction((tx) => seedAll(tx));
+  const ctx = await db.transaction((tx) => seedAll(tx, { history: true }));
   console.log(`Seeded synthetic demo organization ${ctx.orgId}`);
   console.log(`Demo password for every sample login: ${DEMO_PASSWORD}  (or use /dev/switch)`);
   await pool.end();

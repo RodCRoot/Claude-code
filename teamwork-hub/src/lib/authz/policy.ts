@@ -86,7 +86,15 @@ export type OrgCapability =
   /** Read an individual session-feedback response (rating + comment). Coaches only when "tell my coach" was ticked (checked per response). */
   | "feedback.review"
   /** Session-feedback averages report. A coach only gets their own sessions. */
-  | "feedback.report";
+  | "feedback.report"
+  /**
+   * Owner scoreboard (daily, monthly funnel, schedule efficiency, marketing, money view). It shows
+   * billing figures on every tab, so coaches never get it. Payroll cost and the operating margin
+   * additionally need payroll access (canManagePayroll).
+   */
+  | "scoreboard.view"
+  /** Edit scoreboard targets, thresholds, marketing spend and manual expenses. */
+  | "scoreboard.manage";
 
 const ORG_MATRIX: Record<OrgCapability, Role[]> = {
   "people.manage": ["owner", "admin", "operations"],
@@ -111,6 +119,8 @@ const ORG_MATRIX: Record<OrgCapability, Role[]> = {
   "retention.manage": ["owner", "admin", "operations"],
   "feedback.review": ["owner", "admin", "operations"],
   "feedback.report": ["owner", "admin", "coach"],
+  "scoreboard.view": ["owner", "admin", "operations"],
+  "scoreboard.manage": ["owner", "admin"],
 };
 
 export function can(v: Viewer, cap: OrgCapability): boolean {
