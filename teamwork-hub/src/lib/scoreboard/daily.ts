@@ -64,6 +64,8 @@ export type MetricDef = {
   dims: { location: boolean; program: boolean };
   /** Headline counts distinct athletes instead of rows (the row count is shown beside it). */
   people?: boolean;
+  /** What the summed amount of a COUNT metric means, e.g. "per month at plan price". Unset = the amount is not shown. */
+  amountLabel?: string;
   /** Show a per-`grp` breakdown under the headline. */
   breakdown?: boolean;
   rows?: (c: Ctx, day: string) => SQL;
@@ -81,6 +83,7 @@ export type MetricValue = {
   rowCount: number | null;
   people: number | null;
   amountMinor: number | null;
+  amountLabel: string | null;
   na: string | null;
   change: number | null;
   changeLabel: string;
@@ -397,6 +400,7 @@ const hoursAgo = (c: Ctx, h: number) => iso(new Date(c.now.getTime() - h * 3_600
 export const DAILY_METRICS: MetricDef[] = [
   {
     key: "active_members",
+    amountLabel: "per month at plan price",
     label: "Active members",
     group: "Members",
     kind: "count",
@@ -478,6 +482,7 @@ export const DAILY_METRICS: MetricDef[] = [
   },
   {
     key: "sold_mtd",
+    amountLabel: "per month at plan price",
     label: "Memberships sold, month to date",
     group: "Leads and sales",
     kind: "count",
@@ -555,6 +560,7 @@ export const DAILY_METRICS: MetricDef[] = [
   },
   {
     key: "failed_payments_mtd",
+    amountLabel: "attempted",
     label: "Failed payments, month to date",
     group: "Money owed",
     kind: "count",
@@ -567,6 +573,7 @@ export const DAILY_METRICS: MetricDef[] = [
   },
   {
     key: "holds_active",
+    amountLabel: "per month at plan price, paused",
     label: "Holds active",
     group: "Holds and risk",
     kind: "count",
@@ -592,6 +599,7 @@ export const DAILY_METRICS: MetricDef[] = [
   },
   {
     key: "at_risk",
+    amountLabel: "estimated monthly value at risk",
     label: "At-risk members",
     group: "Holds and risk",
     kind: "count",
@@ -605,6 +613,7 @@ export const DAILY_METRICS: MetricDef[] = [
   },
   {
     key: "slipping_cohort",
+    amountLabel: "per month at plan price",
     label: "Slipping: last visit 10 to 25 days ago",
     group: "Holds and risk",
     kind: "count",
@@ -667,6 +676,7 @@ export const DAILY_METRICS: MetricDef[] = [
   },
   {
     key: "autopay_off",
+    amountLabel: "per month at plan price",
     label: "Memberships with autopay off",
     group: "Membership checks",
     kind: "count",
@@ -680,6 +690,7 @@ export const DAILY_METRICS: MetricDef[] = [
   },
   {
     key: "expiring_30",
+    amountLabel: "per month at plan price",
     label: "Memberships expiring in 30 days",
     group: "Membership checks",
     kind: "count",
@@ -770,7 +781,7 @@ export async function metricRows(tx: Tx, v: Viewer, c: Ctx, key: string, limit =
 }
 
 export async function metricValue(tx: Tx, c: Ctx, def: MetricDef, sh: Shared): Promise<MetricValue> {
-  const base = { key: def.key, label: def.label, group: def.group, kind: def.kind };
+  const base = { key: def.key, label: def.label, group: def.group, kind: def.kind, amountLabel: def.amountLabel ?? null };
   const na = notApplicable(def, c);
   if (na) return { ...base, value: null, rowCount: null, people: null, amountMinor: null, na, change: null, changeLabel: "", breakdown: [] };
   let a: { n: number; people: number; amount: number | null };
