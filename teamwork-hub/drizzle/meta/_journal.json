@@ -211,6 +211,13 @@
       "when": 1794522309397,
       "tag": "0029_journey",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1794523418297,
+      "tag": "0030_checkins",
+      "breakpoints": true
     }
   ]
 }

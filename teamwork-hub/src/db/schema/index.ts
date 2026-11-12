@@ -17,3 +17,4 @@ export * from "./community";
 export * from "./scoreboard";
 export * from "./wins";
 export * from "./journey";
+export * from "./checkins";

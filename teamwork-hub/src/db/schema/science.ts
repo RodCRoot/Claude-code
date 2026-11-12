@@ -111,9 +111,11 @@ export const bodyRegionReports = pgTable(
     reviewedAt: ts("reviewed_at"),
     reviewNote: text("review_note"),
     reviewTaskId: uuid("review_task_id"),
+    /** Set when the spot was marked inside a session check-in (session_checkins.id); null for body-map page reports. */
+    sourceCheckinId: uuid("source_checkin_id"),
     isDemo: isDemo(),
   },
-  (t) => [index("body_reports_athlete_idx").on(t.athleteId, t.reportedAt)],
+  (t) => [index("body_reports_checkin_idx").on(t.sourceCheckinId), index("body_reports_athlete_idx").on(t.athleteId, t.reportedAt)],
 );
 
 // ---------------------------------------------------------------------------
