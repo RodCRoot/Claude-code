@@ -14,6 +14,7 @@ import { AthleteHomeView } from "./_components/athlete-home";
 import { Badge, ButtonLink, Card, CardBody, CardHeader, EmptyState, PageHeader, Stat, StatusBadge } from "@/components/ui";
 import { fmt, fmtTime } from "@/lib/time";
 import { TimeClockCard } from "@/components/time-clock-card";
+import { CompetingThisWeekCard } from "@/components/wins/staff";
 
 export const metadata = { title: "Today" };
 
@@ -81,6 +82,7 @@ async function CoachToday({ v, tz, greeting, dateLabel }: { v: Viewer; tz?: stri
         <Stat label="Results to review" value={overview.toReview.length} tone={overview.toReview.length ? "warn" : undefined} />
       </div>
       <TimeClockCard v={v} tz={tz} />
+      <CompetingThisWeekCard v={v} tz={tz} className="mb-5" />
       <div className="grid gap-5 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader title="My sessions" />

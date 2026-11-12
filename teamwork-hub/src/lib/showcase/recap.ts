@@ -17,6 +17,7 @@ import { UserError } from "@/lib/actions";
 import { audit } from "@/lib/audit";
 import { AuthzError, accessibleAthleteIds, athleteCapabilities, athleteScopeFilter, can, isStaff, type Viewer } from "@/lib/authz/policy";
 import { badgeDef } from "@/lib/engagement/badges";
+import { approvedWinsBetween } from "@/lib/wins/wins";
 import { listGoals } from "@/lib/engagement/goals";
 import { loadActivity, streakFromActivity } from "@/lib/engagement/sync";
 import { isNum } from "@/lib/science/formulas";
@@ -93,6 +94,11 @@ export type RecapSnapshot = {
       notCompared: number;
     }[];
   };
+  /**
+   * Approved wins outside the gym that happened in the month (Wins module). Visible with profile
+   * access. Optional: recaps finalized before this section existed do not have it.
+   */
+  wins?: { headline: string; typeLabel: string; occurredOn: string }[];
   goals: {
     title: string;
     status: "active" | "achieved";
@@ -215,6 +221,7 @@ export async function computeRecap(tx: Tx, orgId: string, athleteId: string, mon
       badges: badgeRows.flatMap((b) => (badgeDef(b.key) ? [{ key: b.key, name: badgeDef(b.key)!.name, earnedOn: localYmd(b.earnedAt, tz) }] : [])).sort((a, b) => a.earnedOn.localeCompare(b.earnedOn)),
       tests,
     },
+    wins: await approvedWinsBetween(tx, orgId, athleteId, start, end),
     goals,
     next: {
       month: nextMonth,

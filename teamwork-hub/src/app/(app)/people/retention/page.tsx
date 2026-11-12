@@ -12,6 +12,7 @@ import { Badge, ButtonLink, Callout, EmptyState, Field, PageHeader, Select, Stat
 import { KpiTile, MemberAvatar, Widget } from "@/components/profile/studio";
 import { PeopleTabs } from "@/components/people-tabs";
 import { LevelBadge, RetentionNav } from "@/components/retention/parts";
+import { RecentWinsOutreachCard } from "@/components/wins/staff";
 import { createFollowUpTaskAction, logOutcomeAction } from "./actions";
 
 export const metadata = { title: "Retention radar" };
@@ -209,6 +210,7 @@ export default async function RetentionRadarPage({ searchParams }: { searchParam
       <div className="mb-4">
         <RetentionNav current="radar" manager={manager} />
       </div>
+      <RecentWinsOutreachCard v={v} />
 
       <div className="mb-4 grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-4">
         <KpiTile icon="people" label="Members at risk" value={summary.atRisk} tone={summary.atRisk ? "bad" : "ok"} hint={`${summary.watch} on watch · ${summary.members} active members`} />

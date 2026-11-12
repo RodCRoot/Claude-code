@@ -193,6 +193,25 @@ export default async function RecapPage({ params, searchParams }: { params: Prom
           </Card>
         ) : null}
 
+        {r.wins?.length ? (
+          <Card className="md:col-span-2">
+            <CardHeader title="Wins outside the gym" kicker={`${r.wins.length} this month`} action={!staff ? <Link href={`/wins?athlete=${athleteId}`} className="no-print text-sm font-semibold text-brand underline">All wins</Link> : undefined} />
+            <CardBody>
+              <ul className="divide-y divide-edge">
+                {r.wins.map((w) => (
+                  <li key={`${w.occurredOn}-${w.headline}`} className="flex flex-wrap items-baseline justify-between gap-x-4 py-2.5">
+                    <span className="min-w-0">
+                      <span className="block font-semibold">{w.headline}</span>
+                      <span className="block text-xs text-ink-3">{w.typeLabel}</span>
+                    </span>
+                    <span className="text-sm text-ink-2">{prettyDate(w.occurredOn)}</span>
+                  </li>
+                ))}
+              </ul>
+            </CardBody>
+          </Card>
+        ) : null}
+
         <Card className="md:col-span-2">
           <CardHeader title="Goals" kicker={`${r.goals.length} this month`} action={!staff ? <Link href={`/goals?athlete=${athleteId}`} className="no-print text-sm font-semibold text-brand underline">All goals</Link> : undefined} />
           <CardBody>

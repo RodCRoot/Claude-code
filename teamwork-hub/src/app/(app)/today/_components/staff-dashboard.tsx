@@ -18,6 +18,7 @@ import { fmt, fmtTime } from "@/lib/time";
 import { formatMoney } from "@/lib/money";
 import { TimeClockCard } from "@/components/time-clock-card";
 import { MilestonesCard } from "@/components/retention/milestones-card";
+import { CompetingThisWeekCard } from "@/components/wins/staff";
 
 /** Front-desk dashboard (owner/admin/operations): KPI row + widget grid. Same data and checks as before. */
 export async function StaffToday({ v, tz, greeting, dateLabel }: { v: Viewer; tz?: string; greeting: string; dateLabel: string }) {
@@ -218,6 +219,7 @@ export async function StaffToday({ v, tz, greeting, dateLabel }: { v: Viewer; tz
         </Widget>
 
         <MilestonesCard v={v} />
+        <CompetingThisWeekCard v={v} tz={tz} />
 
         {review.length ? (
           <Widget title="Body-map reviews" icon="science" count={review.length} href="/science/body-map" linkLabel="Review queue" flush>

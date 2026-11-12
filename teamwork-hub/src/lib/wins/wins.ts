@@ -207,6 +207,21 @@ export async function setPhotoApproval(tx: Tx, v: Viewer, winId: string, approve
 }
 
 /**
+ * Add or replace the photo on a win (the family member who can act for the athlete, or staff in
+ * scope). The bytes were already stripped of EXIF by `preparePhoto`. A new photo always needs a
+ * fresh staff approval before anyone outside the family sees it.
+ */
+export async function attachPhoto(tx: Tx, v: Viewer, winId: string, photo: PreparedPhoto, opts: { today?: string } = {}): Promise<Win> {
+  const { win, access } = await winForViewer(tx, v, winId, opts.today);
+  if (!access.canSubmit) throw new AuthzError("You cannot add a photo to this win.");
+  if (win.status === "removed" || win.status === "declined") throw new UserError("This win is no longer active.");
+  const obj = await saveObject(tx, { orgId: v.orgId, bytes: photo.bytes, filename: `win-photo.${photo.ext}`, mimeType: photo.mimeType, kind: "upload", ownerPersonId: access.personId, accessLevel: "subject_and_guardians", uploadedBy: v.userId });
+  const [after] = await tx.update(wins).set({ photoObjectId: obj.id, photoApprovedAt: null, photoApprovedBy: null, updatedAt: new Date() }).where(eq(wins.id, win.id)).returning();
+  await audit(tx, actorOf(v), "wins.photo.add", "win", win.id, { summary: `Photo ${win.photoObjectId ? "replaced" : "added"}; it needs staff approval before display` });
+  return after;
+}
+
+/**
  * Take a win down (soft delete, audited). Staff in scope may remove any win with a reason. The
  * family may withdraw their athlete's win at any time. XP already awarded stays: the ledger is
  * append-only.

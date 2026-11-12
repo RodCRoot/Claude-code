@@ -9,7 +9,7 @@ import { login, USERS } from "./helpers";
 /** Demo display token from scripts/seed/community.ts (synthetic data only). */
 const DISPLAY_LINK = "/display/link/TeamworkDemoDisplayBoardTV00000000000000000";
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
-const APP_ROUTES = ["/today", "/people", "/schedule", "/billing", "/training", "/science", "/performance", "/messages", "/documents", "/reports", "/settings", "/settings/community", "/settings/audit", "/leaderboards", "/kiosk", "/payroll", "/imports", "/showcase", "/recap"];
+const APP_ROUTES = ["/today", "/people", "/schedule", "/billing", "/training", "/science", "/performance", "/messages", "/documents", "/reports", "/settings", "/settings/community", "/settings/audit", "/leaderboards", "/kiosk", "/payroll", "/imports", "/showcase", "/recap", "/wins", "/wins/marketing"];
 
 async function connect(context: BrowserContext) {
   const page = await context.newPage();
@@ -36,6 +36,14 @@ test("a display device reads the board and nothing else", async ({ context }) =>
   expect(body).not.toContain("Parker");
   expect(body).not.toMatch(/\bEli\b/);
   expect(body).toContain("Maya P.");
+  // Wins panel: approved wins under display names. The hidden athlete's approved win, a win still
+  // waiting for review and a staff draft awaiting the family are all absent, as are source links.
+  const winsPanel = JSON.parse(body).panels.find((p: { key: string }) => p.key === "wins");
+  expect(JSON.stringify(winsPanel)).toContain("all-conference second team");
+  expect(body).not.toContain("Sampleton Storm semifinal");
+  expect(body).not.toContain("Career high 14 kills");
+  expect(body).not.toContain("Sectional opener");
+  expect(body).not.toContain("https://");
 
   // Every app route treats the TV as signed out.
   for (const route of APP_ROUTES) {
