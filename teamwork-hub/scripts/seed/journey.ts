@@ -113,7 +113,7 @@ export async function seedJourney(ctx: SeedCtx) {
   for (let d = -38; d <= -2; d += 3) await book(ivy.athleteId, d, "attended");
   await book(ivy.athleteId, 1, "booked");
   await signForm(ivy);
-  await tx.insert(coachAssignments).values({ orgId, coachUserId: ctx.users.marcus, athleteId: ivy.athleteId });
+  await tx.insert(coachAssignments).values({ orgId, coachUserId: ctx.users.tess, athleteId: ivy.athleteId });
 
   // 4. Six-week check-in five days overdue.
   const cal = await member("cal", "Cal", "Ortega", 47);
@@ -130,7 +130,7 @@ export async function seedJourney(ctx: SeedCtx) {
   await book(remy.athleteId, 1, "booked");
   await signForm(remy);
   await card(remy.payerId);
-  await tx.insert(coachAssignments).values({ orgId, coachUserId: ctx.users.marcus, athleteId: remy.athleteId });
+  await tx.insert(coachAssignments).values({ orgId, coachUserId: ctx.users.tess, athleteId: remy.athleteId });
   await tx.insert(sessionFeedback).values({ orgId, bookingId: lastRemy!.booking.id, sessionId: lastRemy!.session.id, athleteId: remy.athleteId, rating: 5, submittedByUserId: ctx.users.alex, submittedByRole: "guardian", createdAt: at(-3, "19:00"), isDemo: true });
 
   // 6. Twenty-fifth visit eight days ago, already recognised with a shoutout.
@@ -145,12 +145,12 @@ export async function seedJourney(ctx: SeedCtx) {
   const june = await member("june", "June", "Abara", 150, { status: "on_hold" });
   for (let d = -60; d <= -12; d += 4) await book(june.athleteId, d, "attended");
   await tx.insert(membershipHolds).values({ membershipId: june.membershipId, startDate: day(-10), endDate: day(8), reason: "Family travel (sample)", requestedOn: day(-12), requestChannel: "email", createdBy: ctx.users.erin });
-  await tx.insert(coachAssignments).values({ orgId, coachUserId: ctx.users.marcus, athleteId: june.athleteId });
+  await tx.insert(coachAssignments).values({ orgId, coachUserId: ctx.users.tess, athleteId: june.athleteId });
 
   // 8. Cancellation scheduled for ten days from now, no reason recorded yet.
   const dex = await member("dex", "Dex", "Moreno", 210, { cancelAt: day(10) });
   for (let d = -40; d <= -9; d += 5) await book(dex.athleteId, d, "attended");
-  await tx.insert(coachAssignments).values({ orgId, coachUserId: ctx.users.marcus, athleteId: dex.athleteId });
+  await tx.insert(coachAssignments).values({ orgId, coachUserId: ctx.users.tess, athleteId: dex.athleteId });
 
   const ids = [nora, theo, ivy, cal, remy, sage, june, dex].map((m) => m.athleteId);
   await syncJourneys(tx, orgId, { today: T, now, athleteIds: ids });

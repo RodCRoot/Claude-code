@@ -12,6 +12,7 @@ Module `scheduled`. Code in `src/lib/scheduled/jobs.ts`, handlers registered in
 | Team challenge completions and challenge badges | Athlete Home, `/leaderboards` | `community.challenges.nightly` | `syncChallengeCompletions` |
 | Auto-achieved goals, XP ledger, badges | Athlete Home, `/goals`, performance page | `engagement.refresh.nightly` | `evaluateGoals`, `syncXp`, `syncBadges` (what `refreshEngagement` does) |
 | Monthly recap finalization | first view of a closed month | `recap.monthly` (already existed, daily) | `runMonthlyRecaps` |
+| Member journey: checklists started from memberships, holds, cancellations and visit counts; detectable steps ticked | `/follow-ups`, the journey panel on a person page | `journey.sync.nightly` | `syncJourneys` (see `docs/modules/journey.md`) |
 
 Checked and not scheduled, because nothing is stored:
 - **Streaks**: computed from attendance each time they are shown.
