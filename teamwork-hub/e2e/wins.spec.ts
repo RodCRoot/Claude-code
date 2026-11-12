@@ -15,6 +15,8 @@ async function as(browser: Browser, email: string, viewport?: { width: number; h
   await login(page, email);
   return page;
 }
+/** Buttons carry the headline in a screen-reader-only span, which reads as "Approve : headline". */
+const btn = (label: string, headline: string) => new RegExp(`${label}\\s*: ${headline.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
 const noSideScroll = async (page: Page) => expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), `${page.url()} scrolls sideways`).toBeLessThanOrEqual(1);
 const shot = async (page: Page, name: string, project: string) => {
   if (SHOTS) await page.screenshot({ path: `docs/screenshots/wins/${name}-${project === "mobile" ? "390" : "desktop"}.png`, fullPage: true });
@@ -50,7 +52,7 @@ test("a parent submits a win; staff approve; other families see a display name; 
   await marcus.goto("/wins/review");
   await marcus.waitForLoadState("networkidle");
   await expect(marcus.locator("#wins-pending")).toContainText(headline.slice(0, 20));
-  await marcus.getByRole("button", { name: `Approve: ${headline}` }).click();
+  await marcus.getByRole("button", { name: btn("Approve", headline) }).click();
   await expect(marcus.locator("#wins-approved")).toContainText(headline);
   await shot(marcus, "review", info.project.name);
   // A coach cannot open the marketing queue.
@@ -75,11 +77,13 @@ test("a parent submits a win; staff approve; other families see a display name; 
   await erin.waitForLoadState("networkidle");
   await expect(erin.locator("#marketing-ready")).not.toContainText(headline);
   await expect(erin.locator("#marketing-ask")).toContainText(headline);
-  await erin.getByRole("button", { name: `Ask the family: ${headline}` }).click();
+  await erin.getByRole("button", { name: btn("Ask the family", headline) }).click();
   await expect(erin.locator("#marketing-ask li", { hasText: headline })).toContainText("Asked, no answer yet");
 
   // 6. Alex sees the request on Home and gives consent on the Wins page.
-  await alex.goto("/today");
+  const mayaId = ((await alex.locator("section[id^='wins-']", { hasText: "Maya's wins" }).first().getAttribute("id")) ?? "").slice(5);
+  expect(mayaId).toMatch(/^[0-9a-f-]{36}$/);
+  await alex.goto(`/today?athlete=${mayaId}`);
   await expect(alex.locator("#wins-home")).toContainText("The gym would like to share a win publicly");
   await alex.goto("/wins");
   await alex.waitForLoadState("networkidle");
@@ -87,7 +91,7 @@ test("a parent submits a win; staff approve; other families see a display name; 
   await expect(row).toContainText("The gym would like to share this win publicly");
   await row.getByText("Choose", { exact: false }).first().click();
   await expect(row).toContainText("SAMPLE WORDING");
-  await row.getByRole("button", { name: `I agree, allow it: ${headline}` }).click();
+  await row.getByRole("button", { name: btn("I agree, allow it", headline) }).click();
   await expect(alex.locator("li", { hasText: headline }).first()).toContainText("Social posts and the gym website: Given (Alex Parker");
   await shot(alex, "family-wins", info.project.name);
 
@@ -103,14 +107,14 @@ test("a parent submits a win; staff approve; other families see a display name; 
     expect(c).toContain(headline);
     expect(c).not.toMatch(/Parker|—/);
   }
-  await ready.getByRole("button", { name: `Mark as posted: ${headline}` }).click();
+  await ready.getByRole("button", { name: btn("Mark as posted", headline) }).click();
   await expect(erin.locator("#marketing-ready li", { hasText: headline })).toContainText("Posted: Instagram");
   await noSideScroll(erin);
   await shot(erin, "marketing", info.project.name);
 
   // 8. Alex withdraws. The win leaves the queue and lands on the take-down list.
   alex.once("dialog", (d) => d.accept());
-  await alex.locator("li", { hasText: headline }).first().getByRole("button", { name: `Withdraw permission: ${headline}` }).click();
+  await alex.locator("li", { hasText: headline }).first().getByRole("button", { name: btn("Withdraw permission", headline) }).click();
   await expect(alex.locator("li", { hasText: headline }).first()).toContainText("Social posts and the gym website: Withdrawn");
   await erin.reload();
   await erin.waitForLoadState("networkidle");
@@ -119,14 +123,14 @@ test("a parent submits a win; staff approve; other families see a display name; 
   const down = erin.locator("li", { hasText: headline }).first();
   await expect(down).toContainText("The family withdrew marketing consent");
   erin.once("dialog", (d) => d.accept());
-  await down.getByRole("button", { name: `Posts taken down: ${headline}` }).click();
-  await expect(erin.getByRole("button", { name: `Posts taken down: ${headline}` })).toHaveCount(0);
+  await down.getByRole("button", { name: btn("Posts taken down", headline) }).click();
+  await expect(erin.getByRole("button", { name: btn("Posts taken down", headline) })).toHaveCount(0);
 
   // 9. Clean up so the seeded TV panel keeps its content on repeat runs: Alex removes the win.
   alex.once("dialog", (d) => d.accept());
   const again = alex.locator("li", { hasText: headline }).first();
   await again.getByText("Photo and removal").click();
-  await again.getByRole("button", { name: `Remove this win: ${headline}` }).click();
+  await again.getByRole("button", { name: btn("Remove this win", headline) }).click();
   await expect(alex.getByText(headline)).toHaveCount(0);
   for (const p of [alex, chris, marcus, erin]) await p.context().close();
 });

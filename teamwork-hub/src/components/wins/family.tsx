@@ -187,6 +187,8 @@ export function FamilyWinItem({ w, access, tz }: { w: WinView; access: WinsAcces
                   </SubmitButton>
                 </ActionForm>
               ) : null
+            ) : access.canConsent && !access.displayName ? (
+              <p className="mt-1 text-xs text-ink-3">Not available while the name is hidden from other families: public marketing would use the display name.</p>
             ) : access.canConsent ? (
               <details className="mt-1">
                 <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold text-brand underline">
