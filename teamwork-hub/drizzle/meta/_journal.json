@@ -204,6 +204,13 @@
       "when": 1794522222507,
       "tag": "0028_wins",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1794522309397,
+      "tag": "0029_journey",
+      "breakpoints": true
     }
   ]
 }

@@ -102,7 +102,15 @@ export type OrgCapability =
    */
   | "wins.review"
   /** Marketing queue: captions, "mark as posted", and asking a family for marketing consent. */
-  | "wins.marketing";
+  | "wins.marketing"
+  /** Member journey: follow-ups queue, the profile journey panel and step actions. Coaches: assigned athletes only, never billing steps. */
+  | "journey.view"
+  /** See and act on billing-related journey steps (payment method on file, final bill settled). Never coaches. */
+  | "journey.billing_steps"
+  /** Journey completion reporting and every coach's weekly scorecard. */
+  | "journey.report"
+  /** Tick the daily / weekly operations checklist. The list itself is edited with settings.manage. */
+  | "ops_checklist.use";
 
 const ORG_MATRIX: Record<OrgCapability, Role[]> = {
   "people.manage": ["owner", "admin", "operations"],
@@ -131,6 +139,10 @@ const ORG_MATRIX: Record<OrgCapability, Role[]> = {
   "scoreboard.manage": ["owner", "admin"],
   "wins.review": ["owner", "admin", "operations", "coach"],
   "wins.marketing": ["owner", "admin", "operations"],
+  "journey.view": ["owner", "admin", "operations", "coach"],
+  "journey.billing_steps": ["owner", "admin", "operations"],
+  "journey.report": ["owner", "admin"],
+  "ops_checklist.use": ["owner", "admin", "operations", "coach"],
 };
 
 export function can(v: Viewer, cap: OrgCapability): boolean {

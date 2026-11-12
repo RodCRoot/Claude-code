@@ -226,7 +226,8 @@ export async function getPersonDetail(tx: Tx, v: Viewer, personId: string) {
         .select({ t: tasks, assignee: users.displayName })
         .from(tasks)
         .leftJoin(users, eq(users.id, tasks.assigneeUserId))
-        .where(and(eq(tasks.orgId, v.orgId), eq(tasks.relatedPersonId, personId), inArray(tasks.status, ["open", "in_progress"])))
+        // Journey steps have their own panel (and coaches must not see the billing ones here).
+        .where(and(eq(tasks.orgId, v.orgId), eq(tasks.relatedPersonId, personId), inArray(tasks.status, ["open", "in_progress"]), sql`${tasks.source} <> 'journey'`))
         .orderBy(asc(tasks.dueAt))
     : [];
 

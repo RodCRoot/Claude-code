@@ -84,6 +84,8 @@ Computed for active members in the current facility-local week (Monday to Sunday
 
 The only action is "Create shoutout task" (one per athlete and milestone). No automatic messages.
 
+The member journey (`docs/modules/journey.md`) creates its "Recognise N visits" step with the same task key, so a milestone never has two tasks, and it extends the visit counts to 10, 500, 750 and 1000 on its own screens.
+
 ## Winback list
 
 Athletes with no membership now whose most recent membership ended in the last 365 days, with the end reason (from the save log, else the cancellation reason, else the athlete record, else "Not recorded"), last plan and tenure. The only action is "Create follow-up task".

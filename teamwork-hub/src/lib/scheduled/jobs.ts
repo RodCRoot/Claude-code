@@ -35,6 +35,7 @@ import { syncChallengeCompletions } from "@/lib/community/challenges";
 import { evaluateGoals } from "@/lib/engagement/goals";
 import { syncBadges, syncXp } from "@/lib/engagement/sync";
 import { syncReferrals } from "@/lib/growth/referrals";
+import { syncJourneys } from "@/lib/journey/sync";
 import { enqueue, runJobs, type JobHandler } from "@/lib/jobs";
 import { log } from "@/lib/observability";
 import { RECAP_MONTHLY_JOB, enqueueRecapJobs, recapJobHandlers } from "@/lib/showcase/jobs";
@@ -43,12 +44,13 @@ import { DEFAULT_TZ, fmt, todayLocal } from "@/lib/time";
 export const REFERRALS_NIGHTLY_JOB = "growth.referrals.nightly";
 export const CHALLENGES_NIGHTLY_JOB = "community.challenges.nightly";
 export const ENGAGEMENT_NIGHTLY_JOB = "engagement.refresh.nightly";
+export const JOURNEY_NIGHTLY_JOB = "journey.sync.nightly";
 
 /** Facility-local hour (0 to 23) after which the nightly jobs for that date are created. */
 export const NIGHTLY_HOUR = 2;
 const MAX_ERRORS_KEPT = 5;
 
-export const NIGHTLY_JOB_TYPES = [REFERRALS_NIGHTLY_JOB, CHALLENGES_NIGHTLY_JOB, ENGAGEMENT_NIGHTLY_JOB] as const;
+export const NIGHTLY_JOB_TYPES = [REFERRALS_NIGHTLY_JOB, CHALLENGES_NIGHTLY_JOB, ENGAGEMENT_NIGHTLY_JOB, JOURNEY_NIGHTLY_JOB] as const;
 
 export const SCHEDULED_JOBS: { type: string; label: string; schedule: string; does: string; manual: boolean }[] = [
   {
@@ -70,6 +72,13 @@ export const SCHEDULED_JOBS: { type: string; label: string; schedule: string; do
     label: "Goals, XP and badges",
     schedule: "Nightly, after 2:00 AM facility time",
     does: "Brings every active athlete's auto-achieved goals, XP and badges up to date. Streaks are worked out from attendance when shown and need no job.",
+    manual: true,
+  },
+  {
+    type: JOURNEY_NIGHTLY_JOB,
+    label: "Member journey",
+    schedule: "Nightly, after 2:00 AM facility time",
+    does: "Starts onboarding, touchpoint, milestone, hold and offboarding checklists from memberships, holds, cancellations and visit counts, and ticks the steps the system can already see are done. Sends nothing.",
     manual: true,
   },
   {
@@ -175,6 +184,19 @@ export async function runEngagementNightly(db: DB, orgId: string, opts: RunOpts 
   return { date: today, athletes: rows.length, ...totals, ...res };
 }
 
+/**
+ * Member journey: starts checklists from real events (membership, hold, cancellation, visit
+ * counts, 5-star feedback) and ticks the steps the system can already see are done. One
+ * transaction per organization under an advisory lock; idempotent (unique anchor and step keys).
+ * Sends nothing.
+ */
+export async function runJourneyNightly(db: DB, orgId: string, opts: RunOpts = {}) {
+  const tz = await orgTz(db, orgId);
+  if (!tz) return { skipped: "organization not found" as const };
+  const now = opts.now ?? new Date();
+  return db.transaction((tx) => syncJourneys(tx, orgId, { now, today: todayLocal(tz, now) }));
+}
+
 const orgOf = (payload: Record<string, unknown>, job: { orgId: string | null }) => {
   const orgId = (typeof payload.orgId === "string" && payload.orgId) || job.orgId;
   if (!orgId) throw new Error("payload.orgId is required");
@@ -187,6 +209,7 @@ export function scheduledJobHandlers(db: DB): Record<string, JobHandler> {
     [REFERRALS_NIGHTLY_JOB]: (p, job) => runReferralsNightly(db, orgOf(p, job)),
     [CHALLENGES_NIGHTLY_JOB]: (p, job) => runChallengesNightly(db, orgOf(p, job)),
     [ENGAGEMENT_NIGHTLY_JOB]: (p, job) => runEngagementNightly(db, orgOf(p, job)),
+    [JOURNEY_NIGHTLY_JOB]: (p, job) => runJourneyNightly(db, orgOf(p, job)),
   };
 }
 
@@ -240,6 +263,12 @@ const SUMMARY_LABEL: Record<string, string> = {
   xpEvents: "XP awards",
   badges: "badges",
   finalized: "recaps finalized",
+  journeysCreated: "checklists started",
+  stepsCreated: "steps created",
+  autoCompleted: "steps ticked automatically",
+  moved: "due dates moved for a hold",
+  closed: "checklists closed",
+  journeysCompleted: "checklists completed",
 };
 
 /** One plain sentence from a job's result JSON. */
@@ -248,7 +277,7 @@ export function summarizeResult(result: unknown): string {
   const r = result as Record<string, unknown>;
   if (typeof r.skipped === "string") return r.skipped === "disabled" ? "Skipped: recaps are turned off" : r.skipped === "grace" ? "Nothing to do yet: last month is still in its grace period" : `Skipped: ${r.skipped}`;
   const parts = Object.entries(SUMMARY_LABEL)
-    .filter(([k]) => typeof r[k] === "number" && (k === "referrals" || k === "athletes" || k === "completions" || k === "finalized" || (r[k] as number) > 0))
+    .filter(([k]) => typeof r[k] === "number" && (k === "referrals" || k === "athletes" || k === "completions" || k === "finalized" || k === "stepsCreated" || (r[k] as number) > 0))
     .map(([k, label]) => `${r[k]} ${label}`);
   const failed = typeof r.failed === "number" && r.failed > 0 ? ` ${r.failed} could not be processed and will be tried again on the next run.` : "";
   return `${parts.length ? parts.join(", ") : "Nothing to do"}.${failed}`;

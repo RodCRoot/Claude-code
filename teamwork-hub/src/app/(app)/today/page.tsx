@@ -15,6 +15,7 @@ import { Badge, ButtonLink, Card, CardBody, CardHeader, EmptyState, PageHeader, 
 import { fmt, fmtTime } from "@/lib/time";
 import { TimeClockCard } from "@/components/time-clock-card";
 import { CompetingThisWeekCard } from "@/components/wins/staff";
+import { FollowUpsTodayCard } from "@/components/journey/today-card";
 
 export const metadata = { title: "Today" };
 
@@ -90,6 +91,7 @@ async function CoachToday({ v, tz, greeting, dateLabel }: { v: Viewer; tz?: stri
             <SessionList sessions={sessions} tz={tz} empty="No sessions assigned to you today" />
           </CardBody>
         </Card>
+        <FollowUpsTodayCard v={v} />
         <Card>
           <CardHeader title="Body-map reviews" action={<Link href="/science/body-map" className="text-sm text-brand underline">Queue</Link>} />
           <CardBody>

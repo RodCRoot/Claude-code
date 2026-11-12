@@ -1,5 +1,6 @@
 import { CommunityProfileCard } from "@/components/community/profile-card";
 import { WinsProfileCard } from "@/components/wins/staff";
+import { JourneyPanel } from "@/components/journey/panel";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
@@ -393,6 +394,7 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
       {tab === "overview" ? (
         <div className="space-y-4">
           {athlete ? <OpportunitiesCard viewer={v} athleteId={athlete.id} /> : null}
+          {athlete && staff ? <JourneyPanel v={v} athleteId={athlete.id} /> : null}
           {athlete && staff ? <CommunityProfileCard v={v} athleteId={athlete.id} /> : null}
           {athlete && staff ? <WinsProfileCard v={v} athleteId={athlete.id} /> : null}
           {staff ? (
