@@ -269,9 +269,10 @@ export function membershipCtes(c: Ctx): SQL {
 }
 
 /** Predicate: membership alias `x` is active on day `d`. */
-export const activeOn = (x: string, d: string) => sql`(${sql.raw(x)}.start_date <= ${d} and (${sql.raw(x)}.ended_on is null or ${sql.raw(x)}.ended_on > ${d}))`;
+const D = (d: string | SQL) => (typeof d === "string" ? sql`${d}::date` : d);
+export const activeOn = (x: string, d: string | SQL) => sql`(${sql.raw(x)}.start_date <= ${D(d)} and (${sql.raw(x)}.ended_on is null or ${sql.raw(x)}.ended_on > ${D(d)}))`;
 /** Predicate: membership alias `x` is a trial on day `d` (a trial product, or still inside the plan's trial days). */
-export const trialOn = (x: string, d: string) => sql`(${sql.raw(x)}.trial_product or ${d}::date < ${sql.raw(x)}.trial_until)`;
+export const trialOn = (x: string, d: string | SQL) => sql`(${sql.raw(x)}.trial_product or ${D(d)} < ${sql.raw(x)}.trial_until)`;
 /** Predicate: membership alias `x` is a trial product or was sold with trial days (used for "trials sold"). */
 export const isTrialPlan = (x: string) => sql`(${sql.raw(x)}.trial_product or ${sql.raw(x)}.trial_days > 0)`;
 
