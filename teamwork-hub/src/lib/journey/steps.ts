@@ -327,7 +327,7 @@ export async function completeStep(tx: Tx, v: Viewer, raw: unknown, opts: { now?
   await tx.update(tasks).set({ status: "done", completedAt: now, completedBy: v.userId }).where(eq(tasks.id, task.id));
   await tx.update(journeySteps).set({ completedVia: "staff", note, outcome, snoozedUntil: null, updatedAt: now }).where(eq(journeySteps.taskId, task.id));
   if (note && meta.input === "note") {
-    await tx.insert(notes).values({ orgId: v.orgId, subjectPersonId: personId, authorUserId: v.userId, body: `${step.name}: ${note}`, category: step.kind === "touchpoints" ? "check_in" : "reach_out", visibility: "coaches_assigned" });
+    await tx.insert(notes).values({ orgId: v.orgId, subjectPersonId: personId, authorUserId: v.userId, body: `${step.name}: ${note}`, category: step.kind === "touchpoints" ? "check_in" : "reach_out", visibility: "coaches_assigned", createdAt: now });
   }
   await audit(tx, actor(v), "journey.step_complete", "task", task.id, { summary: `${step.name}: ${athleteName}`, after: { journeyId: step.journeyId, athleteId: step.athleteId, stepKey: step.stepKey, outcome, dueOn: step.dueOn } });
   await settleJourneys(tx, v.orgId, now, [step.athleteId]);
