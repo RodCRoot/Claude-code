@@ -86,7 +86,15 @@ export type OrgCapability =
   /** Read an individual session-feedback response (rating + comment). Coaches only when "tell my coach" was ticked (checked per response). */
   | "feedback.review"
   /** Session-feedback averages report. A coach only gets their own sessions. */
-  | "feedback.report";
+  | "feedback.report"
+  /**
+   * Wins and Competitions: enter team schedules, submit, edit, approve and remove wins, work the
+   * leads list. Always combined with profile.read on the athlete, so coaches act on assigned
+   * athletes only. Staff never grant marketing consent; that is the family's act (wins/access.ts).
+   */
+  | "wins.review"
+  /** Marketing queue: captions, "mark as posted", and asking a family for marketing consent. */
+  | "wins.marketing";
 
 const ORG_MATRIX: Record<OrgCapability, Role[]> = {
   "people.manage": ["owner", "admin", "operations"],
@@ -111,6 +119,8 @@ const ORG_MATRIX: Record<OrgCapability, Role[]> = {
   "retention.manage": ["owner", "admin", "operations"],
   "feedback.review": ["owner", "admin", "operations"],
   "feedback.report": ["owner", "admin", "coach"],
+  "wins.review": ["owner", "admin", "operations", "coach"],
+  "wins.marketing": ["owner", "admin", "operations"],
 };
 
 export function can(v: Viewer, cap: OrgCapability): boolean {

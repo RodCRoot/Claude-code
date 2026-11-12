@@ -40,7 +40,7 @@ export const CHALLENGE_MODE_LABEL: Record<ChallengeMode, string> = { individual:
 export type AgeBand = "U12" | "U14" | "U16" | "U18" | "Adult";
 export const AGE_BANDS: AgeBand[] = ["U12", "U14", "U16", "U18", "Adult"];
 
-export const PANEL_KEYS = ["pr_bell", "streaks", "level_ups", "leaderboards", "classes", "milestones", "shoutouts", "challenges", "message"] as const;
+export const PANEL_KEYS = ["pr_bell", "streaks", "level_ups", "leaderboards", "classes", "milestones", "shoutouts", "wins", "challenges", "message"] as const;
 export type PanelKey = (typeof PANEL_KEYS)[number];
 export const PANEL_LABEL: Record<PanelKey, string> = {
   pr_bell: "PR Bell",
@@ -50,6 +50,7 @@ export const PANEL_LABEL: Record<PanelKey, string> = {
   classes: "Today's classes",
   milestones: "Milestones",
   shoutouts: "Coach shoutouts",
+  wins: "Wins outside the gym",
   challenges: "Team challenges",
   message: "Gym message",
 };
@@ -131,6 +132,7 @@ export type BoardPanel =
   | { key: "classes"; title: string; items: { time: string; title: string; coach: string | null; spotsLeft: number; state: "now" | "next" | "done" }[] }
   | { key: "milestones"; title: string; items: { name: string; label: string }[] }
   | { key: "shoutouts"; title: string; items: { name: string; headline: string; note: string | null; coach: string }[] }
+  | { key: "wins"; title: string; items: { name: string; headline: string; label: string; sport: string; when: string }[] }
   | { key: "challenges"; title: string; challenge: Omit<ChallengeView, "you" | "id"> }
   | { key: "message"; title: string; text: string };
 
