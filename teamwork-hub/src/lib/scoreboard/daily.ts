@@ -833,19 +833,24 @@ export async function classesToday(tx: Tx, c: Ctx): Promise<ClassToday[]> {
   return rows.map((r) => ({ id: String(r.id), title: String(r.title), startsAt: new Date(r.starts_at as string), location: (r.location as string) ?? null, coach: (r.coach as string) ?? null, capacity: num(r.capacity), booked: num(r.booked), checkedIn: num(r.checked_in), waitlisted: num(r.waitlisted) }));
 }
 
-export type LocationCount = { id: string | null; name: string; people: number; memberships: number };
+export type LocationCount = { name: string; people: number; memberships: number };
 
-/** Active members per location. A membership valid at several locations counts at each, so rows can add up to more than the total. */
+/**
+ * Active members by where their membership is valid: one row per single-location scope, plus
+ * "Multiple / all locations" for plans valid at several or all. Every active membership falls in
+ * exactly one row, so memberships add up to the total (a person holding plans in two rows is
+ * counted as a person in both).
+ */
 export async function activeByLocation(tx: Tx, c: Ctx): Promise<LocationCount[]> {
   const rows = await rowsOf<Row>(
     tx,
-    sql`with ${membershipCtes(c)}, act as (select * from ms where ${activeOn("ms", c.today)} and not ${trialOn("ms", c.today)})
-        select l.id, l.name, l.sort_order, count(distinct act.athlete_id)::int as people, count(act.id)::int as memberships
-        from locations l left join act on (jsonb_array_length(act.loc_scope) = 0 or act.loc_scope @> jsonb_build_array(l.id::text))
-        where l.org_id = ${c.orgId} and l.active ${c.filter.locationId ? sql`and l.id = ${c.filter.locationId}` : sql``}
-        group by l.id, l.name, l.sort_order order by l.sort_order, l.name`,
+    sql`with ${membershipCtes(c)}
+        select case when jsonb_array_length(ms.loc_scope) = 1 then coalesce((select l.name from locations l where l.id::text = ms.loc_scope->>0), 'Unknown location') else 'Multiple / all locations' end as name,
+          count(distinct ms.athlete_id)::int as people, count(*)::int as memberships
+        from ms where ${activeOn("ms", c.today)} and not ${trialOn("ms", c.today)}
+        group by 1 order by (case when jsonb_array_length(min(ms.loc_scope::text)::jsonb) = 1 then 0 else 1 end), 1`,
   );
-  return rows.map((r) => ({ id: String(r.id), name: String(r.name), people: num(r.people), memberships: num(r.memberships) }));
+  return rows.map((r) => ({ name: String(r.name), people: num(r.people), memberships: num(r.memberships) }));
 }
 
 export type DailyScoreboard = { metrics: Record<string, MetricValue>; order: string[]; classes: ClassToday[]; byLocation: LocationCount[]; decisions: MetricRow[]; atRiskValueMinor: number | null; tookMs: number };

@@ -53,7 +53,7 @@ export const MONTHLY_ROWS: MonthlyRowDef[] = [
     version: 1,
     dims: { location: true, program: false },
     definition:
-      "Distinct people who showed up in the month: an attended booking on an assessment-type session, or a lead whose linked assessment session was in the month and whose stage is Assessment Done or won. Location = the session's location; withheld while a program filter is on.",
+      "Distinct people who showed up in the month: an attended booking on an assessment-type session, or a lead whose linked assessment session was in the month and whose stage is Assessment Done or won. The CRM keeps only a lead's current stage, so a lead who showed and was later marked Lost is not counted unless a booking was checked in. Location = the session's location; withheld while a program filter is on.",
   },
   { key: "trials_sold", label: "New trials sold", kind: "int", better: "higher", version: 1, dims: BOTH, definition: "Memberships that started in the month on a trial product or a plan with trial days, plus trial passes issued in the month (passes carry no plan or location and are left out while a filter is on)." },
   {
