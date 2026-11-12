@@ -83,6 +83,9 @@ export function loadOrigin(e: { source: "activity" | "workout"; kind?: string; a
   return e.kind === "training" ? "gym" : "other";
 }
 
+/** activity_sessions.source written by the session after check (src/lib/checkins/core.ts). */
+export const CHECKIN_LOAD_SOURCE = "session_checkin";
+
 export type LoadRow = LoadEntry & { id: string; source: "activity" | "workout"; origin: LoadOrigin; label: string; load: number | null; notes: string | null };
 
 /** All load entries (manual activity sessions + completed workouts not already linked) for one athlete. */
@@ -119,8 +122,18 @@ export async function loadEntries(tx: Tx, orgId: string, athleteId: string, from
     label: a.kind,
     notes: a.notes,
   }));
+  // One gym session, one load number. A session check-in's sRPE (activity source "session_checkin")
+  // and a workout finished in the workout logger on the same local day describe the same training:
+  // the workout logger wins when it has a computable load (it carries the minutes actually
+  // trained); otherwise the check-in's load stands and the workout without a load is left out,
+  // so the day is not marked incomplete.
+  const workoutDay = (w: (typeof wos)[number]) => workoutLoadDate(w.completedAt, w.scheduledDate);
+  const loggerDays = new Set(wos.filter((w) => !linked.has(w.id) && srpeLoad(w.durationMinutes, w.sessionRpe) !== null).map(workoutDay));
+  const checkinDays = new Set(acts.filter((a) => a.source === CHECKIN_LOAD_SOURCE && !loggerDays.has(a.activityDate)).map((a) => a.activityDate));
+  for (let i = out.length - 1; i >= 0; i--) if (acts[i].source === CHECKIN_LOAD_SOURCE && loggerDays.has(acts[i].activityDate)) out.splice(i, 1);
   for (const w of wos) {
     if (linked.has(w.id)) continue;
+    if (checkinDays.has(workoutDay(w)) && srpeLoad(w.durationMinutes, w.sessionRpe) === null) continue;
     if (w.completedAt && (w.completedAt < start || w.completedAt > end)) continue;
     const date = workoutLoadDate(w.completedAt, w.scheduledDate);
     if (date < from || date > to) continue;

@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Tx } from "@/db";
 import { athletes, bodyRegionReports, tasks } from "@/db/schema";
 import { accessibleAthleteIds, athleteScopeFilter, AuthzError, requireOnAthlete, type Viewer } from "@/lib/authz/policy";
-import { audit } from "@/lib/audit";
+import { audit, type AuditActor } from "@/lib/audit";
 import { UserError } from "@/lib/actions";
 import { actorOf, responsibleCoach, scienceSettings, scopedAthletes } from "./access";
 import { isValidSpot, needsReview } from "./body-regions";
@@ -25,11 +25,25 @@ export const bodyReportInput = z.object({
 export async function submitBodyReport(tx: Tx, v: Viewer, raw: z.input<typeof bodyReportInput>, now = new Date()) {
   const input = bodyReportInput.parse(raw);
   await requireOnAthlete(tx, v, input.athleteId, "health.write");
+  return recordBodyReport(tx, { ...input, orgId: v.orgId, reportedBy: v.userId, auditActor: actorOf(v) }, now);
+}
+
+/**
+ * The storage half of submitBodyReport, WITHOUT a capability check: the caller must already have
+ * decided this person may report for this athlete. Used by the body-map page (health.write) and by
+ * session check-ins (the athlete, a parent logging for an under-13, or a kiosk pass).
+ */
+export async function recordBodyReport(
+  tx: Tx,
+  input: z.infer<typeof bodyReportInput> & { orgId: string; reportedBy: string | null; auditActor: AuditActor; sourceCheckinId?: string | null },
+  now = new Date(),
+) {
   if (!isValidSpot(input.view, input.region, input.side)) throw new UserError("That body region/side combination isn't valid for this view.", { region: "Invalid region" });
+  const v = { orgId: input.orgId, userId: input.reportedBy };
   const settings = await scienceSettings(tx, v.orgId);
   const [report] = await tx
     .insert(bodyRegionReports)
-    .values({ orgId: v.orgId, athleteId: input.athleteId, view: input.view, region: input.region, side: input.side, kind: input.kind, severity: input.severity, note: input.note || null, reportedAt: now, reportedBy: v.userId })
+    .values({ orgId: v.orgId, athleteId: input.athleteId, view: input.view, region: input.region, side: input.side, kind: input.kind, severity: input.severity, note: input.note || null, reportedAt: now, reportedBy: v.userId, sourceCheckinId: input.sourceCheckinId ?? null })
     .returning();
   let taskId: string | null = null;
   if (needsReview(input.kind, input.severity, settings.sorenessReviewThreshold)) {
@@ -59,7 +73,7 @@ export async function submitBodyReport(tx: Tx, v: Viewer, raw: z.input<typeof bo
     // Below threshold soreness doesn't need review; mark it so it never sits in the queue.
     await tx.update(bodyRegionReports).set({ reviewStatus: "reviewed", reviewNote: "Below review threshold (auto)" }).where(eq(bodyRegionReports.id, report.id));
   }
-  await audit(tx, actorOf(v), "science.body_report.create", "body_region_report", report.id, { summary: `Body map ${input.kind} report${taskId ? " → review task" : ""}` });
+  await audit(tx, input.auditActor, "science.body_report.create", "body_region_report", report.id, { summary: `Body map ${input.kind} report${taskId ? " → review task" : ""}` });
   return { id: report.id, taskId };
 }
 

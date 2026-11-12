@@ -31,7 +31,7 @@ export const DEFAULT_ENGAGEMENT_SETTINGS: EngagementSettings = { levelsEnabled: 
 export const XP_KIND_LABEL: Record<XpKind, string> = {
   session_attended: "Session attended",
   workout_completed: "Workout completed",
-  wellness_checkin: "Wellness check-in submitted",
+  wellness_checkin: "Check-in submitted (daily wellness, ready check or after check)",
   pr_set: "Personal record set",
   goal_achieved: "Goal achieved",
   form_signed: "Form signed",
