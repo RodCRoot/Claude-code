@@ -15,3 +15,4 @@ export * from "./anywhere";
 export * from "./showcase";
 export * from "./community";
 export * from "./scoreboard";
+export * from "./wins";

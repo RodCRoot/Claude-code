@@ -30,7 +30,7 @@ const DISPLAY_LINK = "/display/link/TeamworkDemoDisplayBoardTV00000000000000000"
 // Signed out, "/display" is the "not connected" screen; the link lands on the live board as a TV would.
 const PUBLIC = ["/", "/classes", "/programs", "/inquire", "/login", "/r/parkerdemo26", SHOWCASE, "/s/not-a-real-showcase-link", "/display", DISPLAY_LINK];
 /** The owner's board preview with each panel pinned in turn (every panel type gets audited). */
-const BOARD_PANELS = Array.from({ length: 18 }, (_, i) => `/display?panel=${i + 1}`);
+const BOARD_PANELS = Array.from({ length: 19 }, (_, i) => `/display?panel=${i + 1}`);
 const STAFF = [
   "/today",
   "/people",
@@ -122,13 +122,20 @@ const STAFF = [
   ...BOARD_PANELS,
   "/people/showcases",
   "/training/recaps",
+  "/wins",
+  "/wins/review",
+  "/wins/calendar",
+  "/wins/calendar?view=month",
+  "/wins/teams",
+  "/wins/leads",
+  "/wins/marketing",
   "/settings/security",
   "/settings/integrations",
   "/settings/jobs",
   "/settings/audit",
 ];
-const COACH = ["/today", "/people", "/people/tasks", "/schedule", "/training", "/training/today", "/training/weight-room", "/training/review", "/science", "/science/load", "/performance", "/messages", "/documents", "/reports", "/reports/attendance", "/reports/utilization", "/people/retention", "/reports/session-feedback", "/settings/security", "/time", "/training/anywhere", "/training/recaps", "/people/showcases", "/leaderboards"];
-const FAMILY = ["/today", "/schedule", "/schedule/book", "/schedule/reservations", "/schedule/attendance", "/billing", "/billing/invoices", "/billing/memberships", "/billing/payment-methods", "/billing/history", "/training", "/science", "/science/wellness", "/science/body-map", "/performance", "/messages", "/documents", "/goals", "/shop", "/shop/camps", "/refer", "/anywhere", "/anywhere/season", "/showcase", "/recap", "/leaderboards"];
+const COACH = ["/today", "/people", "/people/tasks", "/schedule", "/training", "/training/today", "/training/weight-room", "/training/review", "/science", "/science/load", "/performance", "/messages", "/documents", "/reports", "/reports/attendance", "/reports/utilization", "/people/retention", "/reports/session-feedback", "/settings/security", "/time", "/training/anywhere", "/training/recaps", "/people/showcases", "/leaderboards", "/wins", "/wins/review", "/wins/calendar", "/wins/teams", "/wins/leads"];
+const FAMILY = ["/today", "/schedule", "/schedule/book", "/schedule/reservations", "/schedule/attendance", "/billing", "/billing/invoices", "/billing/memberships", "/billing/payment-methods", "/billing/history", "/training", "/science", "/science/wellness", "/science/body-map", "/performance", "/messages", "/documents", "/goals", "/shop", "/shop/camps", "/refer", "/anywhere", "/anywhere/season", "/showcase", "/recap", "/leaderboards", "/wins"];
 
 type Role = { name: string; email?: string; routes: string[]; dynamic?: [string, RegExp][] };
 const ROLES: Role[] = [

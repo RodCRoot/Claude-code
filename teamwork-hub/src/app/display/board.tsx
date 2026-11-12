@@ -349,6 +349,26 @@ function PanelView({ panel }: { panel: BoardPanel }) {
           </ul>
         </section>
       );
+    case "wins":
+      return (
+        <section className="flex min-h-0 flex-1 flex-col" aria-label={panel.title}>
+          <Head kicker="Our athletes out in the world" title={panel.title} />
+          <ul className={`grid min-h-0 flex-1 auto-rows-fr gap-[1.6vh] gap-x-[1.6vw] ${panel.items.length > 1 ? "md:grid-cols-2" : ""}`}>
+            {panel.items.map((w, i) => (
+              <li key={i} className="flex min-h-0 flex-col justify-center rounded-[1.6vh] bg-white/[0.055] px-[2.2vw] py-[1.6vh] ring-1 ring-white/10">
+                <div className="flex flex-wrap items-center gap-x-[1.2vw] gap-y-1">
+                  <p className={`min-w-0 truncate ${T.big}`}>{w.name}</p>
+                  <Chip tone="gold">{w.label}</Chip>
+                </div>
+                <p className={`mt-[1vh] line-clamp-3 ${T.mid} text-[#e6edf7]`}>{w.headline}</p>
+                <p className={`mt-[1vh] truncate ${T.small} ${MUTED}`}>
+                  {w.sport} · {w.when}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      );
     case "challenges": {
       const c = panel.challenge;
       const unit = CHALLENGE_METRIC_UNIT[c.metric];

@@ -13,6 +13,8 @@ import { PrBadge, ProgressBar } from "../../training/_components/tb";
 import { AnywhereGameDay, AnywhereHomeCards } from "@/components/anywhere/home-cards";
 import { UpcomingEventsCard } from "@/components/events/family";
 import { CommunityHomeCards } from "@/components/community/home-cards";
+import { CompetingFamilyCard, WinsHomeCard } from "@/components/wins/family";
+import { communityOrg } from "@/lib/community/settings";
 
 /**
  * Athlete Home: the athlete and guardian view of /today. Mobile-first. Everything shown comes
@@ -163,6 +165,8 @@ export async function AthleteHomeView({ v, tz, dateLabel, greeting, selected }: 
               </Card>
             ) : null}
             <CommunityHomeCards v={v} athleteId={home.athleteId} firstName={home.firstName} tz={tz} />
+            <WinsHomeCard v={v} athleteId={home.athleteId} firstName={home.firstName} tz={tz} />
+            <CompetingFamilyCard v={v} orgName={(await communityOrg(db, v.orgId)).name} />
             <ShowcaseHomeCards v={v} athleteId={home.athleteId} firstName={home.firstName} />
             {isAthlete ? <PaymentsCard billing={billing} /> : null}
             <Card>

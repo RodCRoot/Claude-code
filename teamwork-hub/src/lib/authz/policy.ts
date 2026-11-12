@@ -94,7 +94,15 @@ export type OrgCapability =
    */
   | "scoreboard.view"
   /** Edit scoreboard targets, thresholds, marketing spend and manual expenses. */
-  | "scoreboard.manage";
+  | "scoreboard.manage"
+  /**
+   * Wins and Competitions: enter team schedules, submit, edit, approve and remove wins, work the
+   * leads list. Always combined with profile.read on the athlete, so coaches act on assigned
+   * athletes only. Staff never grant marketing consent; that is the family's act (wins/access.ts).
+   */
+  | "wins.review"
+  /** Marketing queue: captions, "mark as posted", and asking a family for marketing consent. */
+  | "wins.marketing";
 
 const ORG_MATRIX: Record<OrgCapability, Role[]> = {
   "people.manage": ["owner", "admin", "operations"],
@@ -121,6 +129,8 @@ const ORG_MATRIX: Record<OrgCapability, Role[]> = {
   "feedback.report": ["owner", "admin", "coach"],
   "scoreboard.view": ["owner", "admin", "operations"],
   "scoreboard.manage": ["owner", "admin"],
+  "wins.review": ["owner", "admin", "operations", "coach"],
+  "wins.marketing": ["owner", "admin", "operations"],
 };
 
 export function can(v: Viewer, cap: OrgCapability): boolean {

@@ -22,6 +22,7 @@ const PANEL_HINT: Record<(typeof PANEL_KEYS)[number], string> = {
   classes: "Time, class, coach and spots left. Never who is booked.",
   milestones: "Session counts and membership milestones. Never birthdays.",
   shoutouts: "Coach shoutouts from the last 7 days.",
+  wins: "Approved wins outside the gym from the last 30 days, when the family left the TV level on.",
   challenges: "Current team challenges and their progress.",
   message: "The gym message below, when one is set.",
 };

@@ -28,6 +28,7 @@ import { actorOf, communityOrg } from "./settings";
 import { AGE_BANDS, SHOUTOUT_LABEL, type BoardPanel, type BoardPayload, type ChallengeView } from "./shared";
 import { recentShoutoutRows } from "./shoutouts";
 import { fmtLoad, measuredPrs } from "./stats";
+import { tvWinItems } from "@/lib/wins/wins";
 
 export const DISPLAY_COOKIE = "tw_display";
 export const DISPLAY_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
@@ -162,6 +163,12 @@ export async function boardPayload(tx: Tx, orgId: string, opts: { now?: Date } =
       return name ? [{ name, headline: SHOUTOUT_LABEL[r.template], note: r.note, coach: r.coach }] : [];
     });
     if (items.length) panels.push({ key: "shoutouts", title: "Coach shoutouts", items: items.slice(0, 4) });
+  }
+
+  if (on.wins) {
+    // Approved wins with the TV level on, under display names. No ids, no photos, no links.
+    const items = await tvWinItems(tx, orgId, roster, { today, tz, limit: 4 });
+    if (items.length) panels.push({ key: "wins", title: "Wins outside the gym", items });
   }
 
   if (on.streaks) {

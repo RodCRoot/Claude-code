@@ -1,0 +1,137 @@
+import { and, asc, eq } from "drizzle-orm";
+import { db } from "@/db";
+import { ActionForm, SubmitButton } from "@/components/forms";
+import { WinsStaffTabs } from "@/components/wins/staff";
+import { Callout, Card, CardBody, CardHeader, EmptyState, Field, Input, Select, Textarea } from "@/components/ui";
+import { athletes, people, WIN_TYPES } from "@/db/schema";
+import { getOrg, requireCap } from "@/lib/auth/viewer";
+import { accessibleAthleteIds, athleteScopeFilter } from "@/lib/authz/policy";
+import { fmt, todayLocal } from "@/lib/time";
+import { listLeads } from "@/lib/wins/leads";
+import { HEADLINE_MAX, LEAD_NOTE_MAX, WIN_TYPE_LABEL } from "@/lib/wins/shared";
+import { ModuleHero } from "../../training/_components/tb";
+import { addLeadAction, convertLeadAction, dismissLeadAction } from "../actions";
+
+export const metadata = { title: "Leads to check" };
+
+export default async function WinLeadsPage() {
+  const v = await requireCap("wins.review");
+  const tz = (await getOrg(v.orgId))?.timezone;
+  const today = todayLocal(tz);
+  const leads = await listLeads(db, v, { status: "open" });
+  const scope = await accessibleAthleteIds(db, v, "profile.read");
+  const roster = await db
+    .select({ id: athletes.id, first: people.firstName, preferred: people.preferredName, last: people.lastName, sport: athletes.sport })
+    .from(athletes)
+    .innerJoin(people, eq(people.id, athletes.personId))
+    .where(and(eq(athletes.orgId, v.orgId), eq(athletes.active, true), athleteScopeFilter(scope, athletes.id)))
+    .orderBy(asc(people.firstName), asc(people.lastName));
+  const options = roster.map((a) => (
+    <option key={a.id} value={a.id}>
+      {a.preferred ?? a.first} {a.last}
+    </option>
+  ));
+  return (
+    <div className="mx-auto max-w-6xl">
+      <ModuleHero kicker="Wins" title="Leads to check" description="Heard something at the front desk, or saw a write-up? Note it here. A lead becomes a draft win only the family sees until they confirm it." />
+      <WinsStaffTabs v={v} current="leads" />
+      <Callout tone="info" className="mb-4" title="What this does not do">
+        This app does not search social media or news sites and never opens the links you paste. Every lead is typed in by a staff member, and nothing is shown to anyone until the family says it is right and staff approve it.
+      </Callout>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="space-y-4 lg:col-span-2">
+          <Card id="leads-open">
+            <CardHeader title="Open leads" kicker={`${leads.length} to check`} />
+            <CardBody>
+              {leads.length === 0 ? <EmptyState title="No open leads">Add one with the form on this page.</EmptyState> : null}
+              <ul className="divide-y divide-edge">
+                {leads.map((l) => (
+                  <li key={l.id} className="space-y-2 py-4 first:pt-0 last:pb-0">
+                    <p className="font-medium">{l.note}</p>
+                    <p className="text-xs text-ink-3">
+                      {l.athleteName ? `About ${l.athleteName} · ` : "No athlete attached yet · "}
+                      Added by {l.createdBy ?? "staff"} on {fmt(l.createdAt, "MMM d", tz)}
+                      {l.sourceUrl ? (
+                        <>
+                          {" · "}
+                          <a href={l.sourceUrl} target="_blank" rel="noopener noreferrer nofollow" className="font-semibold text-brand underline">
+                            Pasted link<span className="sr-only"> for this lead (opens in a new tab)</span>
+                          </a>
+                        </>
+                      ) : null}
+                    </p>
+                    <details>
+                      <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold text-brand underline">
+                        Turn into a draft win<span className="sr-only">: {l.note}</span>
+                      </summary>
+                      <ActionForm action={convertLeadAction} className="space-y-3">
+                        <input type="hidden" name="leadId" value={l.id} />
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <Field label="Athlete" htmlFor={`la-${l.id}`} required>
+                            <Select id={`la-${l.id}`} name="athleteId" required defaultValue={l.athleteId ?? ""}>
+                              <option value="" disabled>
+                                Choose an athlete
+                              </option>
+                              {options}
+                            </Select>
+                          </Field>
+                          <Field label="Kind of win" htmlFor={`lt-${l.id}`} required>
+                            <Select id={`lt-${l.id}`} name="type" required defaultValue="placing">
+                              {WIN_TYPES.map((t) => (
+                                <option key={t} value={t}>
+                                  {WIN_TYPE_LABEL[t]}
+                                </option>
+                              ))}
+                            </Select>
+                          </Field>
+                          <Field label="Sport" htmlFor={`ls-${l.id}`} required>
+                            <Input id={`ls-${l.id}`} name="sport" required maxLength={40} autoComplete="off" />
+                          </Field>
+                          <Field label="When did it happen?" htmlFor={`ld-${l.id}`} required>
+                            <Input id={`ld-${l.id}`} name="occurredOn" type="date" required defaultValue={today} max={today} />
+                          </Field>
+                        </div>
+                        <Field label="Headline" htmlFor={`lh-${l.id}`} required hint={`First name only, up to ${HEADLINE_MAX} characters. The family reads this exact wording.`}>
+                          <Input id={`lh-${l.id}`} name="headline" required maxLength={HEADLINE_MAX} autoComplete="off" />
+                        </Field>
+                        <SubmitButton>Create draft for the family</SubmitButton>
+                      </ActionForm>
+                    </details>
+                    <ActionForm action={dismissLeadAction}>
+                      <input type="hidden" name="leadId" value={l.id} />
+                      <SubmitButton variant="ghost" size="sm">
+                        Dismiss<span className="sr-only">: {l.note}</span>
+                      </SubmitButton>
+                    </ActionForm>
+                  </li>
+                ))}
+              </ul>
+            </CardBody>
+          </Card>
+        </div>
+        <div>
+          <Card id="add-lead">
+            <CardHeader title="Add a lead" kicker="Staff only" />
+            <CardBody>
+              <ActionForm action={addLeadAction} resetOnSuccess className="space-y-3">
+                <Field label="What did you hear?" htmlFor="lead-note" required hint={`Up to ${LEAD_NOTE_MAX} characters. Keep it to the achievement: no health, injury, body weight or grades.`}>
+                  <Textarea id="lead-note" name="note" rows={3} required maxLength={LEAD_NOTE_MAX} />
+                </Field>
+                <Field label="Link (optional)" htmlFor="lead-link" hint="Paste it by hand. The app never opens it.">
+                  <Input id="lead-link" name="sourceUrl" type="url" inputMode="url" placeholder="https://" autoComplete="off" />
+                </Field>
+                <Field label="Athlete (optional)" htmlFor="lead-athlete">
+                  <Select id="lead-athlete" name="athleteId" defaultValue="">
+                    <option value="">Not sure yet</option>
+                    {options}
+                  </Select>
+                </Field>
+                <SubmitButton>Add lead</SubmitButton>
+              </ActionForm>
+            </CardBody>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
