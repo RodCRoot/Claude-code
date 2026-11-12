@@ -23,6 +23,7 @@ export const NAV: NavItem[] = [
   { key: "schedule", href: "/schedule", label: "Calendar", roles: ALL, icon: "schedule", group: "front" },
   { key: "events", href: "/events", label: "Camps & clinics", roles: ["owner", "admin", "operations"], icon: "trophy", group: "front" },
   { key: "messages", href: "/messages", label: "Messages", roles: ALL, icon: "messages", group: "front" },
+  { key: "follow-ups", href: "/follow-ups", label: "Follow-ups", roles: STAFF, icon: "today", group: "front" },
   { key: "people", href: "/people", label: "People", roles: ["owner", "admin", "operations", "coach"], icon: "people", group: "members" },
   { key: "billing", href: "/billing", label: "Memberships & Billing", familyLabel: "My Profile", roles: ["owner", "admin", "operations", "guardian", "athlete"], icon: "billing", group: "members" },
   { key: "documents", href: "/documents", label: "Documents", roles: ALL, icon: "documents", group: "members" },

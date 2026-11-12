@@ -18,6 +18,7 @@ import { fmt, fmtTime } from "@/lib/time";
 import { formatMoney } from "@/lib/money";
 import { TimeClockCard } from "@/components/time-clock-card";
 import { MilestonesCard } from "@/components/retention/milestones-card";
+import { FollowUpsTodayCard } from "@/components/journey/today-card";
 
 /** Front-desk dashboard (owner/admin/operations): KPI row + widget grid. Same data and checks as before. */
 export async function StaffToday({ v, tz, greeting, dateLabel }: { v: Viewer; tz?: string; greeting: string; dateLabel: string }) {
@@ -117,6 +118,8 @@ export async function StaffToday({ v, tz, greeting, dateLabel }: { v: Viewer; tz
             </Widget>
           ) : null}
         </div>
+
+        <FollowUpsTodayCard v={v} />
 
         <Widget title="Missing forms" icon="documents" count={forms.length} href="/documents" linkLabel="Documents" flush>
           {forms.length === 0 ? (

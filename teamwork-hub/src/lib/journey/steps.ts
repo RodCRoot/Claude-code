@@ -68,13 +68,13 @@ export function stepHref(link: StepLink | null, s: { personId: string; athleteId
     case "referrals":
       return "/people/referrals";
     case "goals":
-      return `/people/${s.personId}#goals`;
+      return `/performance/${s.athleteId}`;
     case "shoutout":
-      return `/people/${s.personId}#shoutouts`;
+      return `/people/${s.personId}`;
     case "documents":
-      return `/people/${s.personId}#documents`;
+      return "/documents";
     case "billing":
-      return `/people/${s.personId}#billing`;
+      return `/people/${s.personId}/membership-status`;
     case "winback":
       return "/people/retention/winback";
     default:
@@ -456,4 +456,15 @@ export async function logReachOut(tx: Tx, v: Viewer, raw: unknown) {
   const [n] = await tx.insert(notes).values({ orgId: v.orgId, subjectPersonId: a.personId, authorUserId: v.userId, body: `${label}: ${input.note}`, category: "reach_out", visibility: "coaches_assigned" }).returning({ id: notes.id });
   await audit(tx, actor(v), "journey.reach_out_log", "note", n.id, { summary: `${label}: ${a.first} ${a.last}`, after: { athleteId: input.athleteId, reason: input.reason } });
   return { ok: true as const, noteId: n.id };
+}
+
+/** Staff a step can be assigned to from this viewer: a coach only themselves; everyone else, every active staff login. */
+export async function staffOptions(tx: Tx, v: Viewer): Promise<{ id: string; name: string; role: string }[]> {
+  assertCan(v, "journey.view");
+  if (v.role === "coach") return [{ id: v.userId, name: v.displayName, role: v.role }];
+  const rows = await rowsOf<{ id: string; name: string; role: string }>(
+    tx,
+    sql`select id, display_name as name, role from users where org_id = ${v.orgId} and role in ('owner','admin','operations','coach') and disabled_at is null order by display_name`,
+  );
+  return rows;
 }

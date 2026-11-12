@@ -27,4 +27,5 @@ export const moduleSeeds: [string, (ctx: SeedCtx) => Promise<void>][] = [
   ["engagement", (ctx) => import("./engagement").then((m) => m.seedEngagement(ctx))], // last: derives XP/badges from every other module
   ["showcase", (ctx) => import("./showcase").then((m) => m.seedShowcase(ctx))], // after engagement: recaps read badges and goals
   ["community", (ctx) => import("./community").then((m) => m.seedCommunity(ctx))], // after engagement (XP ledger, badges) and showcase (adds PRs it must not see)
+  ["journey", (ctx) => import("./journey").then((m) => m.seedJourney(ctx))], // last: runs the real generator for its own synthetic members (after documents, community)
 ];

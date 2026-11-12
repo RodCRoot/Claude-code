@@ -27,6 +27,8 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
       and(
         eq(tasks.orgId, v.orgId),
         inArray(tasks.status, status as ("open" | "done")[]),
+        // Member-journey steps are worked from Follow-ups; they only show here once someone owns them.
+        sql`(${tasks.source} <> 'journey' or ${tasks.assigneeUserId} is not null)`,
         who === "me" ? eq(tasks.assigneeUserId, v.userId) : who === "unassigned" ? sql`${tasks.assigneeUserId} is null` : sql`true`,
       ),
     )
@@ -38,7 +40,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
 
   return (
     <>
-      <PageHeader kicker="People" title="Tasks & follow-ups" description="Manual tasks plus those created by automations, body-map reviews, and imports." />
+      <PageHeader kicker="People" title="Tasks & follow-ups" description={<>Manual tasks plus those created by automations, body-map reviews, and imports. Member-journey steps live in <Link href="/follow-ups" className="underline">Follow-ups</Link> and appear here once they are assigned.</>} />
       <PeopleTabs current="tasks" showLeads={can(v, "crm.manage")} showRequests={can(v, "people.manage") || can(v, "crm.manage")} />
       <div className="grid gap-5 lg:grid-cols-3">
         <Card className="lg:col-span-2">
