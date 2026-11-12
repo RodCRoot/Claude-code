@@ -494,7 +494,7 @@ export async function settleJourneys(tx: Tx, orgId: string, now = new Date(), at
   if (athleteIds && !athleteIds.length) return 0;
   const res = await tx.execute(sql`
     update journeys j set status = 'completed', updated_at = ${now.toISOString()},
-      completed_at = coalesce((select max(t.completed_at) from journey_steps js join tasks t on t.id = js.task_id where js.journey_id = j.id), ${now.toISOString()})
+      completed_at = coalesce((select max(case when t.status = 'done' then t.completed_at else js.updated_at end) from journey_steps js join tasks t on t.id = js.task_id where js.journey_id = j.id), ${now.toISOString()})
     where j.org_id = ${orgId} and j.status = 'active' and j.kind in ('onboarding','hold','offboarding','review_referral')
       ${athleteIds ? sql`and j.athlete_id in (${inList(athleteIds)})` : sql``}
       and exists (select 1 from journey_steps js where js.journey_id = j.id)
