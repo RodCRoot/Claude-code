@@ -86,7 +86,15 @@ export type OrgCapability =
   /** Read an individual session-feedback response (rating + comment). Coaches only when "tell my coach" was ticked (checked per response). */
   | "feedback.review"
   /** Session-feedback averages report. A coach only gets their own sessions. */
-  | "feedback.report";
+  | "feedback.report"
+  /** Member journey: follow-ups queue, the profile journey panel and step actions. Coaches: assigned athletes only, never billing steps. */
+  | "journey.view"
+  /** See and act on billing-related journey steps (payment method on file, final bill settled). Never coaches. */
+  | "journey.billing_steps"
+  /** Journey completion reporting and every coach's weekly scorecard. */
+  | "journey.report"
+  /** Tick the daily / weekly operations checklist. The list itself is edited with settings.manage. */
+  | "ops_checklist.use";
 
 const ORG_MATRIX: Record<OrgCapability, Role[]> = {
   "people.manage": ["owner", "admin", "operations"],
@@ -111,6 +119,10 @@ const ORG_MATRIX: Record<OrgCapability, Role[]> = {
   "retention.manage": ["owner", "admin", "operations"],
   "feedback.review": ["owner", "admin", "operations"],
   "feedback.report": ["owner", "admin", "coach"],
+  "journey.view": ["owner", "admin", "operations", "coach"],
+  "journey.billing_steps": ["owner", "admin", "operations"],
+  "journey.report": ["owner", "admin"],
+  "ops_checklist.use": ["owner", "admin", "operations", "coach"],
 };
 
 export function can(v: Viewer, cap: OrgCapability): boolean {
