@@ -152,7 +152,7 @@ export default async function CompetitionCalendarPage({ searchParams }: { search
           const entries = cal.entries.filter((e) => e.date === d);
           const outside = month !== null && d.slice(0, 7) !== month;
           return (
-            <li key={d} className={`min-w-0 rounded-md border p-2 ${d === today ? "border-brand bg-brand/5" : "border-edge bg-surface"} ${entries.length === 0 ? "hidden md:block" : ""} ${outside ? "md:opacity-60" : ""} ${view === "week" ? "md:min-h-40" : "md:min-h-28"}`}>
+            <li key={d} className={`min-w-0 rounded-md border p-2 ${d === today ? "border-brand bg-brand/5" : "border-edge bg-surface"} ${entries.length === 0 ? "hidden md:block" : ""} ${outside && d !== today ? "md:bg-surface-2" : ""} ${view === "week" ? "md:min-h-40" : "md:min-h-28"}`}>
               <h3 className="flex flex-wrap items-center gap-1.5 text-xs font-bold text-ink-2">
                 <span className="md:hidden">{label(d, "EEEE, MMM d")}</span>
                 <span className="hidden md:inline">{label(d, view === "week" ? "EEE MMM d" : "EEE d")}</span>
