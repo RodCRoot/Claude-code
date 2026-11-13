@@ -1,0 +1,9 @@
+First Name,Last Name,Birth Date,Email,Phone,Status,Family ID,Family,Parent First,Parent Last,Parent Email,Special Needs,Medications,Allergies,Prospect Status,Source,Interest,Referred By,Prospect Priority,Sales Rep,Inquiry Date,Trial End Date,Tracking Source,Tracking Name,Tracking Medium,Tracking Keywords,Primary Instructor,Primary Location,Signup Date,Has Password?,Signed Documents,Groups,Bar Code
+Nova,Fictional,04/02/2011,,,Member,F-100,Fictional Family,Quill,Fictional,quill.fictional@example.test,,Inhaler before sessions (fictional),Peanuts (fictional),,Referral,,,,,,,,,,,Coach Nobody,Bloomington,01/05/2026,Yes,Waiver (fictional),Soccer; Warriors 2026,FIX-0001
+Orbit,Fictional,09/10/2013,,,Member,F-100,Fictional Family,Quill,Fictional,quill.fictional@example.test,,,,,,,,,,,,,,,,,Bloomington,01/05/2026,No,,Basketball,FIX-0002
+Juno,Madeup,06/15/2010,,,Member,F-200,Madeup Family,Vega,Madeup,vega.madeup@example.test,,,,,,,,,,,,,,,,,Linton,02/01/2026,No,,Volleyball,FIX-0003
+Vega,Madeup,03/03/1984,vega.madeup@example.test,555-0100,Member,F-200,Madeup Family,,,,,,,,,,,,,,,,,,,,Linton,02/01/2026,Yes,,,FIX-0004
+Lyric,Pretend,11/20/2012,,,Prospect,F-300,,Rune,Pretend,rune.pretend@example.test,,,,Call 2,Facebook,Performance Training,Vega Madeup,High,Nobody Salesperson,10/01/2026,10/15/2026,facebook,fall-speed-fictional,paid_social,speed training,,Bloomington,,No,,,FIX-0005
+Echo,Imaginary,01/09/1990,echo.imaginary@example.test,555-0101,Prospect,,,,,,,,,Not Interested,Billboard,General Fitness,,Low,,09/12/2026,,,,,,,,,No,,,FIX-0006
+Sable,Invented,07/07/2008,,,Alumni,F-400,,,,,,,,,,,,,,,,,,,,,Bloomington,03/01/2024,No,,Inactive,FIX-0007
+Atlas,Nonreal,12/12/2009,,,Staffish,F-500,,,,,,,,,,,,,,,,,,,,,Bloomington,04/01/2025,No,,Football,FIX-0008

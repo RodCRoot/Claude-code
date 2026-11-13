@@ -10,6 +10,7 @@ import { people, users } from "@/db/schema";
 import { requireViewer } from "@/lib/auth/viewer";
 import { AuthzError, can, isStaff } from "@/lib/authz/policy";
 import { getPersonDetail } from "@/lib/people/queries";
+import { importedHealthForPerson } from "@/lib/zenplanner/health";
 import { athleteTimeline } from "@/lib/people/timeline";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import {
@@ -80,6 +81,8 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
     throw e;
   }
   if (!d) notFound();
+  // Health data imported from Zen Planner: null unless the viewer has health access to this person.
+  const zpHealth = await importedHealthForPerson(db, v, personId);
   const { person, athlete } = d;
   const staff = isStaff(v);
   const manage = can(v, "people.manage");
@@ -200,6 +203,33 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
             : undefined
         }
       >
+        {zpHealth ? (
+          <div className="border-t border-edge px-4 py-3 sm:px-5" data-testid="zp-health">
+            <Callout tone="warn" title="Health information imported from Zen Planner" className="py-2">
+              <dl className="grid gap-x-4 gap-y-1 sm:grid-cols-[auto_1fr]">
+                {zpHealth.allergies ? (
+                  <>
+                    <dt className="font-medium">Allergies</dt>
+                    <dd>{zpHealth.allergies}</dd>
+                  </>
+                ) : null}
+                {zpHealth.medications ? (
+                  <>
+                    <dt className="font-medium">Medications</dt>
+                    <dd>{zpHealth.medications}</dd>
+                  </>
+                ) : null}
+                {zpHealth.specialNeeds ? (
+                  <>
+                    <dt className="font-medium">Special needs</dt>
+                    <dd>{zpHealth.specialNeeds}</dd>
+                  </>
+                ) : null}
+              </dl>
+              <p className="mt-1 text-xs">Shown only to people with health access to this athlete. Copied from Zen Planner as written; confirm it with the family.</p>
+            </Callout>
+          </div>
+        ) : null}
         {d.alerts.length ? (
           <div className="space-y-2 border-t border-edge px-4 py-3 sm:px-5">
             {d.alerts.map((a) => (

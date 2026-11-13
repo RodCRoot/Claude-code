@@ -19,7 +19,12 @@ export type FieldDef = {
 };
 
 /** How well a source-field mapping is known. */
-export type Evidence = "existing Teamwork integration" | "vendor docs" | "unverified — configurable";
+export type Evidence =
+  | "existing Teamwork integration"
+  | "vendor docs"
+  | "unverified — configurable"
+  /** Column names taken from the Zen Planner account map; never run against a real export file. */
+  | "built from the 2026-11-13 account map; not yet tested against a real export file";
 
 /** Parsed datetime: the instant plus the verbatim source text. */
 export type ParsedDateTime = {
@@ -77,7 +82,15 @@ export type NormalizedRow = {
   dates: string[];
 };
 
-export type NormalizeCtx = { orgId: string; tz: string; options: Record<string, string> };
+export type NormalizeCtx = {
+  orgId: string;
+  tz: string;
+  options: Record<string, string>;
+  /** Org additions to the Zen Planner vocabularies (values not on a list are flagged, never rejected). */
+  vocab?: Partial<Record<string, string[]>>;
+  /** Facility-local today (YYYY-MM-DD); defaults to the real date. */
+  today?: string;
+};
 
 export type ImportSchemaDef = {
   id: string;
@@ -98,6 +111,8 @@ export type ImportSchemaDef = {
   limitations: string;
   /** Batch-level options shown on the mapping step (stored in the batch mapping as "$option.<key>"). */
   options?: { key: string; label: string; choices: { value: string; label: string }[]; hint?: string }[];
+  /** Step-by-step export instructions shown in the wizard and on Imports → Zen Planner. */
+  exportHelp?: { grid: string; path: string; steps: string[]; columns: string[] };
   /** Not offered in the upload wizard (e.g. API-fed schemas). */
   internal?: boolean;
   normalize(fields: Record<string, FieldValue>, raw: Record<string, string | null>, ctx: NormalizeCtx, metrics: MetricCell[]): NormalizedRow;

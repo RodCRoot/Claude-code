@@ -117,3 +117,13 @@ Each one is a setting or a small change, not a rebuild. The current behaviour is
 7. Bank pay: offer a monthly discount for paying by bank account? (Card surcharges are not built; ask the accountant.)
 8. Membership agreement and waiver wording: everything in the app is sample text until the real documents are supplied.
 
+## Zen Planner import, catalog and discounts (2026-11-13)
+
+Built from `docs/ZENPLANNER-MAP.md`. Defaults in use, each changeable without code:
+- **Prospect Status → lead stage:** New Prospect → New; Call 1 and Call 2 → Contacted; Ready to Sign → Assessment Done; Not Interested → Lost. The hub's own stages were kept rather than replaced with Zen Planner's five. Say so if the pipeline should use Zen Planner's stages instead.
+- **Health columns** (Special Needs, Medications, Allergies) are visible to owner, admin, the assigned coach and guardians with health access; operations sees only that something is on file.
+- **Imported guardians** get no health access and are not emergency contacts until staff change it per family.
+- **Plan catalog:** 20 draft plans at the Zen Planner prices, named by us, unpublished. To confirm per plan: the name, the weekly limit for In Season (1x assumed) and Linton (unset), monthly billing for Bootcamp and Fitness Together Unlimited, and what sits between the $10 and $60 Fitness Together options.
+- **Discount review** groups by the saved family percent (10%, still unconfirmed; the 10 vs 15 question above decides it). For each non-standard rate the owner decides: keep, convert to the family discount, or end.
+- **Short-run programs** (challenges, Summer 8-week, Vertical Jump, All-Girl Speed & Strength) are not memberships here; they belong in Events.
+

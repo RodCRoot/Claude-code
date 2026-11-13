@@ -27,6 +27,20 @@ It was written assuming the hub sits on top of Zen Planner; this project replace
 - **47 tags carry sport, cohort and partner context.** Import them as tags, and map sport tags onto the athlete's sport.
 - Open question 1 (where the hub lives): this repository, `teamwork-hub/`, branch `claude/teamwork-hub`.
 
+## What the hub now does with this map (2026-11-13, later the same day)
+Details in `docs/modules/imports-exports.md` → "Zen Planner exact presets". Everything below is built from this map and **not yet tested against a real export file or a real webhook delivery**.
+- **Exact presets** for the Person, Membership, Bill and Attendance grids (Imports → choose the "exact preset"). Headers match without case or punctuation; unknown columns are listed, not fatal. No Task preset.
+- **Family ID → households; Parent columns → guardians** with no health access; a parent who matches an existing person waits for staff confirmation; never merged by name.
+- **Special Needs / Medications / Allergies** stored as health data behind `health.read`.
+- **Prospect block and UTM fields → CRM leads**; Prospect Status mapped onto the hub's stages (table in the module doc).
+- **Vocabularies mirrored** as the default lists. Only 4 of 12 Drop Reasons, 4 of 12 Income Categories and 3 of 14 Membership Categories are named in this map; the rest are added by the owner on Imports → Zen Planner or flagged when they appear.
+- **Plan catalog**: "Load Teamwork plan catalog" creates 20 unpublished drafts from section 4. The short-run programs (challenges, Summer 8-week, Vertical Jump, All-Girl Speed & Strength) are left for the events module.
+- **Discount review** after a Membership import, including siblings on one Family ID without the family discount.
+- **Webhook receiver** for the three feeds, off by default. The secret format and payload are unknown (see the module doc); it does not verify a signature.
+- **Reconciliation** page for the dashboard figures.
+- Still open from this map: the exact CSV header spellings and `_c` tokens; Zen Planner's membership option names (the catalog uses our own names); what the two Linton prices and the Fitness Together steps between $10 and $60 cover; whether API access was bought (question 2).
+- "Change Card Info is off for members" belongs in the cutover notes: in the hub the parent saves and manages the card or bank account in the sign-up flow (`docs/modules/payments-autopay.md`).
+
 ---
 
 # Zen Planner → Teamwork Hub: CRM build map

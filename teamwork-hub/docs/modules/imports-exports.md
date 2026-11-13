@@ -1,7 +1,7 @@
 # Import Center, Hawkin API sync, exports
 
-Owner: imports module. Routes: `/imports` (history + upload), `/imports/[id]` (wizard), `/imports/[id]/rejected` (CSV), `/imports/hawkin`, `/imports/exports`, `/api/exports/[id]`.
-Code: `src/lib/imports/**`, `src/lib/integrations/hawkin/**`, `src/lib/exports/**`. Fixtures: `fixtures/**`. Tests: `tests/imports.test.ts`, `tests/hawkin.test.ts`, `tests/exports.test.ts`.
+Owner: imports module. Routes: `/imports` (history + upload), `/imports/[id]` (wizard), `/imports/[id]/rejected` (CSV), `/imports/zenplanner` (guide, lists, plan catalog), `/imports/zenplanner/discounts` (+ `/export` CSV), `/imports/zenplanner/reconcile`, `/imports/hawkin`, `/imports/exports`, `/api/exports/[id]`, `/api/webhooks/zenplanner/[feed]`.
+Code: `src/lib/imports/**`, `src/lib/zenplanner/**`, `src/lib/integrations/hawkin/**`, `src/lib/exports/**`. Fixtures: `fixtures/**`. Tests: `tests/imports.test.ts`, `tests/zpimport.test.ts`, `tests/hawkin.test.ts`, `tests/exports.test.ts`, `e2e/zpimport.spec.ts`.
 
 ## Access
 
@@ -49,6 +49,127 @@ Re-import of the same or an overlapping file: rows whose source record id is alr
 | `generic.people` | people / athletes | |
 | `generic.metric_values` | metric_values (`other_vendor`, `aggregation single`) | |
 | `wearable.daily_csv` | wearable_observations; empty value → `quality=missing` | |
+
+## Zen Planner exact presets (2026-11-13)
+
+**Status: built from the 2026-11-13 account map (`docs/ZENPLANNER-MAP.md`); not yet tested against a real export file.** The column names are the report-grid labels seen in the owner's account. Nobody has run a real CSV through them. Fixtures are fictional people only.
+
+The older `zenplanner.members / family_links / memberships / attendance` schemas stay (existing data and saved mappings keep working); the presets below are separate schemas offered first in the upload list.
+
+### Header matching
+
+Headers are compared without case or punctuation (`normHeader` in `mapping.ts`: "Att." = "att", "Shared?" = "shared", "Mbr. Begin Date" = "mbr begin date"), and every field has a short alias list. A header the preset does not recognize is listed on the mapping step ("Not recognized (will not be imported): ...") and left out; it never fails the import. Preset columns missing from the file are listed too and left empty. Staff can still remap any field by hand.
+
+### Export steps (the same text is shown in the wizard and on Imports → Zen Planner)
+
+For every grid: open the report grid in Zen Planner Studio, choose columns, add the listed columns, export as CSV. The address has the form `~/<object>/index.cfm?export=CSV&_c=<chosen column names>`; the column list goes in `_c`. The exact `_c` token for each column is not in the map, so use the grid's own column picker and export link. Import order: Person, then Membership, then Bill and Attendance.
+
+| Preset | Grid | Columns to include |
+| --- | --- | --- |
+| `zenplanner.person_grid` | `person/index.cfm` | First Name, Last Name, Birth Date, Email, Phone, Status, Family ID, Family, Parent First, Parent Last, Parent Email, Special Needs, Medications, Allergies, Prospect Status, Source, Interest, Referred By, Prospect Priority, Sales Rep, Inquiry Date, Trial End Date, Tracking Source / Name / Medium / Keywords, Primary Instructor, Primary Location, Signup Date, Has Password?, Signed Documents, Groups |
+| `zenplanner.membership_grid` | `membership/index.cfm` | First Name, Last Name, Membership, Status, Mbr. Begin Date, Mbr. End Date, Months, Auto Renew, Renewal Type, Trial Member?, Cancel Date, Cancel By, Cancel Reason, Cancel Comments, Payment Amount, First Bill Due, Income Category, Att. Limit, Att. Limit Type, Class Card Att. Remaining, Shared?, Autopay?, Family ID, Birth Date, Email |
+| `zenplanner.bill_grid` | `bill/index.cfm` | First Name, Last Name, Description, Due Date, Amount Due, Amount Paid, Amount Unpaid, Discount Total, Paid On Time, Status (do not add the Autopay Account columns) |
+| `zenplanner.attendance_grid` | `attendance/index.cfm` | First Name, Last Name, Date, Time, Att., Rsvp, Canceled, Session Type, Program, Location, Staff Member |
+
+No Task preset: the Task grid (10 fields) is short-lived staff work and is better re-created than imported.
+
+### What each preset writes
+
+**Person** (`commitPersonGrid`)
+- Person, plus an athlete record unless the row is a prospect. Status: Member → active, Prospect → prospect, Alumni → inactive (athlete inactive). The exact Zen Planner status values are unverified: an unknown value imports as inactive and is flagged.
+- **Family ID is the household key** (`external_ids` `household` = `family:<id>`): everyone sharing it joins one household.
+- **Parent First / Last / Email → guardian.** Never merged by name. In order: (1) a parent who is another row of the same file with the same Family ID and name is linked; (2) a parent this importer created before is reused; (3) exactly one existing person with the same name **and** email is *proposed*: the row waits in identity review and links only when staff confirm it; (4) any other candidate (name only, shared email) links nobody, the row waits in review and says so; (5) no candidate: a new person is created. Every new guardianship has **no health access** and is not an emergency contact, as with `zenplanner.family_links`.
+- **Special Needs / Medications / Allergies are health data.** They go to their own table (`zp_person_health`), read only through `importedHealthForPerson`, which requires `health.read` on the athlete (`policy.ts`): owner, admin, an assigned coach, the athlete, a guardian whose link grants health access. Operations never sees them. Staff get an alert that says only "health information is on file". The values also sit in the import's staged rows and the stored source file, both limited to `imports.manage` (owner/admin, who hold health access).
+- **Prospects → CRM leads** (one open lead per person): stage from the mapping below, Source, Interest, Sales Rep → lead owner only on an exact match to one staff login, guardian → lead contact. Prospect Status, sub-status, Referred By, Priority, Sales Rep, Inquiry Date and Trial End Date are kept in `leads.inquiry.zenplanner`; Tracking Source / Name / Medium / Keywords in `leads.inquiry.utm` (`source`, `campaign`, `medium`, `term`). Inquiry Date becomes the lead's created date.
+- Primary Instructor → coach assignment only on an exact match to one coach login (otherwise the name is kept and the row warns). Primary Location, Signup Date, Has Password?, Signed Documents, Family ID: kept as information in `zp_person_details`.
+- Groups → tags. A tag named after a known sport (`KNOWN_SPORTS`) also fills the athlete's sport when it is empty. Whether the Person grid exports a Groups column is unverified.
+- Not imported: Address, Gender Identity, Bar Code, attendance rollups.
+
+**Membership** (`commitMembershipGrid`). Always `billing_provider = external_zenplanner`, `source = zenplanner`, hub autopay off, no next bill date: never invoiced, renewed or charged here (tested: no invoices, no jobs).
+- One inactive, unlisted product + version per plan name and weekly limit. Its price is the **highest Payment Amount seen for that plan in the file**; each member's own Payment Amount is kept in `zp_membership_details`.
+- Att. Limit with Att. Limit Type "Weekly" → the version's `classes_per_week`. Other limit types are recorded, not enforced.
+- Class Card Att. Remaining → a credit bucket (`source_kind = imported`) tied to the membership. No expiry (not in the grid).
+- Months 6 or 12 with an end date → commitment start/end. Cancel Date / By / Reason / Comments, Auto Renew, Renewal Type, Trial Member?, First Bill Due, Income Category, Shared?, Autopay? kept in `zp_membership_details`. Hold Reason + hold dates (aliases unverified) → a hold row.
+- Status missing → worked out from the dates, with a warning. Plan names containing "In Season" → `kind = in_season`.
+- Not imported: Installment Plan, # of Installments, Signup Fee, Acct Name.
+
+**Bill** (`commitBillGrid`): one row in `zp_bills` (due date, amounts, discount total, paid on time, status). **Never an invoice**: nothing payable, nothing shown to families. Autopay Account columns are never mapped. The membership audit and scoreboard do not read `zp_bills` yet.
+
+**Attendance**: a row is a visit **only when `Att.` = Yes**. Rsvp and Canceled are separate columns and never make a visit; those rows are skipped with the reason. Session Type, Program and Staff Member are kept as text on the imported session; Location links to a hub location on an exact name match.
+
+Revert removes all of the above (leads, tags, health rows, alerts, bills, punch cards, holds); anything later data depends on is kept and listed. Imported plan versions always stay: a database trigger refuses deleting product versions (same as the older membership import).
+
+### Controlled vocabularies (`src/lib/zenplanner/vocab.ts`)
+
+Copied from the map. A value not on a list imports as written, is flagged on the row and stored in `flags`. Owners add missing values on Imports → Zen Planner (stored in `settings.zenplannerVocab`).
+
+| List | Values | Complete? |
+| --- | --- | --- |
+| Prospect Status | New Prospect, Call 1, Call 2, Ready to Sign, Not Interested | yes |
+| Source | Flyer, Newspaper Advertisement, Facebook, Referral, Walk-in, Drive By, Website, Other | yes |
+| Interest | General Fitness, Performance Training, Weight Loss, Police/Fire/Military, Endurance, Other | yes |
+| Priority | Low, Medium, High | yes |
+| Hold Reason | Vacation, Illness, Injury, Financial, maternity, busy, sports | yes |
+| Drop / Cancel Reason | Price is too expensive, Doesn't fit my schedule, Membership Upgrade, Administrative Drop | **4 of 12 known** |
+| Income Category | Sports Performance, Youth, Adult Performance Training, Six Week Challenges | **4 of 12 known** |
+| Membership Category | Sport Performance and Youth Memberships, In-Season, Add-On | **3 of 14 known** |
+
+The other values of the last three lists are not in the map and were not invented.
+
+Prospect Status → lead stage (the hub's own stages were kept; the Zen Planner status stays on the lead):
+
+| Zen Planner | Hub stage | Why |
+| --- | --- | --- |
+| New Prospect | `new` | Not contacted yet |
+| Call 1 | `contacted` | First call made |
+| Call 2 | `contacted` | The hub has one Contacted stage |
+| Ready to Sign | `assessment_done` | Last open stage before Won |
+| Not Interested | `lost` | Lost reason "Not Interested" |
+
+Where the hub already had free text (lead source, interest, hold and cancel reasons), nothing existing was changed; the hold form now suggests Zen Planner's hold reasons.
+
+### Plan catalog (`src/lib/zenplanner/catalog.ts`)
+
+"Load Teamwork plan catalog" on Imports → Zen Planner: **owner only, idempotent (keyed in `external_ids`, never by name), audited** (`zenplanner.catalog_loaded`). Creates 20 products, each **inactive and unlisted**, category and description "From Zen Planner configuration, confirm before use". It never changes or deletes existing products, including the demo "Sample" plans. Prices are the owner's Zen Planner configuration.
+
+| | 12-month | 6-month | Month-to-month |
+| --- | --- | --- | --- |
+| 1x/wk | not offered | not offered | $129.00 |
+| 2x/wk | $178.99 | $197.99 | $232.99 |
+| 3x/wk | $221.99 | $261.99 | $348.00 |
+| 4x/wk | $295.99 | $375.99 | $465.00 |
+| Unlimited | $309.99 | $419.99 | $569.00 |
+
+Plus In Season $99, College Plan $50 weekly (unlimited, 7-day billing per the existing college logic), Fitness Together Drop-in $10 and Unlimited $60, Bootcamp $75, Linton $60 and $75.
+
+Assumptions shown on each draft, because the map gives prices only: plan names are ours (Zen Planner's option names are not in the map); In Season is 1x per week (from the hub's reference plan); Fitness Together options between $10 and $60 are not listed and not created; Bootcamp and Fitness Together Unlimited are assumed monthly; the two Linton prices are not explained (weekly limit left unset). Zen Planner has 33 options; these are the 20 whose price is in the map.
+
+**Not memberships, not created, candidates for the events module:** 6-week challenges ($229 to $299), Summer 8-week ($249), Vertical Jump ($349.99, add-ons $149.99 and $229.99), All-Girl Speed & Strength ($229 and $279.99).
+
+### Discount review (`/imports/zenplanner/discounts`, `discounts.ts`)
+
+Read-only, `imports.manage`. Lists every current imported membership whose Payment Amount differs from its list price or that carries a discount, grouped: **family discount** (equals list less the configured `familyDiscountPercent`, currently 10% and still "needs confirmation"), **In Season rate** (paying the In Season price on another plan), **other**, **cannot tell**. Shows the difference per billing period. A separate table lists **siblings on one Family ID who are not on the family discount**, with what the percent would take off. Can be filtered to one import; CSV by a plain link with `download` (the download is audited).
+
+List price is not a grid column, so it is worked out and the basis is shown: `catalog` when the plan matches the ladder by name, Att. Limit and Months (`matchCatalogPlan`, a heuristic); otherwise the highest Payment Amount on that plan in the import. With the second basis, a plan on which everyone is discounted looks like list price. The optional `Discount` column is mapped if the export has it (not in the map's field list).
+
+### Webhook receiver (`/api/webhooks/zenplanner/{people|class-sessions|attendance}`, `webhooks.ts`)
+
+For the transition only. **Off by default** (404, nothing stored) until an owner or admin turns it on in Settings → Integrations, which also requires the `ZENPLANNER_WEBHOOK_SECRET` server variable. The card shows the three URLs to paste into Zen Planner, last received time and counts per feed, and recent stored payloads.
+
+- **Unverified:** how Zen Planner presents the Shared Secret and the payload shape are not in the map and have never been observed. The receiver accepts the secret as a header or a query value (name configurable) and compares it in constant time. It does **not** verify a body signature. An optional Account ID check refuses deliveries that state a different account.
+- Idempotent: a delivery is keyed by a hash of feed + body; a redelivery is acknowledged and changes nothing.
+- Rate limited per feed (default 120/min, in memory per server process).
+- Payloads are stored with passwords, tokens, payment fields and health fields removed. Health data therefore never arrives by webhook; import it from the Person grid.
+- It feeds the same pipeline: staff press "Stage N for review", which builds an ordinary import batch with the Person or Attendance preset. Identity review, coverage confirmation, commit and revert apply. Nothing is auto-committed. Class Sessions has no import and is kept for inspection only.
+- Receive only. No code path calls Zen Planner.
+
+### Reconciliation (`/imports/zenplanner/reconcile`, `reconcile.ts`)
+
+Type in Zen Planner's dashboard figures (active members, memberships, on hold, past due total), optionally tied to one committed import. The page stores them with the hub's figures at that moment and shows the differences with likely reasons drawn from hub breakdowns: prospects, alumni, active athletes with no membership, members with several memberships, on-hold and pending memberships, and the split by Zen Planner Primary Location (location filter). A reason that equals the gap exactly is marked. The hub's past-due figure is the unpaid amount on imported bills past their due date, so it is empty until the Bill grid is imported. Hub figures are org-wide, not per batch.
+
+### Tables (migration `0033_zpimport`)
+
+`zp_person_details`, `zp_person_health` (health), `zp_membership_details`, `zp_bills`, `zp_webhook_events`, `zp_reconciliations`. No hand-written SQL.
 
 ### GoHighLevel contacts
 
@@ -125,9 +246,15 @@ Evidence levels: **verified in docs** = stated on the vendor's official page; **
 | Membership data was never imported by the scoreboard | existing Teamwork integration | same |
 | People report → CSV with First Name, Last Name, Birth Date, Email, Phone, Status, Signup Date columns | third-party | https://help.pushpress.com/articles/508445-export-users-from-zen-planner, https://help.arboxapp.com/en/articles/5320233-export-data-from-zen-planner |
 | Family/guardian link export, membership report columns, signed document export | **unverified — configurable** (no account access) | — |
+| Report-grid column names for Person, Membership, Bill, Attendance, Task; controlled vocabularies; price ladder; three webhook feeds taking URL + Account ID + Shared Secret; `?export=CSV&_c=` pattern | account observation (read-only session, 2026-11-13) | `docs/ZENPLANNER-MAP.md` |
+| CSV header spellings, webhook payload and signing, `_c` column tokens | **unverified** | — |
 
 ## Known gaps / needs real data
 
+- The Zen Planner exact presets have never seen a real export file: header spellings, Person Status values, whether Groups / Discount / hold columns exist, and whether the grids export a Person or Membership ID are all unconfirmed. Without an ID column people are matched by exact name + birth date and confirmed by staff, and a renamed person re-imports as new.
+- A Person export with no date column (no Signup Date / Inquiry Date) has no detected coverage range; staff type the range before committing.
+- Zen Planner webhook payload and secret format unverified; no body signature check; the rate limit is per server process.
+- Discount review list prices are worked out (ladder match or highest in import), not exported.
 - Every mapping marked "unverified — configurable" must be checked against a real export (Zen Planner People/Membership/Attendance reports, TeamBuildr Max/Raw Data/Questionnaire reports, Hawkin Cloud export); save the confirmed mapping as a preset.
 - Hawkin API never called live (no credentials here). First real sync should be a short historical window with auto-commit off; check warnings for field-shape differences (athlete object, metrics shape, force-time shape).
 - Hawkin CSV without a Test ID column cannot be de-duplicated against API-synced tests.
