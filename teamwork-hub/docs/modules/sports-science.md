@@ -45,6 +45,8 @@ All formulas are pure functions, and each one has a version key that is shown in
 | `attendance_rate_v1` | attended ÷ (attended + no-show) bookings × 100. Cancellations are excluded, and the rate is null if there are no eligible bookings. | % |
 | `load_origin_v1` | `srpe_load_v1` summed per ISO week and split by where the session happened: gym (Hub workouts, manual training), sport (My Season logs with source `sport`, manual practice or game), on your own (finished On Your Own sessions with source `on_your_own`), other. A display split only: ACWR, monotony and strain use the same total as before. See `docs/modules/anywhere.md`. | AU |
 
+Session check-ins (`docs/modules/checkins.md`) feed `srpe_load_v1` too: an after check's session RPE writes one `activity_sessions` row with source `session_checkin` (minutes = the session's scheduled length). `loadEntries` keeps one load number per gym session: on a local day where a completed workout has a computable load the workout logger wins and the check-in row is left out; where the workout has none, the check-in's load stands and that workout is left out. The check-in calculations (`checkin_baseline_v1`, `intensity_gap_v1`, `checkin_completion_v1`, `soreness_response_v1`) are documented there.
+
 Bar-speed and relative-strength calculations live in the training module (`src/lib/training/vbt.ts`) and follow the same rules (named, versioned, null when not calculable): `lv_profile_v1`, `mpv_squat_v1` / `mpv_bench_v1` / `mpv_generic_v1` and `rel_strength_v1`. Their definitions and where each is shown are in `docs/modules/training.md` → "Bar speed". Relative strength needs `health.read` as well as `training.read`, because it reveals body weight.
 
 **Unit conversion** (`convertUnit`) uses exact constants: 1 lb = 0.45359237 kg and 1 in = 2.54 cm. Units in different families, such as cm and s, return `null` and are never compared.
@@ -179,5 +181,5 @@ A live sync would need the following:
 - No PDF export of progress reports, and no email or SMS delivery when a report is shared.
 - Body-map history has no per-region drill-down chart.
 - No inter-athlete comparison beyond the group table and leaderboard.
-- Guardians can't submit check-ins on behalf of a minor, because policy grants guardians no `health.write`.
+- Guardians can't submit the daily wellness check-in or a body-map report on behalf of a minor, because policy grants guardians no `health.write`. (The session ready check is the exception: a parent with health access may answer it for an athlete under 13; see `docs/modules/checkins.md`. Body spots marked there are stored through `recordBodyReport`, the storage half of `submitBodyReport`, with `source_checkin_id` set.)
 - `pre_session` scheduling counts any booked or attended booking that day; it doesn't filter by service type.

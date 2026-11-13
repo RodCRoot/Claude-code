@@ -30,7 +30,7 @@ test.beforeAll(async ({}, info) => {
     const maya = await one(`select a.id from athletes a join people p on p.id = a.person_id where a.org_id = $1 and p.first_name = 'Maya' and p.last_name = 'Parker'`, [org.id]);
     const coach = await one(`select id from users where email = $1`, [USERS.marcus]);
     const svc = await one(`select id from service_types where org_id = $1 and name = 'Group Performance Training' limit 1`, [org.id]);
-    const session = async (title: string, startMin: number, endMin: number, status: string) => {
+    const session = async (title: string, startMin: number, endMin: number, status: string, athleteId: string = maya.id) => {
       const s = await one(
         `insert into schedule_sessions (org_id, service_type_id, title, starts_at, ends_at, timezone, coach_user_id, capacity, is_demo)
          values ($1, $2, $3, now() + $4 * interval '1 minute', now() + $5 * interval '1 minute', $6, $7, 12, true) returning id`,
@@ -39,12 +39,15 @@ test.beforeAll(async ({}, info) => {
       const b = await one(
         `insert into bookings (org_id, session_id, athlete_id, status, entitlement_source, checked_in_at, check_in_method, is_demo)
          values ($1, $2, $3, $4, 'comp', case when $4 = 'attended' then now() - interval '2 hours' end, case when $4 = 'attended' then 'staff' end, true) returning id`,
-        [org.id, s.id, maya.id, status],
+        [org.id, s.id, athleteId, status],
       );
       return { sessionId: s.id as string, bookingId: b.id as string };
     };
     const up = await session(`Check-in demo (${info.project.name})`, 90, 150, "booked");
     const done = await session(`Check-in demo, finished (${info.project.name})`, -120, -60, "attended");
+    // Eli (demo kiosk PIN 2580) is booked on a class that started two minutes ago.
+    const eli = await one(`select a.id from athletes a join people p on p.id = a.person_id where a.org_id = $1 and p.first_name = 'Eli' and p.last_name = 'Parker'`, [org.id]);
+    await session(`Kiosk demo (${info.project.name})`, -2, 58, "booked", eli.id);
     fx[info.project.name] = { upcomingSession: up.sessionId, upcomingBooking: up.bookingId, doneBooking: done.bookingId };
   } finally {
     await pool.end();
@@ -153,4 +156,32 @@ test("coach sees the readiness strip with the pain flag; the front desk sees onl
   await expect(page.locator("#readiness")).not.toContainText("knee");
   await expect(page.locator("#readiness")).not.toContainText("Tweaked");
   await expect(page.locator("#readiness")).not.toContainText("7/10");
+});
+
+test("kiosk: after a PIN check-in the ready check takes a few taps, then the pad is back with nothing left on screen", async ({ page }, info) => {
+  await login(page, USERS.kiosk);
+  await page.goto("/kiosk");
+  await page.locator("#kiosk-pin").fill("2580");
+  await page.locator("#kiosk-pin").press("Enter");
+  const panel = page.getByRole("region", { name: "Quick ready check" });
+  await expect(panel.getByRole("heading", { name: `Quick ready check for Kiosk demo (${info.project.name})? Four taps.` })).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Skip" })).toBeVisible();
+  await noSideScroll(page);
+  await panel.getByRole("group", { name: "How ready do you feel today?" }).getByRole("button", { name: /Good/ }).click();
+  await panel.getByRole("group", { name: "How did you sleep last night?" }).getByRole("button", { name: /OK/ }).click();
+  await panel.getByRole("button", { name: "2 of 10" }).click();
+  await panel.getByRole("button", { name: "No, all good" }).click();
+  await shot(page, info.project.name, "kiosk-ready-check");
+  await panel.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(page.getByText("Thanks! Have a great session.")).toBeVisible();
+  // It closes by itself; the next athlete sees an empty PIN pad and no name.
+  await expect(page.locator("#kiosk-pin")).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator("#kiosk-pin")).toHaveValue("");
+  await expect(page.getByText("Thanks! Have a great session.")).toHaveCount(0);
+  await expect(page.getByText(/checked in, Eli/)).toHaveCount(0);
+  // A second PIN entry for the same class offers no second ready check.
+  await page.locator("#kiosk-pin").fill("2580");
+  await page.locator("#kiosk-pin").press("Enter");
+  await expect(page.getByText(/Hi Eli/).first()).toBeVisible();
+  await expect(page.getByRole("region", { name: "Quick ready check" })).toHaveCount(0);
 });
