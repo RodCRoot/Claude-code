@@ -1,11 +1,21 @@
+import "dotenv/config";
 import { expect, test, type Page } from "@playwright/test";
+import { Pool } from "pg";
 import { login, USERS } from "./helpers";
 
 /**
  * Member journey: follow-ups queue, profile panel, operations checklist, coach scorecard, report
  * and settings (run against `pnpm build && pnpm start` seeded with `pnpm db:fresh`, at desktop
- * and 390px). The seeded members are synthetic: Nora Quill (new), Theo Marsh (nearly through
- * onboarding, no-show yesterday), June Abara (on hold), Dex Moreno (cancelling).
+ * and 390px).
+ *
+ * The first test acts on its OWN member, inserted through DATABASE_URL when the test starts (one per
+ * project, like signup.spec.ts): joined two days ago, coach assigned, a no-show yesterday. It used to
+ * use the seeded Nora Quill and Theo Marsh, whose dates are relative to the day the database was
+ * seeded: once the facility-local date moved past the seed day (a long run crossing midnight in
+ * America/Indiana/Indianapolis) "yesterday's no-show" was two days old and the test failed, at 390px
+ * only because that project runs last. Reproduced by moving the seeded sessions back one day.
+ * The other assertions on seeded members (June Abara on hold, Theo Marsh for the coach) are read-only
+ * and only need a step that is due or overdue, which stays true on later days.
  */
 const noSideScroll = async (page: Page) => {
   // Compare with the configured viewport, not innerWidth: on a phone a too-wide page widens innerWidth with it.
@@ -13,9 +23,54 @@ const noSideScroll = async (page: Page) => {
   expect(await page.evaluate(() => document.documentElement.scrollWidth), `${page.url()} scrolls sideways`).toBeLessThanOrEqual(vw + 1);
 };
 
+let pool: Pool;
+test.beforeAll(() => {
+  pool = new Pool({ connectionString: process.env.DATABASE_URL });
+});
+test.afterAll(async () => {
+  await pool.end();
+});
+
+/** A synthetic member whose dates are relative to the facility-local day at the moment of the call. */
+async function newMember(project: string) {
+  const one = async (q: string, params: unknown[] = []) => (await pool.query(q, params)).rows[0];
+  const org = await one(`select id, timezone from organizations where slug = 'teamwork-demo'`);
+  const tz = org.timezone ?? "America/Indiana/Indianapolis";
+  const first = `Journey${project === "desktop" ? "Desk" : "Phone"}${Date.now().toString(36).slice(-5)}`;
+  const name = `${first} Sample`;
+  const tess = await one(`select id from users where org_id = $1 and display_name ilike '%tess%' limit 1`, [org.id]);
+  const erin = await one(`select id from users where email = $1`, [USERS.erin]);
+  const plan = await one(
+    `select pv.id from product_versions pv join products pr on pr.id = pv.product_id
+     where pr.org_id = $1 and pr.kind = 'recurring_membership' and pr.active and pv.interval = 'month' order by pv.effective_from limit 1`,
+    [org.id],
+  );
+  const svc = await one(`select service_type_id as id from schedule_sessions where org_id = $1 limit 1`, [org.id]);
+  const person = await one(`insert into people (org_id, first_name, last_name, date_of_birth, is_demo) values ($1, $2, 'Sample', current_date - interval '15 years', true) returning id`, [org.id, first]);
+  const athlete = await one(`insert into athletes (org_id, person_id, is_demo) values ($1, $2, true) returning id`, [org.id, person.id]);
+  const payer = await one(`insert into payer_accounts (org_id, name) values ($1, $2) returning id`, [org.id, `${name} family (e2e)`]);
+  await pool.query(`insert into payer_beneficiaries (payer_account_id, athlete_id) values ($1, $2)`, [payer.id, athlete.id]);
+  await pool.query(
+    `insert into memberships (org_id, athlete_id, payer_account_id, product_version_id, status, start_date, billing_provider, source, is_demo)
+     values ($1, $2, $3, $4, 'active', (now() at time zone $5)::date - 2, 'manual', 'e2e_journey', true)`,
+    [org.id, athlete.id, payer.id, plan.id, tz],
+  );
+  await pool.query(`insert into coach_assignments (org_id, coach_user_id, athlete_id) values ($1, $2, $3)`, [org.id, tess.id, athlete.id]);
+  // A session yesterday morning (facility time) that this member booked and missed.
+  const session = await one(
+    `insert into schedule_sessions (org_id, service_type_id, title, starts_at, ends_at, timezone, coach_user_id, capacity, status, is_demo)
+     values ($1, $2, 'Journey check (e2e sample)', (((now() at time zone $3)::date - 1) + time '06:15') at time zone $3, (((now() at time zone $3)::date - 1) + time '07:15') at time zone $3, $3, $4, 12, 'completed', true)
+     returning id`,
+    [org.id, svc.id, tz, tess.id],
+  );
+  await pool.query(`insert into bookings (org_id, session_id, athlete_id, booked_by_user_id, status, entitlement_source, is_demo) values ($1, $2, $3, $4, 'no_show', 'membership', true)`, [org.id, session.id, athlete.id, erin.id]);
+  return { name, personId: person.id as string };
+}
+
 test("owner works the follow-ups queue and a member's journey panel", async ({ page }, info) => {
+  const member = await newMember(info.project.name);
   await login(page, USERS.rod);
-  await page.goto("/follow-ups");
+  await page.goto("/follow-ups"); // the page runs the same generator as the nightly job, so the new member's journey exists now
   await expect(page.getByRole("heading", { level: 1, name: "Today's follow-ups" })).toBeVisible();
   await noSideScroll(page);
   // Grouped by type, with billing steps visible to the owner.
@@ -24,7 +79,9 @@ test("owner works the follow-ups queue and a member's journey panel", async ({ p
   await expect(page.getByRole("list", { name: "Offboarding steps" })).toBeVisible();
   const queue = page.locator("main");
   await expect(queue.getByText("Final bill settled").first()).toBeHidden(); // not due yet (7 days after the cancellation)
-  await expect(queue.getByRole("link", { name: "Nora Quill", exact: true }).first()).toBeVisible();
+  const onboarding = page.getByRole("list", { name: "Onboarding steps" });
+  await expect(onboarding.getByRole("link", { name: member.name, exact: true }).first()).toBeVisible();
+  await expect(onboarding.locator("li", { hasText: member.name }).filter({ hasText: "Payment method on file" })).toHaveCount(1); // billing step, due today, no card saved
 
   // Filter by owner role and by type.
   await page.getByLabel("Type").selectOption("hold");
@@ -35,43 +92,37 @@ test("owner works the follow-ups queue and a member's journey panel", async ({ p
   await page.goto("/follow-ups");
 
   // Yesterday's no-show, with log-a-reach-out.
-  const noShows = page.locator("#no-shows");
-  await expect(noShows.getByRole("link", { name: "Theo Marsh", exact: true })).toBeVisible();
-  await noShows.getByText("Log a reach-out").first().click();
-  await noShows.getByLabel(/What you did and what they said/).first().fill(`Called home, back on Thursday (sample, ${info.project.name}).`);
-  await noShows.getByRole("button", { name: "Save reach-out" }).first().click();
-  await expect(noShows.getByText("Reach-out logged.")).toBeVisible();
+  const mine = page.locator("#no-shows li", { hasText: member.name });
+  await expect(mine.getByRole("link", { name: member.name, exact: true })).toBeVisible();
+  await expect(mine.getByText("No reach-out logged yet")).toBeVisible();
+  await mine.getByText("Log a reach-out").click();
+  await mine.getByLabel(/What you did and what they said/).fill(`Called home, back on Thursday (sample, ${info.project.name}).`);
+  await mine.getByRole("button", { name: "Save reach-out" }).click();
+  await expect(mine.getByText("Reach-out logged.")).toBeVisible();
   await page.reload();
-  await expect(page.getByText(/Last reach-out logged .* by /).first()).toBeVisible();
+  await expect(mine.getByText(/Last reach-out logged .* by /)).toBeVisible();
 
-  // Open Nora's profile: the journey panel shows onboarding with auto-ticked and open steps.
-  await page.getByRole("list", { name: "Onboarding steps" }).getByRole("link", { name: "Nora Quill", exact: true }).first().click();
-  await expect(page).toHaveURL(/\/people\/[0-9a-f-]{36}$/);
+  // Open the member's profile: the journey panel shows onboarding with auto-ticked and open steps.
+  await page.getByRole("list", { name: "Onboarding steps" }).getByRole("link", { name: member.name, exact: true }).first().click();
+  await expect(page).toHaveURL(new RegExp(`/people/${member.personId}$`));
   const panel = page.locator("#journey");
   await expect(panel.getByRole("heading", { name: /Onboarding/ })).toBeVisible();
-  await expect(panel.getByText("Ticked automatically").first()).toBeVisible(); // payment method, first session booked, coach assigned
+  await expect(panel.getByText("Ticked automatically").first()).toBeVisible(); // coach assigned
   await expect(panel.getByText("Visit milestones")).toBeVisible();
   await noSideScroll(page);
 
-  // One-tap complete on a step nobody else in this run touches (one per viewport so both runs act).
-  const key = info.project.name === "mobile" ? "bring_a_friend" : "thank_you_card";
-  const row = panel.locator(`li[data-step="${key}"]`);
-  if (await row.getByRole("button", { name: /^Done/ }).count()) {
-    await row.getByRole("button", { name: /^Done/ }).click();
-    await expect(row.getByText("Done", { exact: true })).toBeVisible();
-  } else {
-    await expect(row.getByText(/Done|Skipped/).first()).toBeVisible(); // already resolved by an earlier run
-  }
+  // One-tap complete on a step.
+  const row = panel.locator('li[data-step="thank_you_card"]');
+  await row.getByRole("button", { name: /^Done/ }).click();
+  await expect(row.getByText("Done", { exact: true })).toBeVisible();
   // Snooze another step, with the reason and assign controls present.
   const welcome = panel.locator('li[data-step="welcome_message"]');
-  if (await welcome.getByText("Skip, snooze or assign").count()) {
-    await welcome.getByText("Skip, snooze or assign").click();
-    await expect(welcome.getByLabel("Skip: reason")).toBeVisible();
-    await expect(welcome.getByLabel("Assign to")).toBeVisible();
-    await welcome.getByLabel("Snooze for").selectOption("1");
-    await welcome.getByRole("button", { name: "Snooze", exact: true }).click();
-    await expect(welcome.getByText(/Snoozed/).first()).toBeVisible();
-  }
+  await welcome.getByText("Skip, snooze or assign").click();
+  await expect(welcome.getByLabel("Skip: reason")).toBeVisible();
+  await expect(welcome.getByLabel("Assign to")).toBeVisible();
+  await welcome.getByLabel("Snooze for").selectOption("1");
+  await welcome.getByRole("button", { name: "Snooze", exact: true }).click();
+  await expect(welcome.getByText(/Snoozed/).first()).toBeVisible();
   // A message step links to the normal compose page; nothing is sent from the journey.
   await expect(panel.getByRole("link", { name: /Write a message/ }).first()).toHaveAttribute("href", /\/messages\/new\?athlete=/);
 });
