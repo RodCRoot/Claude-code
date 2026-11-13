@@ -28,6 +28,7 @@ import { actorOf, communityOrg } from "./settings";
 import { AGE_BANDS, SHOUTOUT_LABEL, type BoardPanel, type BoardPayload, type ChallengeView } from "./shared";
 import { recentShoutoutRows } from "./shoutouts";
 import { fmtLoad, measuredPrs } from "./stats";
+import { tvAlumniItems } from "@/lib/newswatch/clips";
 import { tvWinItems } from "@/lib/wins/wins";
 
 export const DISPLAY_COOKIE = "tw_display";

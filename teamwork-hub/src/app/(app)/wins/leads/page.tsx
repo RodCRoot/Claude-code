@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { WinsStaffTabs } from "@/components/wins/staff";
 import { Callout, Card, CardBody, CardHeader, EmptyState, Field, Input, Select, Textarea } from "@/components/ui";
-import { athletes, people, WIN_TYPES } from "@/db/schema";
+import { athletes, people, SUBMITTABLE_WIN_TYPES } from "@/db/schema";
 import { getOrg, requireCap } from "@/lib/auth/viewer";
 import { accessibleAthleteIds, athleteScopeFilter } from "@/lib/authz/policy";
 import { fmt, todayLocal } from "@/lib/time";
@@ -77,7 +77,7 @@ export default async function WinLeadsPage() {
                           </Field>
                           <Field label="Kind of win" htmlFor={`lt-${l.id}`} required>
                             <Select id={`lt-${l.id}`} name="type" required defaultValue="placing">
-                              {WIN_TYPES.map((t) => (
+                              {SUBMITTABLE_WIN_TYPES.map((t) => (
                                 <option key={t} value={t}>
                                   {WIN_TYPE_LABEL[t]}
                                 </option>
