@@ -3,6 +3,7 @@
 import { startTransition, useActionState, useEffect, useRef, useState } from "react";
 import type { ActionState } from "@/components/forms";
 import { kioskPinCheckInAction } from "./actions";
+import { KioskReadyCheck } from "./ready-check";
 
 type Row = { title: string; time: string; result: "checked_in" | "already_checked_in" | "not_open_yet" | "ended" | "see_front_desk" };
 const RESULT: Record<Row["result"], string> = {
@@ -28,6 +29,9 @@ export function KioskPinPad({ bare = false }: { bare?: boolean }) {
     return () => clearTimeout(t);
   }, [state]);
   const shown: ActionState = hidden === state ? {} : state;
+  // Ready check offered after a match. It is dropped on finish, skip, timeout, or the next PIN attempt.
+  const [dismissed, setDismissed] = useState<ActionState | null>(null);
+  const pass = dismissed === state ? null : ((state.data?.readyPass as { token: string; sessionTitle: string } | null | undefined) ?? null);
   const rows = (shown.data?.sessions as Row[] | undefined) ?? [];
   const alerts = (shown.data?.alerts as string[] | undefined) ?? [];
 
@@ -37,6 +41,21 @@ export function KioskPinPad({ bare = false }: { bare?: boolean }) {
     else setPin((p) => (p.length < 6 ? p + k : p));
     inputRef.current?.focus();
   };
+
+  if (pass) {
+    return (
+      <KioskReadyCheck
+        key={pass.token}
+        token={pass.token}
+        name={(state.data?.name as string | undefined) ?? ""}
+        sessionTitle={pass.sessionTitle}
+        onClose={() => {
+          setDismissed(state);
+          setHidden(state);
+        }}
+      />
+    );
+  }
 
   return (
     <section aria-label="Check in with your PIN" className={bare ? "p-2" : "rounded-2xl border border-edge bg-surface p-4 sm:p-6"}>

@@ -315,7 +315,7 @@ async function ensureReviewTask(tx: Tx, orgId: string, checkin: typeof sessionCh
     .values({
       orgId,
       title: REVIEW_TASK_TITLE,
-      description: `An athlete's check-in answers need a look before or after training. Open /science/check-ins/responses/${checkin.id} (details are shown to staff with health access for this athlete). Self-reported, not a diagnosis. Nothing was sent to the family.`,
+      description: `An athlete's check-in answers need a look before or after training. Open /check-ins/responses/${checkin.id} (details are shown to staff with health access for this athlete). Self-reported, not a diagnosis. Nothing was sent to the family.`,
       dueAt: new Date(now.getTime() + 86_400_000),
       assigneeUserId: assignee,
       relatedPersonId: personId,
@@ -741,7 +741,7 @@ export async function submitAfter(tx: Tx, v: Viewer, raw: unknown, now = new Dat
       .values({
         orgId: v.orgId,
         title: DISLIKE_TASK_TITLE,
-        description: `Someone said there was something they did not like or wanted changed after a session. Open /science/check-ins/responses/${checkin.id} to read it (visible to roles allowed). Nothing was sent to the family.`,
+        description: `Someone said there was something they did not like or wanted changed after a session. Open /check-ins/responses/${checkin.id} to read it (visible to roles allowed). Nothing was sent to the family.`,
         dueAt: new Date(now.getTime() + 2 * 86_400_000),
         assigneeUserId: shared ? t.session.coachUserId : await firstOwner(tx, v.orgId),
         relatedPersonId: shared ? t.personId : null,

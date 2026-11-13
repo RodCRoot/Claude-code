@@ -15,6 +15,7 @@ import { UpcomingEventsCard } from "@/components/events/family";
 import { CommunityHomeCards } from "@/components/community/home-cards";
 import { CompetingFamilyCard, WinsHomeCard } from "@/components/wins/family";
 import { communityOrg } from "@/lib/community/settings";
+import { SessionCheckinCard } from "@/components/checkins/home-card";
 
 /**
  * Athlete Home: the athlete and guardian view of /today. Mobile-first. Everything shown comes
@@ -61,6 +62,7 @@ export async function AthleteHomeView({ v, tz, dateLabel, greeting, selected }: 
         <div className="grid gap-4 lg:grid-cols-3">
           <div className="space-y-4 lg:col-span-2">
             <AnywhereGameDay athleteId={child.athleteId} tz={tz} isAthlete={isAthlete} multi={children.length > 1} />
+            <SessionCheckinCard viewer={v} athleteId={child.athleteId} />
             <WorkoutCard home={home} isAthlete={isAthlete} />
             {isAthlete && home.wellness?.due && !home.wellness.done ? (
               <section className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-info/30 bg-info/5 px-4 py-3">

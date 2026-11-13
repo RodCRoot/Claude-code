@@ -13,6 +13,7 @@ import { destroySession, SESSION_COOKIE, sha256, STAFF_ROLES, verifyCredentials 
 import { getOrg, requireViewer } from "@/lib/auth/viewer";
 import { kioskCheckIn } from "@/lib/scheduling/kiosk";
 import { kioskPinCheckIn } from "@/lib/scheduling/kiosk-pin";
+import { issueKioskReadyPass, submitKioskReady } from "@/lib/checkins/core";
 import { kioskStaffClock } from "@/lib/payroll/service";
 import { DEFAULT_TZ, fmtTime } from "@/lib/time";
 
@@ -33,7 +34,8 @@ export async function kioskPinCheckInAction(_prev: ActionState, fd: FormData): P
     const v = await requireViewer();
     const token = (await cookies()).get(SESSION_COOKIE)?.value;
     if (!token) throw new UserError("Please sign the kiosk in again.");
-    const r = await db.transaction((tx) => kioskPinCheckIn(tx, v, { pin: String(fd.get("pin") ?? ""), sessionKey: sha256(token) }));
+    const pin = String(fd.get("pin") ?? "");
+    const r = await db.transaction((tx) => kioskPinCheckIn(tx, v, { pin, sessionKey: sha256(token) }));
     if (!r.ok) {
       const error =
         r.reason === "invalid_format"
@@ -46,6 +48,9 @@ export async function kioskPinCheckInAction(_prev: ActionState, fd: FormData): P
     revalidatePath("/kiosk");
     const tz = (await getOrg(v.orgId))?.timezone ?? DEFAULT_TZ;
     const checkedIn = r.sessions.filter((s) => s.result === "checked_in").length;
+    // Optional ready check: a single-use pass for the booking this athlete is now checked in for.
+    // Only the token and the class name go to the kiosk; it never receives earlier answers.
+    const readyPass = r.sessions.some((s) => s.result === "checked_in" || s.result === "already_checked_in") ? await db.transaction((tx) => issueKioskReadyPass(tx, v, { pin })) : null;
     const message = !r.sessions.length
       ? `Hi ${r.displayName}! You're not booked for a session today. Please see the front desk.`
       : checkedIn
@@ -56,10 +61,24 @@ export async function kioskPinCheckInAction(_prev: ActionState, fd: FormData): P
       message,
       data: {
         name: r.displayName,
+        readyPass,
         alerts: r.alerts,
         sessions: r.sessions.map((s) => ({ title: s.title, time: `${fmtTime(s.startsAt, tz)} – ${fmtTime(s.endsAt, tz)}`, result: s.result })),
       },
     };
+  })();
+}
+
+/** Kiosk ready check: redeems the single-use pass issued right after the athlete's PIN matched. */
+export async function kioskReadyCheckAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  return safeAction(async () => {
+    const v = await requireViewer();
+    const g = (k: string) => {
+      const x = fd.get(k);
+      return typeof x === "string" ? x : "";
+    };
+    const r = await db.transaction((tx) => submitKioskReady(tx, v, { token: g("token"), readiness: g("readiness"), sleepQuality: g("sleepQuality"), soreness: g("soreness"), hurt: g("hurt") }));
+    return { ok: true, message: r.hurt ? "Thanks! Please tell your coach what hurts before you start." : "Thanks! Have a great session." };
   })();
 }
 

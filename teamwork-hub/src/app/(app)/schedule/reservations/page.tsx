@@ -13,6 +13,7 @@ import { familyAthletes, listSessions } from "@/lib/scheduling/queries";
 import { addDaysYmd, fmt, localToUtc, todayLocal } from "@/lib/time";
 import { cancelBookingAction, rescheduleAction } from "../actions";
 import { ScheduleTabs } from "../_components/calendar";
+import { SessionCheckinCard } from "@/components/checkins/home-card";
 import { cancelConfirm, lateCancelRule, policiesByService } from "../_components/reserve-control";
 
 export const metadata = { title: "My Reservations" };
@@ -58,6 +59,9 @@ export default async function ReservationsPage() {
     <>
       <PageHeader kicker="Schedule" title="My Reservations" description="Upcoming reservations and waitlist spots for your family." actions={<ButtonLink href="/schedule" className="min-h-11">Reserve a class</ButtonLink>} />
       <ScheduleTabs current="reservations" staff={false} manager={false} />
+      <div className="mb-4">
+        <SessionCheckinCard viewer={v} />
+      </div>
 
       {members.length === 0 ? (
         <EmptyState title="No family members linked to your account yet">Ask the front desk to link your child (or your own athlete profile) to this login.</EmptyState>
