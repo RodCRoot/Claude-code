@@ -10,6 +10,7 @@ import {
   householdMembers,
   households,
   importRows,
+  locations,
   maxes,
   memberships,
   metricDefinitions,
@@ -86,7 +87,7 @@ export async function linkExternal(c: CommitCtx, entityType: string, sourceId: s
   }
 }
 
-async function cached(c: CommitCtx, key: string, make: () => Promise<string>): Promise<string> {
+export async function cached(c: CommitCtx, key: string, make: () => Promise<string>): Promise<string> {
   const hit = c.cache.get(key);
   if (hit) return hit;
   const v = await make();
@@ -98,7 +99,7 @@ async function cached(c: CommitCtx, key: string, make: () => Promise<string>): P
 // People / athletes
 // ---------------------------------------------------------------------------
 
-type PersonData = { firstName?: unknown; lastName?: unknown; dob?: unknown; email?: unknown; phone?: unknown; status?: unknown };
+export type PersonData = { firstName?: unknown; lastName?: unknown; dob?: unknown; email?: unknown; phone?: unknown; status?: unknown };
 
 /** Resolve (or create) the row's person and, when needed, athlete. */
 export async function ensurePerson(
@@ -159,7 +160,7 @@ export async function ensurePerson(
 }
 
 /** Fill empty fields on a pre-existing person; never overwrite. Conflicts become warnings. */
-async function fillPerson(c: CommitCtx, personId: string, d: PersonData, out: RowOutcome) {
+export async function fillPerson(c: CommitCtx, personId: string, d: PersonData, out: RowOutcome) {
   const [p] = await c.tx.select().from(people).where(and(eq(people.id, personId), eq(people.orgId, c.orgId)));
   if (!p) return;
   const patch: Record<string, unknown> = {};
@@ -189,7 +190,7 @@ async function fillPerson(c: CommitCtx, personId: string, d: PersonData, out: Ro
 // Per-schema committers
 // ---------------------------------------------------------------------------
 
-type Committer = (c: CommitCtx, row: RowRecord, out: RowOutcome) => Promise<void>;
+export type Committer = (c: CommitCtx, row: RowRecord, out: RowOutcome) => Promise<void>;
 
 const commitPerson: Committer = async (c, row, out) => {
   const n = row.normalized as Record<string, unknown>;
@@ -208,7 +209,7 @@ const commitFamilyLink: Committer = async (c, row, out) => {
 };
 
 /** Household (+ members) and an active guardianship with conservative defaults. Returns the guardianship id. */
-async function linkGuardian(
+export async function linkGuardian(
   c: CommitCtx,
   out: RowOutcome,
   input: { guardianId: string; childId: string; athleteId: string; householdKey: string; householdName: string; relationship: string },
@@ -350,7 +351,7 @@ const commitMembership: Committer = async (c, row, out) => {
   out.action = "create";
 };
 
-const commitAttendance: Committer = async (c, row, out) => {
+export const commitAttendance: Committer = async (c, row, out) => {
   const n = row.normalized as Record<string, unknown>;
   const { athleteId } = await ensurePerson(c, row, out);
   const serviceTypeId = await cached(c, "service_type", async () => {
@@ -373,7 +374,25 @@ const commitAttendance: Committer = async (c, row, out) => {
     return s.id;
   });
   const startsAt = new Date(String(n.startsAt));
-  const sessionKey = syntheticId(c.orgId, "zp-session", String(n.className).toLowerCase(), startsAt.toISOString());
+  // Attendance-grid preset: Location links to a hub location only on an exact name match.
+  const locationName = (n.locationName as string | null) ?? null;
+  let locationId: string | null = null;
+  if (locationName) {
+    const lid = await cached(c, `location:${locationName.toLowerCase()}`, async () => {
+      const [l] = await c.tx.select({ id: locations.id }).from(locations).where(and(eq(locations.orgId, c.orgId), sql`lower(${locations.name}) = ${locationName.toLowerCase()}`));
+      return l?.id ?? "none";
+    });
+    locationId = lid === "none" ? null : lid;
+  }
+  const extraNotes = [
+    n.sessionType ? `Session Type: ${String(n.sessionType)}` : null,
+    n.program ? `Program: ${String(n.program)}` : null,
+    locationName ? `Location: ${locationName}${locationId ? "" : " (no hub location with this name)"}` : null,
+    n.staffName ? `Staff Member: ${String(n.staffName)}` : null,
+  ].filter(Boolean);
+  const sessionKey = locationName
+    ? syntheticId(c.orgId, "zp-session", String(n.className).toLowerCase(), startsAt.toISOString(), locationName.toLowerCase())
+    : syntheticId(c.orgId, "zp-session", String(n.className).toLowerCase(), startsAt.toISOString());
   const sessionId = await cached(c, `session:${sessionKey}`, async () => {
     const existing = await findExternal(c.tx, c.orgId, c.schema.idSource, "session", sessionKey);
     if (existing) return existing;
@@ -389,7 +408,8 @@ const commitAttendance: Committer = async (c, row, out) => {
         capacity: 0,
         status: "completed",
         visibility: "private",
-        notes: `Imported from Zen Planner (import batch ${c.batchId}). Source time: ${String(n.sourceTimestamp)}`,
+        locationId,
+        notes: `Imported from Zen Planner (import batch ${c.batchId}). Source time: ${String(n.sourceTimestamp)}${extraNotes.length ? `. ${extraNotes.join("; ")}` : ""}`,
       })
       .returning({ id: scheduleSessions.id });
     out.created.push({ type: "schedule_session", id: s.id });

@@ -4,10 +4,15 @@ import { hawkinApi, hawkinCsv } from "./hawkin";
 import { tbMaxes, tbQuestionnaire, tbWorkoutLog } from "./teambuildr";
 import { ghlContacts } from "./gohighlevel";
 import { vbtReadingsCsv } from "./vbt";
+import { zpAttendanceGrid, zpBillGrid, zpMembershipGrid, zpPersonGrid } from "./zenplanner-grid";
 import { zpAttendance, zpDocumentsIndex, zpFamilyLinks, zpMembers, zpMemberships } from "./zenplanner";
 
 /** Registry of every import schema, in wizard order. */
 export const IMPORT_SCHEMAS: ImportSchemaDef[] = [
+  zpPersonGrid,
+  zpMembershipGrid,
+  zpBillGrid,
+  zpAttendanceGrid,
   zpMembers,
   zpFamilyLinks,
   zpMemberships,

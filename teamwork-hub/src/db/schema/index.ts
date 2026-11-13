@@ -19,3 +19,4 @@ export * from "./newswatch";
 export * from "./wins";
 export * from "./journey";
 export * from "./checkins";
+export * from "./zenplanner";

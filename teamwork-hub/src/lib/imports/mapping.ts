@@ -3,7 +3,15 @@ import type { FieldValue, ImportSchemaDef, MetricCell, NormalizeCtx, NormalizedR
 
 export const OPTION_PREFIX = "$option.";
 
-const norm = (s: string) => s.toLowerCase().replace(/[_\-.]+/g, " ").replace(/\s+/g, " ").trim();
+/** Header comparison: case, punctuation ("Att.", "Shared?", "# of") and spacing never matter. */
+export const normHeader = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[_\-.]+/g, " ")
+    .replace(/[?:]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+const norm = normHeader;
 
 /** Suggest a target-field → header mapping from header names and schema aliases. */
 export function autoMap(schema: ImportSchemaDef, headers: string[]): Record<string, string> {

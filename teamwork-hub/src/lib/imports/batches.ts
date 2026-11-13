@@ -1,9 +1,21 @@
 import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import type { Tx } from "@/db";
 import {
+  alerts,
   archivedDocuments,
   athletes,
   bookings,
+  coachAssignments,
+  creditBuckets,
+  creditLedger,
+  leads,
+  membershipHolds,
+  personTags,
+  tags,
+  zpBills,
+  zpMembershipDetails,
+  zpPersonDetails,
+  zpPersonHealth,
   exercises,
   externalIds,
   guardianships,
@@ -42,6 +54,9 @@ import { objectStore, saveObject, sha256Bytes } from "@/lib/storage";
 import { DEFAULT_TZ } from "@/lib/time";
 import { advanceHawkinCheckpoint } from "@/lib/integrations/hawkin/checkpoint";
 import { COMMITTERS, findExternal, prepareExtra, type Created, type RowOutcome, type UpdateRecord } from "./commit";
+import { parentKey, prepareGridExtra, ZP_GRID_COMMITTERS } from "./commit-zenplanner";
+import { vocabOverrides } from "@/lib/zenplanner/vocab";
+import { todayLocal } from "@/lib/time";
 import { identityKey, matchPerson } from "./identity";
 import { peopleByAddress } from "@/lib/messaging/inbound";
 import { autoMap, fieldMapping, mappingOptions, metricHeaders, missingRequired, normalizeRow, OPTION_PREFIX } from "./mapping";
@@ -227,7 +242,7 @@ type Planned = {
 };
 
 async function planExisting(tx: Tx, orgId: string, schemaId: string, localId: string, n: Record<string, unknown>): Promise<RowAction> {
-  if (schemaId === "zenplanner.members" || schemaId === "generic.people") {
+  if (schemaId === "zenplanner.members" || schemaId === "generic.people" || schemaId === "zenplanner.person_grid") {
     const [p] = await tx.select().from(people).where(and(eq(people.id, localId), eq(people.orgId, orgId)));
     if (!p) return "skip";
     const fills = (p.dateOfBirth === null && n.dob) || (p.email === null && n.email) || (p.phone === null && n.phone);
@@ -257,7 +272,13 @@ export async function validateBatch(tx: Tx, v: Viewer, batchId: string) {
   const parsed = await loadBatchFile(tx, b);
   const tz = await orgTimezone(tx, v.orgId);
   const { metrics } = metricHeaders(schema, parsed.headers, b.mapping);
-  const ctx = { orgId: v.orgId, tz, options: mappingOptions(b.mapping) };
+  const ctx = {
+    orgId: v.orgId,
+    tz,
+    options: mappingOptions(b.mapping),
+    vocab: schema.source === "zenplanner" ? await vocabOverrides(tx, v.orgId) : undefined,
+    today: todayLocal(tz),
+  };
 
   const planned: Planned[] = [];
   const seen = new Map<string, number>();
@@ -415,6 +436,48 @@ export async function validateBatch(tx: Tx, v: Viewer, batchId: string) {
     }
   }
 
+  // Zen Planner Person grid: the Parent First/Last/Email columns name a guardian. Never merged by
+  // name: an existing person is only proposed (staff confirm the row), and several candidates link nobody.
+  if (schema.id === "zenplanner.person_grid") {
+    const live = planned.filter((p) => p.normalized && (p.status === "ready" || p.status === "needs_review") && p.normalized._identityKey);
+    const byFamilyName = new Map<string, string>();
+    for (const p of live) {
+      const n = p.normalized!;
+      if (n.familyId && n.firstName && n.lastName) byFamilyName.set(`${String(n.familyId)}|${String(n.firstName).toLowerCase()}|${String(n.lastName).toLowerCase()}`, String(n._identityKey));
+    }
+    for (const p of live) {
+      const n = p.normalized!;
+      const parent = n.parent as { firstName: string; lastName: string; email: string | null } | null;
+      if (!parent || n._action === "skip") continue;
+      const who = `${parent.firstName} ${parent.lastName}`;
+      const inFile = n.familyId ? byFamilyName.get(`${String(n.familyId)}|${parent.firstName.toLowerCase()}|${parent.lastName.toLowerCase()}`) : undefined;
+      if (inFile && inFile !== n._identityKey) {
+        n._guardianBatchKey = inFile;
+        n._isChildOfBatchRow = true;
+        p.warnings.push(`Parent ${who} is also a row in this file with the same Family ID and will be linked as guardian (no health access).`);
+        continue;
+      }
+      const known = await findExternal(tx, v.orgId, schema.idSource, "parent", parentKey((n.familyId as string | null) ?? null, parent));
+      if (known) {
+        n._guardianPersonId = known;
+        continue;
+      }
+      const gm = await matchPerson(tx, v.orgId, schema.idSource, { sourceEntityType: "member", firstName: parent.firstName, lastName: parent.lastName, email: parent.email, adult: true, needsAthlete: false });
+      const others = gm.candidates.filter((c) => c.personId !== p.matchPersonId);
+      if ((gm.confidence === "strong" || gm.confidence === "exact_source_id") && gm.personId && gm.personId !== p.matchPersonId) {
+        n._guardianPersonId = gm.personId;
+        p.warnings.push(`Parent ${who} matches a person already in Teamwork (exact name and email). Confirming this row links them as guardian with no health access.`);
+        if (p.status === "ready") p.status = "needs_review";
+      } else if (others.length) {
+        n._guardianSkip = true;
+        p.warnings.push(`Parent ${who} could be ${others.length} existing ${others.length === 1 ? "person" : "people"} (name or email only). No guardian will be linked automatically; link the right one in People.`);
+        if (p.status === "ready") p.status = "needs_review";
+      } else {
+        p.warnings.push(`A new parent/guardian record will be created for ${who} (no health access, not an emergency contact).`);
+      }
+    }
+  }
+
   // Persist rows
   await tx.delete(importRows).where(eq(importRows.batchId, b.id));
   for (let i = 0; i < planned.length; i += 500) {
@@ -566,6 +629,11 @@ export async function commitBatch(tx: Tx, v: Viewer, batchId: string) {
   if (!b.stats.coverageConfirmed) throw new UserError("Confirm the coverage date range on the preview before committing.");
 
   const rows = await tx.select().from(importRows).where(eq(importRows.batchId, b.id)).orderBy(asc(importRows.rowNumber));
+  // Person grid: rows that name another row of the file as their parent go last, so the parent exists first.
+  if (schema.id === "zenplanner.person_grid") {
+    const late = (r: (typeof rows)[number]) => ((r.normalized as Record<string, unknown> | null)?._isChildOfBatchRow ? 1 : 0);
+    rows.sort((a, z) => late(a) - late(z) || a.rowNumber - z.rowNumber);
+  }
   const parsed = schema.id === "zenplanner.documents_index" ? await loadBatchFile(tx, b) : null;
   const c = {
     tx,
@@ -576,9 +644,9 @@ export async function commitBatch(tx: Tx, v: Viewer, batchId: string) {
     tz: await orgTimezone(tx, v.orgId),
     attachments: parsed?.attachments ?? new Map<string, Uint8Array>(),
     cache: new Map<string, string>(),
-    extra: prepareExtra(schema.id, rows),
+    extra: { ...prepareExtra(schema.id, rows), ...prepareGridExtra(schema.id, rows) },
   };
-  const committer = COMMITTERS[schema.id];
+  const committer = COMMITTERS[schema.id] ?? ZP_GRID_COMMITTERS[schema.id];
   const counts: Record<string, number> = { create: 0, link: 0, update: 0, skip: 0, reject: 0 };
   for (const row of rows) {
     const n = (row.normalized ?? {}) as Record<string, unknown>;
@@ -622,7 +690,18 @@ export async function commitBatch(tx: Tx, v: Viewer, batchId: string) {
 type TableRef = { table: Parameters<Tx["delete"]>[0]; idCol: Parameters<typeof inArray>[0] };
 
 /** Deletion order respects foreign keys (children first). */
-const REVERT_ORDER: [string, TableRef | "household_member"][] = [
+const REVERT_ORDER: [string, TableRef | "household_member" | "person_tag"][] = [
+  ["zp_bill", { table: zpBills, idCol: zpBills.id }],
+  ["zp_membership_detail", { table: zpMembershipDetails, idCol: zpMembershipDetails.id }],
+  ["membership_hold", { table: membershipHolds, idCol: membershipHolds.id }],
+  ["credit_bucket", { table: creditBuckets, idCol: creditBuckets.id }],
+  ["lead", { table: leads, idCol: leads.id }],
+  ["alert", { table: alerts, idCol: alerts.id }],
+  ["coach_assignment", { table: coachAssignments, idCol: coachAssignments.id }],
+  ["zp_person_health", { table: zpPersonHealth, idCol: zpPersonHealth.id }],
+  ["zp_person_detail", { table: zpPersonDetails, idCol: zpPersonDetails.id }],
+  ["person_tag", "person_tag"],
+  ["tag", { table: tags, idCol: tags.id }],
   ["metric_value", { table: metricValues, idCol: metricValues.id }],
   ["raw_signal", { table: rawSignals, idCol: rawSignals.id }],
   ["trial", { table: trials, idCol: trials.id }],
@@ -656,13 +735,31 @@ const REVERT_ORDER: [string, TableRef | "household_member"][] = [
 
 const RESTORABLE: Record<string, { table: Parameters<Tx["update"]>[0]; idCol: Parameters<typeof eq>[0] }> = {
   person: { table: people, idCol: people.id },
+  athlete: { table: athletes, idCol: athletes.id },
   metric_value: { table: metricValues, idCol: metricValues.id },
   trial: { table: trials, idCol: trials.id },
   questionnaire_response: { table: questionnaireResponses, idCol: questionnaireResponses.id },
 };
 
-async function tryDelete(tx: Tx, type: string, ref: TableRef | "household_member", ids: string[]): Promise<{ deleted: number; kept: string[] }> {
+async function tryDelete(tx: Tx, type: string, ref: TableRef | "household_member" | "person_tag", ids: string[]): Promise<{ deleted: number; kept: string[] }> {
   const run = async (subset: string[]) => {
+    if (ref === "person_tag") {
+      for (const composite of subset) {
+        const [pid, tid] = composite.split(":");
+        await tx.delete(personTags).where(and(eq(personTags.personId, pid), eq(personTags.tagId, tid)));
+      }
+      return;
+    }
+    if (type === "credit_bucket") {
+      // An imported punch card that was never used has only its grant entry. One that a booking
+      // already drew on still has booking-linked entries, so the delete fails and the bucket is kept.
+      await tx.delete(creditLedger).where(and(inArray(creditLedger.bucketId, subset), eq(creditLedger.kind, "grant")));
+    }
+    if (type === "tag") {
+      // Keep a tag someone else has started using since the import.
+      const used = await tx.select({ id: personTags.tagId }).from(personTags).where(inArray(personTags.tagId, subset));
+      if (used.length) throw new Error("tag in use");
+    }
     if (ref === "household_member") {
       for (const composite of subset) {
         const [hh, pid] = composite.split(":");
