@@ -25,7 +25,7 @@ import { audit, type AuditActor } from "@/lib/audit";
 import { grantCredits } from "@/lib/credits";
 import { enqueue } from "@/lib/jobs";
 import { CAP_DAYS_PER_MONTH, effectiveNoticeDays, membershipPolicy, partialPeriodPriceMinor, type MembershipPolicy } from "@/lib/membership-policy";
-import { percentOf } from "@/lib/money";
+import { formatMoney, percentOf } from "@/lib/money";
 import { addDaysYmd, daysBetween, localToUtc, todayLocal } from "@/lib/time";
 import { UserError } from "./errors";
 import { createInvoiceRecord, invoiceMoney } from "./invoices";
@@ -319,6 +319,12 @@ export async function billPeriod(
     rule = `final period ends ${m.endDate}: ${p.rule}`;
   }
   const price = await periodPrice(tx, m, version, gross);
+  // Optional bank pay discount (off by default): the autopay method is a bank account when this bill is issued.
+  const { resolveAutopayMethod } = await import("./payment-methods");
+  const { autopaySettings, bankPayDiscountMinor } = await import("./autopay-settings");
+  const autopayMethod = await resolveAutopayMethod(tx, m);
+  const bankDiscount = autopayMethod?.type === "us_bank_account" && version.interval === "month" ? bankPayDiscountMinor(await autopaySettings(tx, m.orgId), price.net) : 0;
+  const memoParts = [rule ? `Partial period (${rule}).` : null, bankDiscount > 0 ? `Bank pay discount: ${formatMoney(bankDiscount, version.currency)} off this bill for paying by bank account.` : null].filter(Boolean);
   const fraction = version.priceMinor > 0 ? gross / version.priceMinor : 1;
   const credits = version.unlimited || version.classesPerWeek != null || !version.creditsPerPeriod ? undefined : Math.max(1, Math.ceil(version.creditsPerPeriod * Math.min(1, fraction)));
   const res = await createInvoiceRecord(tx, actor, {
@@ -329,10 +335,10 @@ export async function billPeriod(
     periodEnd,
     source: "membership_renewal",
     idempotencyKey: `membership:${m.id}:${periodStart}`,
-    discountMinor: price.discount,
+    discountMinor: price.discount + bankDiscount,
     dueDate: periodStart,
     isDemo: m.isDemo,
-    memo: rule ? `Partial period (${rule}).` : undefined,
+    memo: memoParts.length ? memoParts.join(" ") : undefined,
     lines: [
       {
         description: `${productName} — ${periodStart} to ${periodEnd}${stub ? " (first partial month)" : ""}`,
@@ -352,6 +358,14 @@ export async function billPeriod(
     .update(memberships)
     .set({ nextBillDate: m.endDate && nextBillDate > m.endDate ? null : nextBillDate, updatedAt: new Date() })
     .where(eq(memberships.id, m.id));
+  if (res.created && bankDiscount > 0) {
+    await event(tx, m, "bank_pay_discount", actor.actorUserId ?? null, { effectiveOn: periodStart, details: { invoiceId: res.invoice.id, discountMinor: bankDiscount, methodId: autopayMethod?.id } });
+  }
+  // Autopay: queue the off-session charge for this bill's due date (deduped per invoice).
+  if (res.created && m.autopay && res.invoice.status === "open" && res.invoice.totalMinor > 0) {
+    const { scheduleAutopayCharge } = await import("./autopay");
+    await scheduleAutopayCharge(tx, res.invoice, 1);
+  }
   if (stub && res.created) {
     await event(tx, m, "stub_billed", actor.actorUserId ?? null, { effectiveOn: periodStart, details: { ...stub, invoiceId: res.invoice.id, discountMinor: price.discount } });
   }

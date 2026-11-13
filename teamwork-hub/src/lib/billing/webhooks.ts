@@ -19,6 +19,8 @@ import type { NormalizedEvent, ParsedWebhook } from "@/lib/payments/provider";
 import { DeferError } from "./errors";
 import { applyInvoiceEntitlements, settleInvoiceIfCovered } from "./invoices";
 import { applySubscriptionInvoice, applySubscriptionStatus } from "./subscriptions";
+import { afterAutopayFailure, afterDispute, scheduleFeeLookup } from "./autopay";
+import { applyMandate, applyMethodSetup, applyMethodUpdate } from "./payment-methods";
 import { billingTask } from "./tasks";
 import { billingSettings, int } from "./util";
 
@@ -188,6 +190,18 @@ async function applyEvent(tx: Tx, provider: WebhookProvider, ev: NormalizedEvent
       return applySubscriptionInvoice(tx, provider, ev, eventAt);
     case "subscription_status":
       return applySubscriptionStatus(tx, provider, ev, eventAt);
+    case "method_setup":
+      return applyMethodSetup(tx, provider, ev, eventAt);
+    case "method_update":
+      return applyMethodUpdate(tx, provider, ev, eventAt);
+    case "mandate":
+      return applyMandate(tx, provider, ev, eventAt);
+    case "fee_hint": {
+      const charge = await findCharge(tx, provider, ev.providerTxnId);
+      if (!charge || charge.status !== "settled" || charge.feeReportedAt) return { outcome: "ignored", detail: "no settled local charge waiting for a fee" };
+      await scheduleFeeLookup(tx, charge.orgId, ev.providerTxnId);
+      return { outcome: "processed", detail: "fee lookup queued" };
+    }
     case "ignored":
       return { outcome: "ignored", detail: ev.reason };
   }
@@ -306,6 +320,7 @@ async function applyPayment(tx: Tx, provider: WebhookProvider, ev: Extract<Norma
       });
     }
     const r = await settleInvoiceIfCovered(tx, inv.id, actor);
+    if (txnProvider === "stripe") await scheduleFeeLookup(tx, attempt.orgId, txnId);
     if (moved) await audit(tx, actor, "billing.payment.succeeded", "payment_attempt", attempt.id, { summary: `Verified ${provider} payment for ${inv.number}${r.paid ? " — invoice paid" : ""}` });
     return { outcome: "processed", detail: moved ? "settled" : "settled (already succeeded)" };
   }
@@ -329,6 +344,8 @@ async function applyPayment(tx: Tx, provider: WebhookProvider, ev: Extract<Norma
       });
     }
     await audit(tx, actor, "billing.payment.failed", "payment_attempt", attempt.id, { summary: `Payment failed for ${inv.number}: ${ev.failureCode ?? "provider reported failure"}` });
+    // Autopay: sort the decline / bank return, schedule the retry or ask for a new method.
+    if (attempt.origin === "autopay") await afterAutopayFailure(tx, attempt.id);
     return { outcome: "processed", detail: "failed" };
   }
 
@@ -430,6 +447,7 @@ async function applyDispute(tx: Tx, provider: WebhookProvider, ev: Extract<Norma
       providerTxnId: ev.providerDisputeId,
       settledAt: new Date(),
       verification: "provider_verified",
+      methodType: charge.methodType,
       notes: `dispute-of:${charge.id}`,
       isDemo: charge.isDemo,
     })
@@ -449,6 +467,7 @@ async function applyDispute(tx: Tx, provider: WebhookProvider, ev: Extract<Norma
         providerTxnId: ev.providerDisputeId,
         settledAt: new Date(),
         verification: "provider_verified",
+        methodType: charge.methodType,
         notes: `dispute-won:${charge.id}`,
         isDemo: charge.isDemo,
       })
@@ -464,6 +483,7 @@ async function applyDispute(tx: Tx, provider: WebhookProvider, ev: Extract<Norma
       priority: "high",
     });
   }
+  await afterDispute(tx, charge, ev);
   await audit(tx, actor, `billing.dispute.${ev.phase}`, "dispute", ev.providerDisputeId, { summary: `Dispute ${ev.status} for ${ev.amountMinor} ${ev.currency}` });
   return { outcome: "processed", detail: `dispute ${ev.phase}` };
 }

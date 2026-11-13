@@ -223,18 +223,20 @@ export async function markUncollectible(tx: Tx, v: Viewer, invoiceId: string, re
 
 export type InvoiceMoney = {
   totalMinor: number;
-  /** Settled money in (charges + manual payments). */
+  /** Settled money in (charges + manual payments), less bank debits the bank later returned. */
   settledMinor: number;
   /** Money in flight (e.g. ACH processing) — never counted as paid. */
   pendingMinor: number;
   /** Settled refunds (positive number). */
   refundedMinor: number;
+  /** Bank debits returned after settling (ACH late returns), already deducted from settledMinor. */
+  bankReturnedMinor: number;
   balanceMinor: number;
 };
 
 /** Balances are derived from the transaction ledger, never stored. */
 export async function invoiceMoney(tx: Tx, invoiceId: string): Promise<InvoiceMoney> {
-  return (await invoiceMoneyMany(tx, [invoiceId]))[invoiceId] ?? { totalMinor: 0, settledMinor: 0, pendingMinor: 0, refundedMinor: 0, balanceMinor: 0 };
+  return (await invoiceMoneyMany(tx, [invoiceId]))[invoiceId] ?? { totalMinor: 0, settledMinor: 0, pendingMinor: 0, refundedMinor: 0, bankReturnedMinor: 0, balanceMinor: 0 };
 }
 
 export async function invoiceMoneyMany(tx: Tx, invoiceIds: string[]): Promise<Record<string, InvoiceMoney>> {
@@ -246,6 +248,8 @@ export async function invoiceMoneyMany(tx: Tx, invoiceIds: string[]): Promise<Re
       settled: sql<string>`coalesce(sum(case when ${transactions.kind} in ('charge','manual_payment') and ${transactions.status} = 'settled' then ${transactions.amountMinor} else 0 end),0)::bigint`,
       pending: sql<string>`coalesce(sum(case when ${transactions.kind} in ('charge','manual_payment') and ${transactions.status} = 'pending' then ${transactions.amountMinor} else 0 end),0)::bigint`,
       refunded: sql<string>`coalesce(sum(case when ${transactions.kind} = 'refund' and ${transactions.status} = 'settled' then -${transactions.amountMinor} else 0 end),0)::bigint`,
+      // A dispute on a bank debit is a late return: that money is no longer here (net of a dispute we won).
+      bankReturned: sql<string>`coalesce(sum(case when ${transactions.kind} in ('dispute','dispute_reversal') and ${transactions.methodType} = 'us_bank_account' and ${transactions.status} = 'settled' then -${transactions.amountMinor} else 0 end),0)::bigint`,
     })
     .from(transactions)
     .where(inArray(transactions.invoiceId, invoiceIds))
@@ -253,12 +257,14 @@ export async function invoiceMoneyMany(tx: Tx, invoiceIds: string[]): Promise<Re
   const out: Record<string, InvoiceMoney> = {};
   for (const i of invs) {
     const r = rows.find((x) => x.invoiceId === i.id);
-    const settled = int(r?.settled);
+    const bankReturned = Math.max(0, int(r?.bankReturned));
+    const settled = Math.max(0, int(r?.settled) - bankReturned);
     out[i.id] = {
       totalMinor: i.total,
       settledMinor: settled,
       pendingMinor: int(r?.pending),
       refundedMinor: int(r?.refunded),
+      bankReturnedMinor: bankReturned,
       balanceMinor: Math.max(0, i.total - settled),
     };
   }
