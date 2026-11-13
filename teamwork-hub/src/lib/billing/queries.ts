@@ -228,7 +228,7 @@ export async function membershipPlanOptions(tx: Tx, orgId: string, today: string
 
 /** For bills the viewer already listed: a one-line description and whether the latest online attempt failed. */
 export async function billExtras(tx: Tx, v: Viewer, invoiceIds: string[]) {
-  const out: Record<string, { description: string; lastAttemptFailed: boolean }> = {};
+  const out: Record<string, { description: string; lastAttemptFailed: boolean; pendingBank: boolean; bankReturned: boolean }> = {};
   if (!invoiceIds.length) return out;
   const lines = await tx
     .select({ invoiceId: invoiceLines.invoiceId, description: invoiceLines.description })
@@ -237,16 +237,23 @@ export async function billExtras(tx: Tx, v: Viewer, invoiceIds: string[]) {
     .where(and(eq(invoices.orgId, v.orgId), inArray(invoiceLines.invoiceId, invoiceIds)))
     .orderBy(asc(invoiceLines.id));
   const attempts = await tx
-    .select({ invoiceId: paymentAttempts.invoiceId, status: paymentAttempts.status })
+    .select({ invoiceId: paymentAttempts.invoiceId, status: paymentAttempts.status, methodType: paymentAttempts.methodType })
     .from(paymentAttempts)
     .where(inArray(paymentAttempts.invoiceId, invoiceIds))
     .orderBy(desc(paymentAttempts.createdAt));
+  const returned = await tx
+    .select({ invoiceId: transactions.invoiceId })
+    .from(transactions)
+    .where(and(inArray(transactions.invoiceId, invoiceIds), eq(transactions.kind, "dispute"), eq(transactions.methodType, "us_bank_account")));
   for (const id of invoiceIds) {
     const mine = lines.filter((l) => l.invoiceId === id);
     const latest = attempts.find((a) => a.invoiceId === id);
     out[id] = {
       description: mine.length === 0 ? "" : mine.length === 1 ? mine[0].description : `${mine[0].description} + ${mine.length - 1} more`,
       lastAttemptFailed: latest?.status === "failed",
+      // A bank debit in flight: shown as "Pending bank payment", never as paid.
+      pendingBank: (latest?.status === "processing" || latest?.status === "pending") && latest.methodType === "us_bank_account",
+      bankReturned: returned.some((r) => r.invoiceId === id),
     };
   }
   return out;

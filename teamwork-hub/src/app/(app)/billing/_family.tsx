@@ -99,7 +99,9 @@ export function BillStatus({ r, extras, today }: { r: InvoiceRow; extras?: Extra
   else if (st === "void") label = "Void";
   else if (st === "uncollectible") label = "Closed";
   else if (st === "open") {
-    if (r.money.pendingMinor > 0) [label, variant, title] = ["Processing", "yellow", "A payment is in flight. It is not counted as paid until the provider confirms it."];
+    if (r.money.pendingMinor > 0 && extras?.pendingBank) [label, variant, title] = ["Pending bank payment", "yellow", "A bank payment was started and takes a few business days. It is not counted as paid until the bank confirms it."];
+    else if (r.money.pendingMinor > 0) [label, variant, title] = ["Processing", "yellow", "A payment is in flight. It is not counted as paid until the provider confirms it."];
+    else if (extras?.bankReturned) [label, variant, title] = ["Returned by bank", "red", "The bank returned this payment, so the bill is unpaid again."];
     else if (extras?.lastAttemptFailed) [label, variant, title] = ["Failed", "red", "The last online payment did not go through. Nothing was charged."];
     else if (r.invoice.dueDate && r.invoice.dueDate < today) [label, variant] = ["Unpaid · past due", "red"];
     else [label, variant] = ["Unpaid", "yellow"];

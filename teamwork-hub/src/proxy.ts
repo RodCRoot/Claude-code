@@ -15,6 +15,12 @@ const APP_PREFIXES = ["/today", "/people", "/schedule", "/billing", "/training",
  */
 const CHECKOUT_FORM_TARGETS = ["https://checkout.stripe.com", "https://www.paypal.com", "https://www.sandbox.paypal.com"];
 const PAYMENT_PAGE = /^\/billing\/invoices\/[^/]+$/;
+/**
+ * Pages with the "Add a card / bank account" form, which redirects to Stripe-hosted Checkout in setup
+ * mode. Only Stripe's checkout host is added, only on these two pages; still no third-party script.
+ */
+const METHOD_SETUP_PAGE = /^\/billing\/(payment-methods|signup\/[^/]+)$/;
+const SETUP_FORM_TARGETS = ["https://checkout.stripe.com"];
 
 /** Athlete logger service worker (public/training-sw.js), registered with scope /training/today. */
 export const TRAINING_SW_PATH = "/training-sw.js";
@@ -22,7 +28,7 @@ export const WORKER_CSP = "default-src 'self'; script-src 'self'; connect-src 's
 
 export function buildCsp(opts: { nonce: string; pathname: string; isDev: boolean; https: boolean }): string {
   const { nonce, pathname, isDev, https } = opts;
-  const formAction = ["'self'", ...(PAYMENT_PAGE.test(pathname) ? CHECKOUT_FORM_TARGETS : [])];
+  const formAction = ["'self'", ...(PAYMENT_PAGE.test(pathname) ? CHECKOUT_FORM_TARGETS : []), ...(METHOD_SETUP_PAGE.test(pathname) ? SETUP_FORM_TARGETS : [])];
   const directives = [
     `default-src 'self'`,
     // 'strict-dynamic': scripts loaded by nonce'd Next.js bundles are trusted; nothing else is.

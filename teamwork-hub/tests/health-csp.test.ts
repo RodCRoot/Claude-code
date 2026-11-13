@@ -48,6 +48,14 @@ describe("Content-Security-Policy", () => {
 
   it("only the invoice payment page may post to hosted checkout", () => {
     const pay = directives(buildCsp({ nonce: "n", pathname: "/billing/invoices/123e4567-e89b-12d3-a456-426614174000", isDev: false, https: true }));
+    // Saving a payment method redirects to Stripe-hosted Checkout (setup mode): Stripe only, on two pages only.
+    for (const path of ["/billing/payment-methods", "/billing/signup/123e4567-e89b-12d3-a456-426614174000"]) {
+      const setup = directives(buildCsp({ nonce: "n", pathname: path, isDev: false, https: true }));
+      expect(setup["form-action"]).toBe("'self' https://checkout.stripe.com");
+      expect(setup["script-src"]).not.toContain("stripe");
+      expect(setup["frame-src"]).toBe("'none'");
+    }
+    expect(directives(buildCsp({ nonce: "n", pathname: "/billing/signup", isDev: false, https: true }))["form-action"]).toBe("'self'");
     expect(pay["form-action"]).toBe("'self' https://checkout.stripe.com https://www.paypal.com https://www.sandbox.paypal.com");
     expect(pay["script-src"]).not.toMatch(/paypal|stripe/);
     const list = directives(buildCsp({ nonce: "n", pathname: "/billing/invoices", isDev: false, https: true }));
