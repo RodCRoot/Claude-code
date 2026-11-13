@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Badge, ButtonLink, Callout, Card, CardBody, CardHeader, Field, Input, NotConfigured, PageHeader, Select, Table, Td, Th } from "@/components/ui";
+import { ChargeNowPanel } from "@/components/billing/charge-now";
 import { can } from "@/lib/authz/policy";
+import { chargeNowView } from "@/lib/billing/autopay";
 import { MANUAL_METHODS } from "@/lib/billing/invoices";
 import { invoiceDetail } from "@/lib/billing/queries";
 import { formatMoney } from "@/lib/money";
@@ -14,7 +16,7 @@ import { BillingTabs, InvoiceStatus, METHOD_LABEL, Money, PROVIDER_LABEL, requir
 
 export const metadata = { title: "Invoice" };
 
-export default async function InvoicePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ checkout?: string; attempt?: string }> }) {
+export default async function InvoicePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ checkout?: string; attempt?: string; charge?: string }> }) {
   const v = await requireBillingViewer();
   const { id } = await params;
   const sp = await searchParams;
@@ -26,6 +28,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
   const latest = d.attempts[0];
   const returned = sp.checkout === "returned";
   const noun = d.staff ? "invoice" : "bill";
+  const chargeNow = await chargeNowView(db, v, inv.id);
   const canPayOnline = d.canPay && inv.status === "open" && money.balanceMinor > 0 && money.pendingMinor === 0;
   return (
     <>
@@ -131,6 +134,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
                 ) : null}
               </>
             ) : null}
+            {chargeNow ? <ChargeNowPanel c={chargeNow} confirming={sp.charge === "1"} staff={d.staff} /> : null}
           </CardBody>
         </Card>
       </div>

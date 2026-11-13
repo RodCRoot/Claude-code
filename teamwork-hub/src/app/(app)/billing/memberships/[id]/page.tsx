@@ -22,6 +22,8 @@ import { listMethodViews } from "@/lib/billing/payment-methods";
 import { payablePayerIds, inScope } from "@/lib/billing/access";
 import { cutoverReadiness } from "@/lib/billing/memberships";
 import { setAutopayAction } from "../../payment-methods/actions";
+import { UnpaidAutopayBills } from "@/components/billing/charge-now";
+import { unpaidAutopayBills } from "@/lib/billing/autopay";
 import { requireAgreementAction } from "../../actions";
 
 export const metadata = { title: "Membership" };
@@ -71,6 +73,8 @@ export default async function MembershipPage({ params }: { params: Promise<{ id:
   const agreement = await currentAgreement(db, d.m.id);
   const ready = ext ? await cutoverReadiness(db, d.m) : null;
   const autopayCapable = d.m.billingProvider === "manual" || ext;
+  // Bills that already existed when autopay was switched on (or whose automatic charge failed).
+  const unpaidAutopay = d.m.autopay && (manage || canPayHere) ? await unpaidAutopayBills(db, v, d.m.id) : [];
   return (
     <>
       <PageHeader
@@ -120,6 +124,7 @@ export default async function MembershipPage({ params }: { params: Promise<{ id:
                         ? "Autopay is on, but there is no active saved payment method, so nothing will be charged automatically."
                         : "Each bill is paid with Pay Now, or at the front desk."}
                 </p>
+                <UnpaidAutopayBills bills={unpaidAutopay} staff={staff} />
                 {manage || canPayHere ? (
                   methods.length || d.m.autopay ? (
                     <ActionForm action={setAutopayAction} className="flex flex-wrap items-end gap-2">

@@ -107,7 +107,14 @@ test("front desk witnesses the signature in person", async ({ page }, info) => {
   await card.locator('input[name="typedName"]').fill("Chris Parker");
   await card.locator('input[name="identityAttested"]').check();
   await card.getByRole("button", { name: /sign/i }).click();
-  await expect(page.locator("#top").getByText("completed")).toBeVisible();
+  // Signing returns to the flow by itself, on the next step.
+  await page.waitForURL(/\/billing\/signup\/[0-9a-f-]{36}\?signed=/);
+  expect(new URL(page.url()).pathname).toBe(f.flowUrl);
+  await expect(page.getByText(/^Signed: /)).toBeVisible();
+  await expect(page.getByText("Everything is signed. Next: choose how you will pay.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "3. How you will pay" })).toBeVisible();
+  await noSideScroll(page);
+  await shot(page, info.project.name, "4b-back-in-flow-after-signing");
   const row = (await pool.query(`select agreement_state from memberships where athlete_id = $1 and status <> 'cancelled'`, [f.athleteId])).rows[0];
   expect(row.agreement_state).toBe("signed");
 });
@@ -145,6 +152,35 @@ test("payment step is honest about Stripe not being connected; parent finishes a
   await expect(page.getByText("Saving a card or bank account is not available yet").first()).toBeVisible();
   await noSideScroll(page);
   await shot(page, info.project.name, "7-payment-methods");
+});
+
+test("an unpaid bill with autopay on offers Charge now, and says plainly that Stripe is not connected", async ({ page }, info) => {
+  const f = fx[info.project.name];
+  const m = (await pool.query(`select m.id, (select i.id from invoices i where i.membership_id = m.id and i.status = 'open' order by i.created_at limit 1) as invoice_id from memberships m where m.athlete_id = $1 and m.status <> 'cancelled'`, [f.athleteId])).rows[0];
+  expect(m.invoice_id, "the finished sign-up left an open first bill").toBeTruthy();
+  // Autopay switched on after the bill already existed (set directly: no method can be saved without Stripe).
+  await pool.query(`update memberships set autopay = true where id = $1`, [m.id]);
+  try {
+    await login(page, USERS.erin);
+    await page.goto(`/billing/memberships/${m.id}`);
+    await expect(page.getByText("Autopay is on, but one bill is still unpaid")).toBeVisible();
+    await expect(page.getByText("Stripe is not connected: record a payment on the bill.")).toBeVisible();
+    await noSideScroll(page);
+    await shot(page, info.project.name, "8-autopay-unpaid-bill-prompt");
+    // Even with the confirmation step requested, nothing can be charged and no charge button is offered.
+    await page.goto(`/billing/invoices/${m.invoice_id}?charge=1`);
+    const panel = page.locator("#autopay-now");
+    await expect(panel.getByText("Stripe is not configured")).toBeVisible();
+    await expect(panel.getByText(/cannot be charged until Stripe is connected/)).toBeVisible();
+    await expect(page.getByRole("button", { name: /Yes, charge/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Charge now|Retry now/ })).toHaveCount(0);
+    await noSideScroll(page);
+    await shot(page, info.project.name, "9-charge-now-not-configured");
+    const r = (await pool.query(`select (select count(*)::int from payment_attempts where invoice_id = $1) as attempts, (select status from invoices where id = $1) as status`, [m.invoice_id])).rows[0];
+    expect(r).toMatchObject({ attempts: 0, status: "open" });
+  } finally {
+    await pool.query(`update memberships set autopay = false where id = $1`, [m.id]);
+  }
 });
 
 test("a view-only guardian cannot start a sign-up", async ({ page }) => {

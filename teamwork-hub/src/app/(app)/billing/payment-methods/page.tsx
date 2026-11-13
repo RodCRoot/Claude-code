@@ -7,7 +7,8 @@ import { AddMethod } from "@/components/billing/add-method";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Badge, ButtonLink, Callout, EmptyState, PageHeader, Select } from "@/components/ui";
 import { isBillingStaff } from "@/lib/billing/access";
-import { failedAutopayNotices } from "@/lib/billing/autopay";
+import { UnpaidAutopayBills } from "@/components/billing/charge-now";
+import { failedAutopayNotices, unpaidAutopayBills } from "@/lib/billing/autopay";
 import { listMethodViews, openSetups, setupReturnView, type MethodView } from "@/lib/billing/payment-methods";
 import { listMemberships, myPayerAccounts } from "@/lib/billing/queries";
 import { env } from "@/lib/env";
@@ -112,6 +113,9 @@ export default async function PaymentMethodsPage({ searchParams }: { searchParam
   const [accounts, methods, ms, setups] = await Promise.all([myPayerAccounts(db, v), listMethodViews(db, v), listMemberships(db, v), openSetups(db, v)]);
   const returned = sp.setup ? await setupReturnView(db, v, sp.setup) : null;
   const notices = await failedAutopayNotices(db, v.orgId, accounts.filter((a) => a.canPay).map((a) => a.payer.id));
+  // Bills that already existed when autopay was switched on: listed under the membership with a way to charge each now.
+  const unpaid = new Map<string, Awaited<ReturnType<typeof unpaidAutopayBills>>>();
+  for (const m of ms) if (m.m.autopay && m.m.billingProvider === "manual") unpaid.set(m.m.id, await unpaidAutopayBills(db, v, m.m.id));
   return (
     <>
       <PageHeader kicker="My Profile" title="Payment Methods" description="Cards and bank accounts saved for each billing account, and which memberships they pay for automatically." />
@@ -257,6 +261,7 @@ export default async function PaymentMethodsPage({ searchParams }: { searchParam
                                     ? `Each bill is charged to ${using.label} on its due date.`
                                     : "Each bill is paid with Pay Now under Bills, or at the front desk."}
                               </p>
+                              {a.canPay && m.m.autopay ? <UnpaidAutopayBills bills={unpaid.get(m.m.id) ?? []} staff={false} className="mt-2" /> : null}
                               {a.canPay && (active.length || m.m.autopay) ? (
                                 <ActionForm action={setAutopayAction} className="mt-2 flex flex-wrap items-end gap-2">
                                   <input type="hidden" name="membershipId" value={m.m.id} />
