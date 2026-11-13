@@ -165,7 +165,9 @@ export default async function ImportBatchPage({ params, searchParams }: { params
         <CardHeader kicker="Steps 2–3" title="Data type and field mapping" action={missing.length ? <Badge variant="yellow">{missing.length} required unmapped</Badge> : <Badge variant="green">required fields mapped</Badge>} />
         <CardBody>
           <p className="mb-3 text-sm text-ink-3">
-            {schema.description} <Badge variant={schema.evidence === "existing Teamwork integration" ? "green" : schema.evidence === "vendor docs" ? "blue" : "yellow"}>{schema.evidence}</Badge>
+            {schema.description} <Badge className="whitespace-normal text-left" variant={schema.evidence === "existing Teamwork integration" ? "green" : schema.evidence === "vendor docs" ? "blue" : "yellow"}>
+              {schema.evidence}
+            </Badge>
           </p>
           {schema.exportHelp && parsed ? (
             <div className="mb-5 rounded-lg border border-edge bg-surface-2 p-3 text-sm" data-testid="preset-status">
