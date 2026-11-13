@@ -39,7 +39,7 @@ export const formTemplates = pgTable("form_templates", {
   id: id(),
   orgId: orgId(),
   name: text("name").notNull(),
-  kind: text("kind").$type<"waiver" | "agreement" | "intake" | "medical" | "media_release" | "policy">().notNull(),
+  kind: text("kind").$type<"waiver" | "agreement" | "membership_agreement" | "intake" | "medical" | "media_release" | "policy">().notNull(),
   /** Months until a completed form must be renewed; null = never. */
   renewalMonths: integer("renewal_months"),
   requiredForBooking: boolean("required_for_booking").notNull().default(false),
@@ -107,6 +107,13 @@ export const formRequests = pgTable(
     supersededById: uuid("superseded_by_id"),
     /** Data submitted by the first signer (fields), frozen at completion. */
     submittedData: jsonb("submitted_data").$type<Record<string, unknown>>(),
+    /**
+     * Membership agreements: the template body with merge fields filled in when the request was issued.
+     * This exact text is what signers see and sign; it never changes afterwards (DB trigger).
+     */
+    renderedBodyMarkdown: text("rendered_body_markdown"),
+    /** The merge values used to render it (display strings). */
+    mergeValues: jsonb("merge_values").$type<Record<string, string>>(),
     completedPdfObjectId: uuid("completed_pdf_object_id").references(() => storedObjects.id),
     /** SHA-256 over version hash + submitted data + all signature evidence. */
     integrityHash: text("integrity_hash"),
