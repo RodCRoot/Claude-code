@@ -71,10 +71,10 @@ Staff screens keep the accounting and operations terms (invoice, booking, payer,
 
 ## Known gaps (not built)
 
-- **Update payment method.** There is no self-service card update flow in this app (payments use the
-  provider's hosted checkout; no customer portal or setup flow exists). The Payment Methods tab shows the
-  card on file when one is stored and says plainly that changes go through the front desk. No button
-  pretends to update a card.
+- **Update payment method.** Built (see `payments-autopay.md`): the Payment Methods tab lets a person allowed
+  to pay the account add a card or bank account on Stripe's hosted page, set the default, remove one and switch
+  autopay per membership. Without Stripe keys it says plainly that saving is not available yet and that bills are
+  paid at the front desk. Never exercised against a Stripe sandbox.
 - **Profile / contact details.** There is no family-editable profile (address, phone, emergency contact).
   The first tab is "Family" (members, memberships, credits, balance) rather than "Profile".
 - **Attendance calendar grid.** Attendance is a monthly list, not a month grid with marked days.

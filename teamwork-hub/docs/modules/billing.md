@@ -192,7 +192,7 @@ Tests: `tests/billing-membership-policy.test.ts`.
 1. Imported memberships are created as `external_zenplanner` (Zen Planner keeps charging). They are excluded from renewals, checkout, invoicing, plan changes and cancellation.
 2. Connect Stripe in sandbox and verify webhooks end to end (`stripe listen --forward-to …/api/webhooks/stripe`).
 3. For each member, pick the first date Zen Planner will **not** bill, and stop the Zen Planner recurring charge.
-4. On the membership page, use **Cut over**. It requires ticking "Zen Planner charge stopped" and a first bill date of today or later. Billing switches to `manual` and the anchor is set to that date. The step is audited and recorded as an event.
+4. On the membership page, use **Cut over**. It requires ticking "Zen Planner charge stopped", a first bill date of today or later, and (since the sign-up flow) a signed membership agreement plus an active saved payment method, or a written reason to skip those two (see `payments-autopay.md`). Billing switches to `manual` and the anchor is set to that date. The step is audited and recorded as an event.
 5. Payment details cannot be exported by us. Payers re-enter them on hosted checkout, or Rod arranges a PAN migration through Stripe's Data Migrations team.
 
 ## Provider subscriptions (Stripe Billing / PayPal Subscriptions)
@@ -285,7 +285,7 @@ verification answered by a mocked verify-webhook-signature call).
 
 - No live or sandbox provider call was ever made. The Stripe and PayPal request shapes in `createCheckout`, `refund` and `capturePaypalOrder` follow the docs but **have not been exercised against a sandbox**.
 - The PayPal refund and dispute event shapes, and the Stripe refund, dispute and payout field names are unverified. Validate them with sandbox fixtures before go-live. (`verification_status` SUCCESS/FAILURE is now verified from the OpenAPI schema.)
-- Saved payment methods UI has not been built (the `payment_methods` table is unused).
+- Saved payment methods, autopay, fee reporting, membership agreements and the guided sign-up are documented in `payments-autopay.md` (built; configuration required; never run against a Stripe sandbox).
 - `webhook_events` has no `org_id`. Events are attributed through payment attempts. Payout routing assumes one org per provider account. Unmatched and rejected events are visible to every org's billing staff (they hold no customer data beyond the type and the claimed id).
 - Tax is always 0. Partial refunds of ACH are not supported by Stripe; this is not enforced locally.
 - Families cannot request holds or cancellations in-app (staff-only actions).
@@ -301,4 +301,4 @@ Read helpers added to `src/lib/billing/queries.ts` (read-only, scoped by `viewab
 
 Bill status shown to families: Paid, Unpaid, Unpaid · past due, Failed (latest attempt failed), Processing (money in flight, not counted as paid), Scheduled (upcoming), Void, Closed (uncollectible). Pay Now appears only when the viewer has `can_pay` on the account, the balance is above 0 and nothing is pending.
 
-Not built: self-service payment method update (no provider portal/setup flow exists; the tab says so), family-editable contact profile.
+Payment Methods is now self-service for people allowed to pay (see `payments-autopay.md`). Not built: family-editable contact profile.

@@ -48,7 +48,7 @@ Six checklists. Every step has a name, an owner role (Owner, Front desk, Coach),
 |---|---|
 | A staff member wrote to the family in Messages | a staff-written message (not an internal note, automation or campaign) in a thread about the athlete since the journey began |
 | Every requested form is signed | at least one form request is completed and none is pending |
-| Payment method on file or autopay linked | the payer has a stored payment method, or the membership has a provider subscription |
+| Payment method on file or autopay linked | the payer has an **active** saved payment method (see `payments-autopay.md`), or the membership has a provider subscription |
 | A session is booked / was attended | a live booking / an attended booking for a session from two weeks before the journey start (a trial session before the start date counts) |
 | An assigned coach is set | a current coach assignment, direct or through a group |
 | Added to a training program | an active program assignment, direct or through a group |
