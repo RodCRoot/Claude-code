@@ -69,6 +69,7 @@ The exact text is in the Definitions drawer on the page (`definitionsFor("daily"
 | Billed this month | Invoices issued, excluding drafts and voids (Invoiced report's rule) |
 | Projected recurring revenue, next month | Monthly-equivalent net price x share of next month's days the membership is running and not on hold. Zen Planner-billed and trial memberships excluded |
 | Memberships with autopay off (definition v2) | Active memberships invoiced by Teamwork where nothing is charged automatically: autopay is off for the membership, or it is on but the payer has no active saved payment method (`AUTOPAY_READY_SQL` in `billing/payment-methods.ts`) |
+| Saved cards expiring within 60 days | `expiringCards()` (payments module): active saved cards whose expiry month ends within 60 days, one row per card, linking to the payer's payment methods. Withheld under a filter (a card belongs to a payer, not a location or program). Also shown as the card "Saved cards about to expire" on the follow-ups queue for owner, admin and operations |
 | Memberships expiring in 30 days | End date or scheduled cancellation in the next 30 days |
 | People with more than one active membership | Two or more active non-trial memberships (a regular plan paused for in-season is not a second one) |
 | Attending above the plan's weekly limit | The membership audit's `over_cap_usage` exceptions |

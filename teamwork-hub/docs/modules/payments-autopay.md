@@ -132,7 +132,9 @@ called and no account or sandbox exists.
   fee yet, and an estimate column that is empty unless the owner typed estimate rates in Settings.
 - **Query functions for other modules** (the scoreboard page was not edited):
   - `expiringCards(tx, orgId, { today?, withinDays? = 60 })` → active cards whose expiry month ends within the window.
-    Also listed on Settings, Payments and agreements.
+    Listed on Settings, Payments and agreements; on the owner scoreboard as the tile "Saved cards expiring within 60 days"
+    with its list (`cards_expiring`, definition v1); and on the follow-ups queue as the card "Saved cards about to
+    expire" (`ExpiringCardsCard`, owner / admin / operations only, not a journey step).
   - `autopayOffMembershipIds(tx, orgId)` and `AUTOPAY_READY_SQL`: "autopay off" = live Teamwork-invoiced membership with
     autopay off **or** no active saved method. The scoreboard's `autopay_off` row SQL now uses it (definition bumped to
     version 2 with the change explained). With no saved methods the listed memberships are the same as before.

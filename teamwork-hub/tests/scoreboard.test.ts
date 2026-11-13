@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { auditEvents, membershipEvents, staffPayRates, timeEntries, zpBills } from "@/db/schema";
+import { auditEvents, membershipEvents, paymentMethods, staffPayRates, timeEntries, zpBills } from "@/db/schema";
+import { expiringCards } from "@/lib/billing/payment-methods";
 import { UserError } from "@/lib/actions";
 import { AuthzError, can } from "@/lib/authz/policy";
 import { calculatePayroll } from "@/lib/payroll/service";
@@ -608,6 +609,58 @@ describe("imported Zen Planner bill history is its own series", () => {
     expect(defs.find((d) => d.key === "mv_zp_imported")).toMatchObject({ label: "Billed in Zen Planner, imported", version: 1 });
     expect(defs.find((d) => d.key === "mv_collected")!.version).toBe(2);
     expect(defs.find((d) => d.key === "mv_billed")!.version).toBe(2);
+  });
+});
+
+describe("saved cards expiring within 60 days", () => {
+  let org: Org;
+  let w: Awaited<ReturnType<typeof scoreboardWorld>>;
+  const ids: Record<string, string> = {};
+  beforeAll(async () => {
+    org = await seedOrg(TODAY, { modules: [] });
+    w = await scoreboardWorld(org, TODAY);
+    const a = await w.athlete("CardSoon");
+    const b = await w.athlete("CardLater");
+    const card = async (key: string, payerId: string, expMonth: number, expYear: number, o: Partial<typeof paymentMethods.$inferInsert> = {}) => {
+      const [m] = await db()
+        .insert(paymentMethods)
+        .values({ payerAccountId: payerId, provider: "stripe", providerMethodId: `pm_test_${key}_${org.orgId.slice(0, 8)}`, type: "card", brand: "visa", last4: "4242", expMonth, expYear, status: "active", isDefault: false, ...o })
+        .returning();
+      ids[key] = m.id;
+    };
+    await card("thisMonth", a.payerId, 3, 2026, { isDefault: true }); // good through Mar 31: 13 days left
+    await card("inWindow", a.payerId, 4, 2026); // Apr 30: 43 days
+    await card("lapsed", b.payerId, 2, 2026, { isDefault: true }); // already past, still active on file
+    await card("later", b.payerId, 6, 2026); // Jun 30: outside 60 days
+    await card("removed", b.payerId, 3, 2026, { status: "removed" });
+    await db().insert(paymentMethods).values({ payerAccountId: b.payerId, provider: "stripe", providerMethodId: `pm_test_bank_${org.orgId.slice(0, 8)}`, type: "us_bank_account", bankName: "First Example Bank", last4: "6789", status: "active", isDefault: false });
+    await w.membership(a, w.planA, { start: -30, autopay: true }); // autopay rides on a's default card
+  });
+
+  it("the tile counts the same cards as expiringCards(), and its list is those rows", async () => {
+    const c = await ctxFor(org);
+    const d = await daily(org);
+    const m = d.metrics.cards_expiring;
+    expect(m).toMatchObject({ value: 3, rowCount: 3, group: "Membership checks", na: null });
+    const direct = await expiringCards(db(), org.orgId, { today: TODAY, withinDays: 60 });
+    expect(direct.map((x) => x.methodId).sort()).toEqual([ids.thisMonth, ids.inWindow, ids.lapsed].sort());
+    const list = (await metricRows(db(), await viewerFor(org, "rod"), c, "cards_expiring"))!;
+    expect(list.rows.map((r) => r.day)).toEqual(["2026-02-28", "2026-03-31", "2026-04-30"]); // soonest first
+    expect(list.rows.every((r) => r.ref_kind === "link" && /^\/billing\/payment-methods\?payer=[0-9a-f-]{36}$/.test(r.ref_id!))).toBe(true);
+    expect(list.rows[1].name).toBe("CardSoon payer");
+    expect(list.rows[1].detail).toMatch(/Visa ending 4242.*autopay for 1 membership.*default method/);
+    expect(list.rows[2].detail).toMatch(/not used for autopay/);
+  });
+
+  it("is withheld under a filter, hidden from another organization, and defined once", async () => {
+    const north = await daily(org, { locationId: w.locA.id });
+    expect(north.metrics.cards_expiring.value).toBeNull();
+    expect(north.metrics.cards_expiring.na).toMatch(/location filter/);
+    const other = await seedOrg(TODAY, { modules: [] });
+    expect((await daily(other)).metrics.cards_expiring.value).toBe(0);
+    const def = definitionsFor("daily").find((x) => x.key === "cards_expiring")!;
+    expect(def.version).toBe(1);
+    expect(def.definition).toMatch(/last day of its expiry month/);
   });
 });
 

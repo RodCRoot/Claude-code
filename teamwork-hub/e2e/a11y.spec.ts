@@ -105,6 +105,7 @@ const STAFF = [
   "/scoreboard/marketing",
   "/scoreboard/money",
   "/scoreboard/list/past_due",
+  "/scoreboard/list/cards_expiring",
   "/payroll",
   "/payroll/staff",
   "/payroll/import",
