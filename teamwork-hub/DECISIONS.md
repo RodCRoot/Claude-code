@@ -105,7 +105,7 @@ Each one is a setting or a small change, not a rebuild. The current behaviour is
 - **News clips need approval (2026-11-12):** "have me approve them before sharing". No auto-sharing exists; owner/admin approve every clip, with a setting to extend approval to operations or coaches.
 - **Local news sources (2026-11-12):** watch the Herald-Times, the Bedford paper and Greene County sports coverage, plus alumni college athletes.
 - **Pre and post session check-ins (2026-11-12):** short questionnaires tracked over time: liked, did not like, anything that hurt, notes, intensity and soreness, not only a 1 to 5 rating.
-- **Parent screens should match Zen Planner closely (2026-11-11):** built from memory; awaiting Rod's screenshots or screen recording to verify details (`docs/modules/zp-parity.md`).
+- **Parent screens (2026-11-11, revised 2026-11-13):** Rod first asked for a close match to Zen Planner, then said "the parent side doesn't have to match zenplanner". The current layout (built in Zen Planner's general shape) stays; no further parity work or parent screenshots are needed. `docs/modules/zp-parity.md` is kept as a record only.
 
 ## Open decisions for Rod (owner tools wave)
 1. Check-ins: likes, dislikes and rating reach the coach with the athlete's name only if the athlete ticks "show my coach" (the old form's promise). Make named the default?
