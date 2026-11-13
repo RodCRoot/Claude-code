@@ -1,10 +1,11 @@
 import { Tabs } from "@/components/ui";
 
-export function ImportTabs({ current, canImport = true }: { current: "imports" | "hawkin" | "exports"; canImport?: boolean }) {
+export function ImportTabs({ current, canImport = true }: { current: "imports" | "zenplanner" | "hawkin" | "exports"; canImport?: boolean }) {
   const tabs = [
     ...(canImport
       ? [
           { key: "imports", href: "/imports", label: "Imports" },
+          { key: "zenplanner", href: "/imports/zenplanner", label: "Zen Planner" },
           { key: "hawkin", href: "/imports/hawkin", label: "Hawkin API sync" },
         ]
       : []),

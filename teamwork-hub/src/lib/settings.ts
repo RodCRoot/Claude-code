@@ -84,7 +84,7 @@ export async function recheckIntegrations(tx: Tx, v: Viewer) {
   const rows = await tx.select().from(integrations).where(eq(integrations.orgId, v.orgId));
   for (const r of rows) {
     const envVars = r.provider === "sms" && process.env.SMS_PROVIDER === "gohighlevel" ? ["SMS_PROVIDER", "GHL_API_KEY", "GHL_LOCATION_ID", "DELIVERY_ENABLED"] : (integrationEnvVars[r.provider] ?? []);
-    const vars = envVars.map((s) => s.split(" ")[0]).filter((n) => !["PAYPAL_ENV", "HAWKIN_API_BASE", "HAWKIN_ORG_SCOPE", "DELIVERY_TEST_RECIPIENTS", "STRIPE_PUBLISHABLE_KEY", "GHL_FROM_NUMBER"].includes(n));
+    const vars = envVars.map((s) => s.split(" ")[0]).filter((n) => !["PAYPAL_ENV", "HAWKIN_API_BASE", "HAWKIN_ORG_SCOPE", "DELIVERY_TEST_RECIPIENTS", "STRIPE_PUBLISHABLE_KEY", "GHL_FROM_NUMBER", "ZENPLANNER_WEBHOOK_SECRET"].includes(n));
     if (!vars.length) continue;
     let present = vars.every((n) => !!process.env[n] && process.env[n] !== "none");
     if ((r.provider === "email" || r.provider === "sms") && process.env.DELIVERY_ENABLED !== "true") present = false;

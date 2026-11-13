@@ -147,6 +147,18 @@ export default async function ImportBatchPage({ params, searchParams }: { params
           {fileError}
         </Callout>
       ) : null}
+      {schema.id === "zenplanner.membership_grid" && batch.status === "committed" ? (
+        <Callout tone="info" title="Discount review is ready" className="mb-4">
+          Every imported membership whose Payment Amount differs from its plan&apos;s list price is listed for you to keep, convert or end.{" "}
+          <Link className="font-medium underline" href={`/imports/zenplanner/discounts?batch=${batch.id}`}>
+            Open the discount review for this import
+          </Link>
+          {" · "}
+          <Link className="font-medium underline" href={`/imports/zenplanner/reconcile?batch=${batch.id}`}>
+            Reconcile against Zen Planner&apos;s dashboard
+          </Link>
+        </Callout>
+      ) : null}
 
       {/* ---------------- Step 2–3: schema + mapping ---------------- */}
       <Card className="mb-6" id="mapping">
@@ -155,6 +167,38 @@ export default async function ImportBatchPage({ params, searchParams }: { params
           <p className="mb-3 text-sm text-ink-3">
             {schema.description} <Badge variant={schema.evidence === "existing Teamwork integration" ? "green" : schema.evidence === "vendor docs" ? "blue" : "yellow"}>{schema.evidence}</Badge>
           </p>
+          {schema.exportHelp && parsed ? (
+            <div className="mb-5 rounded-lg border border-edge bg-surface-2 p-3 text-sm" data-testid="preset-status">
+              <p className="font-medium">
+                Exact preset: {Object.keys(mapping).length} of {parsed.headers.filter((h) => !h.startsWith("_")).length} columns in this file were recognized without manual mapping.
+              </p>
+              {cols.ignored.length ? (
+                <p className="mt-1">
+                  <span className="font-medium text-warn">Not recognized (will not be imported):</span> {cols.ignored.join(", ")}. If one of these is a renamed preset column, pick it in the matching field below.
+                </p>
+              ) : (
+                <p className="mt-1 text-ink-3">Every column in the file was recognized.</p>
+              )}
+              {(() => {
+                const absent = schema.fields.filter((f) => !mapping[f.key] && schema.exportHelp!.columns.some((c) => c.toLowerCase() === f.label.toLowerCase() || c.toLowerCase() === f.label.replace(/ \(.*\)$/, "").toLowerCase()));
+                return absent.length ? <p className="mt-1 text-ink-3">Preset columns not in this file (left empty): {absent.map((f) => f.label).join(", ")}.</p> : null;
+              })()}
+              <details className="mt-2">
+                <summary className="cursor-pointer font-medium">How to export this file from Zen Planner</summary>
+                <ol className="mt-2 list-decimal space-y-1 pl-5">
+                  {schema.exportHelp.steps.map((st) => (
+                    <li key={st}>{st}</li>
+                  ))}
+                </ol>
+                <p className="mt-2 text-ink-3">Columns to include: {schema.exportHelp.columns.join(", ")}.</p>
+              </details>
+              <p className="mt-2">
+                <Link className="underline" href="/imports/zenplanner">
+                  Zen Planner import guide
+                </Link>
+              </p>
+            </div>
+          ) : null}
           {editable && !schema.internal ? (
             <ActionForm action={saveMappingAction} className="mb-5 flex flex-wrap items-end gap-3">
               <input type="hidden" name="batchId" value={batch.id} />

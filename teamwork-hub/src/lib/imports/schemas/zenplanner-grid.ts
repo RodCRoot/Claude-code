@@ -1,6 +1,6 @@
 import { matchVocab, PROSPECT_STATUS_TO_STAGE, type VocabKey } from "@/lib/zenplanner/vocab";
 import { asText, parseNumber, syntheticId, zonedLocalToInstant } from "../normalize";
-import type { Evidence, FieldDef, FieldValue, ImportSchemaDef, NormalizeCtx, NormalizedRow } from "../types";
+import type { Evidence, FieldDef, FieldValue, ImportSchemaDef, NormalizeCtx } from "../types";
 import { emptyRow, identityFrom, resolveName } from "./common";
 
 /**
@@ -110,7 +110,7 @@ export const zpPersonGrid: ImportSchemaDef = {
   id: "zenplanner.person_grid",
   source: "zenplanner",
   idSource: "zenplanner",
-  label: "Zen Planner: Person grid (exact preset)",
+  label: "Zen Planner — Person grid (exact preset)",
   description:
     "The People report grid exported as CSV. Creates or links people, households from Family ID, guardians from the Parent columns, leads for prospects, tags, and health notes. No column mapping needed when the listed columns are included.",
   evidence: GRID_EVIDENCE,
@@ -300,7 +300,7 @@ export const zpMembershipGrid: ImportSchemaDef = {
   id: "zenplanner.membership_grid",
   source: "zenplanner",
   idSource: "zenplanner",
-  label: "Zen Planner: Membership grid (exact preset)",
+  label: "Zen Planner — Membership grid (exact preset)",
   description:
     "The Membership report grid exported as CSV. Creates memberships that stay billed in Zen Planner (external_zenplanner), with the weekly limit, punch-card balance, cancel and hold details, and feeds the discount review. Import the Person grid first.",
   evidence: GRID_EVIDENCE,
@@ -442,7 +442,7 @@ export const zpBillGrid: ImportSchemaDef = {
   id: "zenplanner.bill_grid",
   source: "zenplanner",
   idSource: "zenplanner",
-  label: "Zen Planner: Bill grid (history only)",
+  label: "Zen Planner — Bill grid (history only)",
   description:
     "The Bill report grid exported as CSV. Stored as imported billing history for the membership audit and scoreboard context. Never creates an invoice, a balance or anything payable.",
   evidence: GRID_EVIDENCE,
@@ -506,7 +506,7 @@ export const zpAttendanceGrid: ImportSchemaDef = {
   id: "zenplanner.attendance_grid",
   source: "zenplanner",
   idSource: "zenplanner",
-  label: "Zen Planner: Attendance grid (exact preset)",
+  label: "Zen Planner — Attendance grid (exact preset)",
   description:
     "The Attendance report grid exported as CSV. A row is a visit only when Att. = Yes; Rsvp and Canceled are separate columns and rows without Att. = Yes are skipped. Creates historical sessions and attended bookings.",
   evidence: GRID_EVIDENCE,

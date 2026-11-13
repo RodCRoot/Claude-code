@@ -9,6 +9,7 @@ import { fmt } from "@/lib/time";
 import { Badge, Callout, Card, CardBody, CardHeader, PageHeader, StatusBadge } from "@/components/ui";
 import { SettingsTabs } from "@/components/settings-tabs";
 import { recheckIntegrationsAction } from "../actions";
+import { ZenPlannerWebhooksCard } from "./zenplanner-webhooks";
 
 export const metadata = { title: "Integrations" };
 
@@ -61,7 +62,7 @@ export default async function IntegrationsPage() {
               />
               <CardBody className="space-y-2 text-sm">
                 <p className="text-ink-2">{info?.purpose}</p>
-                <p className="text-xs text-ink-3">{r.provider === "teambuildr" || r.provider === "zenplanner" ? "File-based: import exported reports in the Import Center. No live connection is assumed or claimed." : STATUS_HELP[r.status]}</p>
+                <p className="text-xs text-ink-3">{r.provider === "teambuildr" || r.provider === "zenplanner" ? r.provider === "zenplanner" ? "File-based: import exported report grids in the Import Center. An optional webhook receiver (below) can take pushes from Zen Planner during the transition; no API connection is assumed or claimed." : "File-based: import exported reports in the Import Center. No live connection is assumed or claimed." : STATUS_HELP[r.status]}</p>
                 {integrationEnvVars[r.provider] ? (
                   <p className="flex flex-wrap items-center gap-1 text-xs">
                     Server variables:{" "}
@@ -84,6 +85,7 @@ export default async function IntegrationsPage() {
           );
         })}
       </div>
+      <ZenPlannerWebhooksCard viewer={v} />
       <Card className="mt-5">
         <CardHeader title="Recent sync runs" />
         <CardBody>

@@ -118,6 +118,7 @@ export const integrationEnvVars: Record<string, string[]> = {
   email: ["EMAIL_PROVIDER", "EMAIL_API_KEY", "EMAIL_FROM", "DELIVERY_ENABLED", "DELIVERY_TEST_RECIPIENTS"],
   sms: ["SMS_PROVIDER", "SMS_ACCOUNT_SID", "SMS_AUTH_TOKEN", "SMS_FROM", "DELIVERY_ENABLED", "DELIVERY_TEST_RECIPIENTS"],
   gohighlevel: ["GHL_API_KEY", "GHL_LOCATION_ID", "GHL_FROM_NUMBER (optional)"],
+  zenplanner: ["ZENPLANNER_WEBHOOK_SECRET (optional, only for the webhook receiver)"],
 };
 
 export function hasEnv(...names: string[]): boolean {
