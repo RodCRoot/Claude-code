@@ -175,13 +175,13 @@ export type ChipDef = { key: string; label: string };
 /** DEFAULT chips: starting points an owner can edit in Settings. */
 export const DEFAULT_LIKED_CHIPS: ChipDef[] = [
   { key: "lifting", label: "Lifting" },
-  { key: "speed", label: "Speed work" },
+  { key: "speed_work", label: "Speed work" },
   { key: "jumps", label: "Jumps" },
   { key: "competing", label: "Competing" },
   { key: "my_coach", label: "My coach" },
   { key: "my_group", label: "My group" },
-  { key: "learned", label: "Learned something new" },
-  { key: "fun", label: "It was fun" },
+  { key: "learned_something_new", label: "Learned something new" },
+  { key: "it_was_fun", label: "It was fun" },
 ];
 
 export const DEFAULT_DISLIKED_CHIPS: ChipDef[] = [
@@ -189,7 +189,7 @@ export const DEFAULT_DISLIKED_CHIPS: ChipDef[] = [
   { key: "too_easy", label: "Too easy" },
   { key: "too_crowded", label: "Too crowded" },
   { key: "too_much_waiting", label: "Too much waiting" },
-  { key: "confusing", label: "Did not understand something" },
+  { key: "did_not_understand_something", label: "Did not understand something" },
   { key: "ran_out_of_time", label: "Ran out of time" },
 ];
 
