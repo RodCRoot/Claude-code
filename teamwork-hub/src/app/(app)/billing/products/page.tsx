@@ -56,7 +56,7 @@ export default async function ProductsPage() {
             <thead><tr><Th>Product</Th><Th>Kind</Th><Th align="right">Current price</Th><Th>Terms</Th><Th>Versions</Th><Th /></tr></thead>
             <tbody>
               {catalog.map(({ product: p, current, versions, upcoming }) => (
-                <tr key={p.id} className={p.active ? "" : "opacity-60"}>
+                <tr key={p.id} className={p.active ? "" : "bg-surface-2"}>
                   <Td>
                     <div className="font-medium">{p.name}</div>
                     {p.sku ? <div className="text-xs text-ink-3">SKU {p.sku}</div> : null}
