@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ZP_VOCAB } from "@/lib/zenplanner/vocab";
 import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { ActionForm, SubmitButton } from "@/components/forms";
@@ -312,7 +313,14 @@ export default async function MembershipPage({ params }: { params: Promise<{ id:
                   <Field label="Hold starts" htmlFor="hs" required><Input id="hs" name="startDate" type="date" required defaultValue={today} /></Field>
                   <Field label="Firm restart date" htmlFor="hrd" required hint={`Default ${policy.defaultHoldMonths} months`}><Input id="hrd" name="restartDate" type="date" required defaultValue={suggestedRestart} /></Field>
                 </div>
-                <Field label="Reason" htmlFor="hr" required><Input id="hr" name="reason" required /></Field>
+                <Field label="Reason" htmlFor="hr" required hint="Suggestions are Zen Planner's hold reasons; any text is accepted.">
+                  <Input id="hr" name="reason" required list="zp-hold-reasons" />
+                  <datalist id="zp-hold-reasons">
+                    {ZP_VOCAB.holdReason.values.map((r) => (
+                      <option key={r} value={r} />
+                    ))}
+                  </datalist>
+                </Field>
                 <details className="text-sm">
                   <summary className="cursor-pointer">Cap override and punch card options</summary>
                   <div className="mt-2 space-y-2">
