@@ -2,7 +2,7 @@ import Link from "next/link";
 import { db } from "@/db";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Badge, Callout, Card, CardBody, CardHeader, Field, Input, Select, Textarea, type BadgeVariant } from "@/components/ui";
-import { WIN_TYPES, type WinStatus } from "@/db/schema";
+import { SUBMITTABLE_WIN_TYPES, type WinStatus } from "@/db/schema";
 import { type Viewer } from "@/lib/authz/policy";
 import { fmt, fmtDate, todayLocal } from "@/lib/time";
 import type { WinsAccess } from "@/lib/wins/access";
@@ -41,7 +41,7 @@ export function WinSubmitForm({ athletes, staff, tz }: { athletes: { id: string;
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="What kind of win?" htmlFor="win-type" required>
           <Select id="win-type" name="type" required defaultValue="placing">
-            {WIN_TYPES.map((t) => (
+            {SUBMITTABLE_WIN_TYPES.map((t) => (
               <option key={t} value={t}>
                 {WIN_TYPE_LABEL[t]}
               </option>
@@ -257,7 +257,17 @@ export function WinsFeedList({ items, empty }: { items: FeedItem[]; empty: strin
             <p className="mt-0.5 font-medium text-ink">{i.headline}</p>
             {i.detail ? <p className="text-sm text-ink-2">{i.detail}</p> : null}
             <p className="mt-0.5 text-xs text-ink-3">
+              {i.news ? `${i.news.source} · ` : ""}
               {i.sport} · {i.when}
+              {i.news?.url ? (
+                <>
+                  {" · "}
+                  <a href={i.news.url} target="_blank" rel="noopener noreferrer nofollow" className="font-semibold text-brand underline">
+                    Read it at {i.news.source}
+                    <span className="sr-only"> (opens in a new tab)</span>
+                  </a>
+                </>
+              ) : null}
             </p>
           </div>
         </li>

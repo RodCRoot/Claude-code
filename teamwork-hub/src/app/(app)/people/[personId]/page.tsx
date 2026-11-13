@@ -1,4 +1,5 @@
 import { CommunityProfileCard } from "@/components/community/profile-card";
+import { AlumniProfileCard } from "@/components/newswatch/cards";
 import { WinsProfileCard } from "@/components/wins/staff";
 import { JourneyPanel } from "@/components/journey/panel";
 import Link from "next/link";
@@ -397,6 +398,7 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
           {athlete && staff ? <JourneyPanel v={v} athleteId={athlete.id} /> : null}
           {athlete && staff ? <CommunityProfileCard v={v} athleteId={athlete.id} /> : null}
           {athlete && staff ? <WinsProfileCard v={v} athleteId={athlete.id} /> : null}
+          {athlete && staff ? <AlumniProfileCard v={v} athleteId={athlete.id} firstName={person.preferredName ?? person.firstName} /> : null}
           {staff ? (
             <Card>
               <CardHeader title="Follow-ups" kicker={`${d.tasks.length} open task${d.tasks.length === 1 ? "" : "s"}`} />

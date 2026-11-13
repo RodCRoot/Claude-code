@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
+import { AlumniNewsCard, NewsWatchFamilyCard } from "@/components/newswatch/cards";
 import { CompetingFamilyCard, FamilyWinItem, WinSubmitForm, WinsFeedList } from "@/components/wins/family";
 import { WinsStaffTabs } from "@/components/wins/staff";
 import { Callout, Card, CardBody, CardHeader, EmptyState } from "@/components/ui";
@@ -15,7 +16,7 @@ import { ModuleHero } from "../training/_components/tb";
 
 export const metadata = { title: "Wins" };
 
-export default async function WinsPage({ searchParams }: { searchParams: Promise<{ athlete?: string }> }) {
+export default async function WinsPage({ searchParams }: { searchParams: Promise<{ athlete?: string; show?: string }> }) {
   const v = await requireViewer();
   if (!isStaff(v) && v.role !== "guardian" && v.role !== "athlete") redirect("/denied");
   const sp = await searchParams;
@@ -23,7 +24,8 @@ export default async function WinsPage({ searchParams }: { searchParams: Promise
   const org = await getOrg(v.orgId);
   const tz = org?.timezone;
   const community = await communityOrg(db, v.orgId);
-  const feed = await winsFeed(db, v, { limit: 30 });
+  const onlyNews = sp.show === "news";
+  const feed = await winsFeed(db, v, { limit: 30, onlyNews });
 
   // Athletes the viewer may add a win for.
   const scope = await accessibleAthleteIds(db, v, "profile.read");
@@ -86,13 +88,22 @@ export default async function WinsPage({ searchParams }: { searchParams: Promise
           <Card id="wins-feed">
             <CardHeader title="Gym wins" kicker={staff ? "What families see" : "From athletes across the gym"} />
             <CardBody>
+              <nav aria-label="Filter the gym wins" className="mb-3 flex flex-wrap gap-2 text-sm">
+                <Link href="/wins#wins-feed" aria-current={onlyNews ? undefined : "page"} className={`min-h-11 rounded-full border px-4 py-2.5 font-semibold ${onlyNews ? "border-edge text-ink-2" : "border-brand bg-brand/10 text-brand"}`}>
+                  All wins
+                </Link>
+                <Link href="/wins?show=news#wins-feed" aria-current={onlyNews ? "page" : undefined} className={`min-h-11 rounded-full border px-4 py-2.5 font-semibold ${onlyNews ? "border-brand bg-brand/10 text-brand" : "border-edge text-ink-2"}`}>
+                  In the news
+                </Link>
+              </nav>
               {community.settings.enabled ? (
-                <WinsFeedList items={feed} empty="No wins to show yet. The first approved one will appear here." />
+                <WinsFeedList items={feed} empty={onlyNews ? "No news clips to show yet. Approved ones will appear here." : "No wins to show yet. The first approved one will appear here."} />
               ) : (
                 <p className="text-sm text-ink-3">Community features are turned off at this gym right now, so wins are not shown to other families.</p>
               )}
             </CardBody>
           </Card>
+          <AlumniNewsCard v={v} orgName={community.name} />
         </div>
 
         <div className="space-y-4">
@@ -109,6 +120,7 @@ export default async function WinsPage({ searchParams }: { searchParams: Promise
             </Callout>
           ) : null}
           <CompetingFamilyCard v={v} orgName={community.name} />
+          {!staff ? mine.map(({ access }) => <NewsWatchFamilyCard key={access.athleteId} v={v} athleteId={access.athleteId} tz={tz} />) : null}
           {!staff ? (
             <Card>
               <CardBody className="space-y-2 text-sm text-ink-2">
@@ -122,7 +134,7 @@ export default async function WinsPage({ searchParams }: { searchParams: Promise
                 <p>
                   <strong>3. Public marketing.</strong> Off unless a parent or guardian (or an adult athlete) says yes for that win. It can be withdrawn at any time.
                 </p>
-                <p className="text-xs text-ink-3">Wins never include last names, ages, health, injuries, body weight or school grades.</p>
+                <p className="text-xs text-ink-3">Wins never include last names, ages, health, injuries, body weight or school grades. A news clip shows a first name in the headline and links to the public article, and only when news watch is switched on for that athlete.</p>
               </CardBody>
             </Card>
           ) : null}

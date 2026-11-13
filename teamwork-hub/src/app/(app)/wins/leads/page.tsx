@@ -1,16 +1,22 @@
+import Link from "next/link";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { ActionForm, SubmitButton } from "@/components/forms";
+import { ClipCard } from "@/components/newswatch/clip";
 import { WinsStaffTabs } from "@/components/wins/staff";
 import { Callout, Card, CardBody, CardHeader, EmptyState, Field, Input, Select, Textarea } from "@/components/ui";
-import { athletes, people, WIN_TYPES } from "@/db/schema";
+import { athletes, people, SUBMITTABLE_WIN_TYPES } from "@/db/schema";
 import { getOrg, requireCap } from "@/lib/auth/viewer";
 import { accessibleAthleteIds, athleteScopeFilter } from "@/lib/authz/policy";
 import { fmt, todayLocal } from "@/lib/time";
+import { listClips } from "@/lib/newswatch/clips";
+import { canApproveNews } from "@/lib/newswatch/settings";
+import { athleteWatchList, listAlumni } from "@/lib/newswatch/watch";
 import { listLeads } from "@/lib/wins/leads";
 import { HEADLINE_MAX, LEAD_NOTE_MAX, WIN_TYPE_LABEL } from "@/lib/wins/shared";
 import { ModuleHero } from "../../training/_components/tb";
 import { addLeadAction, convertLeadAction, dismissLeadAction } from "../actions";
+import { addManualClipAction } from "../news-actions";
 
 export const metadata = { title: "Leads to check" };
 
@@ -19,6 +25,12 @@ export default async function WinLeadsPage() {
   const tz = (await getOrg(v.orgId))?.timezone;
   const today = todayLocal(tz);
   const leads = await listLeads(db, v, { status: "open" });
+  const clips = await listClips(db, v, { statuses: ["suggested", "confirmed"] });
+  const approver = await canApproveNews(db, v);
+  const watchOptions = [
+    ...(await athleteWatchList(db, v)).filter((a) => a.optedIn).map((a) => ({ value: `athlete:${a.athleteId}`, label: a.name })),
+    ...(await listAlumni(db, v)).filter((a) => a.watch && a.active).map((a) => ({ value: `alumni:${a.id}`, label: `${a.firstName} ${a.lastName} (alumni)` })),
+  ];
   const scope = await accessibleAthleteIds(db, v, "profile.read");
   const roster = await db
     .select({ id: athletes.id, first: people.firstName, preferred: people.preferredName, last: people.lastName, sport: athletes.sport })
@@ -36,10 +48,34 @@ export default async function WinLeadsPage() {
       <ModuleHero kicker="Wins" title="Leads to check" description="Heard something at the front desk, or saw a write-up? Note it here. A lead becomes a draft win only the family sees until they confirm it." />
       <WinsStaffTabs v={v} current="leads" />
       <Callout tone="info" className="mb-4" title="What this does not do">
-        This app does not search social media or news sites and never opens the links you paste. Every lead is typed in by a staff member, and nothing is shown to anyone until the family says it is right and staff approve it.
+        This app does not search social media and never opens the links you paste. News clips below come from News watch, which reads headlines from the news feeds the owner listed, only for athletes whose family switched it on and for alumni on the watch list. Nothing is shown to anyone until a person approves it.
       </Callout>
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
+          <Card id="news-clips">
+            <CardHeader title="News clips" kicker={`${clips.length} to check`} />
+            <CardBody>
+              <p className="mb-3 text-sm text-ink-2">
+                Is it our athlete? Marking a clip only sorts it. {approver ? (
+                  <>
+                    Approve clips on the{" "}
+                    <Link href="/wins/news" className="font-semibold text-brand underline">
+                      News clips
+                    </Link>{" "}
+                    tab.
+                  </>
+                ) : (
+                  "The owner, an admin, or staff the owner allowed approve it before anyone sees it."
+                )}
+              </p>
+              {clips.length === 0 ? <p className="text-sm text-ink-3">No news clips to check right now.</p> : null}
+              <ul className="divide-y divide-edge">
+                {clips.map((c) => (
+                  <ClipCard key={c.id} c={c} tz={tz} mode="triage" />
+                ))}
+              </ul>
+            </CardBody>
+          </Card>
           <Card id="leads-open">
             <CardHeader title="Open leads" kicker={`${leads.length} to check`} />
             <CardBody>
@@ -77,7 +113,7 @@ export default async function WinLeadsPage() {
                           </Field>
                           <Field label="Kind of win" htmlFor={`lt-${l.id}`} required>
                             <Select id={`lt-${l.id}`} name="type" required defaultValue="placing">
-                              {WIN_TYPES.map((t) => (
+                              {SUBMITTABLE_WIN_TYPES.map((t) => (
                                 <option key={t} value={t}>
                                   {WIN_TYPE_LABEL[t]}
                                 </option>
@@ -110,6 +146,40 @@ export default async function WinLeadsPage() {
           </Card>
         </div>
         <div>
+          {watchOptions.length ? (
+            <Card id="add-news-clip" className="mb-4">
+              <CardHeader title="Add a news clip by hand" kicker="Saw an article the feeds missed?" />
+              <CardBody>
+                <ActionForm action={addManualClipAction} resetOnSuccess className="space-y-3">
+                  <Field label="Who is it about?" htmlFor="mc-person" required hint="Only people on the news watch list.">
+                    <Select id="mc-person" name="person" required defaultValue="">
+                      <option value="" disabled>
+                        Choose a person
+                      </option>
+                      {watchOptions.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="Article headline" htmlFor="mc-headline" required hint="As the publication wrote it. Do not paste any of the article itself.">
+                    <Input id="mc-headline" name="headline" required minLength={5} maxLength={300} autoComplete="off" />
+                  </Field>
+                  <Field label="Publication" htmlFor="mc-source" required>
+                    <Input id="mc-source" name="sourceName" required maxLength={120} autoComplete="off" />
+                  </Field>
+                  <Field label="Link to the article" htmlFor="mc-link" required hint="The app stores the link and never opens it.">
+                    <Input id="mc-link" name="link" type="url" inputMode="url" required placeholder="https://" autoComplete="off" />
+                  </Field>
+                  <Field label="Published on" htmlFor="mc-date">
+                    <Input id="mc-date" name="publishedOn" type="date" defaultValue={today} max={today} />
+                  </Field>
+                  <SubmitButton>Add news clip</SubmitButton>
+                </ActionForm>
+              </CardBody>
+            </Card>
+          ) : null}
           <Card id="add-lead">
             <CardHeader title="Add a lead" kicker="Staff only" />
             <CardBody>

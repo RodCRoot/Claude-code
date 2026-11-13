@@ -129,6 +129,10 @@ const STAFF = [
   "/wins/teams",
   "/wins/leads",
   "/wins/marketing",
+  "/wins/news",
+  "/wins/watch",
+  "/wins?show=news",
+  "/settings/newswatch",
   "/settings/security",
   "/settings/integrations",
   "/settings/jobs",
@@ -143,8 +147,8 @@ const STAFF = [
   "/reports/session-checkins",
   "/settings/audit",
 ];
-const COACH = ["/today", "/check-ins", "/check-ins/athletes", "/reports/session-checkins", "/people", "/people/tasks", "/schedule", "/training", "/training/today", "/training/weight-room", "/training/review", "/science", "/science/load", "/performance", "/messages", "/documents", "/reports", "/reports/attendance", "/reports/utilization", "/people/retention", "/reports/session-feedback", "/settings/security", "/time", "/training/anywhere", "/training/recaps", "/people/showcases", "/leaderboards", "/wins", "/wins/review", "/wins/calendar", "/wins/teams", "/wins/leads", "/follow-ups", "/follow-ups/checklist", "/follow-ups/scorecard"];
-const FAMILY = ["/today", "/check-ins", "/schedule", "/schedule/book", "/schedule/reservations", "/schedule/attendance", "/billing", "/billing/invoices", "/billing/memberships", "/billing/payment-methods", "/billing/history", "/training", "/science", "/science/wellness", "/science/body-map", "/performance", "/messages", "/documents", "/goals", "/shop", "/shop/camps", "/refer", "/anywhere", "/anywhere/season", "/showcase", "/recap", "/leaderboards", "/wins"];
+const COACH = ["/today", "/check-ins", "/check-ins/athletes", "/reports/session-checkins", "/people", "/people/tasks", "/schedule", "/training", "/training/today", "/training/weight-room", "/training/review", "/science", "/science/load", "/performance", "/messages", "/documents", "/reports", "/reports/attendance", "/reports/utilization", "/people/retention", "/reports/session-feedback", "/settings/security", "/time", "/training/anywhere", "/training/recaps", "/people/showcases", "/leaderboards", "/wins", "/wins/review", "/wins/calendar", "/wins/teams", "/wins/leads", "/follow-ups", "/follow-ups/checklist", "/follow-ups/scorecard", "/wins/news", "/wins/watch"];
+const FAMILY = ["/today", "/check-ins", "/schedule", "/schedule/book", "/schedule/reservations", "/schedule/attendance", "/billing", "/billing/invoices", "/billing/memberships", "/billing/payment-methods", "/billing/history", "/training", "/science", "/science/wellness", "/science/body-map", "/performance", "/messages", "/documents", "/goals", "/shop", "/shop/camps", "/refer", "/anywhere", "/anywhere/season", "/showcase", "/recap", "/leaderboards", "/wins", "/wins?show=news"];
 
 type Role = { name: string; email?: string; routes: string[]; dynamic?: [string, RegExp][] };
 const ROLES: Role[] = [

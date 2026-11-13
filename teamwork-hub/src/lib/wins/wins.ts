@@ -91,6 +91,8 @@ export async function winForViewer(tx: Tx, v: Viewer, winId: string, today?: str
  */
 export async function submitWin(tx: Tx, v: Viewer, raw: unknown, opts: { today?: string; photo?: PreparedPhoto | null; draftFromLead?: boolean } = {}): Promise<Win> {
   const input = winInput.parse(raw);
+  // "In the news" wins only come from an approved news clip (src/lib/newswatch/clips.ts).
+  if (input.type === "in_the_news") throw new UserError("Choose what kind of win it is.", { type: "Choose another kind" });
   const access = await winsAccess(tx, v, input.athleteId, { today: opts.today });
   if (!access?.canSubmit) throw new AuthzError("You cannot add a win for this athlete.");
   if (opts.draftFromLead && !access.canReview) throw new AuthzError();
@@ -343,7 +345,20 @@ export async function reviewQueue(tx: Tx, v: Viewer, opts: { statuses?: WinStatu
 }
 
 /** One public feed line. No athlete id and no last name; `id` is the win's own id (for its photo). */
-export type FeedItem = { id: string; name: string; typeLabel: string; sport: string; headline: string; detail: string | null; when: string; occurredOn: string; photo: boolean; mine: boolean };
+export type FeedItem = {
+  id: string;
+  name: string;
+  typeLabel: string;
+  sport: string;
+  headline: string;
+  detail: string | null;
+  when: string;
+  occurredOn: string;
+  photo: boolean;
+  mine: boolean;
+  /** "In the news" wins only: the publication and the link out. Never article text or an image. */
+  news: { source: string; url: string | null } | null;
+};
 
 type ShownRow = { w: Win; last: string };
 
@@ -379,7 +394,7 @@ function shown(rows: ShownRow[], roster: Map<string, RosterEntry>, level: "showI
  * under display names. Hidden athletes never appear, not even to staff here. Empty when community
  * features are off.
  */
-export async function winsFeed(tx: Tx, v: Viewer, opts: { limit?: number; today?: string } = {}): Promise<FeedItem[]> {
+export async function winsFeed(tx: Tx, v: Viewer, opts: { limit?: number; today?: string; onlyNews?: boolean } = {}): Promise<FeedItem[]> {
   if (v.role === "kiosk") throw new AuthzError();
   const org = await communityOrg(tx, v.orgId);
   if (!org.settings.enabled) return [];
@@ -389,8 +404,21 @@ export async function winsFeed(tx: Tx, v: Viewer, opts: { limit?: number; today?
   const ownIds = new Set(own === "all" ? [] : own);
   const rows = await approvedRows(tx, v.orgId, sql`${wins.showInApp} and ${wins.occurredOn} >= ${addDaysYmd(today, -365)}`, 200);
   return shown(rows, roster, "showInApp")
+    .filter(({ w }) => !opts.onlyNews || w.type === "in_the_news")
     .slice(0, opts.limit ?? 30)
-    .map(({ w, name }) => ({ id: w.id, name, typeLabel: WIN_TYPE_LABEL[w.type], sport: w.sport, headline: w.headline, detail: w.detail, when: fmt(localToUtc(w.occurredOn, "12:00", org.tz), "MMM d", org.tz), occurredOn: w.occurredOn, photo: !!w.photoObjectId && !!w.photoApprovedAt, mine: ownIds.has(w.athleteId) }));
+    .map(({ w, name }) => ({
+      id: w.id,
+      name,
+      typeLabel: WIN_TYPE_LABEL[w.type],
+      sport: w.sport,
+      headline: w.headline,
+      detail: w.detail,
+      when: fmt(localToUtc(w.occurredOn, "12:00", org.tz), "MMM d", org.tz),
+      occurredOn: w.occurredOn,
+      photo: !!w.photoObjectId && !!w.photoApprovedAt,
+      mine: ownIds.has(w.athleteId),
+      news: w.type === "in_the_news" ? { source: w.newsSource ?? "News", url: w.sourceUrl } : null,
+    }));
 }
 
 /** TV board items: approved in the last 30 days with level (b) on. Display names only, no ids, no photos. */
@@ -398,7 +426,8 @@ export async function tvWinItems(tx: Tx, orgId: string, roster: Map<string, Rost
   const rows = await approvedRows(tx, orgId, sql`${wins.showOnTv} and ${wins.occurredOn} >= ${addDaysYmd(opts.today, -30)}`, 60);
   return shown(rows, roster, "showOnTv")
     .slice(0, opts.limit ?? 5)
-    .map(({ w, name }) => ({ name, headline: w.headline, label: WIN_TYPE_LABEL[w.type], sport: w.sport, when: fmt(localToUtc(w.occurredOn, "12:00", opts.tz), "MMM d", opts.tz) }));
+    // A news clip shows the publication where other wins show the sport. Never a link on the TV.
+    .map(({ w, name }) => ({ name, headline: w.headline, label: WIN_TYPE_LABEL[w.type], sport: w.type === "in_the_news" ? w.newsSource ?? w.sport : w.sport, when: fmt(localToUtc(w.occurredOn, "12:00", opts.tz), "MMM d", opts.tz) }));
 }
 
 /** May this viewer load this win's photo? The family and staff in scope always; others only what the feed shows. */

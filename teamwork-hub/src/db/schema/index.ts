@@ -15,6 +15,7 @@ export * from "./anywhere";
 export * from "./showcase";
 export * from "./community";
 export * from "./scoreboard";
+export * from "./newswatch";
 export * from "./wins";
 export * from "./journey";
 export * from "./checkins";

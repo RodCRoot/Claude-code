@@ -18,6 +18,7 @@ export function SettingsTabs({ current }: { current: string }) {
           { key: "integrations", href: "/settings/integrations", label: "Integrations" },
           { key: "journey", href: "/settings/journey", label: "Member journey" },
           { key: "check-ins", href: "/settings/check-ins", label: "Session check-ins" },
+          { key: "newswatch", href: "/settings/newswatch", label: "News watch" },
           { key: "jobs", href: "/settings/jobs", label: "Scheduled jobs" },
           { key: "payroll", href: "/payroll", label: "Payroll" },
           { key: "audit", href: "/settings/audit", label: "Audit log" },

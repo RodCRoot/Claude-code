@@ -6,6 +6,7 @@
  * | `growth.referrals.nightly` | `syncReferrals` | /refer, People > Referrals, invoice creation |
  * | `community.challenges.nightly` | `syncChallengeCompletions` | Athlete Home, /leaderboards |
  * | `engagement.refresh.nightly` | `evaluateGoals` + `syncXp` + `syncBadges` (= `refreshEngagement`) | Athlete Home, /goals, performance page |
+ * | `newswatch.fetch.nightly` | `runNewsWatch` (src/lib/newswatch/job.ts) | none: it only runs here or from Run now |
  * | `recap.monthly` (daily, already existed) | `runMonthlyRecaps` | first view of a closed month |
  *
  * Retention (radar, win-back, milestones) is computed live from other tables on every view and
@@ -37,6 +38,8 @@ import { syncBadges, syncXp } from "@/lib/engagement/sync";
 import { syncReferrals } from "@/lib/growth/referrals";
 import { syncJourneys } from "@/lib/journey/sync";
 import { enqueue, runJobs, type JobHandler } from "@/lib/jobs";
+import { runNewsWatch } from "@/lib/newswatch/job";
+import { NEWS_JOB_TYPE } from "@/lib/newswatch/shared";
 import { log } from "@/lib/observability";
 import { RECAP_MONTHLY_JOB, enqueueRecapJobs, recapJobHandlers } from "@/lib/showcase/jobs";
 import { DEFAULT_TZ, fmt, todayLocal } from "@/lib/time";
@@ -50,7 +53,9 @@ export const JOURNEY_NIGHTLY_JOB = "journey.sync.nightly";
 export const NIGHTLY_HOUR = 2;
 const MAX_ERRORS_KEPT = 5;
 
-export const NIGHTLY_JOB_TYPES = [REFERRALS_NIGHTLY_JOB, CHALLENGES_NIGHTLY_JOB, ENGAGEMENT_NIGHTLY_JOB, JOURNEY_NIGHTLY_JOB] as const;
+export const NEWSWATCH_NIGHTLY_JOB = NEWS_JOB_TYPE;
+
+export const NIGHTLY_JOB_TYPES = [REFERRALS_NIGHTLY_JOB, CHALLENGES_NIGHTLY_JOB, ENGAGEMENT_NIGHTLY_JOB, JOURNEY_NIGHTLY_JOB, NEWSWATCH_NIGHTLY_JOB] as const;
 
 export const SCHEDULED_JOBS: { type: string; label: string; schedule: string; does: string; manual: boolean }[] = [
   {
@@ -79,6 +84,13 @@ export const SCHEDULED_JOBS: { type: string; label: string; schedule: string; do
     label: "Member journey",
     schedule: "Nightly, after 2:00 AM facility time",
     does: "Starts onboarding, touchpoint, milestone, hold and offboarding checklists from memberships, holds, cancellations and visit counts, and ticks the steps the system can already see are done. Sends nothing.",
+    manual: true,
+  },
+  {
+    type: NEWSWATCH_NIGHTLY_JOB,
+    label: "News watch",
+    schedule: "Nightly, after 2:00 AM facility time",
+    does: "Reads the news feeds listed in Settings, News watch and puts headlines that match a watched name in Wins, Leads to check. It reads headlines and summaries only, approves nothing and shares nothing. Does nothing while News watch is switched off.",
     manual: true,
   },
   {
@@ -210,6 +222,7 @@ export function scheduledJobHandlers(db: DB): Record<string, JobHandler> {
     [CHALLENGES_NIGHTLY_JOB]: (p, job) => runChallengesNightly(db, orgOf(p, job)),
     [ENGAGEMENT_NIGHTLY_JOB]: (p, job) => runEngagementNightly(db, orgOf(p, job)),
     [JOURNEY_NIGHTLY_JOB]: (p, job) => runJourneyNightly(db, orgOf(p, job)),
+    [NEWSWATCH_NIGHTLY_JOB]: (p, job) => runNewsWatch(db, orgOf(p, job)),
   };
 }
 
@@ -269,6 +282,10 @@ const SUMMARY_LABEL: Record<string, string> = {
   moved: "due dates moved for a hold",
   closed: "checklists closed",
   journeysCompleted: "checklists completed",
+  sourcesFetched: "news sources read",
+  itemsSeen: "headlines read",
+  newClips: "new clips to review",
+  sourcesSkipped: "sources not due yet",
 };
 
 /** One plain sentence from a job's result JSON. */
@@ -277,7 +294,7 @@ export function summarizeResult(result: unknown): string {
   const r = result as Record<string, unknown>;
   if (typeof r.skipped === "string") return r.skipped === "disabled" ? "Skipped: recaps are turned off" : r.skipped === "grace" ? "Nothing to do yet: last month is still in its grace period" : `Skipped: ${r.skipped}`;
   const parts = Object.entries(SUMMARY_LABEL)
-    .filter(([k]) => typeof r[k] === "number" && (k === "referrals" || k === "athletes" || k === "completions" || k === "finalized" || k === "stepsCreated" || (r[k] as number) > 0))
+    .filter(([k]) => typeof r[k] === "number" && (k === "referrals" || k === "athletes" || k === "completions" || k === "finalized" || k === "stepsCreated" || k === "sourcesFetched" || k === "newClips" || (r[k] as number) > 0))
     .map(([k, label]) => `${r[k]} ${label}`);
   const failed = typeof r.failed === "number" && r.failed > 0 ? ` ${r.failed} could not be processed and will be tried again on the next run.` : "";
   return `${parts.length ? parts.join(", ") : "Nothing to do"}.${failed}`;

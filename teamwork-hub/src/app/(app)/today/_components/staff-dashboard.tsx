@@ -18,6 +18,7 @@ import { fmt, fmtTime } from "@/lib/time";
 import { formatMoney } from "@/lib/money";
 import { TimeClockCard } from "@/components/time-clock-card";
 import { MilestonesCard } from "@/components/retention/milestones-card";
+import { NewsClipsTodayCard } from "@/components/newswatch/cards";
 import { CompetingThisWeekCard } from "@/components/wins/staff";
 import { FollowUpsTodayCard } from "@/components/journey/today-card";
 
@@ -222,6 +223,7 @@ export async function StaffToday({ v, tz, greeting, dateLabel }: { v: Viewer; tz
         </Widget>
 
         <MilestonesCard v={v} />
+        <NewsClipsTodayCard v={v} />
         <CompetingThisWeekCard v={v} tz={tz} />
 
         {review.length ? (

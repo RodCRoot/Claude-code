@@ -12,6 +12,7 @@ export const WIN_TYPE_LABEL: Record<WinType, string> = {
   team_championship: "Team championship",
   character: "Character and leadership",
   other: "Other",
+  in_the_news: "In the news",
 };
 
 export const WIN_STATUS_LABEL: Record<WinStatus, string> = {
@@ -115,6 +116,7 @@ const TYPE_OPENER: Record<WinType, string> = {
   team_championship: "Champions",
   character: "Leading the right way",
   other: "Worth celebrating",
+  in_the_news: "In the news",
 };
 
 /** Three ready-to-copy drafts. Sample wording for staff to edit; display name only. */

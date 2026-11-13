@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- Invented test feed in the shape a news search feed returns. Everything here is fictional. -->
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <generator>Fictional-Search</generator>
+    <title>"Zyra Quillfeather" site:gazette.example.com - Fictional Search</title>
+    <link>https://search.example.net/search?q=x</link>
+    <item><title>Zyra Quillfeather scores 22 as Fictional Falls tops Makebelieve Central | Sports - Sampleton Gazette</title><link>https://search.example.net/rss/articles/AAA111?oc=5</link><guid isPermaLink="false">AAA111</guid><pubDate>Sun, 01 Mar 2026 00:40:00 GMT</pubDate><description>&lt;a href="https://search.example.net/rss/articles/AAA111?oc=5" target="_blank"&gt;Zyra Quillfeather scores 22 as Fictional Falls tops Makebelieve Central | Sports&lt;/a&gt;&amp;nbsp;&amp;nbsp;&lt;font color="#6f6f6f"&gt;Sampleton Gazette&lt;/font&gt;</description><source url="https://gazette.example.com">Sampleton Gazette</source></item>
+    <item><title>Fictional Falls rolls into the sectional final - Sampleton Gazette</title><link>https://search.example.net/rss/articles/BBB222?oc=5</link><guid isPermaLink="false">BBB222</guid><pubDate>Sat, 28 Feb 2026 02:00:00 GMT</pubDate><description>&lt;a href="https://search.example.net/rss/articles/BBB222?oc=5" target="_blank"&gt;Fictional Falls rolls into the sectional final&lt;/a&gt;&amp;nbsp;&amp;nbsp;&lt;font color="#6f6f6f"&gt;Sampleton Gazette&lt;/font&gt;</description><source url="https://gazette.example.com">Sampleton Gazette</source></item>
+    <item><title>Sampleton Gazette | Local news in Sampleton - Sampleton Gazette</title><link>https://search.example.net/rss/articles/CCC333?oc=5</link><guid isPermaLink="false">CCC333</guid><pubDate>Tue, 04 Dec 2012 03:07:25 GMT</pubDate><description>&lt;a href="https://search.example.net/rss/articles/CCC333?oc=5"&gt;Sampleton Gazette&lt;/a&gt;</description><source url="https://gazette.example.com">Sampleton Gazette</source></item>
+    <item><title>Unrelated story from a paper that was not asked for - Elsewhere Times</title><link>https://search.example.net/rss/articles/DDD444?oc=5</link><guid isPermaLink="false">DDD444</guid><pubDate>Sat, 28 Feb 2026 02:00:00 GMT</pubDate><description>x</description><source url="https://elsewhere.example.org">Elsewhere Times</source></item>
+  </channel>
+</rss>

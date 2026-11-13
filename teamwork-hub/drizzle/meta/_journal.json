@@ -218,6 +218,13 @@
       "when": 1794523418297,
       "tag": "0030_checkins",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1794543400943,
+      "tag": "0031_newswatch",
+      "breakpoints": true
     }
   ]
 }

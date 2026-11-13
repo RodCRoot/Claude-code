@@ -3,8 +3,9 @@
  * staff-only note. It becomes a draft win attached to an athlete, and that draft is shown to
  * nobody but the athlete's own family until they confirm it and staff then approve it.
  *
- * Nothing here fetches the link, searches the web or reads a social feed. See the "Not built"
- * section of docs/modules/wins.md for why, and for what a consented, reviewed search would need.
+ * Nothing here fetches the link, searches the web or reads a social feed. The same table also
+ * holds news clips (kind "news") that News watch suggests for athletes whose families opted in;
+ * those are listed and decided in src/lib/newswatch/clips.ts, never through these functions.
  */
 import { and, desc, eq, inArray, or } from "drizzle-orm";
 import type { Tx } from "@/db";
@@ -48,6 +49,8 @@ async function leadForUpdate(tx: Tx, v: Viewer, leadId: string): Promise<Lead> {
   if (!uuid.test(leadId)) throw new AuthzError("Lead not found.");
   const [lead] = await tx.select().from(winLeads).where(and(eq(winLeads.id, leadId), eq(winLeads.orgId, v.orgId))).for("update");
   if (!lead) throw new AuthzError("Lead not found.");
+  // News clips have their own decisions and their own approval rule (src/lib/newswatch/clips.ts).
+  if (lead.kind !== "staff") throw new AuthzError("Lead not found.");
   // Coaches work their own leads and leads about athletes they coach.
   if (v.role === "coach" && lead.createdBy !== v.userId) {
     if (!lead.athleteId) throw new AuthzError();
@@ -87,7 +90,7 @@ export async function listLeads(tx: Tx, v: Viewer, opts: { status?: WinLeadStatu
     .leftJoin(athletes, eq(athletes.id, winLeads.athleteId))
     .leftJoin(people, eq(people.id, athletes.personId))
     .leftJoin(users, eq(users.id, winLeads.createdBy))
-    .where(and(eq(winLeads.orgId, v.orgId), opts.status ? eq(winLeads.status, opts.status) : undefined, mine))
+    .where(and(eq(winLeads.orgId, v.orgId), eq(winLeads.kind, "staff"), opts.status ? eq(winLeads.status, opts.status) : undefined, mine))
     .orderBy(desc(winLeads.createdAt))
     .limit(opts.limit ?? 100);
   const inScope = (id: string | null) => !id || scope === "all" || scope.includes(id);

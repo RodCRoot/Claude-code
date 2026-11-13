@@ -28,6 +28,7 @@ import { actorOf, communityOrg } from "./settings";
 import { AGE_BANDS, SHOUTOUT_LABEL, type BoardPanel, type BoardPayload, type ChallengeView } from "./shared";
 import { recentShoutoutRows } from "./shoutouts";
 import { fmtLoad, measuredPrs } from "./stats";
+import { tvAlumniItems } from "@/lib/newswatch/clips";
 import { tvWinItems } from "@/lib/wins/wins";
 
 export const DISPLAY_COOKIE = "tw_display";
@@ -167,7 +168,9 @@ export async function boardPayload(tx: Tx, orgId: string, opts: { now?: Date } =
 
   if (on.wins) {
     // Approved wins with the TV level on, under display names. No ids, no photos, no links.
-    const items = await tvWinItems(tx, orgId, roster, { today, tz, limit: 4 });
+    // Approved alumni news clips share the panel: name form the alumnus agreed to, headline, publication.
+    const alumniItems = await tvAlumniItems(tx, orgId, { tz, now, limit: 2 });
+    const items = [...(await tvWinItems(tx, orgId, roster, { today, tz, limit: 4 - alumniItems.length })), ...alumniItems];
     if (items.length) panels.push({ key: "wins", title: "Wins outside the gym", items });
   }
 
