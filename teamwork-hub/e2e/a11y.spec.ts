@@ -137,10 +137,14 @@ const STAFF = [
   "/follow-ups/checklist",
   "/follow-ups/scorecard",
   "/follow-ups/report",
+  "/check-ins",
+  "/check-ins/athletes",
+  "/settings/check-ins",
+  "/reports/session-checkins",
   "/settings/audit",
 ];
-const COACH = ["/today", "/people", "/people/tasks", "/schedule", "/training", "/training/today", "/training/weight-room", "/training/review", "/science", "/science/load", "/performance", "/messages", "/documents", "/reports", "/reports/attendance", "/reports/utilization", "/people/retention", "/reports/session-feedback", "/settings/security", "/time", "/training/anywhere", "/training/recaps", "/people/showcases", "/leaderboards", "/wins", "/wins/review", "/wins/calendar", "/wins/teams", "/wins/leads", "/follow-ups", "/follow-ups/checklist", "/follow-ups/scorecard"];
-const FAMILY = ["/today", "/schedule", "/schedule/book", "/schedule/reservations", "/schedule/attendance", "/billing", "/billing/invoices", "/billing/memberships", "/billing/payment-methods", "/billing/history", "/training", "/science", "/science/wellness", "/science/body-map", "/performance", "/messages", "/documents", "/goals", "/shop", "/shop/camps", "/refer", "/anywhere", "/anywhere/season", "/showcase", "/recap", "/leaderboards", "/wins"];
+const COACH = ["/today", "/check-ins", "/check-ins/athletes", "/reports/session-checkins", "/people", "/people/tasks", "/schedule", "/training", "/training/today", "/training/weight-room", "/training/review", "/science", "/science/load", "/performance", "/messages", "/documents", "/reports", "/reports/attendance", "/reports/utilization", "/people/retention", "/reports/session-feedback", "/settings/security", "/time", "/training/anywhere", "/training/recaps", "/people/showcases", "/leaderboards", "/wins", "/wins/review", "/wins/calendar", "/wins/teams", "/wins/leads", "/follow-ups", "/follow-ups/checklist", "/follow-ups/scorecard"];
+const FAMILY = ["/today", "/check-ins", "/schedule", "/schedule/book", "/schedule/reservations", "/schedule/attendance", "/billing", "/billing/invoices", "/billing/memberships", "/billing/payment-methods", "/billing/history", "/training", "/science", "/science/wellness", "/science/body-map", "/performance", "/messages", "/documents", "/goals", "/shop", "/shop/camps", "/refer", "/anywhere", "/anywhere/season", "/showcase", "/recap", "/leaderboards", "/wins"];
 
 type Role = { name: string; email?: string; routes: string[]; dynamic?: [string, RegExp][] };
 const ROLES: Role[] = [
@@ -157,6 +161,7 @@ const ROLES: Role[] = [
       ["/messages", /^\/messages\/[0-9a-f-]{36}$/],
       ["/performance", /^\/performance\/[0-9a-f-]{36}$/],
       ["/people/retention", /^\/people\/retention\/feedback\/[0-9a-f-]{36}$/],
+      ["/check-ins", /^\/check-ins\/responses\/[0-9a-f-]{36}$/],
       ["/training/anywhere", /^\/training\/anywhere\/[0-9a-f-]{36}$/],
       ["/events", /^\/events\/[0-9a-f-]{36}$/],
     ],
@@ -170,7 +175,7 @@ const ROLES: Role[] = [
       ["/billing", /^\/billing\/invoices\/[0-9a-f-]{36}$/],
       ["/today", /^\/people\/[0-9a-f-]{36}$/],
       ["/performance", /^\/performance\/[0-9a-f-]{36}$/],
-      ["/schedule", /^\/feedback\/[0-9a-f-]{36}$/],
+      ["/check-ins", /^\/check-ins\/[0-9a-f-]{36}\/after$/],
       ["/schedule/reservations", /^\/schedule\/classes\/[0-9a-f-]{36}$/],
       ["/billing/memberships", /^\/billing\/memberships\/[0-9a-f-]{36}$/],
       ["/shop/camps", /^\/shop\/camps\/[0-9a-f-]{36}$/],
