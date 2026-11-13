@@ -239,7 +239,9 @@ for (const role of ROLES) {
     for (const route of role.routes) {
       test(route, async ({ browser }, info) => {
         test.setTimeout(120_000);
-        await check(await page(browser, info), route, role.name, info.project.name);
+        const p = await page(browser, info);
+        // Close the context: one per test otherwise piles up and the browser slows until it stalls.
+        try { await check(p, route, role.name, info.project.name); } finally { await p.context().close(); }
       });
     }
     if (role.dynamic?.length) {
@@ -259,6 +261,7 @@ for (const role of ROLES) {
             failures.push(String((e as Error).message).split("\n").slice(0, 12).join("\n"));
           }
         }
+        await p.context().close();
         expect(failures).toEqual([]);
       });
     }
