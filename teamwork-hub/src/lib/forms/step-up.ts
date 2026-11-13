@@ -38,9 +38,9 @@ export type StepUpSettings = {
   allowSessionMfa: boolean;
 };
 
-export const DEFAULT_STEP_UP: StepUpSettings = { requireForKinds: ["waiver", "agreement"], allowSessionMfa: true };
+export const DEFAULT_STEP_UP: StepUpSettings = { requireForKinds: ["waiver", "agreement", "membership_agreement"], allowSessionMfa: true };
 
-const KINDS: TemplateKind[] = ["waiver", "agreement", "intake", "medical", "media_release", "policy"];
+const KINDS: TemplateKind[] = ["waiver", "agreement", "membership_agreement", "intake", "medical", "media_release", "policy"];
 
 /** Org settings live at `organizations.settings.formsStepUp`; absent = defaults (ON for waivers/agreements). */
 export function stepUpSettingsOf(settings: Record<string, unknown> | null | undefined): StepUpSettings {

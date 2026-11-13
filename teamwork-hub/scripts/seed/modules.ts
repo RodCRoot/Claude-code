@@ -32,6 +32,7 @@ export const moduleSeeds: [string, (ctx: SeedCtx) => Promise<void>][] = [
   ["wins", (ctx) => import("./wins").then((m) => m.seedWins(ctx))], // after community (display names) and anywhere (My Season)
   ["newswatch", (ctx) => import("./newswatch").then((m) => m.seedNewsWatch(ctx))], // OPT-IN (see HISTORY_SEEDS): after wins and community; adds an approved "In the news" win and alumni
   ["journey", (ctx) => import("./journey").then((m) => m.seedJourney(ctx))], // last: runs the real generator for its own synthetic members (after documents, community)
+  ["signup", (ctx) => import("./signup").then((m) => m.seedSignup(ctx))], // sample membership agreement template only
 ];
 
 /**

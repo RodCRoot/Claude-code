@@ -241,7 +241,7 @@ export async function cancelSubscriptionAction(_p: ActionState, fd: FormData) {
 export async function cutoverAction(_p: ActionState, fd: FormData) {
   return run(async () => {
     const v = await requireViewer();
-    await db.transaction((tx) => cutoverMembership(tx, v, { membershipId: s(fd, "membershipId"), firstBillDate: s(fd, "firstBillDate"), zenPlannerStopped: fd.get("zpStopped") === "on", today: todayLocal() }));
+    await db.transaction((tx) => cutoverMembership(tx, v, { membershipId: s(fd, "membershipId"), firstBillDate: s(fd, "firstBillDate"), overrideReason: String(fd.get("overrideReason") ?? "") || null, zenPlannerStopped: fd.get("zpStopped") === "on", today: todayLocal() }));
     return { ok: true, message: "Membership now billed by Teamwork Hub from the chosen date." };
   });
 }

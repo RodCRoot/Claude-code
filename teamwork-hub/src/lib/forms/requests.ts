@@ -8,6 +8,7 @@ import {
   formTemplateVersions,
   groupMembers,
   groups,
+  membershipAgreements,
   people,
 } from "@/db/schema";
 import { audit } from "@/lib/audit";
@@ -112,6 +113,7 @@ export async function issueRequests(tx: Tx, v: Viewer, input: { templateId: stri
   const [tpl] = await tx.select().from(formTemplates).where(and(eq(formTemplates.id, input.templateId), eq(formTemplates.orgId, v.orgId)));
   if (!tpl) throw new UserError("Form template not found.");
   if (!tpl.active) throw new UserError("This template is inactive. Reactivate it before issuing requests.");
+  if (tpl.kind === "membership_agreement") throw new UserError("A membership agreement is issued from a membership (Billing, Memberships, or the sign-up flow) so its terms can be filled in. It cannot be issued as a blank form.");
   const version = await currentPublishedVersion(tx, tpl.id);
   if (!version) throw new UserError("Publish a version of this template before issuing requests.");
 
@@ -184,7 +186,14 @@ export async function voidRequest(tx: Tx, v: Viewer, requestId: string, reason: 
   if (!r) throw new UserError("Request not found.");
   if (!isOpen(r.status)) throw new UserError("Only pending or partially signed requests can be voided. Completed forms are permanent records.");
   let newId: string | null = null;
-  if (opts.reissue) {
+  const [linked] = r.renderedBodyMarkdown != null ? await tx.select({ membershipId: membershipAgreements.membershipId, reason: membershipAgreements.reason }).from(membershipAgreements).where(eq(membershipAgreements.formRequestId, r.id)) : [];
+  if (linked) {
+    // A membership agreement is re-rendered from its membership, never copied.
+    const { issueMembershipAgreement, onFormRequestVoided } = await import("@/lib/agreements/issue");
+    await tx.update(formRequests).set({ status: "voided" }).where(eq(formRequests.id, r.id));
+    await onFormRequestVoided(tx, r.id);
+    if (opts.reissue) newId = (await issueMembershipAgreement(tx, { orgId: v.orgId, actorUserId: v.userId, actorRole: v.role }, { membershipId: linked.membershipId, reason: linked.reason, notify: true })).requestId;
+  } else if (opts.reissue) {
     const [ver] = await tx.select().from(formTemplateVersions).where(eq(formTemplateVersions.id, r.templateVersionId));
     const cur = await currentPublishedVersion(tx, ver.templateId);
     if (!cur) throw new UserError("No published version to reissue.");
@@ -270,7 +279,7 @@ export async function processRenewals(tx: Tx, orgId: string, opts: { now?: Date;
     await tx.update(formRequests).set({ status: "expired" }).where(eq(formRequests.id, r.id));
     await formEvent(tx, r.id, "expired", opts.actorUserId ?? null, { expiresAt: r.expiresAt?.toISOString() });
     expired++;
-    if (!active || !r.athleteId) continue;
+    if (!active || !r.athleteId || r.renderedBodyMarkdown != null) continue;
     const openExisting = await tx
       .select({ id: formRequests.id })
       .from(formRequests)

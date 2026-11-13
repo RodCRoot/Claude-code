@@ -6,7 +6,7 @@ import { UserError } from "@/lib/actions";
 import { AuthzError, can, canOnAthlete, type Viewer } from "@/lib/authz/policy";
 import { ESIGN_CONSENT_TEXT } from "./consent";
 import { applicableRoles, requiredRoles, SIGNER_ROLE_LABEL, validateSubmission, type SignerRole } from "./fields";
-import { dataHash } from "./hash";
+import { dataHash, sha256Hex } from "./hash";
 import { isAdultAt, isOpen, loadRequestContext, signingGuardians, type RequestContext } from "./context";
 import { completeRequest } from "./completion";
 import { formEvent } from "./requests";
@@ -190,6 +190,11 @@ async function resolveIdentity(
   );
 }
 
+/** What a membership agreement signature is made over, stored in the frozen submitted data. */
+export function agreementSeal(renderedBody: string, mergeValues: Record<string, string>) {
+  return { _agreement: { schema: "teamwork.membership-agreement.v1", renderedBodySha256: sha256Hex(renderedBody), mergeValues } };
+}
+
 export function normalizeTypedName(s: string) {
   return s.normalize("NFC").replace(/\s+/g, " ").trim();
 }
@@ -231,6 +236,8 @@ export async function signRequest(tx: Tx, v: Viewer, input: SignInput, evidence:
       if (!res.ok) throw new UserError("Please fix the highlighted fields.", res.errors);
       data = res.data;
     } else data = {};
+    // Membership agreements: the signature covers the exact rendered text and merge values, through the data hash.
+    if (ctx.req.renderedBodyMarkdown != null) data = { ...data, ...agreementSeal(ctx.req.renderedBodyMarkdown, ctx.req.mergeValues ?? {}) };
   }
 
   // Identity step-up is resolved before anything is written.

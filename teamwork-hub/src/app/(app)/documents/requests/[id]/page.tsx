@@ -85,7 +85,7 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
           <Card>
             <CardHeader title="Document" kicker="Exactly as published" />
             <CardBody>
-              <FormMarkdown source={ctx.version.bodyMarkdown} />
+              <FormMarkdown source={ctx.req.renderedBodyMarkdown ?? ctx.version.bodyMarkdown} />
             </CardBody>
           </Card>
 

@@ -268,7 +268,9 @@ describe("memberships and renewals", () => {
     const id = B.sofiaExternalMembershipId;
     await expect(db.transaction((tx) => cutoverMembership(tx, rod, { membershipId: id, firstBillDate: addDaysYmd(T, 10), zenPlannerStopped: false, today: T }))).rejects.toThrow(/stopped/);
     await expect(db.transaction((tx) => cutoverMembership(tx, rod, { membershipId: id, firstBillDate: addDaysYmd(T, -1), zenPlannerStopped: true, today: T }))).rejects.toThrow(/today or later/);
-    await db.transaction((tx) => cutoverMembership(tx, rod, { membershipId: id, firstBillDate: addDaysYmd(T, 200), zenPlannerStopped: true, today: T }));
+    // Since the sign-up flow: cutover also needs a signed agreement + saved method, or a written reason to skip them.
+    await expect(db.transaction((tx) => cutoverMembership(tx, rod, { membershipId: id, firstBillDate: addDaysYmd(T, 200), zenPlannerStopped: true, today: T }))).rejects.toThrow(/signed membership agreement and a saved payment method/);
+    await db.transaction((tx) => cutoverMembership(tx, rod, { membershipId: id, firstBillDate: addDaysYmd(T, 200), zenPlannerStopped: true, today: T, overrideReason: "Family pays each bill at the front desk" }));
     const [m] = await db.select().from(memberships).where(eq(memberships.id, id));
     expect(m.billingProvider).toBe("manual");
     expect(m.nextBillDate).toBe(addDaysYmd(T, 200));

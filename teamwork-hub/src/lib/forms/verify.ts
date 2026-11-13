@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { Tx } from "@/db";
 import { storedObjects } from "@/db/schema";
-import { contentHash, dataHash } from "./hash";
+import { contentHash, dataHash, sha256Hex } from "./hash";
 import type { RequestContext } from "./context";
 import { computeIntegrity } from "./completion";
 
@@ -32,6 +32,13 @@ export async function verifyRequest(tx: Tx, ctx: RequestContext, opts: { checkPd
       actual: s.templateContentHash,
     });
     checks.push({ label: `${s.signerRole} signature was made over the stored submitted data`, ok: s.dataHash === dh, expected: s.dataHash, actual: dh });
+  }
+
+  if (ctx.req.renderedBodyMarkdown != null) {
+    const sealed = (ctx.req.submittedData?._agreement ?? null) as { renderedBodySha256?: string } | null;
+    const actual = sha256Hex(ctx.req.renderedBodyMarkdown);
+    if (sealed?.renderedBodySha256) checks.push({ label: "Agreement text on file is the exact text that was signed", ok: sealed.renderedBodySha256 === actual, expected: sealed.renderedBodySha256, actual });
+    else checks.push({ label: "Agreement text", ok: true, note: "Not signed yet." });
   }
 
   if (ctx.req.integrityHash) {
