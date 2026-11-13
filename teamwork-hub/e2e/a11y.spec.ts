@@ -174,6 +174,8 @@ const ROLES: Role[] = [
       ["/check-ins", /^\/check-ins\/responses\/[0-9a-f-]{36}$/],
       ["/training/anywhere", /^\/training\/anywhere\/[0-9a-f-]{36}$/],
       ["/events", /^\/events\/[0-9a-f-]{36}$/],
+      // The demo seed leaves one sign-up open at its first step (scripts/seed/signup.ts).
+      ["/billing/signup", /^\/billing\/signup\/[0-9a-f-]{36}$/],
     ],
   },
   { name: "coach", email: USERS.marcus, routes: COACH, dynamic: [["/people", /^\/people\/[0-9a-f-]{36}$/], ["/training/athletes", /^\/training\/athletes\/[0-9a-f-]{36}$/]] },

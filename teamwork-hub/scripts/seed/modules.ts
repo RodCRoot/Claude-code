@@ -33,6 +33,7 @@ export const moduleSeeds: [string, (ctx: SeedCtx) => Promise<void>][] = [
   ["newswatch", (ctx) => import("./newswatch").then((m) => m.seedNewsWatch(ctx))], // OPT-IN (see HISTORY_SEEDS): after wins and community; adds an approved "In the news" win and alumni
   ["journey", (ctx) => import("./journey").then((m) => m.seedJourney(ctx))], // last: runs the real generator for its own synthetic members (after documents, community)
   ["signup", (ctx) => import("./signup").then((m) => m.seedSignup(ctx))], // sample membership agreement template only
+  ["signup-demo", (ctx) => import("./signup").then((m) => m.seedSignupDemoFlow(ctx))], // OPT-IN (see HISTORY_SEEDS): one open sign-up at the first step, for the demo and the a11y sweep
 ];
 
 /**
@@ -41,4 +42,4 @@ export const moduleSeeds: [string, (ctx: SeedCtx) => Promise<void>][] = [
  * when a test names them in `modules`, but NOT in the default test seed, so other modules'
  * fixtures and counts stay as they were.
  */
-export const HISTORY_SEEDS = ["scoreboard", "checkins", "newswatch"];
+export const HISTORY_SEEDS = ["scoreboard", "checkins", "newswatch", "signup-demo"];

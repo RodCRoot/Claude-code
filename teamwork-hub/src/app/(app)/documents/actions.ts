@@ -13,6 +13,8 @@ import { assertCan } from "@/lib/authz/policy";
 import { createDraftVersion, createTemplate, discardDraft, publishVersion, saveDraft, setApprovedText, updateTemplate, TEMPLATE_KINDS } from "@/lib/forms/templates";
 import { issueRequests, processRenewals, remindOverdue, sendReminder, voidRequest, type IssueTarget } from "@/lib/forms/requests";
 import { signRequest } from "@/lib/forms/signing";
+import { signupReturnPath } from "@/lib/signup/flow";
+import { todayLocal } from "@/lib/time";
 import { sendStepUpCode, updateStepUpSettings, verifyStepUpCode, type StepUpSettings } from "@/lib/forms/step-up";
 
 const refresh = () => revalidatePath("/documents", "layout");
@@ -199,6 +201,14 @@ export const signAction = safeAction(async (_prev: ActionState, fd: FormData) =>
     ),
   );
   refresh();
+  // Signed inside a guided sign-up: go straight back to the flow, which opens on its next step.
+  if (res.status === "completed") {
+    const back = await signupReturnPath(db, v, requestId, todayLocal());
+    if (back) {
+      revalidatePath("/billing", "layout");
+      redirect(back);
+    }
+  }
   // The signing card disappears once this signer is done, so confirm on the page itself.
   redirect(`/documents/requests/${values.requestId}?signed=${res.status === "completed" ? "complete" : "partial"}#top`);
 });
