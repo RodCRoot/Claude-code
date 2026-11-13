@@ -10,7 +10,8 @@ import { login, USERS } from "./helpers";
  */
 test.describe.configure({ mode: "serial" });
 
-const noSideScroll = async (page: Page) => expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), `${page.url()} scrolls sideways`).toBeLessThanOrEqual(1);
+// Compared with the layout width, not innerWidth: a too-wide page widens innerWidth with it on a phone.
+const noSideScroll = async (page: Page) => expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), `${page.url()} scrolls sideways`).toBeLessThanOrEqual(1);
 const letters = () => Array.from({ length: 6 }, () => String.fromCharCode(97 + Math.floor(Math.random() * 26))).join("");
 
 /** The wizard is a long page and the app scrolls smoothly: jump to the control first so the click lands on it at 390px too. */
