@@ -29,7 +29,7 @@ import { communityOrg } from "@/lib/community/settings";
 import { engagementSettingsOf } from "@/lib/engagement/settings";
 import { fmt, todayLocal } from "@/lib/time";
 import { winsAccess } from "@/lib/wins/access";
-import { oneLine } from "@/lib/wins/shared";
+import { cleanSourceUrl, oneLine } from "@/lib/wins/shared";
 import { checkWinText } from "@/lib/wins/wins";
 import { linkKey, titleKey, type ParsedItem } from "./feed";
 import { actorOf, mayApproveNews, newsOrg } from "./settings";
@@ -104,6 +104,52 @@ export async function ingestItems(tx: Tx, orgId: string, source: IngestSource, i
     }
   }
   return res;
+}
+
+/**
+ * A staff member adds a clip by hand: a headline they saw that the feeds missed. Same rules as a
+ * matched clip (the person must be watched right now; it starts as "suggested" and is shown to
+ * nobody until an approver approves it). The link is stored, never opened.
+ */
+export async function addManualClip(tx: Tx, v: Viewer, raw: { person: unknown; headline: unknown; sourceName: unknown; link: unknown; publishedOn?: unknown }, opts: { now?: Date } = {}): Promise<{ clipId: string }> {
+  assertCan(v, "wins.review");
+  const [kind, id] = String(raw.person ?? "").split(":");
+  if ((kind !== "athlete" && kind !== "alumni") || !uuidRe.test(id ?? "")) throw new UserError("Choose who the article is about.", { person: "Required" });
+  const headline = oneLine(raw.headline).slice(0, 300);
+  const sourceName = oneLine(raw.sourceName).slice(0, 120);
+  if (headline.length < 5) throw new UserError("Type the headline as the publication wrote it.", { headline: "Required" });
+  if (sourceName.length < 2) throw new UserError("Add the name of the publication.", { sourceName: "Required" });
+  const src = cleanSourceUrl(raw.link);
+  if (src.error || !src.url) throw new UserError(src.error ?? "Paste the link to the article.", { link: src.error ?? "Required" });
+  const now = opts.now ?? new Date();
+  const day = typeof raw.publishedOn === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.publishedOn) ? new Date(`${raw.publishedOn}T17:00:00Z`) : null;
+  if (day && (Number.isNaN(day.getTime()) || day.getTime() > now.getTime() + DAY)) throw new UserError("Use the date the article was published.", { publishedOn: "Not a past date" });
+  let isDemo = false;
+  if (kind === "athlete") {
+    const scope = await coachScope(tx, v);
+    if (scope !== "all" && !scope.includes(id)) throw new AuthzError();
+    const [w] = await tx.select({ optedIn: newsWatchAthletes.optedIn, isDemo: athletes.isDemo }).from(athletes).leftJoin(newsWatchAthletes, eq(newsWatchAthletes.athleteId, athletes.id)).where(and(eq(athletes.id, id), eq(athletes.orgId, v.orgId)));
+    if (!w) throw new AuthzError();
+    if (!w.optedIn) throw new UserError("News watch is not on for this athlete. Only the family can switch it on, on their Wins page.");
+    isDemo = w.isDemo;
+  } else {
+    const [a] = await tx.select().from(alumni).where(and(eq(alumni.id, id), eq(alumni.orgId, v.orgId)));
+    if (!a) throw new AuthzError();
+    if (!a.watch || !a.active) throw new UserError("This alumnus is not on the watch list.");
+    isDemo = a.isDemo;
+  }
+  const lKey = linkKey(src.url);
+  let [stored] = await tx.select().from(newsItems).where(and(eq(newsItems.orgId, v.orgId), eq(newsItems.linkKey, lKey)));
+  if (!stored) [stored] = await tx.insert(newsItems).values({ orgId: v.orgId, sourceId: null, linkKey: lKey, titleKey: titleKey(headline, sourceName), headline, sourceName, publishedAt: day, link: src.url, snippet: null, isDemo }).returning();
+  const sens = sensitiveCheck(stored.headline, null);
+  const made = await tx
+    .insert(winLeads)
+    .values({ orgId: v.orgId, kind: "news", note: stored.headline.slice(0, 300), sourceUrl: stored.link, athleteId: kind === "athlete" ? id : null, alumniId: kind === "alumni" ? id : null, status: "open", newsItemId: stored.id, newsStatus: "suggested", matchLevel: "likely", matchScore: null, matchReasons: [`Added by hand by ${v.displayName}. The matcher did not find it.`], sensitiveNote: sens.blocked ? `Mentions ${sens.blocked}` : sens.warning, createdBy: v.userId, isDemo })
+    .onConflictDoNothing()
+    .returning({ id: winLeads.id });
+  if (!made.length) throw new UserError("That article is already in the list for this person.");
+  await audit(tx, actorOf(v), "newswatch.clip.add_manual", "win_lead", made[0].id, { summary: "News clip added by hand (not shown until approved)", after: { athleteId: kind === "athlete" ? id : null, alumniId: kind === "alumni" ? id : null, source: sourceName } });
+  return { clipId: made[0].id };
 }
 
 // ---------------------------------------------------------------------------

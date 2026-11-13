@@ -304,7 +304,24 @@ Security review: see `docs/SECURITY-REVIEW.md` (10 findings fixed with regressio
 | XP for an approved win (`win_approved`, default 15, once per win) | verified locally | `wins.test.ts` | Default is a starting point. XP stays if the win is removed |
 | Marketing queue: only approved wins with consent; three caption drafts from fixed templates; mark as posted (channel, date); "Ask the family" in-app request; take-down list after a withdrawal | verified locally | `wins.test.ts` (revocation removes a win; nothing can be marked without consent; no job written), e2e `wins.spec.ts` | The app posts nothing and sends nothing. Caption templates are sample wording |
 | Leads to check: staff note or pasted link becomes a draft win the family confirms, then staff approve | verified locally | `wins.test.ts`, e2e `wins.spec.ts` (list only) | Converting a lead was not clicked through in the browser |
-| Searching news feeds or social media for athletes | **not implemented, on purpose** | none | Scraping is ruled out. A consented, staff-reviewed news search is described in `wins.md` as a possible later option |
+| Scraping social media or news site pages for athletes | **not implemented, on purpose** | none | Ruled out. News watch (below) reads feeds only, for opted-in names |
+
+## News watch (owner request, built; see `docs/modules/newswatch.md`)
+
+| Feature | Status | Test evidence | Gaps |
+|---|---|---|---|
+| Every news clip needs a person's approval before it appears anywhere (feed, alumni section, TV). Owner and admin approve; the owner can also allow operations and coaches. No automatic approval exists | verified locally | `newswatch.test.ts` (every demo role, both settings, database CHECK), e2e `newswatch.spec.ts` | None known |
+| Sources: publisher RSS/Atom feeds and news search feeds restricted to named publications; on/off, audience, minimum interval, last result; https public hosts only | verified locally (fixtures) | `newswatch.test.ts` (parsing, validation, permissions), e2e settings page | **Not run end to end against live feeds.** One manual live check of each default address is recorded in the module doc. A news search feed is a third-party service whose terms need review |
+| Sample default sources for the Herald-Times, the Bedford Times-Mail and the Greene County Daily World | implemented, configuration required | default list test; live check notes in the doc | Both paywalled papers answer 402 directly and are covered only through a news search feed; the Bedford search results looked stale in the live check |
+| Watch list: guardian opt-in for minors (sign-forms flag), adult self opt-in, default off, revocable, "Ask the family" in-app request, append-only ledger | verified locally | `newswatch.test.ts`, e2e `newswatch.spec.ts` | Opt-in wording is SAMPLE text. The request is shown on the Wins page only, not on Home |
+| Alumni records with a recorded basis for watching, one-step removal, "Mark as alumni" on a profile, minors never watched on staff's say-so | verified locally | `newswatch.test.ts` | "Mark as alumni" card covered by unit tests and axe only, not a browser flow |
+| Matching: exact full-name phrase, school/sport/town words, same-name and common-name penalties, "not our athlete" negatives, dedupe across sources and days | verified locally | `newswatch.test.ts` | A word-and-phrase matcher: it can miss stories and mis-match names |
+| Sensitive topics: health, weight or grades headlines cannot be approved; arrest, court, death, discipline or crash terms show a warning label | verified locally | `newswatch.test.ts` | Word lists only |
+| Approval queue with bulk approve and one-step take down; pending count on staff Today for approvers | verified locally | `newswatch.test.ts`, e2e `newswatch.spec.ts` (approve, Today count, take down) | Bulk approve covered by unit tests, not clicked in e2e |
+| Display: "In the news" wins in the feed with a filter, "Teamwork alumni in college" section, TV panel lines; headline, publication, date, link out; never article text or images | verified locally | `newswatch.test.ts` (payloads), e2e `newswatch.spec.ts`, axe and CSP route lists | TV lines covered by unit tests only |
+| Never public marketing: the app posts nothing; marketing queue still needs the family's separate consent | verified locally | `newswatch.test.ts` | None known |
+| Nightly job with Run now, daily request cap, per-source interval and backoff, failure isolation, idempotent | verified locally (fixtures) | `newswatch.test.ts` | **No worker is deployed**, so nothing runs on its own until the app is hosted. News watch is off by default |
+| Paid or licensed news API | **not implemented** | none | An adapter interface exists; nothing is integrated |
 
 ## Cross-module acceptance paths (brief §13)
 

@@ -7,7 +7,8 @@ lead at merge), `src/components/wins/**`, `src/app/(app)/wins/**`, `src/app/api/
 Purpose: the gym knows when its athletes compete, celebrates what they achieve outside the gym,
 and turns that into recognition (retention) and, only with a family's recorded consent, marketing
 content. Most athletes are minors, so the module is built so the wrong thing cannot be shown by
-accident. Nothing in this module sends a message, posts anywhere, or reads another website.
+accident. Nothing in this module sends a message or posts anywhere. The only thing that reads
+another site is News watch (`docs/modules/newswatch.md`), which reads news feeds for opted-in names.
 
 ## What's built
 
@@ -58,7 +59,8 @@ One entry per athlete per day: when both sources have that day, the family's own
 ## Wins
 
 A win (`wins`): athlete, date, sport, type (personal best, win or placing, selection or
-all-conference, college commitment, team championship, character and leadership, other), a
+all-conference, college commitment, team championship, character and leadership, other, and
+"in the news", which only an approved news clip can create), a
 headline (3 to 120 characters), optional detail (500), optional `https` source link, optional photo.
 
 | Status | Meaning |
@@ -192,31 +194,21 @@ attaches it to an athlete as `awaiting_family`; the family confirms or declines 
 confirmed drafts still need staff approval. A coach sees their own leads and leads about athletes
 they coach. The link is never opened by the app.
 
-### Not built, on purpose: scraping social media or news sites
+### News clips (built later, see `docs/modules/newswatch.md`)
 
-Reading social feeds or news sites for athletes' names would collect data about minors without
-their families knowing, and it breaks those sites' terms. It is not built and should not be.
+The same list now also holds **news clips**: headlines that News watch matched to an athlete whose
+family opted in, or to an alumnus on the watch list. They are rows of `win_leads` with kind
+`news`, listed and decided by `src/lib/newswatch/clips.ts` (the functions in `leads.ts` refuse
+them). A clip is shown to nobody until an approver approves it; for a current athlete the approved
+clip becomes a win of type "In the news", which then follows every rule on this page. It is the
+one kind of win whose source link other families see (headline, publication, date, link out).
 
-**A possible later option (not implemented):** a staff-reviewed search of local news RSS feeds,
-or a licensed search API, for the names of athletes whose guardians opted in. It would need:
+### Still not built, on purpose: scraping
 
-1. **Its own opt-in per athlete**, separate from all three levels above, given by a guardian with
-   the sign-forms flag (or the adult athlete), recorded like marketing consent (who, when,
-   wording), default off, revocable. The wording must say plainly that the gym will search public
-   news for the athlete's name.
-2. **A named, lawful source list** chosen by the owner: publishers' RSS feeds or a search API
-   whose terms allow this use. No social networks, no sign-in walls, no scraping of pages.
-3. **Minimum data out and in**: only opted-in names leave the Hub (a full name sent to a search
-   provider is a disclosure the consent text must cover), and only a title, link and date come
-   back. No article text or images are stored.
-4. **Suggestions only.** A match becomes a lead in this same list, marked as a suggestion. A
-   staff member checks it is the right person (common names will mismatch), then it follows the
-   existing path: family confirmation, staff approval, the three levels. Nothing is ever shown
-   automatically.
-5. **Housekeeping**: withdrawing the opt-in stops searches and deletes that athlete's unhandled
-   suggestions; old suggestions expire; every search and decision is audited; the search runs as
-   a scheduled job with a rate limit; a legal review of children's privacy rules for the gym's
-   state before turning it on.
+Reading social feeds, or scraping news sites' pages, would collect data about minors without
+their families knowing and breaks those sites' terms. It is not built and should not be. News
+watch reads only feeds (a publisher's RSS or Atom feed, or a news search feed), only for names
+whose family opted in, and never opens an article.
 
 ## Seed (`scripts/seed/wins.ts`)
 

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { formToObject, safeAction, type ActionState } from "@/lib/actions";
 import { requireViewer } from "@/lib/auth/viewer";
-import { approveClip, approveClips, rejectClip, removeClip, triageClip } from "@/lib/newswatch/clips";
+import { addManualClip, approveClip, approveClips, rejectClip, removeClip, triageClip } from "@/lib/newswatch/clips";
 import { addSource, deleteSource, saveNewsSettings, setSourceEnabled, updateSource } from "@/lib/newswatch/settings";
 import { createAlumnus, markAthleteAsAlumni, requestNewsOptIn, setAlumniActive, setAlumniWatch, setNewsOptIn, setWatchTerms, updateAlumnus } from "@/lib/newswatch/watch";
 
@@ -31,6 +31,13 @@ export const triageClipAction = safeAction(async (_p: ActionState, fd: FormData)
     ok: true,
     message: decision === "ours" ? "Marked as our athlete. It is still shown to nobody until it is approved." : decision === "not_ours" ? "Thanks. This article will not be suggested for this person again." : "Ignored.",
   };
+});
+
+export const addManualClipAction = safeAction(async (_p: ActionState, fd: FormData) => {
+  const v = await requireViewer();
+  await db.transaction((tx) => addManualClip(tx, v, { person: str(fd, "person"), headline: str(fd, "headline"), sourceName: str(fd, "sourceName"), link: str(fd, "link"), publishedOn: str(fd, "publishedOn") }));
+  refresh();
+  return { ok: true, message: "Added to News clips. It is shown to nobody until it is approved." };
 });
 
 export const approveClipAction = safeAction(async (_p: ActionState, fd: FormData) => {

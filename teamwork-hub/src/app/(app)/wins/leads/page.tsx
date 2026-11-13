@@ -11,10 +11,12 @@ import { accessibleAthleteIds, athleteScopeFilter } from "@/lib/authz/policy";
 import { fmt, todayLocal } from "@/lib/time";
 import { listClips } from "@/lib/newswatch/clips";
 import { canApproveNews } from "@/lib/newswatch/settings";
+import { athleteWatchList, listAlumni } from "@/lib/newswatch/watch";
 import { listLeads } from "@/lib/wins/leads";
 import { HEADLINE_MAX, LEAD_NOTE_MAX, WIN_TYPE_LABEL } from "@/lib/wins/shared";
 import { ModuleHero } from "../../training/_components/tb";
 import { addLeadAction, convertLeadAction, dismissLeadAction } from "../actions";
+import { addManualClipAction } from "../news-actions";
 
 export const metadata = { title: "Leads to check" };
 
@@ -25,6 +27,10 @@ export default async function WinLeadsPage() {
   const leads = await listLeads(db, v, { status: "open" });
   const clips = await listClips(db, v, { statuses: ["suggested", "confirmed"] });
   const approver = await canApproveNews(db, v);
+  const watchOptions = [
+    ...(await athleteWatchList(db, v)).filter((a) => a.optedIn).map((a) => ({ value: `athlete:${a.athleteId}`, label: a.name })),
+    ...(await listAlumni(db, v)).filter((a) => a.watch && a.active).map((a) => ({ value: `alumni:${a.id}`, label: `${a.firstName} ${a.lastName} (alumni)` })),
+  ];
   const scope = await accessibleAthleteIds(db, v, "profile.read");
   const roster = await db
     .select({ id: athletes.id, first: people.firstName, preferred: people.preferredName, last: people.lastName, sport: athletes.sport })
@@ -140,6 +146,40 @@ export default async function WinLeadsPage() {
           </Card>
         </div>
         <div>
+          {watchOptions.length ? (
+            <Card id="add-news-clip" className="mb-4">
+              <CardHeader title="Add a news clip by hand" kicker="Saw an article the feeds missed?" />
+              <CardBody>
+                <ActionForm action={addManualClipAction} resetOnSuccess className="space-y-3">
+                  <Field label="Who is it about?" htmlFor="mc-person" required hint="Only people on the news watch list.">
+                    <Select id="mc-person" name="person" required defaultValue="">
+                      <option value="" disabled>
+                        Choose a person
+                      </option>
+                      {watchOptions.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="Article headline" htmlFor="mc-headline" required hint="As the publication wrote it. Do not paste any of the article itself.">
+                    <Input id="mc-headline" name="headline" required minLength={5} maxLength={300} autoComplete="off" />
+                  </Field>
+                  <Field label="Publication" htmlFor="mc-source" required>
+                    <Input id="mc-source" name="sourceName" required maxLength={120} autoComplete="off" />
+                  </Field>
+                  <Field label="Link to the article" htmlFor="mc-link" required hint="The app stores the link and never opens it.">
+                    <Input id="mc-link" name="link" type="url" inputMode="url" required placeholder="https://" autoComplete="off" />
+                  </Field>
+                  <Field label="Published on" htmlFor="mc-date">
+                    <Input id="mc-date" name="publishedOn" type="date" defaultValue={today} max={today} />
+                  </Field>
+                  <SubmitButton>Add news clip</SubmitButton>
+                </ActionForm>
+              </CardBody>
+            </Card>
+          ) : null}
           <Card id="add-lead">
             <CardHeader title="Add a lead" kicker="Staff only" />
             <CardBody>
