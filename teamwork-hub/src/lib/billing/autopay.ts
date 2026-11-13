@@ -17,6 +17,7 @@ import { billingTask } from "./tasks";
 export const AUTOPAY_JOB = "billing.autopay_charge";
 export const FEE_JOB = "billing.record_fee";
 const SYSTEM = (orgId: string) => ({ orgId, actorUserId: null, actorRole: "system" });
+const RESUME_AFTER_MS = 10 * 60_000;
 const IN_FLIGHT = ["created", "requires_action", "processing", "pending"] as const;
 
 /**
@@ -56,8 +57,10 @@ export async function chargeInvoiceAutopay(db: DB, input: { orgId: string; invoi
     const prior = await tx.select().from(paymentAttempts).where(and(eq(paymentAttempts.invoiceId, inv.id), eq(paymentAttempts.origin, "autopay")));
     const open = prior.find((a) => (IN_FLIGHT as readonly string[]).includes(a.status));
     // A crash between writing the attempt and calling Stripe leaves `created` with no provider reference:
-    // resume it with the same idempotency key instead of starting another.
-    const resume = open && open.status === "created" && !open.providerRef && open.idempotencyKey === `autopay:${inv.id}:${input.attemptNumber}` ? open : null;
+    // after 10 minutes resume it with the same idempotency key (Stripe then returns the original result
+    // rather than charging twice). Younger ones are another worker mid-call.
+    const resume =
+      open && open.status === "created" && !open.providerRef && open.idempotencyKey === `autopay:${inv.id}:${input.attemptNumber}` && open.createdAt.getTime() < Date.now() - RESUME_AFTER_MS ? open : null;
     if (open && !resume) return { charged: false, reason: "in_flight" };
     if (!resume && prior.length + 1 !== input.attemptNumber) return { charged: false, reason: "stale", detail: `attempt ${input.attemptNumber} requested, ${prior.length} already made` };
     const method = await resolveAutopayMethod(tx, m);
