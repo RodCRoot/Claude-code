@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Badge, ButtonLink, Card, CardBody, CardHeader, Field, Input, Tabs } from "@/components/ui";
 import { can, isStaff, type Viewer } from "@/lib/authz/policy";
+import { pendingClipCount } from "@/lib/newswatch/clips";
 import { fmt, fmtDate, fmtTime } from "@/lib/time";
 import { competingThisWeekStaff, type StaffEntry } from "@/lib/wins/calendar";
 import { CONSENT_LABEL, WIN_STATUS_LABEL } from "@/lib/wins/shared";
@@ -14,12 +15,15 @@ import { STATUS_VARIANT } from "./family";
 export async function WinsStaffTabs({ v, current }: { v: Viewer; current: string }) {
   if (!isStaff(v)) return null;
   const counts = await winCounts(db, v);
+  const news = await pendingClipCount(db, v);
   const tabs = [
     { key: "feed", href: "/wins", label: "Wins" },
     { key: "review", href: "/wins/review", label: `Review${counts.pending ? ` (${counts.pending})` : ""}` },
     { key: "calendar", href: "/wins/calendar", label: "Competition calendar" },
     { key: "teams", href: "/wins/teams", label: "Team schedules" },
     { key: "leads", href: "/wins/leads", label: "Leads to check" },
+    { key: "news", href: "/wins/news", label: `News clips${news.canApprove && news.pending ? ` (${news.pending})` : ""}` },
+    { key: "watch", href: "/wins/watch", label: "News watch list" },
     ...(can(v, "wins.marketing") ? [{ key: "marketing", href: "/wins/marketing", label: "Marketing queue" }] : []),
   ];
   return <Tabs tabs={tabs} current={current} />;

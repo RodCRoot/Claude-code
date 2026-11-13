@@ -1,12 +1,16 @@
+import Link from "next/link";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { ActionForm, SubmitButton } from "@/components/forms";
+import { ClipCard } from "@/components/newswatch/clip";
 import { WinsStaffTabs } from "@/components/wins/staff";
 import { Callout, Card, CardBody, CardHeader, EmptyState, Field, Input, Select, Textarea } from "@/components/ui";
 import { athletes, people, SUBMITTABLE_WIN_TYPES } from "@/db/schema";
 import { getOrg, requireCap } from "@/lib/auth/viewer";
 import { accessibleAthleteIds, athleteScopeFilter } from "@/lib/authz/policy";
 import { fmt, todayLocal } from "@/lib/time";
+import { listClips } from "@/lib/newswatch/clips";
+import { canApproveNews } from "@/lib/newswatch/settings";
 import { listLeads } from "@/lib/wins/leads";
 import { HEADLINE_MAX, LEAD_NOTE_MAX, WIN_TYPE_LABEL } from "@/lib/wins/shared";
 import { ModuleHero } from "../../training/_components/tb";
@@ -19,6 +23,8 @@ export default async function WinLeadsPage() {
   const tz = (await getOrg(v.orgId))?.timezone;
   const today = todayLocal(tz);
   const leads = await listLeads(db, v, { status: "open" });
+  const clips = await listClips(db, v, { statuses: ["suggested", "confirmed"] });
+  const approver = await canApproveNews(db, v);
   const scope = await accessibleAthleteIds(db, v, "profile.read");
   const roster = await db
     .select({ id: athletes.id, first: people.firstName, preferred: people.preferredName, last: people.lastName, sport: athletes.sport })
@@ -36,10 +42,34 @@ export default async function WinLeadsPage() {
       <ModuleHero kicker="Wins" title="Leads to check" description="Heard something at the front desk, or saw a write-up? Note it here. A lead becomes a draft win only the family sees until they confirm it." />
       <WinsStaffTabs v={v} current="leads" />
       <Callout tone="info" className="mb-4" title="What this does not do">
-        This app does not search social media or news sites and never opens the links you paste. Every lead is typed in by a staff member, and nothing is shown to anyone until the family says it is right and staff approve it.
+        This app does not search social media and never opens the links you paste. News clips below come from News watch, which reads headlines from the news feeds the owner listed, only for athletes whose family switched it on and for alumni on the watch list. Nothing is shown to anyone until a person approves it.
       </Callout>
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
+          <Card id="news-clips">
+            <CardHeader title="News clips" kicker={`${clips.length} to check`} />
+            <CardBody>
+              <p className="mb-3 text-sm text-ink-2">
+                Is it our athlete? Marking a clip only sorts it. {approver ? (
+                  <>
+                    Approve clips on the{" "}
+                    <Link href="/wins/news" className="font-semibold text-brand underline">
+                      News clips
+                    </Link>{" "}
+                    tab.
+                  </>
+                ) : (
+                  "The owner, an admin, or staff the owner allowed approve it before anyone sees it."
+                )}
+              </p>
+              {clips.length === 0 ? <p className="text-sm text-ink-3">No news clips to check right now.</p> : null}
+              <ul className="divide-y divide-edge">
+                {clips.map((c) => (
+                  <ClipCard key={c.id} c={c} tz={tz} mode="triage" />
+                ))}
+              </ul>
+            </CardBody>
+          </Card>
           <Card id="leads-open">
             <CardHeader title="Open leads" kicker={`${leads.length} to check`} />
             <CardBody>

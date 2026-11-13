@@ -211,6 +211,13 @@
       "when": 1794522309397,
       "tag": "0029_journey",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1794540888988,
+      "tag": "0030_newswatch",
+      "breakpoints": true
     }
   ]
 }

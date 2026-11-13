@@ -29,12 +29,14 @@ export const moduleSeeds: [string, (ctx: SeedCtx) => Promise<void>][] = [
   ["showcase", (ctx) => import("./showcase").then((m) => m.seedShowcase(ctx))], // after engagement: recaps read badges and goals
   ["community", (ctx) => import("./community").then((m) => m.seedCommunity(ctx))], // after engagement (XP ledger, badges) and showcase (adds PRs it must not see)
   ["wins", (ctx) => import("./wins").then((m) => m.seedWins(ctx))], // after community (display names) and anywhere (My Season)
+  ["newswatch", (ctx) => import("./newswatch").then((m) => m.seedNewsWatch(ctx))], // OPT-IN (see HISTORY_SEEDS): after wins and community; adds an approved "In the news" win and alumni
   ["journey", (ctx) => import("./journey").then((m) => m.seedJourney(ctx))], // last: runs the real generator for its own synthetic members (after documents, community)
 ];
 
 /**
- * Seeds that add a large synthetic history. They run for the demo database (`pnpm db:fresh`) and
+ * Seeds that add a large synthetic history, or (newswatch) rows that would change other modules'
+ * feeds and counts. They run for the demo database (`pnpm db:fresh`) and
  * when a test names them in `modules`, but NOT in the default test seed, so other modules'
  * fixtures and counts stay as they were.
  */
-export const HISTORY_SEEDS = ["scoreboard"];
+export const HISTORY_SEEDS = ["scoreboard", "newswatch"];
