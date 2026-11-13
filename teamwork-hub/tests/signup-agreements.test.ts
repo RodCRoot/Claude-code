@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, like, sql } from "drizzle-orm";
 import { paymentMethods, formRequests, formTemplates, formTemplateVersions, invoices, jobs, membershipAgreements, memberships, organizations, paymentAttempts, signatures, signupFlows, tasks } from "@/db/schema";
-import { agreementBlock, agreementSettingsOf, currentAgreement, DEFAULT_AGREEMENT_SETTINGS, issueMembershipAgreement, requireAgreement, saveAgreementSettings, syncMembershipAgreement, unsignedAgreements } from "@/lib/agreements/issue";
+import { agreementBlock, agreementSettingsOf, currentAgreement, DEFAULT_AGREEMENT_SETTINGS, requireAgreement, saveAgreementSettings, syncMembershipAgreement, unsignedAgreements } from "@/lib/agreements/issue";
 import { buildAgreementTerms, DEFAULT_RESIGN_ON, mergeValues, renderAgreement, resignReasons, unknownMergeFields, type AgreementTerms } from "@/lib/agreements/terms";
 import { AUTOPAY_JOB } from "@/lib/billing/autopay";
 import { createProduct, createProductVersion } from "@/lib/billing/catalog";
@@ -503,7 +503,7 @@ describe("Zen Planner cutover through the same flow", () => {
     const { flow } = await db().transaction((tx) => startSignupFlow(tx, erin, { athleteId: ctx.athletes.aria, payerAccountId: ctx.payers.aria }));
     expect(flow).toMatchObject({ kind: "cutover", membershipId: mid });
     await expect(db().transaction((tx) => choosePlan(tx, erin, { flowId: flow.id, productVersionId: vM2M, startDate: T, today: T }))).rejects.toThrow(/plan stays the same/);
-    let view = await db().transaction((tx) => signupView(tx, erin, flow.id, T));
+    const view = await db().transaction((tx) => signupView(tx, erin, flow.id, T));
     expect(view.current).toBe("documents");
     expect(view.firstBill).toBeNull();
     const agr = view.documents.find((d) => d.isAgreement)!;

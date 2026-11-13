@@ -368,6 +368,51 @@ export const REPORTS: ReportDef[] = [
     }),
   },
   {
+    key: "processing-fees",
+    title: "Processing fees by payment method",
+    category: "Money",
+    definition:
+      "Provider-verified payments settled in the range, by month and method (card, bank account). Fees are the amounts the processor itself reported for each payment; a payment whose fee has not been reported yet is counted under \"Fee not reported yet\" and adds nothing to the fee total. The estimate column appears only when estimate rates were entered in Settings, Payments and agreements, and is an estimate to confirm against Stripe's pricing page.",
+    cap: "reports.financial",
+    columns: [
+      { key: "month", label: "Month" },
+      { key: "method", label: "Method" },
+      { key: "payments", label: "Payments", kind: "int" },
+      { key: "volume_minor", label: "Collected", kind: "money" },
+      { key: "fee_minor", label: "Fees reported by processor", kind: "money" },
+      { key: "fee_rate", label: "Fees ÷ collected (reported only)", kind: "pct" },
+      { key: "payments_without_fee", label: "Fee not reported yet", kind: "int" },
+      { key: "estimate_minor", label: "Estimated fees (your rates)", kind: "money" },
+    ],
+    run: async (tx, orgId, r) => {
+      const { processingFeesByMonth } = await import("@/lib/billing/autopay");
+      const { autopaySettings, estimateFeeMinor } = await import("@/lib/billing/autopay-settings");
+      const settings = await autopaySettings(tx, orgId);
+      const fees = await processingFeesByMonth(tx, orgId, { from: r.from, to: r.to });
+      const label: Record<string, string> = { card: "Card", us_bank_account: "Bank account (ACH)", unknown: "Not recorded" };
+      const rows = fees.map((f) => {
+        const est = f.methodType === "card" ? settings.feeEstimates.card : f.methodType === "us_bank_account" ? settings.feeEstimates.us_bank_account : null;
+        // Per-payment estimate at the average payment size (fixed fees and caps apply per payment).
+        const perPayment = est && f.payments > 0 ? estimateFeeMinor(est, Math.round(f.volumeMinor / f.payments)) : null;
+        const reportedVolume = f.paymentsWithFee > 0 && f.payments > 0 ? Math.round((f.volumeMinor * f.paymentsWithFee) / f.payments) : 0;
+        return {
+          month: f.month,
+          method: label[f.methodType] ?? f.methodType,
+          payments: f.payments,
+          volume_minor: f.volumeMinor,
+          fee_minor: f.paymentsWithFee > 0 ? f.feeMinor : null,
+          fee_rate: f.paymentsWithoutFee === 0 && reportedVolume > 0 ? f.feeMinor / reportedVolume : null,
+          payments_without_fee: f.paymentsWithoutFee,
+          estimate_minor: perPayment != null ? perPayment * f.payments : null,
+        };
+      });
+      const notes = ["Fees come from Stripe's balance transaction for each payment. Nothing here uses a built-in fee rate."];
+      if (!settings.feeEstimates.card && !settings.feeEstimates.us_bank_account) notes.push("No estimate rates are entered, so the estimate column is empty.");
+      else notes.push("Estimates use the rates entered in Settings and the average payment size for the month; confirm the rates against Stripe's pricing page.");
+      return { rows, notes };
+    },
+  },
+  {
     key: "credits",
     title: "Package credits",
     category: "Memberships",

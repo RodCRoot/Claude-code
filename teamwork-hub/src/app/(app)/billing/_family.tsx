@@ -358,10 +358,10 @@ export async function FamilyMemberships({ v }: { v: Viewer }) {
   const packs = accounts.flatMap((a) => a.athletes).filter((ath, i, all) => all.findIndex((x) => x.athleteId === ath.athleteId) === i);
   return (
     <>
-      <PageHeader kicker="My Profile" title="Memberships" />
+      <PageHeader kicker="My Profile" title="Memberships" actions={<ButtonLink href="/billing/signup" variant="secondary" className="min-h-11">Sign up for a membership</ButtonLink>} />
       <BillingTabs current="memberships" staff={false} />
       {cards.length === 0 ? (
-        <EmptyState title="No memberships">No one on your billing accounts has a membership yet. Ask the front desk about plans.</EmptyState>
+        <EmptyState title="No memberships" action={<ButtonLink href="/billing/signup" className="min-h-11">Choose a plan</ButtonLink>}>No one on your billing accounts has a membership yet. If you pay for the account you can choose a plan here, or ask the front desk.</EmptyState>
       ) : (
         <ul className="grid gap-4 md:grid-cols-2 [&>*]:min-w-0">
           {cards.map(({ r, version, hold, credits, price }) => {

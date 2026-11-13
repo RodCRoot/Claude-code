@@ -62,7 +62,7 @@ const signAlex = async (requestId: string, now = T0) => {
 describe("signer identity step-up: settings", () => {
   it("defaults to ON for waivers and agreements, MFA accepted; only owners/admins change it", async () => {
     expect(stepUpSettingsOf({})).toEqual(DEFAULT_STEP_UP);
-    expect(DEFAULT_STEP_UP.requireForKinds).toEqual(["waiver", "agreement"]);
+    expect(DEFAULT_STEP_UP.requireForKinds).toEqual(["waiver", "agreement", "membership_agreement"]);
     const db = testDb();
     const erin = await viewerFor(ctx, "erin");
     await expect(db.transaction((tx) => updateStepUpSettings(tx, erin, { requireForKinds: [], allowSessionMfa: true }))).rejects.toThrow(AuthzError);

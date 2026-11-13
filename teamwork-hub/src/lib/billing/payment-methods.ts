@@ -165,7 +165,7 @@ export async function startMethodSetup(
       customerId = await adapter.ensureCustomer({ orgId: v.orgId, payerAccountId: payer.id, name: payer.name, email: payer.billingEmail, idempotencyKey: `customer:${v.orgId}:${payer.id}` });
       await db.execute(sql`update payer_accounts set provider_refs = provider_refs || ${JSON.stringify({ stripeCustomerId: customerId })}::jsonb where id = ${payer.id}`);
     }
-    const back = input.signupFlowId ? `${input.appUrl}/signup/${input.signupFlowId}` : `${input.appUrl}/billing/payment-methods`;
+    const back = input.signupFlowId ? `${input.appUrl}/billing/signup/${input.signupFlowId}` : `${input.appUrl}/billing/payment-methods`;
     const res = await adapter.createSetupSession({
       setupId: setup.id,
       providerCustomerId: customerId,

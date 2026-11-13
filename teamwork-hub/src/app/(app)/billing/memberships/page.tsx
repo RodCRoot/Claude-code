@@ -42,7 +42,7 @@ export default async function MembershipsPage({ searchParams }: { searchParams: 
   const rows = await listMemberships(db, v, { status });
   return (
     <>
-      <PageHeader kicker="Billing" title="Memberships" />
+      <PageHeader kicker="Billing" title="Memberships" actions={<Link href="/billing/signup" className="rounded-md border border-edge bg-surface px-3 py-2 text-sm font-semibold hover:bg-surface-2">Sign up a member</Link>} />
       <BillingTabs current="memberships" staff={staff} />
       <section aria-label="Membership ledger" className="min-w-0 overflow-hidden rounded-md border border-edge bg-surface shadow-[0_1px_3px_rgb(16_24_40/0.06)]">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-edge bg-th px-3 py-2.5 sm:px-4">
@@ -105,6 +105,8 @@ export default async function MembershipsPage({ searchParams }: { searchParams: 
 }
 
 async function NewMembership({ viewer, search }: { viewer: Viewer; search: Search }) {
+  const { agreementSettings } = await import("@/lib/agreements/issue");
+  const requireAgreementDefault = (await agreementSettings(db, viewer.orgId)).requireForNewMemberships;
   const today = todayLocal();
   const [payers, plans] = await Promise.all([payerOptions(db, viewer.orgId), membershipPlanOptions(db, viewer.orgId, today)]);
   const pairs = payers.flatMap((p) => p.athletes.map((a) => ({ value: `${a.athleteId}:${p.id}`, label: `${a.first} ${a.last} — paid by ${p.name}` })));
@@ -184,6 +186,10 @@ async function NewMembership({ viewer, search }: { viewer: Viewer; search: Searc
                       <Field label="Override reason" htmlFor="stubOverrideReason" hint="Required with an override (audited)."><Input id="stubOverrideReason" name="stubOverrideReason" /></Field>
                     </>
                   ) : null}
+                  <label className="flex items-start gap-2 text-sm sm:col-span-3">
+                    <input type="checkbox" name="requireAgreement" defaultChecked={requireAgreementDefault} className="mt-1 size-4" />
+                    <span>Require a membership agreement (created as &quot;awaiting agreement&quot;; the agreement is filled in from this plan and sent for signature). For a family finishing on their own phone, use <Link href="/billing/signup" className="underline">Sign up a member</Link> instead.</span>
+                  </label>
                   <div className="sm:col-span-3">
                     <SubmitButton pendingText="Creating…" confirm="Create this membership and its first invoice?">Confirm and create membership</SubmitButton>
                   </div>
