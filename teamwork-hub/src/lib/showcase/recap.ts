@@ -23,12 +23,22 @@ import { loadActivity, streakFromActivity } from "@/lib/engagement/sync";
 import { isNum } from "@/lib/science/formulas";
 import { athleteMetricSeries } from "@/lib/science/kpis";
 import { DEFAULT_TZ, addDaysYmd, localDayBounds, localYmd, todayLocal } from "@/lib/time";
+import { completionV1 } from "@/lib/checkins/baseline";
 import { cleanPlainText, isShareableMetric } from "./allowlist";
 import { systemViewer } from "./catalog";
 import { showcaseSettingsOf, type ShowcaseSettings } from "./settings";
 
-/** Bump the suffix when a number on the recap changes meaning. Old snapshots keep their key. */
-export const RECAP_CALC_KEY = "tw_recap_v1";
+/**
+ * Bump the suffix when a number on the recap changes meaning or a section is added. Old snapshots keep
+ * their key and their content: a stored snapshot is shown exactly as it was frozen.
+ *
+ * - `tw_recap_v1`: sessions, training, goals, next month (and, later, wins as an optional section).
+ * - `tw_recap_v2`: v1 plus `sessionCheckins`, the one line of session check-in completion and average
+ *   reported effort. No existing number changed. v1 snapshots do not have the section and do not show
+ *   the line.
+ */
+export const RECAP_CALC_KEY = "tw_recap_v2";
+export const RECAP_CALC_KEYS = ["tw_recap_v1", "tw_recap_v2"] as const;
 export const MAX_COACH_NOTE = 1200;
 /** The Athlete Home notice for a finished recap shows for this many days. */
 export const RECAP_NOTICE_DAYS = 21;
@@ -95,6 +105,22 @@ export type RecapSnapshot = {
     }[];
   };
   /**
+   * Session check-ins for the month's attended sessions (`tw_recap_v2` and later; absent on v1
+   * snapshots). Counts only: how many ready checks and after checks were answered
+   * (checkin_completion_v1: answered ÷ attended, null when nothing was attended). Never an answer to a
+   * health question. Visible with profile access; `effort` (the mean of the 0 to 10 session RPE the
+   * athlete reported, with how many answers it is the mean of) is coaching data and is stripped for
+   * viewers without training access. Null effort mean = no RPE was reported, never 0.
+   */
+  sessionCheckins?: {
+    attended: number;
+    readyChecks: number;
+    afterChecks: number;
+    readyRate: number | null;
+    afterRate: number | null;
+    effort: { mean: number | null; answers: number } | null;
+  };
+  /**
    * Approved wins outside the gym that happened in the month (Wins module). Visible with profile
    * access. Optional: recaps finalized before this section existed do not have it.
    */
@@ -131,6 +157,20 @@ export async function computeRecap(tx: Tx, orgId: string, athleteId: string, mon
                count(*) filter (where b.status = 'booked' and s.status <> 'cancelled')::int as booked
         from bookings b join schedule_sessions s on s.id = b.session_id
         where b.org_id = ${orgId} and b.athlete_id = ${athleteId} and s.starts_at >= ${from} and s.starts_at < ${to}`,
+  );
+  // Same population as the check-in reports: attended bookings on non-cancelled sessions that started in the month.
+  const [ci] = await q<{ attended: number; ready: number; after: number; rpe_mean: string | null; rpe_n: number }>(
+    tx,
+    sql`select count(*)::int as attended,
+               count(pre.id)::int as ready,
+               count(post.id)::int as after,
+               avg(post.rpe) as rpe_mean,
+               count(post.rpe)::int as rpe_n
+        from bookings b join schedule_sessions s on s.id = b.session_id
+          left join session_checkins pre on pre.booking_id = b.id and pre.phase = 'pre' and pre.org_id = b.org_id
+          left join session_checkins post on post.booking_id = b.id and post.phase = 'post' and post.org_id = b.org_id
+        where b.org_id = ${orgId} and b.athlete_id = ${athleteId} and b.status = 'attended' and s.status <> 'cancelled'
+          and s.starts_at >= ${from} and s.starts_at < ${to}`,
   );
   const [plan] = await q<{ cap: number | null }>(
     tx,
@@ -221,6 +261,14 @@ export async function computeRecap(tx: Tx, orgId: string, athleteId: string, mon
       badges: badgeRows.flatMap((b) => (badgeDef(b.key) ? [{ key: b.key, name: badgeDef(b.key)!.name, earnedOn: localYmd(b.earnedAt, tz) }] : [])).sort((a, b) => a.earnedOn.localeCompare(b.earnedOn)),
       tests,
     },
+    sessionCheckins: {
+      attended: ci?.attended ?? 0,
+      readyChecks: ci?.ready ?? 0,
+      afterChecks: ci?.after ?? 0,
+      readyRate: completionV1(ci?.ready ?? 0, ci?.attended ?? 0),
+      afterRate: completionV1(ci?.after ?? 0, ci?.attended ?? 0),
+      effort: { mean: ci?.rpe_mean == null ? null : Math.round(Number(ci.rpe_mean) * 10) / 10, answers: ci?.rpe_n ?? 0 },
+    },
     wins: await approvedWinsBetween(tx, orgId, athleteId, start, end),
     goals,
     next: {
@@ -272,7 +320,19 @@ export async function recapAccess(tx: Tx, v: Viewer, athleteId: string): Promise
 /** Remove what this viewer may not see. Sections become null, never zeros. */
 export function filterRecap(s: RecapSnapshot, canSeeTraining: boolean): Omit<RecapSnapshot, "training"> & { training: RecapSnapshot["training"] | null } {
   if (canSeeTraining) return s;
-  return { ...s, training: null, goals: s.goals.map((g) => ({ ...g, measured: null })) };
+  return { ...s, training: null, goals: s.goals.map((g) => ({ ...g, measured: null })), ...(s.sessionCheckins ? { sessionCheckins: { ...s.sessionCheckins, effort: null } } : {}) };
+}
+
+/**
+ * The one line about session check-ins, or null when there is nothing to say: a v1 snapshot (no
+ * section), or a month with no attended session. Plain words, no em dashes (families read it).
+ */
+export function sessionCheckinLine(c: RecapSnapshot["sessionCheckins"] | undefined): string | null {
+  if (!c || c.attended <= 0) return null;
+  const of = `${c.attended} attended session${c.attended === 1 ? "" : "s"}`;
+  const done = `Session check-ins: ready check answered for ${c.readyChecks} and after check for ${c.afterChecks} of ${of}.`;
+  if (!c.effort) return done;
+  return c.effort.mean == null ? `${done} No effort rating was reported.` : `${done} Average effort reported: ${c.effort.mean.toFixed(1)} out of 10 (${c.effort.answers} answer${c.effort.answers === 1 ? "" : "s"}).`;
 }
 
 // ---------------------------------------------------------------------------

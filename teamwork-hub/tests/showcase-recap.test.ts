@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
-import { athletes, auditEvents, bookings, guardianships, jobs, maxes, messageDeliveries, monthlyRecaps, payerAuthorizations, people, questionnaireResponses, scheduleSessions, serviceTypes, exercises } from "@/db/schema";
+import { athletes, auditEvents, bookings, guardianships, jobs, maxes, messageDeliveries, monthlyRecaps, payerAuthorizations, people, questionnaireResponses, scheduleSessions, serviceTypes, sessionCheckins, exercises } from "@/db/schema";
 import { UserError } from "@/lib/actions";
 import { AuthzError, type Viewer } from "@/lib/authz/policy";
 import { jobHandlers } from "@/lib/jobs-registry";
 import { FORBIDDEN_KEYS } from "@/lib/showcase/allowlist";
 import { RECAP_MONTHLY_JOB, enqueueRecapJobs } from "@/lib/showcase/jobs";
-import { RECAP_CALC_KEY, coachRecapQueue, computeRecap, finalizeOn, finalizeRecap, finalizeRecapByStaff, listRecapMonths, monthBounds, monthLabel, plannedForMonth, recapAccess, recapNotice, runMonthlyRecaps, saveCoachNote, shiftMonth, viewRecap, type RecapSnapshot } from "@/lib/showcase/recap";
+import { RECAP_CALC_KEY, coachRecapQueue, computeRecap, filterRecap, finalizeOn, finalizeRecap, finalizeRecapByStaff, listRecapMonths, monthBounds, monthLabel, plannedForMonth, recapAccess, recapNotice, runMonthlyRecaps, saveCoachNote, sessionCheckinLine, shiftMonth, viewRecap, type RecapSnapshot } from "@/lib/showcase/recap";
 import { saveShowcaseSettings } from "@/lib/showcase/settings";
 import { localToUtc } from "@/lib/time";
 import { closeTestDb, seedOrg, testDb, viewerFor } from "./helpers/db";
@@ -109,6 +109,87 @@ describe("assembling a recap", () => {
   });
 });
 
+describe("tw_recap_v2: the session check-ins line", () => {
+  const checkin = async (athleteId: string, bookingId: string, phase: "pre" | "post", rpe: number | null = null) => {
+    const [b] = await db.select({ sessionId: bookings.sessionId }).from(bookings).where(eq(bookings.id, bookingId));
+    // A ready check carries health answers; none of them may reach the recap.
+    await db.insert(sessionCheckins).values({ orgId: ctx.orgId, bookingId, sessionId: b.sessionId, athleteId, phase, questionSetVersion: "1.0", rpe, ...(phase === "pre" ? { readiness: 2, soreness: 9, sleepQuality: 1 } : {}) });
+  };
+
+  it("counts answered check-ins against attended sessions and averages the reported effort, without any health answer", async () => {
+    const a = await newAthlete();
+    await db.insert(guardianships).values({ orgId: ctx.orgId, guardianPersonId: ctx.people.alex_parker, athleteId: a, canViewHealth: true });
+    const feb = [];
+    for (const d of ["2026-02-03", "2026-02-10", "2026-02-17", "2026-02-24"]) feb.push(await addSession(a, d));
+    const jan = await addSession(a, "2026-01-27");
+    const missed = await addSession(a, "2026-02-19", "no_show");
+    await checkin(a, feb[0], "pre");
+    await checkin(a, feb[1], "pre");
+    await checkin(a, feb[2], "pre");
+    await checkin(a, feb[0], "post", 6);
+    await checkin(a, feb[1], "post", 7);
+    await checkin(a, feb[2], "post", null); // answered the after check but skipped the effort question
+    await checkin(a, jan, "pre"); // another month
+    await checkin(a, jan, "post", 10);
+    await checkin(a, missed, "pre"); // answered, then did not attend: not an attended session
+    const snap = (await computeRecap(db, ctx.orgId, a, "2026-02", { today: TODAY }))!;
+    expect(snap.calcKey).toBe("tw_recap_v2");
+    expect(snap.sessionCheckins).toEqual({ attended: 4, readyChecks: 3, afterChecks: 3, readyRate: 0.75, afterRate: 0.75, effort: { mean: 6.5, answers: 2 } });
+    expect(sessionCheckinLine(snap.sessionCheckins)).toBe("Session check-ins: ready check answered for 3 and after check for 3 of 4 attended sessions. Average effort reported: 6.5 out of 10 (2 answers).");
+    const json = JSON.stringify(snap).toLowerCase();
+    for (const word of ["readiness", "sleep", "soreness", "pain", "wellness"]) expect(json, word).not.toContain(word);
+    // Effort is coaching data: a viewer without training access keeps the counts and loses the average.
+    const cut = filterRecap(snap, false);
+    expect(cut.sessionCheckins).toEqual({ attended: 4, readyChecks: 3, afterChecks: 3, readyRate: 0.75, afterRate: 0.75, effort: null });
+    expect(sessionCheckinLine(cut.sessionCheckins)).toBe("Session check-ins: ready check answered for 3 and after check for 3 of 4 attended sessions.");
+    expect(sessionCheckinLine(snap.sessionCheckins)).not.toMatch(/\u2014/); // no em dash
+    // Another organization reads none of it.
+    expect(await computeRecap(db, other.orgId, a, "2026-02", { today: TODAY })).toBeNull();
+    // Finalizing stores the section under the new key.
+    const done = await db.transaction((tx) => finalizeRecap(tx, ctx.orgId, a, "2026-02", "job", { today: "2026-03-10" }));
+    expect(done.calcKey).toBe("tw_recap_v2");
+    expect((done.snapshot as RecapSnapshot).sessionCheckins).toMatchObject({ attended: 4, readyChecks: 3 });
+    const view = (await db.transaction((tx) => viewRecap(tx, V.alex, a, "2026-02", { today: "2026-03-10" })))!;
+    expect(view.calcKey).toBe("tw_recap_v2");
+    expect(sessionCheckinLine(view.recap.sessionCheckins)).toMatch(/3 and after check for 3 of 4/);
+  });
+
+  it("no attended session: rates are null, not 0, and there is no line; no effort answers: the mean is null and the line says so", async () => {
+    const a = await newAthlete();
+    const none = (await computeRecap(db, ctx.orgId, a, "2026-02", { today: TODAY }))!;
+    expect(none.sessionCheckins).toEqual({ attended: 0, readyChecks: 0, afterChecks: 0, readyRate: null, afterRate: null, effort: { mean: null, answers: 0 } });
+    expect(sessionCheckinLine(none.sessionCheckins)).toBeNull();
+    await addSession(a, "2026-02-05");
+    const one = (await computeRecap(db, ctx.orgId, a, "2026-02", { today: TODAY }))!;
+    expect(one.sessionCheckins).toMatchObject({ attended: 1, readyChecks: 0, afterChecks: 0, readyRate: 0, afterRate: 0, effort: { mean: null, answers: 0 } });
+    expect(sessionCheckinLine(one.sessionCheckins)).toBe("Session check-ins: ready check answered for 0 and after check for 0 of 1 attended session. No effort rating was reported.");
+  });
+
+  it("a recap stored under tw_recap_v1 is shown exactly as it was frozen: no check-ins section, no line, same key", async () => {
+    const a = await newAthlete();
+    await db.insert(guardianships).values({ orgId: ctx.orgId, guardianPersonId: ctx.people.alex_parker, athleteId: a, canViewHealth: true });
+    const b = await addSession(a, "2026-01-08");
+    await checkin(a, b, "pre");
+    await checkin(a, b, "post", 8); // check-ins exist for the month, but the stored v1 recap predates the section
+    const now = (await computeRecap(db, ctx.orgId, a, "2026-01", { today: TODAY }))!;
+    const v1: Record<string, unknown> = { ...now, calcKey: "tw_recap_v1" };
+    delete v1.sessionCheckins;
+    await db.insert(monthlyRecaps).values({ orgId: ctx.orgId, athleteId: a, month: "2026-01", status: "final", calcKey: "tw_recap_v1", snapshot: v1, finalizedAt: new Date("2026-02-04T12:00:00Z"), finalizedVia: "job", noticeAt: new Date("2026-02-04T12:00:00Z") });
+    const view = (await db.transaction((tx) => viewRecap(tx, V.alex, a, "2026-01", { today: TODAY })))!;
+    expect(view.state).toBe("final");
+    expect(view.calcKey).toBe("tw_recap_v1");
+    expect(view.recap).toEqual(v1);
+    expect("sessionCheckins" in view.recap).toBe(false);
+    expect(sessionCheckinLine(view.recap.sessionCheckins)).toBeNull();
+    // Finalizing again (job re-run, a page view) leaves the stored recap and its key alone.
+    const again = await db.transaction((tx) => finalizeRecap(tx, ctx.orgId, a, "2026-01", "on_demand", { today: TODAY }));
+    expect(again.calcKey).toBe("tw_recap_v1");
+    expect(again.snapshot).toEqual(v1);
+    // And the database still refuses to move it to the new key.
+    await expect(db.update(monthlyRecaps).set({ calcKey: "tw_recap_v2" }).where(eq(monthlyRecaps.id, again.id))).rejects.toThrow();
+  });
+});
+
 describe("snapshots", () => {
   it("finalizing freezes the numbers: later edits do not rewrite history", async () => {
     const a = await newAthlete();
@@ -116,7 +197,7 @@ describe("snapshots", () => {
     for (const d of ["2026-01-05", "2026-01-12"]) await addSession(a, d);
     await refused(db.transaction((tx) => finalizeRecap(tx, ctx.orgId, a, "2026-03", "job", { today: TODAY }))); // month not over
     const done = await db.transaction((tx) => finalizeRecap(tx, ctx.orgId, a, "2026-01", "job", { today: TODAY }));
-    expect(done).toMatchObject({ status: "final", calcKey: "tw_recap_v1", finalizedVia: "job" });
+    expect(done).toMatchObject({ status: "final", calcKey: "tw_recap_v2", finalizedVia: "job" });
     expect(done.noticeAt).toBeInstanceOf(Date);
     const frozen = done.snapshot as RecapSnapshot;
     expect(frozen.sessions.attended).toBe(2);
@@ -141,7 +222,7 @@ describe("snapshots", () => {
     await expect(db.update(monthlyRecaps).set({ snapshot: { ...frozen, sessions: { ...frozen.sessions, attended: 99 } } }).where(row)).rejects.toThrow();
     await expect(db.update(monthlyRecaps).set({ coachNote: "edited later" }).where(row)).rejects.toThrow();
     await expect(db.update(monthlyRecaps).set({ status: "open" }).where(row)).rejects.toThrow();
-    await expect(db.update(monthlyRecaps).set({ calcKey: "tw_recap_v2" }).where(row)).rejects.toThrow();
+    await expect(db.update(monthlyRecaps).set({ calcKey: "tw_recap_v3" }).where(row)).rejects.toThrow();
     await expect(db.update(monthlyRecaps).set({ month: "2026-02" }).where(row)).rejects.toThrow();
     await expect(db.delete(monthlyRecaps).where(row)).rejects.toThrow();
     await db.update(monthlyRecaps).set({ noticeAt: new Date() }).where(row); // the notice may move; the content may not

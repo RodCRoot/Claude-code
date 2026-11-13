@@ -9,7 +9,7 @@ import { AuthzError, isStaff } from "@/lib/authz/policy";
 import { familyAthletes } from "@/lib/dashboards";
 import { badgeDef } from "@/lib/engagement/badges";
 import { formatValue, prettyDate } from "@/lib/showcase/compose";
-import { isMonth, monthLabel, shiftMonth, viewRecap, type RecapView } from "@/lib/showcase/recap";
+import { isMonth, monthLabel, sessionCheckinLine, shiftMonth, viewRecap, type RecapView } from "@/lib/showcase/recap";
 import { fmt } from "@/lib/time";
 import { HeroLink, ModuleHero, PrBadge, ProgressBar } from "../../training/_components/tb";
 
@@ -60,6 +60,7 @@ export default async function RecapPage({ params, searchParams }: { params: Prom
   const name = r.athleteFirstName;
   const s = r.sessions;
   const t = r.training;
+  const checkinLine = sessionCheckinLine(r.sessionCheckins);
   const isAthlete = v.role === "athlete";
   const prev = shiftMonth(month, -1);
   const back = staff ? `/training/recaps?month=${month}` : `/recap?athlete=${athleteId}`;
@@ -91,6 +92,11 @@ export default async function RecapPage({ params, searchParams }: { params: Prom
             <Big label="Attended" value={s.planned !== null ? <>{s.attended}<span className="text-lg font-bold text-ink-2"> of {s.planned}</span></> : s.attended} hint={s.planned !== null ? `Your plan covers about ${s.planned} sessions a month (${s.planPerWeek} a week).` : "Your plan has no weekly limit."} />
             {s.planned !== null ? <ProgressBar done={Math.min(s.attended, s.planned)} total={s.planned} complete={s.attended >= s.planned} /> : null}
             {view.state === "in_progress" && s.stillBooked > 0 ? <p className="text-sm text-ink-2">{s.stillBooked} more booked this month.</p> : null}
+            {checkinLine ? (
+              <p className="text-sm text-ink-2" data-recap="session-checkins">
+                {checkinLine}
+              </p>
+            ) : null}
           </CardBody>
         </Card>
 
@@ -286,7 +292,7 @@ export default async function RecapPage({ params, searchParams }: { params: Prom
       </div>
 
       <p className="mt-4 text-xs text-ink-3">
-        Wellness check-ins and health details are never part of a recap. Calculation {view.calcKey}.{" "}
+        Wellness answers and health details are never part of a recap{checkinLine ? "; the session check-in line counts answered check-ins and the effort reported, never a health answer" : ""}. Calculation {view.calcKey}.{" "}
         {view.access.firstMonth && prev >= view.access.firstMonth ? (
           <Link href={`/recap/${prev}?athlete=${athleteId}`} className="no-print font-semibold text-brand underline">
             See {monthLabel(prev)}
