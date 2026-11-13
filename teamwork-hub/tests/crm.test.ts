@@ -11,6 +11,7 @@ import {
   leads,
   messageDeliveries,
   messages,
+  threads,
   payerAuthorizations,
   payerBeneficiaries,
   people,
@@ -257,9 +258,11 @@ describe("automations", () => {
       .values({ orgId: ctx.orgId, serviceTypeId: st.id, title: "Speed & Agility", startsAt: start, endsAt: new Date(start.getTime() + 3_600_000), timezone: ctx.tz, capacity: 10, status: "cancelled" })
       .returning();
     await db().insert(bookings).values({ orgId: ctx.orgId, sessionId: s.id, athleteId: ctx.athletes.maya, status: "booked" });
-    const countBefore = (await db().select({ n: sql<number>`count(*)::int` }).from(messages))[0].n;
+    // Count this organization's messages only: other test files insert messages in parallel.
+    const orgMessages = async () => (await db().select({ n: sql<number>`count(*)::int` }).from(messages).innerJoin(threads, eq(threads.id, messages.threadId)).where(eq(threads.orgId, ctx.orgId)))[0].n;
+    const countBefore = await orgMessages();
     const pv = await previewRule(db(), erin, rule.id, s.id);
-    const countAfter = (await db().select({ n: sql<number>`count(*)::int` }).from(messages))[0].n;
+    const countAfter = await orgMessages();
     expect(countAfter).toBe(countBefore);
     expect(pv.items).toHaveLength(1);
     const item = pv.items[0];

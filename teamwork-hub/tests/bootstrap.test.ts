@@ -13,9 +13,11 @@ const valid = { orgName: "Teamwork Bloomington", slug: "teamwork-bloomington", e
 describe("bootstrapOwner", () => {
   it("refuses when any organization exists (no second owner / takeover)", async () => {
     const db = testDb();
-    const before = (await db.execute(sql`select count(*)::int as n from users where role = 'owner'`)).rows[0];
     await expect(db.transaction((tx) => bootstrapOwner(tx, valid))).rejects.toThrow(/already exists/);
-    expect((await db.execute(sql`select count(*)::int as n from users where role = 'owner'`)).rows[0]).toEqual(before);
+    // Nothing of the refused bootstrap exists. (A count of every owner would race with other test files, which seed
+    // organizations, each with an owner, in parallel.)
+    expect((await db.execute(sql`select count(*)::int as n from organizations where slug = ${valid.slug}`)).rows[0]).toEqual({ n: 0 });
+    expect((await db.execute(sql`select count(*)::int as n from users where email = ${valid.email}`)).rows[0]).toEqual({ n: 0 });
   });
 
   it("validates input before touching the database", async () => {

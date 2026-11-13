@@ -236,7 +236,7 @@ describe("Person grid", () => {
 describe("Membership grid", () => {
   it("imports external memberships with limits, punch cards, cancel and hold details, and bills nothing", async () => {
     const invoicesBefore = await count(invoices, eq(invoices.orgId, ctx.orgId));
-    const jobsBefore = (await db().select({ n: sql<number>`count(*)::int` }).from(jobs))[0].n;
+    const jobsBefore = await count(jobs, eq(jobs.orgId, ctx.orgId)); // this organization's jobs: other files enqueue in parallel
     const { batchId, stats } = await uploadAndValidate(rod, "zenplanner.membership_grid", "membership.csv", fixture("zenplanner/grid/membership.csv"));
     membershipBatch = batchId;
     expect(stats.needs_review).toBe(6); // name + birth date matches are strong, still confirmed by staff
@@ -254,7 +254,7 @@ describe("Membership grid", () => {
       expect(m.nextBillDate).toBeNull();
     }
     expect(await count(invoices, eq(invoices.orgId, ctx.orgId))).toBe(invoicesBefore);
-    expect((await db().select({ n: sql<number>`count(*)::int` }).from(jobs))[0].n).toBe(jobsBefore);
+    expect(await count(jobs, eq(jobs.orgId, ctx.orgId))).toBe(jobsBefore);
 
     const nova = await athleteOf((await personByName("Nova", "Fictional")).id);
     const [nm] = ms.filter((m) => m.athleteId === nova.id);

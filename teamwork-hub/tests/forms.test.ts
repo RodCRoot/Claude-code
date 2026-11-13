@@ -367,7 +367,9 @@ describe("archive + markdown + fields", () => {
     const db = testDb();
     const erin = await viewerFor(ctx, "erin");
     const bytes = new TextEncoder().encode("%PDF-1.4\n% synthetic archive\n%%EOF\n");
-    const before = await db.select({ n: sql<number>`count(*)::int` }).from(signatures);
+    // This organization's signatures only: other test files sign documents in parallel.
+    const orgSignatures = () => db.select({ n: sql<number>`count(*)::int` }).from(signatures).innerJoin(formRequests, eq(formRequests.id, signatures.formRequestId)).where(eq(formRequests.orgId, ctx.orgId));
+    const before = await orgSignatures();
     const res = await db.transaction((tx) =>
       importArchive(tx, erin, {
         personId: ctx.people.ava_parker,
@@ -381,7 +383,7 @@ describe("archive + markdown + fields", () => {
       }),
     );
     expect(res.object.kind).toBe("imported_archive");
-    const after = await db.select({ n: sql<number>`count(*)::int` }).from(signatures);
+    const after = await orgSignatures();
     expect(after[0].n).toBe(before[0].n);
     const [doc] = await db.select().from(archivedDocuments).where(eq(archivedDocuments.id, res.doc.id));
     expect(doc.originalSystem).toBe("Zen Planner");
