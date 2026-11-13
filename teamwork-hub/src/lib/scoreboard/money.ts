@@ -14,10 +14,13 @@ import { payrollByMonth } from "./efficiency";
  * expenses; it is not accounting and nothing here is posted to a ledger.
  */
 
-export const MONEY_DEFINITIONS = [
-  { key: "mv_collected", label: "Collected", version: 1, definition: "Settled charges and manual payments by settlement time in the month. Gross of refunds and processor fees; pending money is not counted. Same rule as the Collected revenue report and the daily page." },
+/** Label of the imported Zen Planner series. Shown word for word on the page and in the export. */
+export const ZP_IMPORTED_LABEL = "Billed in Zen Planner, imported";
+
+export const MONEY_DEFINITIONS: { key: string; label: string; version: number; definition: string; filterNote?: string }[] = [
+  { key: "mv_collected", label: "Collected", version: 2, definition: "Settled charges and manual payments by settlement time in the month. Gross of refunds and processor fees; pending money is not counted. Same rule as the Collected revenue report and the daily page. Money taken in Zen Planner is never part of Collected, including bills read from an imported Zen Planner bill history: those have their own table (Billed in Zen Planner, imported)." },
   { key: "mv_refunds", label: "Refunds", version: 1, definition: "Settled refund transactions in the month, shown as a positive amount. Net collected = collected minus refunds." },
-  { key: "mv_billed", label: "Billed", version: 1, definition: "Total of invoices issued in the month, excluding drafts and voided invoices. Same rule as the Invoiced report." },
+  { key: "mv_billed", label: "Billed", version: 2, definition: "Total of invoices issued in the month, excluding drafts and voided invoices. Same rule as the Invoiced report. Imported Zen Planner bills are not invoices and are never part of Billed or Outstanding." },
   { key: "mv_outstanding", label: "Outstanding", version: 1, definition: "Of the invoices issued in that month, the balance still unpaid today on those that are still open (invoice total minus settled payments). It is today's balance, not the balance at month end." },
   { key: "mv_credits", label: "Account credits issued", version: 1, definition: "Referral reward credits added to family accounts in the month (the account credit ledger's referral rewards). Account credit is not money received and is never part of collected." },
   { key: "mv_events", label: "Camp and clinic revenue", version: 1, definition: "Collected (same rule) on invoices created for camp and clinic registrations in the events module. It is part of Collected, not in addition to it." },
@@ -39,6 +42,14 @@ export const MONEY_DEFINITIONS = [
     version: 1,
     definition:
       "Net collected minus expenses for the month. Expenses = rent, software and other entered by hand here, marketing from the Marketing tab, and payroll from the payroll module (gross pay for clocked hours; if a month has no time-clock data, a hand-entered payroll figure is used when present). When payroll is unknown or incomplete the margin is shown as not available and the figure before payroll is given instead. This is a management estimate from cash collected and typed-in costs: it is not accounting, has no accruals, taxes or depreciation, and should not be used for filings.",
+  },
+  {
+    key: "mv_zp_imported",
+    label: ZP_IMPORTED_LABEL,
+    version: 1,
+    definition:
+      "Bills read from a Zen Planner bill export in Imports, by the bill's due date in the month: the amount due as billed, the amount Zen Planner recorded as paid, and what it recorded as unpaid. This is history from another system, exactly as it stood in the export on the day it was imported: Teamwork did not collect this money, cannot check it against a processor and does not update it afterwards. It is shown beside the hub's numbers and is never added to Collected, Billed, Outstanding, any revenue group or the margin. A month with no imported bills is blank, not $0. A bill with no amount in the export counts as a bill and adds nothing to the totals.",
+    filterNote: "With a location or program filter, only imported bills that were matched to a membership in the filtered set are counted; bills not matched to a membership are left out.",
   },
 ];
 
@@ -153,6 +164,48 @@ export async function moneyView(tx: Tx, c: Ctx, opts: { months?: number } = {}):
     return { groups: [...totals].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([g]) => g), byMonth };
   };
   return { first, last, months, byOption: pivot("opt"), byLocation: pivot("loc"), outstandingNowMinor: num(outNow.amount) };
+}
+
+// ---------------------------------------------------------------------------
+// Imported Zen Planner bill history: its own series, never part of the hub's money
+// ---------------------------------------------------------------------------
+
+export type ImportedBillsMonth = { month: string; label: string; partial: boolean; bills: number; billedMinor: number | null; paidMinor: number | null; unpaidMinor: number | null };
+export type ImportedBillsView = {
+  /** Imported bills on file for the organization (under a filter: those matched to a filtered membership), any date. */
+  totalBills: number;
+  firstDue: string | null;
+  lastDue: string | null;
+  months: ImportedBillsMonth[];
+};
+
+/**
+ * Zen Planner bills from `zp_bills` by due month (mv_zp_imported). Reads nothing from invoices or
+ * transactions and is never summed with them. A month without imported bills has null amounts.
+ */
+export async function importedBillsView(tx: Tx, c: Ctx, opts: { months?: number } = {}): Promise<ImportedBillsView> {
+  const count = Math.min(24, Math.max(2, opts.months ?? 6));
+  const last = monthStart(c.today);
+  const first = addMonths(last, -(count - 1));
+  const f = c.filtered ? sql`and b.membership_id in (select id from ms)` : sql``;
+  const [all] = await rowsOf<Row>(tx, sql`with ${membershipCtes(c)} select count(*)::int as n, min(b.due_date) as first_due, max(b.due_date) as last_due from zp_bills b where b.org_id = ${c.orgId} ${f}`);
+  const rows = num(all?.n)
+    ? await rowsOf<Row>(
+        tx,
+        sql`with ${membershipCtes(c)}
+            select date_trunc('month', b.due_date)::date as m, count(*)::int as bills,
+              coalesce(sum(b.amount_due_minor), 0)::bigint as billed, coalesce(sum(b.amount_paid_minor), 0)::bigint as paid, coalesce(sum(b.amount_unpaid_minor), 0)::bigint as unpaid
+            from zp_bills b where b.org_id = ${c.orgId} and b.due_date >= ${first} and b.due_date <= ${monthEnd(last)} ${f}
+            group by 1`,
+      )
+    : [];
+  const byM = new Map(rows.map((r) => [ymdOf(r.m)!, r]));
+  const months: ImportedBillsMonth[] = [];
+  for (let m = first; m <= last; m = addMonths(m, 1)) {
+    const r = byM.get(m);
+    months.push({ month: m, label: monthLabel(m), partial: m === last, bills: num(r?.bills), billedMinor: r ? num(r.billed) : null, paidMinor: r ? num(r.paid) : null, unpaidMinor: r ? num(r.unpaid) : null });
+  }
+  return { totalBills: num(all?.n), firstDue: ymdOf(all?.first_due), lastDue: ymdOf(all?.last_due), months };
 }
 
 // ---------------------------------------------------------------------------

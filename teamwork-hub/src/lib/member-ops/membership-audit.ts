@@ -201,6 +201,21 @@ async function loadFacts(tx: Tx, orgId: string, today: string, tz: string, athle
         )
       ).map((i) => ({ id: i.id as string, membershipId: i.membership_id as string, periodStart: ymd(i.period_start)!, totalMinor: Number(i.total_minor), status: i.status as string }))
     : [];
+  // Imported Zen Planner bill history (history only, never payable), for bills tied to one of these memberships.
+  const zpBills = mIds.length
+    ? (
+        await rowsOf<Record<string, unknown>>(
+          tx,
+          sql`select id, membership_id, due_date, amount_due_minor, amount_paid_minor from zp_bills where org_id = ${orgId} and membership_id in (${inList(mIds)}) and due_date <= ${today}`,
+        )
+      ).map((b) => ({
+        id: b.id as string,
+        membershipId: b.membership_id as string,
+        dueDate: ymd(b.due_date)!,
+        amountDueMinor: b.amount_due_minor == null ? null : Number(b.amount_due_minor),
+        amountPaidMinor: b.amount_paid_minor == null ? null : Number(b.amount_paid_minor),
+      }))
+    : [];
   const end = localDayBounds(today, tz).end.toISOString();
   const lastVisits = await rowsOf<{ athlete_id: string; last_at: string | Date }>(
     tx,
@@ -299,6 +314,7 @@ async function loadFacts(tx: Tx, orgId: string, today: string, tz: string, athle
     memberships,
     holds,
     invoices,
+    zpBills,
     lastVisit: new Map(lastVisits.map((l) => [l.athlete_id, localYmd(new Date(l.last_at), tz)])),
     recentVisits: recent.map((r) => ({ athleteId: r.athlete_id, day: localYmd(new Date(r.starts_at), tz) })),
     requests,
@@ -309,6 +325,34 @@ async function loadFacts(tx: Tx, orgId: string, today: string, tz: string, athle
 }
 
 export type AuditFacts = Awaited<ReturnType<typeof loadFacts>>;
+
+/** Label on amounts read from `zp_bills`. Shown word for word in the audit. */
+export const IMPORTED_BILL_LABEL = "from imported bill history";
+
+type Billed = {
+  minor: number;
+  count: number;
+  /** True when any part of `minor` is an estimate. */
+  estimated: boolean;
+  /** Zen Planner bills read from the import; null for Hub-billed memberships. */
+  imported: { count: number; billedMinor: number; paidMinor: number; noAmount: number } | null;
+  estimatedCount: number;
+  estimatedMinor: number;
+  invoiceIds: string[];
+  dates: string[];
+};
+
+/** How a billed figure was computed: Hub invoices, imported Zen Planner bills, an estimate, or imported plus estimate. */
+export function billedBasis(b: Pick<Billed, "count" | "imported" | "estimatedCount" | "estimatedMinor">, when: string): string {
+  const est = b.estimatedCount ? `${b.estimatedCount} Zen Planner bill date(s) × plan rate ${when} (estimate — verify in Zen Planner)` : "";
+  if (b.imported?.count) {
+    const i = b.imported;
+    const imp = `${i.count} Zen Planner bill(s) ${when}, ${IMPORTED_BILL_LABEL}: billed ${money(i.billedMinor)}, paid ${money(i.paidMinor)}${i.noAmount ? ` (${i.noAmount} with no amount in the export)` : ""}`;
+    return est ? `${imp}; plus ${money(b.estimatedMinor)} for ${est}` : imp;
+  }
+  if (est) return est;
+  return `${b.count} bill(s) ${when}`;
+}
 
 /** Pure detectors over loaded facts. Exported for unit tests. */
 export function detectExceptions(f: AuditFacts, policy: MembershipPolicy, today: string, opts: { unprocessedAfterDays: number; repeatWindowDays: number }): { exceptions: MembershipException[]; skipped: string[]; billedCount: number } {
@@ -325,15 +369,43 @@ export function detectExceptions(f: AuditFacts, policy: MembershipPolicy, today:
   const anchor = (m: MRow) => m.anchorDay ?? policy.billingAnchorDay;
   const ext = (m: MRow) => m.billingProvider === "external_zenplanner";
   const liveOn = (m: MRow, d: string) => m.startDate <= d && (!m.endDate || m.endDate >= d) && (!m.cancelAt || m.cancelAt > d) && !holdOn(m, d);
-  /** Money billed (or, for Zen Planner-billed memberships, estimated) for bill dates in (after, until]. */
-  const billedBetween = (m: MRow, after: string, until: string, exclude = new Set<string>()) => {
+  const zpBy = new Map<string, AuditFacts["zpBills"]>();
+  for (const b of f.zpBills ?? []) zpBy.set(b.membershipId, [...(zpBy.get(b.membershipId) ?? []), b]);
+  let zpWithHistory = 0;
+  let zpEstimatedOnly = 0;
+  for (const m of live.filter(ext)) {
+    if (zpBy.get(m.id)?.length) zpWithHistory++;
+    else zpEstimatedOnly++;
+  }
+  /**
+   * Money billed for bill dates in (after, until].
+   * Hub-billed: the invoices. Zen Planner-billed: the imported bill history (`zp_bills`) where the
+   * membership has any, and an estimate (anchor-day bill dates × plan rate) for dates the history does
+   * not reach: all of them when nothing was imported, or those after the last imported bill.
+   */
+  const billedBetween = (m: MRow, after: string, until: string, exclude = new Set<string>()): Billed => {
     if (ext(m)) {
+      const history = zpBy.get(m.id) ?? [];
+      const coveredThrough = history.reduce((mx, b) => (b.dueDate > mx ? b.dueDate : mx), "");
+      const imported = history.filter((b) => b.dueDate > after && b.dueDate <= until && !exclude.has(`zp:${b.id}`));
       // Estimated bill dates are keyed by membership + date so repeat asks never count one bill twice.
-      const dates = billDatesBetween(after, until, anchor(m)).filter((d) => liveOn(m, d) && !exclude.has(`${m.id}:${d}`));
-      return { minor: dates.length * (m.monthlyMinor ?? 0), count: dates.length, estimated: true, invoiceIds: dates.map((d) => `${m.id}:${d}`), dates };
+      const estAfter = coveredThrough > after ? coveredThrough : after;
+      const dates = billDatesBetween(estAfter, until, anchor(m)).filter((d) => liveOn(m, d) && !exclude.has(`${m.id}:${d}`));
+      const importedMinor = imported.reduce((s, b) => s + (b.amountDueMinor ?? 0), 0);
+      const estimatedMinor = dates.length * (m.monthlyMinor ?? 0);
+      return {
+        minor: importedMinor + estimatedMinor,
+        count: imported.length + dates.length,
+        estimated: dates.length > 0,
+        imported: { count: imported.length, billedMinor: importedMinor, paidMinor: imported.reduce((s, b) => s + (b.amountPaidMinor ?? 0), 0), noAmount: imported.filter((b) => b.amountDueMinor == null).length },
+        estimatedCount: dates.length,
+        estimatedMinor,
+        invoiceIds: [...imported.map((b) => `zp:${b.id}`), ...dates.map((d) => `${m.id}:${d}`)],
+        dates: [...imported.map((b) => b.dueDate), ...dates].sort(),
+      };
     }
     const inv = (invBy.get(m.id) ?? []).filter((i) => i.periodStart > after && i.periodStart <= until && !exclude.has(i.id));
-    return { minor: inv.reduce((s, i) => s + i.totalMinor, 0), count: inv.length, estimated: false, invoiceIds: inv.map((i) => i.id), dates: inv.map((i) => i.periodStart) };
+    return { minor: inv.reduce((s, i) => s + i.totalMinor, 0), count: inv.length, estimated: false, imported: null, estimatedCount: 0, estimatedMinor: 0, invoiceIds: inv.map((i) => i.id), dates: inv.map((i) => i.periodStart) };
   };
   const base = (m: MRow) => ({ athleteIds: [m.athleteId], athleteNames: m.athleteName, personId: m.personId, payerName: m.payerName, membershipId: m.id, requestId: null });
   const push = (e: Omit<MembershipException, "label">) => out.push({ ...e, label: EXCEPTION_LABELS[e.type] });
@@ -352,7 +424,7 @@ export function detectExceptions(f: AuditFacts, policy: MembershipPolicy, today:
       type: "dormant_billed",
       detail: `${last ? `No attended visit since ${last} (${daysBetween(last, today)} days)` : `No attended visit since the membership started ${m.startDate}`}; ${m.productName} still billing${b.count ? ` — ${b.count} bill(s) since` : ""}.`,
       impactMinor: b.minor > 0 ? b.minor : per,
-      impactBasis: b.minor > 0 ? (b.estimated ? `${b.count} Zen Planner bill date(s) × plan rate since last visit (estimate — verify in Zen Planner)` : `${b.count} bill(s) since the last visit`) : "per month going forward",
+      impactBasis: b.minor > 0 ? billedBasis(b, "since the last visit") : "per month going forward",
       recommendation: `Likely refund/hold request. Contact the family before the next bill; if they ask, date any hold to their request date. Unused already-billed sessions can become a punch card valid ${policy.punchCardExpiryMonths} months (needs an active membership). Do not change billing until they confirm.`,
     });
   }
@@ -597,7 +669,7 @@ export function detectExceptions(f: AuditFacts, policy: MembershipPolicy, today:
         type: "request_billed_anyway",
         detail: `${typeLabel(r.type)} asked ${r.sentOn}${r.type === "cancel" ? ` (${policy.cancellationNoticeDays}-day notice → billable through ${after})` : ""}; ${m.productName} billed on ${b.dates.join(", ")} anyway${r.status === "resolved" ? ` before it was resolved ${r.resolvedOn}` : " and the request is still open"}.`,
         impactMinor: b.minor,
-        impactBasis: b.estimated ? `${b.count} Zen Planner bill date(s) × plan rate (estimate — verify in Zen Planner)` : `${b.count} bill(s) after the request date`,
+        impactBasis: billedBasis(b, "after the request date"),
         recommendation: `Date the change to ${r.sentOn} (the family's request date) and credit or refund ${money(b.minor)} — or, per policy, convert unused sessions to a punch card valid ${policy.punchCardExpiryMonths} months. Apologize in writing.`,
       });
     }
@@ -605,13 +677,17 @@ export function detectExceptions(f: AuditFacts, policy: MembershipPolicy, today:
 
   out.sort((a, b) => (b.impactMinor ?? -1) - (a.impactMinor ?? -1) || a.athleteNames.localeCompare(b.athleteNames));
 
-  const zp = live.filter(ext).length;
   const none = f.memberships.filter((m) => LIVE.includes(m.status) && m.billingProvider === "none").length;
   skipped.push(
     "Requests by phone (AI Call Recap emails), Facebook Messenger, forwarded email and the website form are only included when staff logged them in the Requests log — they never reach the Hub on their own.",
     "Attendance counts only attended visits (checked in / marked attended); booked, cancelled, late-cancelled and no-show reservations are not visits.",
   );
-  if (zp) skipped.push(`${zp} Zen Planner-billed membership(s): the Hub has no bill history for them, so their amounts are estimates (bill dates on the anchor day × plan rate) and their card status is not visible here. Verify in Zen Planner.`);
+  if (zpWithHistory)
+    skipped.push(
+      `${zpWithHistory} Zen Planner-billed membership(s) have imported bill history: their amounts are the billed and paid amounts from that import (labelled "from imported bill history"); bill dates after the last imported bill are estimates. Their card status is not visible here.`,
+    );
+  if (zpEstimatedOnly)
+    skipped.push(`${zpEstimatedOnly} Zen Planner-billed membership(s) have no imported bill history, so their amounts are estimates (bill dates on the anchor day × plan rate) and their card status is not visible here. Verify in Zen Planner.`);
   if (none) skipped.push(`${none} live membership(s) with no billing provider were skipped for billing checks.`);
   if (noPayer) skipped.push(`${noPayer} live membership(s) with no payer account were skipped for the family-discount check.`);
   if (uncapped) skipped.push(`${uncapped} live membership(s) have no weekly cap (unlimited or no credits) and were skipped for over-use.`);

@@ -113,6 +113,10 @@ A pure function (`bottleneck`) reads the last complete month against the ideals 
 
 Collected, refunds, net, billed, outstanding, account credits issued (referral rewards) and camp / clinic revenue per month; collected by membership option and by location (each a partition that adds up to collected). `scoreboard_expenses` holds optional monthly rent, software, other and a hand-entered payroll figure used only for months with no time-clock data. Operating margin = net collected minus those, marketing spend and payroll. It is labelled a management estimate, not accounting, on the page and in the export; when payroll is unknown or incomplete the margin is "not available" and the figure before payroll is shown.
 
+### Billed in Zen Planner, imported
+
+When the organization has rows in `zp_bills` (a Zen Planner bill export committed in Imports), the money view shows one more card, "Billed in Zen Planner, imported": bills, billed, paid and unpaid-at-import per month of the bill's due date (`importedBillsView`, definition `mv_zp_imported` v1, export table `money-zp-imported`). It is imported history from another system and is **never** added to Collected, Billed, Outstanding, the revenue groups or the margin; `mv_collected` and `mv_billed` say so (both now version 2, wording only, the rule did not change). A month with no imported bills is blank, not $0. Under a filter only bills matched to a filtered membership count. The card is hidden when nothing was imported; the demo seed imports no bills.
+
 ## Charts
 
 Two charts, both using the reports' `ChartFigure` + `ReportBarChart` (sold vs lost; collected vs billed), each with a text summary and a data table.

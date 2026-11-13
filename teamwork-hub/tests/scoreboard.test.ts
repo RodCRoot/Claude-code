@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { auditEvents, membershipEvents, staffPayRates, timeEntries } from "@/db/schema";
+import { auditEvents, membershipEvents, staffPayRates, timeEntries, zpBills } from "@/db/schema";
 import { UserError } from "@/lib/actions";
 import { AuthzError, can } from "@/lib/authz/policy";
 import { calculatePayroll } from "@/lib/payroll/service";
@@ -9,7 +9,8 @@ import { AGING_ORDER, activeByLocation, classesToday, DAILY_METRICS, dailyScoreb
 import { definitionsFor } from "@/lib/scoreboard/definitions";
 import { payrollByMonth, slotUtilisation } from "@/lib/scoreboard/efficiency";
 import { deleteSpend, marketingEconomics, saveSpend } from "@/lib/scoreboard/marketing";
-import { marginView, moneyView, saveExpense } from "@/lib/scoreboard/money";
+import { ZP_IMPORTED_LABEL, importedBillsView, marginView, moneyView, saveExpense } from "@/lib/scoreboard/money";
+import { exportTable } from "@/lib/scoreboard/tables";
 import { bottleneck, monthlyScoreboard, TARGET_KEYS } from "@/lib/scoreboard/monthly";
 import { localToUtc } from "@/lib/time";
 import { closeTestDb, seedOrg, testDb, viewerFor } from "./helpers/db";
@@ -539,6 +540,74 @@ describe("where is the bottleneck? (rule of thumb)", () => {
     const filtered = bottleneck({ leads: null, showed: null, sold: 1, active: 50 }, targets, { leads: "n/a", showed: "n/a" });
     expect(filtered.stage).toBe("sales");
     expect(filtered.steps.find((s) => s.key === "leads")!.status).toBe("no_data");
+  });
+});
+
+describe("imported Zen Planner bill history is its own series", () => {
+  let org: Org;
+  let w: Awaited<ReturnType<typeof scoreboardWorld>>;
+  beforeAll(async () => {
+    org = await seedOrg(TODAY, { modules: [] });
+    w = await scoreboardWorld(org, TODAY);
+    const hub = await w.athlete();
+    await w.invoice(hub.payerId, { total: 4000, due: -3, status: "paid", paid: 4000, paidDaysAgo: 2 }); // the hub's only money: 40.00 in March
+    const north = await w.athlete();
+    const m = await w.membership(north, w.planA, { start: -400, billingProvider: "external_zenplanner" });
+    const loose = await w.athlete();
+    const bill = (personId: string, id: string, dueDate: string, due: number | null, paid: number | null, membershipId: string | null = null) =>
+      db()
+        .insert(zpBills)
+        .values({ orgId: org.orgId, personId, membershipId, sourceRecordId: id, dueDate, amountDueMinor: due, amountPaidMinor: paid, amountUnpaidMinor: due != null && paid != null ? due - paid : null });
+    await bill(north.personId, "zp-1", "2026-02-01", 10000, 10000, m.id);
+    await bill(north.personId, "zp-2", "2026-03-01", 10000, 2500, m.id); // 75.00 unpaid at import
+    await bill(loose.personId, "zp-3", "2026-03-05", 6000, 6000); // not matched to a membership
+    await bill(loose.personId, "zp-4", "2026-03-06", null, null); // no amount in the export
+    await bill(north.personId, "zp-old", "2024-06-01", 9900, 9900, m.id); // outside the months shown
+  });
+
+  it("totals by due month, blank months are null, and old history is reported but not shown", async () => {
+    const iv = await importedBillsView(db(), await ctxFor(org));
+    expect(iv.totalBills).toBe(5);
+    expect([iv.firstDue, iv.lastDue]).toEqual(["2024-06-01", "2026-03-06"]);
+    const by = Object.fromEntries(iv.months.map((m) => [m.month, m]));
+    expect(by["2026-02-01"]).toMatchObject({ bills: 1, billedMinor: 10000, paidMinor: 10000, unpaidMinor: 0 });
+    expect(by["2026-03-01"]).toMatchObject({ bills: 3, billedMinor: 16000, paidMinor: 8500, unpaidMinor: 7500, partial: true });
+    expect(by["2026-01-01"]).toMatchObject({ bills: 0, billedMinor: null, paidMinor: null, unpaidMinor: null });
+  });
+
+  it("never reaches collected, billed, outstanding or the revenue groups", async () => {
+    const mv = await moneyView(db(), await ctxFor(org));
+    const mar = mv.months.find((m) => m.month === "2026-03-01")!;
+    const feb = mv.months.find((m) => m.month === "2026-02-01")!;
+    expect([mar.collectedMinor, mar.billedMinor, mar.outstandingMinor]).toEqual([4000, 4000, 0]);
+    expect([feb.collectedMinor, feb.billedMinor]).toEqual([0, 0]);
+    expect(mv.outstandingNowMinor).toBe(0);
+    expect(mv.byOption.groups).toEqual(["Other sales"]);
+    const d = await daily(org);
+    expect(d.metrics.collected_mtd.value).toBe(4000);
+    expect(d.metrics.past_due.value).toBe(0);
+  });
+
+  it("a filter keeps only bills matched to a filtered membership; another organization sees none", async () => {
+    const northOnly = await importedBillsView(db(), await ctxFor(org, { locationId: w.locA.id }));
+    expect(northOnly.totalBills).toBe(3);
+    expect(northOnly.months.find((m) => m.month === "2026-03-01")).toMatchObject({ bills: 1, billedMinor: 10000, paidMinor: 2500 });
+    const south = await importedBillsView(db(), await ctxFor(org, { locationId: w.locB.id }));
+    expect(south.totalBills).toBe(0);
+    expect(south.months.every((m) => m.billedMinor === null)).toBe(true);
+    const other = await seedOrg(TODAY, { modules: [] });
+    expect((await importedBillsView(db(), await ctxFor(other))).totalBills).toBe(0);
+  });
+
+  it("exports as its own labelled table and has a versioned definition", async () => {
+    const c = await ctxFor(org);
+    const t = await exportTable(db(), await viewerFor(org, "rod"), c, "money-zp-imported", {});
+    expect(t!.rows.every((r) => r.source === ZP_IMPORTED_LABEL)).toBe(true);
+    expect(t!.columns.map((x) => x.label)).toContain("Billed in Zen Planner");
+    const defs = definitionsFor("money");
+    expect(defs.find((d) => d.key === "mv_zp_imported")).toMatchObject({ label: "Billed in Zen Planner, imported", version: 1 });
+    expect(defs.find((d) => d.key === "mv_collected")!.version).toBe(2);
+    expect(defs.find((d) => d.key === "mv_billed")!.version).toBe(2);
   });
 });
 
