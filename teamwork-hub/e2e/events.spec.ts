@@ -7,7 +7,11 @@ import { login, USERS } from "./helpers";
  * (390px) registers her for the sample clinic, so the two runs do not depend on each other.
  * A second run on the same database finds the spot already held and checks that state instead.
  */
-const noSideScroll = async (page: Page) => expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+const noSideScroll = async (page: Page) => {
+  // Compare with the configured viewport, not innerWidth: on a phone a too-wide page widens innerWidth with it.
+  const vw = page.viewportSize()?.width ?? 0;
+  expect(await page.evaluate(() => document.documentElement.scrollWidth), `${page.url()} scrolls sideways`).toBeLessThanOrEqual(vw + 1);
+};
 
 test("a parent finds a camp, registers an athlete, and lands on an unpaid invoice with the spot held", async ({ page }, info) => {
   const mobile = info.project.name === "mobile";

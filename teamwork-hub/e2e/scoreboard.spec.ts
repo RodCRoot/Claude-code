@@ -7,7 +7,11 @@ import { login, USERS } from "./helpers";
  * the same "ideal" back, so it can be re-run on the same database.
  * Set SHOTS=1 to refresh docs/screenshots/scoreboard/.
  */
-const noSideScroll = async (page: Page) => expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+const noSideScroll = async (page: Page) => {
+  // Compare with the configured viewport, not innerWidth: on a phone a too-wide page widens innerWidth with it.
+  const vw = page.viewportSize()?.width ?? 0;
+  expect(await page.evaluate(() => document.documentElement.scrollWidth), `${page.url()} scrolls sideways`).toBeLessThanOrEqual(vw + 1);
+};
 const dollars = (s: string) => Math.round(Number(s.replace(/[^0-9.]/g, "")) * 100);
 const shot = async (page: Page, name: string, project: string) => {
   if (process.env.SHOTS) await page.screenshot({ path: `docs/screenshots/scoreboard/${name}-${project}.png`, fullPage: false });

@@ -17,7 +17,11 @@ async function as(browser: Browser, email: string, viewport?: { width: number; h
 }
 /** Buttons carry the headline in a screen-reader-only span, which reads as "Approve : headline". */
 const btn = (label: string, headline: string) => new RegExp(`${label}\\s*: ${headline.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
-const noSideScroll = async (page: Page) => expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), `${page.url()} scrolls sideways`).toBeLessThanOrEqual(1);
+const noSideScroll = async (page: Page) => {
+  // Compare with the configured viewport, not innerWidth: on a phone a too-wide page widens innerWidth with it.
+  const vw = page.viewportSize()?.width ?? 0;
+  expect(await page.evaluate(() => document.documentElement.scrollWidth), `${page.url()} scrolls sideways`).toBeLessThanOrEqual(vw + 1);
+};
 const shot = async (page: Page, name: string, project: string) => {
   if (SHOTS) await page.screenshot({ path: `docs/screenshots/wins/${name}-${project === "mobile" ? "390" : "desktop"}.png`, fullPage: true });
 };

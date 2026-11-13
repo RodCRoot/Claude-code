@@ -7,7 +7,11 @@ import { login, USERS } from "./helpers";
  * and 390px). The seeded members are synthetic: Nora Quill (new), Theo Marsh (nearly through
  * onboarding, no-show yesterday), June Abara (on hold), Dex Moreno (cancelling).
  */
-const noSideScroll = async (page: Page) => expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+const noSideScroll = async (page: Page) => {
+  // Compare with the configured viewport, not innerWidth: on a phone a too-wide page widens innerWidth with it.
+  const vw = page.viewportSize()?.width ?? 0;
+  expect(await page.evaluate(() => document.documentElement.scrollWidth), `${page.url()} scrolls sideways`).toBeLessThanOrEqual(vw + 1);
+};
 
 test("owner works the follow-ups queue and a member's journey panel", async ({ page }, info) => {
   await login(page, USERS.rod);

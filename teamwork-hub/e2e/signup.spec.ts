@@ -18,7 +18,11 @@ import { login, USERS } from "./helpers";
  */
 test.describe.configure({ mode: "serial" });
 
-const noSideScroll = async (page: Page) => expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+const noSideScroll = async (page: Page) => {
+  // Compare with the configured viewport, not innerWidth: on a phone a too-wide page widens innerWidth with it.
+  const vw = page.viewportSize()?.width ?? 0;
+  expect(await page.evaluate(() => document.documentElement.scrollWidth), `${page.url()} scrolls sideways`).toBeLessThanOrEqual(vw + 1);
+};
 const shot = async (page: Page, project: string, name: string) => {
   if (process.env.SHOTS) await page.screenshot({ path: `docs/screenshots/signup/${project}-${name}.png`, fullPage: true });
 };
