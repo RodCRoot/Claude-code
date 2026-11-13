@@ -12,7 +12,7 @@
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { BAR_SPEED_SOURCE } from "@/lib/training/vbt";
 import type { Tx } from "@/db";
-import { anywhereCompletions, athleteBadges, athleteGoals, athletes, bookings, formRequests, maxes, membershipHolds, memberships, organizations, questionnaireResponses, scheduleSessions, workouts, xpEvents, type XpKind } from "@/db/schema";
+import { anywhereCompletions, athleteBadges, athleteGoals, athletes, bookings, formRequests, maxes, membershipHolds, memberships, organizations, questionnaireResponses, scheduleSessions, sessionCheckins, workouts, xpEvents, type XpKind } from "@/db/schema";
 import { DEFAULT_TZ, addDaysYmd, fmt, localToUtc, localYmd, todayLocal } from "@/lib/time";
 import { EARLY_BIRD_BEFORE_HOUR, STREAK_MILESTONES, evaluateBadges, type BadgeStats } from "./badges";
 import { evaluateGoals } from "./goals";
@@ -28,6 +28,8 @@ export type Activity = {
   onYourOwn: { id: string; completedAt: Date; localDate: string }[];
   /** One entry per facility-local date with at least one submitted check-in. No answers. */
   checkinDays: { forDate: string; submittedAt: Date }[];
+  /** Session check-ins (ready check / after check): which booking and phase, and when. No answers. */
+  sessionCheckins: { bookingId: string; phase: "pre" | "post"; at: Date }[];
   prs: PrEvent[];
   holds: HoldRange[];
   goalsAchieved: { id: string; achievedAt: Date }[];
@@ -55,6 +57,10 @@ export async function loadActivity(tx: Tx, orgId: string, athleteId: string, tz 
     .from(questionnaireResponses)
     .where(and(eq(questionnaireResponses.orgId, orgId), eq(questionnaireResponses.athleteId, athleteId)))
     .groupBy(questionnaireResponses.forDate);
+  const sessionChecks = await tx
+    .select({ bookingId: sessionCheckins.bookingId, phase: sessionCheckins.phase, at: sessionCheckins.createdAt })
+    .from(sessionCheckins)
+    .where(and(eq(sessionCheckins.orgId, orgId), eq(sessionCheckins.athleteId, athleteId)));
   const maxRows = await tx
     .select({ id: maxes.id, exerciseId: maxes.exerciseId, value: maxes.value, unit: maxes.unit, kind: maxes.kind, recordedOn: maxes.recordedOn, createdAt: maxes.createdAt })
     .from(maxes)
@@ -81,6 +87,7 @@ export async function loadActivity(tx: Tx, orgId: string, athleteId: string, tz 
     }),
     onYourOwn: own,
     checkinDays: checkins.map((c) => ({ forDate: c.forDate, submittedAt: c.submittedAt })),
+    sessionCheckins: sessionChecks,
     prs: detectPrs(maxRows.map((m) => ({ ...m, value: Number(m.value) }))),
     holds: holdRows,
     goalsAchieved: goals.filter((g): g is { id: string; achievedAt: Date } => !!g.achievedAt).sort((a, b) => a.achievedAt.getTime() - b.achievedAt.getTime()),
@@ -118,6 +125,9 @@ export function xpCandidates(a: Activity, athleteId: string, tz = DEFAULT_TZ): C
     ...a.onYourOwn.map((o): Candidate => ({ kind: "on_your_own_completed", sourceType: "anywhere_completion", sourceId: o.id, key: `own:${o.id}`, occurredAt: o.completedAt })),
     // One award per day however many questionnaires were answered. The key holds the date only.
     ...a.checkinDays.map((c): Candidate => ({ kind: "wellness_checkin", sourceType: "checkin_day", sourceId: c.forDate, key: `checkin:${athleteId}:${c.forDate}`, occurredAt: c.submittedAt })),
+    // Session check-ins reuse the check-in kind and points. One award per booking and phase, ever:
+    // corrections, a second person completing a section, and re-submissions change nothing.
+    ...a.sessionCheckins.map((c): Candidate => ({ kind: "wellness_checkin", sourceType: "session_checkin", sourceId: `${c.bookingId}:${c.phase}`, key: `session_checkin:${c.bookingId}:${c.phase}`, occurredAt: c.at })),
     ...a.prs.map((p): Candidate => ({ kind: "pr_set", sourceType: "max", sourceId: p.maxId, key: `pr:${p.maxId}`, occurredAt: localToUtc(p.recordedOn, "12:00", tz) })),
     ...a.goalsAchieved.map((g): Candidate => ({ kind: "goal_achieved", sourceType: "athlete_goal", sourceId: g.id, key: `goal:${g.id}`, occurredAt: g.achievedAt })),
     ...a.formsSigned.map((f): Candidate => ({ kind: "form_signed", sourceType: "form_request", sourceId: f.id, key: `form:${f.id}`, occurredAt: f.completedAt })),

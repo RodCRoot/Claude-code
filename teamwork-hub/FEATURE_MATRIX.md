@@ -175,6 +175,22 @@ Security review: see `docs/SECURITY-REVIEW.md` (10 findings fixed with regressio
 | Low rating → staff task "Follow up on session feedback" (no comment, rating or name in the task; not linked to the athlete unless shared with the coach) | verified locally | `retention-feedback.test.ts` | Unshared follow-ups go to the first owner login |
 | Milestones this week on the staff dashboard (anniversaries, 25/50/100/250 sessions, birthdays staff-only, first 30 days) with "Create shoutout task"; facility-timezone math | verified locally | `retention-milestones-reports.test.ts` | Shown on the owner/admin/operations dashboard only; no automatic messages by design |
 | Winback list (`/people/retention/winback`): ended in the last 12 months with end reason, last plan, tenure; follow-up task only | verified locally | `retention-milestones-reports.test.ts` | End reason is only as good as the cancellation reason or logged loss |
+## Session check-ins (ready check and after check; see `docs/modules/checkins.md`)
+
+| Capability | Status | Evidence | Notes |
+|---|---|---|---|
+| Ready check before a booked session (readiness, sleep, soreness 0 to 10, does anything hurt with the existing body map, tiredness, mood, optional note); window in hours before the start; prefill from today's wellness for identical items | verified locally | `checkins.test.ts`, `e2e/checkins.spec.ts` | Wording in `src/lib/checkins/questions.ts`; defaults labelled in Settings |
+| After check (session RPE, liked / did not like chips and text, anything hurt, soreness, the existing 1 to 5 rating, notes); replaces the ten-second feedback form, old link redirects, rating still stored in `session_feedback` | verified locally | `checkins.test.ts`, `retention-feedback.test.ts` (unchanged), `e2e/checkins.spec.ts` | Sections can be answered by different people; each locks to who answered it |
+| Who may answer: athlete; parent of an under-13 (`training.log_at_home`), health questions only with health access; other parents experience only; staff and kiosk login never | verified locally | `checkins.test.ts` (every demo role) | Recorded as logged by a parent |
+| Session RPE feeds the existing sRPE load exactly once (one `activity_sessions` row per check-in; workout logger wins on a day it has a computable load) | verified locally | `checkins.test.ts` | Two separate gym sessions in one day, logged differently, count once |
+| Coach readiness strip on the session page with own-baseline context; health details only inside the viewer's health scope, others see "has a note for the coach"; optional planned intensity per session | verified locally | `checkins.test.ts`, `e2e/checkins.spec.ts` | Not shown on the shared weight-room board |
+| Alerts as staff tasks (sharp pain via the body-map queue, pain two sessions running, soreness / readiness far from own baseline, "did not like" comment, low rating), listed on the follow-ups queue | verified locally | `checkins.test.ts`, `e2e/checkins.spec.ts` | Nothing is sent to families |
+| Trends per athlete (staff view and simpler family view) with rolling own baseline and "not enough data yet"; class view (completion, reported vs planned RPE, chip counts, shared comments); owner report with CSV | verified locally | `checkins.test.ts`; a11y on `/check-ins`, `/check-ins/athletes`, `/reports/session-checkins` | Every number names its method and version |
+| Kiosk ready check after PIN check-in: single-use pass, four taps, skip, idle timeout, reads nothing back | verified locally | `checkins.test.ts`, `e2e/checkins.spec.ts` (kiosk test) | No free text and no body picture at the kiosk |
+| Settings → Session check-ins: on / off, kiosk offer, optional questions, chips, windows, alert thresholds; question-set version on every answer | verified locally | `checkins.test.ts`; a11y on `/settings/check-ins` | |
+| XP for each check-in, once per booking and phase, through the existing ledger | verified locally | `checkins.test.ts` | Reuses kind `wellness_checkin` |
+| Check-in completion line in the monthly recap | not implemented | | Recap snapshots are frozen under `tw_recap_v1` |
+
 ## Member journey (replaces the coaching program's checkbox spreadsheets; see `docs/modules/journey.md`)
 
 | Feature | Status | Test evidence | Gaps |

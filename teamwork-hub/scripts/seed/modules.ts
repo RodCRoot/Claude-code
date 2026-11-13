@@ -25,6 +25,7 @@ export const moduleSeeds: [string, (ctx: SeedCtx) => Promise<void>][] = [
   ["scoreboard", (ctx) => import("./scoreboard").then((m) => m.seedScoreboard(ctx))], // OPT-IN (see HISTORY_SEEDS): months of synthetic history for the owner scoreboard
   ["science", seedScience], // keep after any training seed (uses its set_logs if present)
   ["anywhere", (ctx) => import("./anywhere").then((m) => m.seedAnywhere(ctx))], // after training + science (reuses the exercise library, adds load rows)
+  ["checkins", (ctx) => import("./checkins").then((m) => m.seedCheckins(ctx))], // OPT-IN (see HISTORY_SEEDS): weeks of synthetic session check-ins; before engagement so their XP is derived
   ["engagement", (ctx) => import("./engagement").then((m) => m.seedEngagement(ctx))], // last: derives XP/badges from every other module
   ["showcase", (ctx) => import("./showcase").then((m) => m.seedShowcase(ctx))], // after engagement: recaps read badges and goals
   ["community", (ctx) => import("./community").then((m) => m.seedCommunity(ctx))], // after engagement (XP ledger, badges) and showcase (adds PRs it must not see)
@@ -37,4 +38,4 @@ export const moduleSeeds: [string, (ctx: SeedCtx) => Promise<void>][] = [
  * when a test names them in `modules`, but NOT in the default test seed, so other modules'
  * fixtures and counts stay as they were.
  */
-export const HISTORY_SEEDS = ["scoreboard"];
+export const HISTORY_SEEDS = ["scoreboard", "checkins"];

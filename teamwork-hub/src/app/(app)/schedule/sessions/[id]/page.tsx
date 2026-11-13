@@ -12,6 +12,7 @@ import { CapacityBar, Initials } from "../../_components/calendar";
 import { svcStyle } from "../../_components/time-grid";
 import { requireStaff } from "@/lib/auth/viewer";
 import { SessionFeedbackSummaryLine } from "@/components/retention/session-feedback-summary";
+import { SessionReadinessStrip } from "@/components/checkins/session-strip";
 import { can } from "@/lib/authz/policy";
 import { listCoaches } from "@/lib/scheduling/availability";
 import { canRunSession } from "@/lib/scheduling/common";
@@ -144,6 +145,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
 
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
+          {!cancelled ? <SessionReadinessStrip viewer={v} sessionId={s.id} names={Object.fromEntries(active.map((r) => [r.booking.athleteId, `${r.first} ${r.last}`]))} /> : null}
           <Card>
             <CardHeader title="Roster" kicker="Attendance" action={<span className="text-xs text-ink-3 tabular">{active.length} on roster</span>} />
             {active.length === 0 ? (

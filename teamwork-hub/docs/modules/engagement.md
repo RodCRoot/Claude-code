@@ -71,6 +71,7 @@ page load, repeatedly, and concurrently.
 | `session_attended` | booking with status `attended` | `session:<bookingId>` | 20 |
 | `workout_completed` | workout with status `completed` | `workout:<workoutId>` | 15 |
 | `wellness_checkin` | any questionnaire response for a date | `checkin:<athleteId>:<date>` | 5 |
+| `wellness_checkin` (same kind and points) | a session ready check or after check (`session_checkins`), once per booking and phase | `session_checkin:<bookingId>:<pre|post>` | 5 |
 | `pr_set` | a max that beats every earlier max of the same kind for that lift | `pr:<maxId>` | 25 |
 | `goal_achieved` | goal with status `achieved` | `goal:<goalId>` | 50 |
 | `form_signed` | completed form request (not imported archives) | `form:<requestId>` | 10 |

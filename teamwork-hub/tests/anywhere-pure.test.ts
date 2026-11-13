@@ -198,7 +198,7 @@ describe("load origin split (load_origin_v1)", () => {
 });
 
 describe("engagement: On Your Own as a streak and XP source", () => {
-  const empty: Activity = { attended: [], workouts: [], onYourOwn: [], checkinDays: [], prs: [], holds: [], goalsAchieved: [], formsSigned: [] };
+  const empty: Activity = { attended: [], workouts: [], onYourOwn: [], checkinDays: [], sessionCheckins: [], prs: [], holds: [], goalsAchieved: [], formsSigned: [] };
   it("a finished session makes the week active and earns its own, lower, XP kind", () => {
     const a: Activity = { ...empty, onYourOwn: [{ id: "c1", completedAt: new Date("2026-11-04T23:00:00Z"), localDate: "2026-11-04" }] };
     expect(streakFromActivity(empty, "2026-11-10").current).toBe(0);

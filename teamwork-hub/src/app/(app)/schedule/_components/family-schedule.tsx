@@ -15,7 +15,7 @@ import { byDay, dayLabel, MonthView } from "./calendar";
 import { hrefWith, rangeLabel, type Params } from "./nav";
 import { coachShort, svcStyle } from "./time-grid";
 import { liveBySession, policiesByService, ReserveControl, spotsText, type BookingRules, type FamilyBooking, type FamilyMember } from "./reserve-control";
-import { SessionFeedbackCard } from "@/components/retention/feedback-card";
+import { SessionCheckinCard } from "@/components/checkins/home-card";
 
 type Range = ReturnType<typeof calendarRange>;
 type Policies = Awaited<ReturnType<typeof policiesByService>>;
@@ -312,7 +312,7 @@ export async function FamilySchedule({ viewer, params, range, tz, today }: { vie
           </div>
         )}
       </section>
-      <SessionFeedbackCard viewer={viewer} />
+      <SessionCheckinCard viewer={viewer} />
     </div>
   );
 }

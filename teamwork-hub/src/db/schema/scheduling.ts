@@ -127,6 +127,8 @@ export const scheduleSessions = pgTable(
     cancelReason: text("cancel_reason"),
     visibility: text("visibility").$type<"public" | "members" | "private">().notNull().default("members"),
     notes: text("notes"),
+    /** Optional: how hard the coach meant this session to be (session RPE 0 to 10). Compared with what athletes report in the after check. */
+    intendedRpe: integer("intended_rpe"),
     /** Monotonic counter for optimistic concurrency on edits. */
     version: integer("version").notNull().default(1),
     isDemo: isDemo(),

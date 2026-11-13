@@ -11,7 +11,7 @@ No scheduled job: the radar, the winback list and milestones are worked out live
 | Retention radar | `/people/retention` (People → Retention) | owner, admin, operations; coaches see assigned athletes only |
 | Winback list | `/people/retention/winback` | owner, admin, operations |
 | One feedback response | `/people/retention/feedback/[id]` | owner, admin, operations; a coach only if "tell my coach" was ticked |
-| Leave feedback | `/feedback/[bookingId]` and the card on the family schedule page | the athlete, or a guardian who may book for the athlete |
+| Leave feedback | `/check-ins/[bookingId]/after` (old `/feedback/[bookingId]` links redirect there) and the "Session check-ins" card on Athlete Home and the family schedule | the athlete, or a guardian who may book for the athlete |
 | Milestones this week | card on the staff dashboard (`/today`) | owner, admin, operations |
 | Thresholds | Settings → "Retention radar thresholds" (`/settings#retention`) | owner, admin |
 | Reports | `/reports/retention-saves`, `/reports/session-feedback` | see Reports below |
@@ -64,6 +64,8 @@ Each chip is shown with its evidence in plain language, for example: "2 visits i
 `retention_actions`: athlete, what staff did, outcome (`saved`, `still_at_risk`, `lost`), reason code (required for a loss, enforced by a database CHECK), notes, a snapshot of the level and signals at that moment, the value-at-risk estimate, staff member and timestamps. Every entry writes an audit event (`retention.outcome_log`).
 
 ## Session feedback
+
+**Since the session check-ins module (`docs/modules/checkins.md`) the rating is asked inside the after check**, so an athlete is never asked twice. `/feedback/[bookingId]` redirects to `/check-ins/[bookingId]/after`, and the family card is now "Session check-ins". The rating is still stored in `session_feedback` through `submitFeedback`, so everything below (one response per booking, the 24 hour edit window, the entry window, coach anonymity, the low-rating task, the radar signal, the averages report) is unchanged. The old comment box maps to the after check's "Any other notes?".
 
 After an attended session has ended, the athlete or a guardian can leave a 1 to 5 rating, an optional comment and an optional "tell my coach" tick.
 

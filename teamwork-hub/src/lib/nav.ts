@@ -31,6 +31,7 @@ export const NAV: NavItem[] = [
   { key: "refer", href: "/refer", label: "Refer a friend", roles: FAMILY, icon: "gift", group: "members" },
   { key: "training", href: "/training", label: "Training", roles: ALL, icon: "training", group: "coaching" },
   { key: "science", href: "/science", label: "Sports Science", roles: ALL, icon: "science", group: "coaching" },
+  { key: "check-ins", href: "/check-ins", label: "Session check-ins", familyLabel: "Check-ins", roles: ALL, icon: "science", group: "coaching" },
   { key: "performance", href: "/performance", label: "Performance", roles: ALL, icon: "performance", group: "coaching" },
   { key: "anywhere", href: "/anywhere", label: "On Your Own", roles: FAMILY, icon: "anywhere", group: "coaching" },
   { key: "goals", href: "/goals", label: "Goals", roles: FAMILY, icon: "goals", group: "coaching" },
