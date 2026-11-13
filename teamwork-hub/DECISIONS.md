@@ -102,4 +102,18 @@ Each one is a setting or a small change, not a rebuild. The current behaviour is
   - *Scope:* at-home sessions only. Workouts, habits and practice or game logs stay with the athlete and coaches.
   - *Record:* the completion stores who logged it and `logged_as = guardian`; the audit entry says a parent logged it on behalf of an athlete under 13; coaches see a "Logged by parent: name" badge in the review queue and families see "logged by a parent" in the history. It counts toward streaks, XP and load exactly like the athlete's own log (same rows).
 - **One gym TV board for the whole business is fine (no per-location boards).** Nothing to build; the board stays one per organization.
+- **News clips need approval (2026-11-12):** "have me approve them before sharing". No auto-sharing exists; owner/admin approve every clip, with a setting to extend approval to operations or coaches.
+- **Local news sources (2026-11-12):** watch the Herald-Times, the Bedford paper and Greene County sports coverage, plus alumni college athletes.
+- **Pre and post session check-ins (2026-11-12):** short questionnaires tracked over time: liked, did not like, anything that hurt, notes, intensity and soreness, not only a 1 to 5 rating.
+- **Parent screens should match Zen Planner closely (2026-11-11):** built from memory; awaiting Rod's screenshots or screen recording to verify details (`docs/modules/zp-parity.md`).
+
+## Open decisions for Rod (owner tools wave)
+1. Check-ins: likes, dislikes and rating reach the coach with the athlete's name only if the athlete ticks "show my coach" (the old form's promise). Make named the default?
+2. Check-ins: should a coach be able to fill one in on behalf of a young athlete?
+3. News watch: the Bedford Times-Mail is effectively not covered by free feeds. Paid news service, or add Bedford clips by hand?
+4. News watch: the news search feed is a third-party service; review its terms before real use.
+5. Wins: consent wording, caption templates and XP values are sample values.
+6. Existing saved cards in Zen Planner: ask Zen Planner's processor for a transfer to Stripe, or have families re-enter once at cutover?
+7. Bank pay: offer a monthly discount for paying by bank account? (Card surcharges are not built; ask the accountant.)
+8. Membership agreement and waiver wording: everything in the app is sample text until the real documents are supplied.
 
