@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { formAuditEvents, users, type FormField } from "@/db/schema";
+import { formAuditEvents, signupFlows, users, type FormField } from "@/db/schema";
+import { can } from "@/lib/authz/policy";
+import { inScope, payablePayerIds } from "@/lib/billing/access";
 import { requireViewer } from "@/lib/auth/viewer";
 import { loadRequestContext } from "@/lib/forms/context";
 import { requestAccess } from "@/lib/forms/access";
@@ -41,6 +43,9 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
   const actorName = (uid: string | null) => (uid ? (actors.find((a) => a.id === uid)?.name ?? "Unknown user") : "System");
   const fields = (ctx.version.fields ?? []) as FormField[];
   const provider = esignProvider();
+  // An open guided sign-up for this athlete: offer the way back (only to people who may use that flow).
+  const [flowRow] = ctx.req.athleteId ? await db.select({ id: signupFlows.id, payerAccountId: signupFlows.payerAccountId }).from(signupFlows).where(and(eq(signupFlows.athleteId, ctx.req.athleteId), eq(signupFlows.orgId, v.orgId), eq(signupFlows.status, "open"))) : [];
+  const signupFlow = flowRow && (can(v, "billing.manage") || inScope(await payablePayerIds(db, v), flowRow.payerAccountId)) ? flowRow : null;
   const stepUp = st.mine.length ? await stepUpStatus(db, v, ctx) : null;
 
   return (
@@ -61,6 +66,19 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
           </ButtonLink>
         }
       />
+      {signupFlow ? (
+        <Callout tone="info" className="mb-5" title="Part of a membership sign-up">
+          {ctx.req.status === "completed" ? "This one is signed. " : "Sign this, then continue the sign-up. "}
+          <Link href={`/billing/signup/${signupFlow.id}`} className="font-semibold underline">
+            Back to the sign-up
+          </Link>
+        </Callout>
+      ) : null}
+      {ctx.req.renderedBodyMarkdown != null ? (
+        <Callout tone="info" className="mb-5" title="Membership agreement">
+          The plan, price, dates and terms below were filled in from the membership when this agreement was issued. This exact text is what is signed and kept; later changes to prices or policies do not change it.
+        </Callout>
+      ) : null}
       {signed ? (
         <Callout tone="ok" className="mb-5" title="Your signature was recorded">
           {ctx.req.status === "completed"
@@ -85,7 +103,7 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
           <Card>
             <CardHeader title="Document" kicker="Exactly as published" />
             <CardBody>
-              <FormMarkdown source={ctx.version.bodyMarkdown} />
+              <FormMarkdown source={ctx.req.renderedBodyMarkdown ?? ctx.version.bodyMarkdown} />
             </CardBody>
           </Card>
 

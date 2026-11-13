@@ -22,6 +22,8 @@ export type RenewalSummary = {
   /** Commitments that ended this run (membership continues month-to-month at the committed rate). */
   commitmentsEnded: number;
   familyDiscountChanges: number;
+  /** Not billed because the org makes billing wait for a signed membership agreement. */
+  waitingForAgreement: number;
 };
 
 const SYSTEM = (orgId: string) => ({ orgId, actorUserId: null, actorRole: "system" });
@@ -35,7 +37,7 @@ const SYSTEM = (orgId: string) => ({ orgId, actorUserId: null, actorRole: "syste
  * - Cancelled memberships / periods on or after cancel_at are not billed.
  */
 export async function generateRenewals(tx: Tx, orgId: string, today: string): Promise<RenewalSummary> {
-  const s: RenewalSummary = { invoicesCreated: 0, alreadyBilled: 0, deferredForHold: 0, cancelled: 0, planChangesApplied: 0, skippedExternal: 0, skippedProviderBilled: 0, statusChanges: 0, commitmentsEnded: 0, familyDiscountChanges: 0 };
+  const s: RenewalSummary = { invoicesCreated: 0, alreadyBilled: 0, deferredForHold: 0, cancelled: 0, planChangesApplied: 0, skippedExternal: 0, skippedProviderBilled: 0, statusChanges: 0, commitmentsEnded: 0, familyDiscountChanges: 0, waitingForAgreement: 0 };
   const ext = await tx.execute(sql`
     select count(*)::int as n from memberships where org_id = ${orgId} and billing_provider = 'external_zenplanner'
       and status in ('active','trialing','past_due','pending','on_hold') and next_bill_date <= ${today}`);
@@ -60,7 +62,13 @@ export async function generateRenewals(tx: Tx, orgId: string, today: string): Pr
     .for("update", { skipLocked: true });
 
   const endedPayers = new Set<string>();
+  const { agreementSettings, syncMembershipAgreement } = await import("@/lib/agreements/issue");
+  const billingWaits = (await agreementSettings(tx, orgId)).billingWaitsForSignature;
   for (let m of due) {
+    if (billingWaits && m.agreementState === "awaiting") {
+      s.waitingForAgreement++;
+      continue;
+    }
     for (let guard = 0; guard < 24 && m.nextBillDate && m.nextBillDate <= today; guard++) {
       const periodStart = m.nextBillDate;
       if (m.cancelAt && periodStart >= m.cancelAt) {
@@ -117,6 +125,7 @@ export async function generateRenewals(tx: Tx, orgId: string, today: string): Pr
         await tx.insert(membershipEvents).values({ membershipId: m.id, type: "plan_changed", fromVersionId: m.productVersionId, toVersionId: sched.toVersionId, effectiveOn: periodStart, details: { scheduledEventId: sched.id } });
         m = { ...m, productVersionId: sched.toVersionId };
         s.planChangesApplied++;
+        await syncMembershipAgreement(tx, SYSTEM(orgId), m.id);
       }
       const [row] = await tx
         .select({ version: productVersions, name: products.name })

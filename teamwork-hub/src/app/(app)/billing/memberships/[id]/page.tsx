@@ -16,6 +16,12 @@ import { billingMethodView } from "@/lib/billing/subscriptions";
 import { addHoldAction, cancelMembershipAction, cancelSubscriptionAction, changePlanAction, cutoverAction, removeHoldAction, startInSeasonAction } from "../../actions";
 import { BillingTabs, InvoiceStatus, Money, PROVIDER_LABEL, requireBillingViewer } from "../../_components";
 import { BillingMethodCard } from "./_billing-method";
+import { AGREEMENT_REASON_LABEL, currentAgreement } from "@/lib/agreements/issue";
+import { listMethodViews } from "@/lib/billing/payment-methods";
+import { payablePayerIds, inScope } from "@/lib/billing/access";
+import { cutoverReadiness } from "@/lib/billing/memberships";
+import { setAutopayAction } from "../../payment-methods/actions";
+import { requireAgreementAction } from "../../actions";
 
 export const metadata = { title: "Membership" };
 
@@ -57,6 +63,13 @@ export default async function MembershipPage({ params }: { params: Promise<{ id:
   const cancelPreview = staff && live && !ext ? await cancellationPreview(db, v.orgId, d.m.id, today) : null;
   const inSeasonPlans = plans.filter((p) => /in.?season/i.test(p.name));
   const suggestedRestart = addMonthsYmd(today, policy.defaultHoldMonths);
+  // Autopay + agreement (families who can pay the account, and billing staff).
+  const canPayHere = !!d.m.payerAccountId && inScope(await payablePayerIds(db, v), d.m.payerAccountId);
+  const methods = d.m.payerAccountId ? (await listMethodViews(db, v, { payerAccountId: d.m.payerAccountId })).filter((x) => x.status === "active") : [];
+  const autopayMethod = d.m.autopay ? (methods.find((x) => x.id === d.m.autopayMethodId) ?? methods.find((x) => x.isDefault) ?? null) : null;
+  const agreement = await currentAgreement(db, d.m.id);
+  const ready = ext ? await cutoverReadiness(db, d.m) : null;
+  const autopayCapable = d.m.billingProvider === "manual" || ext;
   return (
     <>
       <PageHeader
@@ -78,10 +91,85 @@ export default async function MembershipPage({ params }: { params: Promise<{ id:
               <input type="hidden" name="membershipId" value={d.m.id} />
               <Field label="First Teamwork bill date" htmlFor="fbd"><Input id="fbd" name="firstBillDate" type="date" required /></Field>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="zpStopped" /> I confirmed the Zen Planner recurring charge is stopped</label>
+              <div className="w-full text-sm">
+                <span className="font-semibold">Also needed: </span>
+                {ready?.agreementSigned ? "✓ new membership agreement signed" : "○ new membership agreement signed"} · {ready?.methodOnFile ? "✓ payment method saved (autopay will be switched on)" : "○ payment method saved"}.{" "}
+                {!ready?.agreementSigned || !ready?.methodOnFile ? <Link href="/billing/signup" className="underline">Start the sign-up flow for this family</Link> : null}
+              </div>
+              {!ready?.agreementSigned || !ready?.methodOnFile ? (
+                <Field label="Reason to cut over without them (optional, audited)" htmlFor="cutoverOverride" hint="For example: the family pays each bill at the front desk."><Input id="cutoverOverride" name="overrideReason" /></Field>
+              ) : null}
               <SubmitButton size="sm" variant="secondary" confirm="Switch this membership to Teamwork Hub invoicing?">Cut over</SubmitButton>
             </ActionForm>
           ) : null}
         </Callout>
+      ) : null}
+      {live && (autopayCapable || agreement || manage) ? (
+        <div className="mb-6 grid gap-6 lg:grid-cols-2 [&>*]:min-w-0">
+          {autopayCapable ? (
+            <Card>
+              <CardHeader title="Autopay" action={d.m.autopay && autopayMethod ? <Badge variant="green">On</Badge> : d.m.autopay ? <Badge variant="red">On, no working method</Badge> : <Badge>Off</Badge>} />
+              <CardBody className="space-y-3 text-sm">
+                <p className="text-ink-2">
+                  {ext
+                    ? "Still billed in the previous system. This choice takes effect only after the membership is moved over."
+                    : d.m.autopay && autopayMethod
+                      ? `Each bill is charged to ${autopayMethod.label} on its due date. A bank payment shows as pending for a few business days and counts as paid only once the bank confirms it.`
+                      : d.m.autopay
+                        ? "Autopay is on, but there is no active saved payment method, so nothing will be charged automatically."
+                        : "Each bill is paid with Pay Now, or at the front desk."}
+                </p>
+                {manage || canPayHere ? (
+                  methods.length || d.m.autopay ? (
+                    <ActionForm action={setAutopayAction} className="flex flex-wrap items-end gap-2">
+                      <input type="hidden" name="membershipId" value={d.m.id} />
+                      {d.m.autopay ? (
+                        <SubmitButton size="sm" variant="secondary" name="autopay" value="off">Turn autopay off</SubmitButton>
+                      ) : (
+                        <>
+                          <Field label="Pay with" htmlFor="autopayMethod">
+                            <Select id="autopayMethod" name="methodId" defaultValue={methods.find((x) => x.isDefault)?.id ?? methods[0]?.id}>
+                              {methods.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+                            </Select>
+                          </Field>
+                          <SubmitButton size="sm" name="autopay" value="on">Turn autopay on</SubmitButton>
+                        </>
+                      )}
+                    </ActionForm>
+                  ) : (
+                    <p className="text-ink-3">No card or bank account is saved for this account yet.</p>
+                  )
+                ) : null}
+                {staff && d.m.payerAccountId ? (
+                  <p><Link href={`/billing/payment-methods?payer=${d.m.payerAccountId}`} className="underline">Payment methods on file and a link to hand over</Link></p>
+                ) : canPayHere ? (
+                  <p><Link href="/billing/payment-methods" className="underline">Manage payment methods</Link></p>
+                ) : null}
+              </CardBody>
+            </Card>
+          ) : null}
+          <Card>
+            <CardHeader title="Membership agreement" action={d.m.agreementState === "signed" ? <Badge variant="green">Signed</Badge> : d.m.agreementState === "awaiting" ? <Badge variant="yellow">Awaiting signature</Badge> : <Badge>Not required</Badge>} />
+            <CardBody className="space-y-3 text-sm">
+              {agreement ? (
+                <p className="text-ink-2">
+                  {AGREEMENT_REASON_LABEL[agreement.reason] ?? agreement.reason} · issued {fmtDate(agreement.createdAt)}
+                  {agreement.signedAt ? ` · signed ${fmtDate(agreement.signedAt)}` : ""}.{" "}
+                  <Link href={`/documents/requests/${agreement.formRequestId}`} className="underline">{agreement.signedAt ? "View the signed agreement" : "Review and sign"}</Link>
+                </p>
+              ) : (
+                <p className="text-ink-2">No membership agreement has been issued for this membership.</p>
+              )}
+              {d.m.agreementState === "awaiting" ? <p className="text-ink-2">Until it is signed, reservations may be blocked (gym setting). The signed copy keeps the exact terms shown when it was issued.</p> : null}
+              {manage ? (
+                <ActionForm action={requireAgreementAction}>
+                  <input type="hidden" name="membershipId" value={d.m.id} />
+                  <SubmitButton size="sm" variant="secondary">{agreement ? "Re-issue from current terms" : "Require a membership agreement"}</SubmitButton>
+                </ActionForm>
+              ) : null}
+            </CardBody>
+          </Card>
+        </div>
       ) : null}
       <div className="grid gap-6 lg:grid-cols-3 [&>*]:min-w-0">
         <Card>

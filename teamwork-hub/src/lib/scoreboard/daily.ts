@@ -6,6 +6,7 @@ import { weeklyCap } from "@/lib/member-ops/common";
 import { EXCEPTION_LABELS, membershipAuditSweep, type AuditResult } from "@/lib/member-ops/membership-audit";
 import { retentionRadar, type RadarResult } from "@/lib/retention/radar";
 import { addDaysYmd, isoWeekday, startOfWeekYmd } from "@/lib/time";
+import { AUTOPAY_READY_SQL } from "@/lib/billing/payment-methods";
 import {
   activeOn,
   addMonths,
@@ -272,9 +273,17 @@ const cohortRows = (c: Ctx, d: string) => sql`
     order by ms.athlete_id, ms.monthly_minor desc nulls last) x
   where x.days >= ${c.settings.thresholds.cohortMinDays} and x.days <= ${c.settings.thresholds.cohortMaxDays}`;
 
+/**
+ * "Autopay off": Teamwork-invoiced and NOT charged automatically, i.e. autopay is switched off or there is no
+ * active saved payment method to charge. Same rule as autopayOffMembershipIds in billing/payment-methods.ts.
+ * Autopay state has no history, so past days use today's state.
+ */
 const autopayOffRows = (c: Ctx, d: string) => sql`
-  select 'membership' as ref_kind, ms.id as ref_id, ms.name, ms.product || ' · invoiced by Teamwork each period (no Stripe / PayPal subscription)' as detail, ms.monthly_minor as amount_minor, ms.next_bill_date as day, ms.athlete_id, ms.product as grp
-  from ms where ${activeOn("ms", d)} and not ${trialOn("ms", d)} and ms.billing_provider = 'manual'`;
+  select 'membership' as ref_kind, ms.id as ref_id, ms.name,
+    ms.product || case when (select m.autopay from memberships m where m.id = ms.id) then ' · autopay is on but no active saved payment method' else ' · autopay is off: each bill is paid by the family or at the front desk' end as detail,
+    ms.monthly_minor as amount_minor, ms.next_bill_date as day, ms.athlete_id, ms.product as grp
+  from ms where ${activeOn("ms", d)} and not ${trialOn("ms", d)} and ms.billing_provider = 'manual'
+    and not exists (select 1 from memberships m where m.id = ms.id and ${AUTOPAY_READY_SQL})`;
 
 const expiringRows = (c: Ctx, d: string) => sql`
   select 'membership' as ref_kind, ms.id as ref_id, ms.name, ms.product || ' · ends ' || to_char(coalesce(ms.end_date, ms.cancel_at), 'Mon DD, YYYY') as detail, ms.monthly_minor as amount_minor, coalesce(ms.end_date, ms.cancel_at) as day, ms.athlete_id, ms.product as grp
@@ -680,13 +689,13 @@ export const DAILY_METRICS: MetricDef[] = [
     label: "Memberships with autopay off",
     group: "Membership checks",
     kind: "count",
-    version: 1,
+    version: 2,
     definition:
-      "Active, non-trial memberships invoiced by Teamwork each period (billing set to manual) instead of a Stripe or PayPal subscription, so nothing is charged automatically. Memberships billed by Zen Planner or set to no billing are not listed: the Hub cannot see whether a card is on file there.",
+      "Active, non-trial memberships invoiced by Teamwork where nothing will be charged automatically: autopay is switched off for the membership, or it is on but the payer has no active saved card or bank account to charge. Memberships on a Stripe or PayPal subscription charge themselves and are not listed. Memberships billed by Zen Planner or set to no billing are not listed: the Hub cannot see whether a card is on file there. (Version 1 listed every Teamwork-invoiced membership, because saved payment methods did not exist yet.)",
     filterNote: MEMBERSHIP_FILTER,
     dims: BOTH,
     rows: autopayOffRows,
-    change: { none: "Billing-method history is not stored." },
+    change: { none: "Autopay history is not stored." },
   },
   {
     key: "expiring_30",

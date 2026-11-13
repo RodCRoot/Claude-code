@@ -280,6 +280,21 @@ async function loadFacts(tx: Tx, orgId: string, today: string, tz: string, athle
             group by a.id`,
       )
     : [];
+  // An unsigned membership agreement blocks booking the same way (unless the org switched that rule off).
+  const awaiting = billedAthletes.length
+    ? await rowsOf<{ athlete_id: string }>(
+        tx,
+        sql`select distinct m.athlete_id from memberships m join organizations o on o.id = m.org_id
+            where m.org_id = ${orgId} and m.agreement_state = 'awaiting' and m.status in ('pending','trialing','active','on_hold','past_due')
+              and m.athlete_id in (${inList(billedAthletes)})
+              and coalesce((o.settings->'agreements'->>'blockReservationsUntilSigned')::boolean, true)`,
+      )
+    : [];
+  for (const a of awaiting) {
+    const row = docs.find((d) => d.athlete_id === a.athlete_id);
+    if (row) row.forms = `Membership agreement, ${row.forms}`;
+    else docs.push({ athlete_id: a.athlete_id, forms: "Membership agreement" });
+  }
   return {
     memberships,
     holds,

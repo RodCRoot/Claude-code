@@ -7,6 +7,13 @@ import {
   type SubscriptionProviderAdapter,
 } from "./provider";
 import { stripeAdapter, stripeSubscriptions } from "./stripe";
+import { stripeSavedMethods } from "./stripe-methods";
+import type { SavedMethodProviderAdapter } from "./provider";
+
+/** The provider that vaults saved cards / bank accounts and runs autopay charges. Stripe only. */
+export function getSavedMethodProvider(): SavedMethodProviderAdapter {
+  return stripeSavedMethods;
+}
 
 export type SubscriptionProviderName = "stripe" | "paypal";
 export const SUBSCRIPTION_PROVIDERS: SubscriptionProviderName[] = ["stripe", "paypal"];

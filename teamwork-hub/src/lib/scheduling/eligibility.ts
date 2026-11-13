@@ -72,6 +72,11 @@ export async function checkEligibility(
     }
   }
 
+  // A membership created as "awaiting agreement" blocks reservations until signed (org setting, on by default).
+  const { agreementBlock } = await import("@/lib/agreements/issue");
+  const blocked = await agreementBlock(tx, input.orgId, input.athleteId);
+  if (blocked) reasons.push(blocked);
+
   if (el.minAge != null || el.maxAge != null) {
     if (!a.dob) reasons.push("A date of birth is needed to check the age limit for this service.");
     else {

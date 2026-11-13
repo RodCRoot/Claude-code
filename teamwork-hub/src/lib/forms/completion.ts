@@ -81,7 +81,8 @@ export async function buildPdf(ctx: RequestContext, completedAt: Date, integrity
     version: ctx.version.version,
     contentHash: ctx.version.contentHash,
     isSampleText: ctx.version.isSampleText,
-    bodyMarkdown: ctx.version.bodyMarkdown,
+    // Membership agreements: the text frozen when the request was issued is what was signed.
+    bodyMarkdown: ctx.req.renderedBodyMarkdown ?? ctx.version.bodyMarkdown,
     subjectName: `${ctx.subject.firstName} ${ctx.subject.lastName}`,
     fields: fields.map((f) => ({ key: f.key, label: f.label })),
     values,
@@ -135,5 +136,8 @@ export async function completeRequest(tx: Tx, ctx: RequestContext, actorUserId: 
     pdfSha256: obj.sha256,
     expiresAt: expiresAt?.toISOString() ?? null,
   });
+  // Membership agreements: mark the linked membership as signed.
+  const { onFormRequestCompleted } = await import("@/lib/agreements/issue");
+  await onFormRequestCompleted(tx, ctx.req.id, completedAt);
   return { integrity, pdfObjectId: obj.id, pdfSha256: obj.sha256, expiresAt };
 }

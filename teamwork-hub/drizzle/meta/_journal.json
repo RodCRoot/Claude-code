@@ -225,6 +225,13 @@
       "when": 1794543400943,
       "tag": "0031_newswatch",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1794575111927,
+      "tag": "0032_signup",
+      "breakpoints": true
     }
   ]
 }

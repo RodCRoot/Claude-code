@@ -101,7 +101,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
             ) : !d.canPay ? (
               <Callout tone="info">You can view this {noun} but you are not authorized to pay it.</Callout>
             ) : money.pendingMinor > 0 ? (
-              <Callout tone="info" title="Payment processing">A payment of {formatMoney(money.pendingMinor)} is in flight. We&apos;ll update this {noun} when the provider confirms it.</Callout>
+              <Callout tone="info" title={latest?.methodType === "us_bank_account" ? "Pending bank payment" : "Payment processing"}>{latest?.methodType === "us_bank_account" ? <>A bank payment of {formatMoney(money.pendingMinor)} was started. Bank payments take a few business days. This {noun} is not paid until the bank confirms it.</> : <>A payment of {formatMoney(money.pendingMinor)} is in flight. We&apos;ll update this {noun} when the provider confirms it.</>}</Callout>
             ) : canPayOnline ? (
               <>
                 <p className="text-sm">Pay <strong><Money minor={money.balanceMinor} currency={inv.currency} /></strong> securely on the provider&apos;s hosted page. We never see your card or bank numbers.</p>

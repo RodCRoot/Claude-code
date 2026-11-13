@@ -127,7 +127,96 @@ export type NormalizedEvent =
       cancelAt: string | null;
       currentPeriodEnd: string | null;
     }
+  | {
+      /** A hosted "save a payment method" session / SetupIntent moved. */
+      kind: "method_setup";
+      /** session_completed only links the session to its SetupIntent; it never activates anything. */
+      status: "session_completed" | "succeeded" | "requires_verification" | "failed" | "expired";
+      /** Our payment_method_setups.id echoed back in metadata. */
+      setupId: string | null;
+      providerSessionId: string | null;
+      providerSetupIntentId: string | null;
+      providerCustomerId: string | null;
+      providerMethodId: string | null;
+      mandateRef: string | null;
+      /** Provider-hosted page for microdeposit verification, when handed back. */
+      verificationUrl: string | null;
+      failureCode?: string | null;
+      failureMessage?: string | null;
+    }
+  | {
+      /** Display details of a saved method (never a full number). */
+      kind: "method_update";
+      phase: "attached" | "updated" | "detached";
+      providerMethodId: string;
+      providerCustomerId: string | null;
+      type: string | null;
+      brand: string | null;
+      bankName: string | null;
+      last4: string | null;
+      expMonth: number | null;
+      expYear: number | null;
+    }
+  | { kind: "mandate"; mandateRef: string; providerMethodId: string | null; status: string }
+  | {
+      /** The processor's balance transaction for a charge is known; the fee is fetched from it. */
+      kind: "fee_hint";
+      providerTxnId: string;
+      balanceTransactionId: string;
+    }
   | { kind: "ignored"; reason: string };
+
+// ---------------------------------------------------------------------------
+// Saved payment methods + off-session charges
+// ---------------------------------------------------------------------------
+
+export type SavedMethodType = "card" | "us_bank_account";
+
+export type SetupSessionRequest = {
+  setupId: string;
+  providerCustomerId: string;
+  type: SavedMethodType;
+  successUrl: string;
+  cancelUrl: string;
+  idempotencyKey: string;
+};
+
+export type OffSessionChargeRequest = {
+  attemptId: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  amountMinor: number;
+  currency: string;
+  providerCustomerId: string;
+  providerMethodId: string;
+  methodType: SavedMethodType;
+  /** Required by the provider for bank debits. */
+  mandateRef: string | null;
+  idempotencyKey: string;
+};
+
+/**
+ * What the provider answered when the charge was created. This is NOT money state: an invoice is paid only
+ * when the verified webhook says so. A synchronous refusal (declined) is recorded on the attempt.
+ */
+export type OffSessionChargeResult = {
+  providerRef: string | null;
+  status: "submitted" | "requires_action" | "declined";
+  failureCode: string | null;
+  failureMessage: string | null;
+};
+
+export interface SavedMethodProviderAdapter {
+  name: "stripe";
+  isConfigured(): boolean;
+  missingEnv(): string[];
+  ensureCustomer(req: { orgId: string; payerAccountId: string; name: string; email: string | null; idempotencyKey: string }): Promise<string>;
+  createSetupSession(req: SetupSessionRequest): Promise<{ providerSessionId: string; url: string; providerSetupIntentId: string | null }>;
+  chargeSavedMethod(req: OffSessionChargeRequest): Promise<OffSessionChargeResult>;
+  detachMethod(req: { providerMethodId: string; idempotencyKey: string }): Promise<void>;
+  /** Processor fee for one payment (from its balance transaction), in minor units, as the provider reports it. Null = not available yet. */
+  fetchFee(providerTxnId: string): Promise<{ feeMinor: number; currency: string } | null>;
+}
 
 /** Ids we attach to a provider subscription so its webhooks can be matched back to a membership request. */
 export type SubscriptionHint = { membershipId: string; requestId: string | null };

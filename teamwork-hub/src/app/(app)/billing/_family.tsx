@@ -99,7 +99,9 @@ export function BillStatus({ r, extras, today }: { r: InvoiceRow; extras?: Extra
   else if (st === "void") label = "Void";
   else if (st === "uncollectible") label = "Closed";
   else if (st === "open") {
-    if (r.money.pendingMinor > 0) [label, variant, title] = ["Processing", "yellow", "A payment is in flight. It is not counted as paid until the provider confirms it."];
+    if (r.money.pendingMinor > 0 && extras?.pendingBank) [label, variant, title] = ["Pending bank payment", "yellow", "A bank payment was started and takes a few business days. It is not counted as paid until the bank confirms it."];
+    else if (r.money.pendingMinor > 0) [label, variant, title] = ["Processing", "yellow", "A payment is in flight. It is not counted as paid until the provider confirms it."];
+    else if (extras?.bankReturned) [label, variant, title] = ["Returned by bank", "red", "The bank returned this payment, so the bill is unpaid again."];
     else if (extras?.lastAttemptFailed) [label, variant, title] = ["Failed", "red", "The last online payment did not go through. Nothing was charged."];
     else if (r.invoice.dueDate && r.invoice.dueDate < today) [label, variant] = ["Unpaid · past due", "red"];
     else [label, variant] = ["Unpaid", "yellow"];
@@ -358,10 +360,10 @@ export async function FamilyMemberships({ v }: { v: Viewer }) {
   const packs = accounts.flatMap((a) => a.athletes).filter((ath, i, all) => all.findIndex((x) => x.athleteId === ath.athleteId) === i);
   return (
     <>
-      <PageHeader kicker="My Profile" title="Memberships" />
+      <PageHeader kicker="My Profile" title="Memberships" actions={<ButtonLink href="/billing/signup" variant="secondary" className="min-h-11">Sign up for a membership</ButtonLink>} />
       <BillingTabs current="memberships" staff={false} />
       {cards.length === 0 ? (
-        <EmptyState title="No memberships">No one on your billing accounts has a membership yet. Ask the front desk about plans.</EmptyState>
+        <EmptyState title="No memberships" action={<ButtonLink href="/billing/signup" className="min-h-11">Choose a plan</ButtonLink>}>No one on your billing accounts has a membership yet. If you pay for the account you can choose a plan here, or ask the front desk.</EmptyState>
       ) : (
         <ul className="grid gap-4 md:grid-cols-2 [&>*]:min-w-0">
           {cards.map(({ r, version, hold, credits, price }) => {

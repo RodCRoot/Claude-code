@@ -68,7 +68,7 @@ The exact text is in the Definitions drawer on the page (`definitionsFor("daily"
 | Collected month to date / last month | Settled charges and manual payments by settlement time (Collected revenue report's rule) |
 | Billed this month | Invoices issued, excluding drafts and voids (Invoiced report's rule) |
 | Projected recurring revenue, next month | Monthly-equivalent net price x share of next month's days the membership is running and not on hold. Zen Planner-billed and trial memberships excluded |
-| Memberships with autopay off | Active memberships invoiced by Teamwork each period (`manual`) rather than a Stripe / PayPal subscription |
+| Memberships with autopay off (definition v2) | Active memberships invoiced by Teamwork where nothing is charged automatically: autopay is off for the membership, or it is on but the payer has no active saved payment method (`AUTOPAY_READY_SQL` in `billing/payment-methods.ts`) |
 | Memberships expiring in 30 days | End date or scheduled cancellation in the next 30 days |
 | People with more than one active membership | Two or more active non-trial memberships (a regular plan paused for in-season is not a second one) |
 | Attending above the plan's weekly limit | The membership audit's `over_cap_usage` exceptions |
@@ -126,7 +126,7 @@ Two charts, both using the reports' `ChartFigure` + `ReportBarChart` (sold vs lo
 - No stored history: "yesterday's change" for lead stages, the radar and billing method is not available; monthly At-risk has the current month only.
 - A lead who showed and was later marked Lost is not counted as showed unless a booking was checked in (the CRM keeps only the current stage). Close rate can exceed 100% when a sale follows an earlier month's consult.
 - Leads cannot be filtered by location or program.
-- Autopay off means "invoiced by Teamwork" because the Hub has no separate autopay flag; Zen Planner-billed memberships are not judged.
+- Autopay off now uses the per-membership autopay flag and saved payment methods (see `payments-autopay.md`); autopay history is not stored, so past days use today's state. Zen Planner-billed memberships are not judged. `expiringCards()` (cards expiring within 60 days) is exposed for a future tile; the scoreboard page does not show it yet.
 - No accounting integration, no ad-platform integration, no scheduled email of the scoreboard.
 - Money is assumed to be in the organization's one currency.
 

@@ -213,7 +213,7 @@ export async function syncJourneys(tx: Tx, orgId: string, opts: { today?: string
     fact(r.athlete_id).completedForms = Number(r.completed);
   }
   const payersWithMethod = new Set(
-    (await rowsOf<{ id: string }>(tx, sql`select distinct pm.payer_account_id as id from payment_methods pm join payer_accounts pa on pa.id = pm.payer_account_id where pa.org_id = ${orgId}`)).map((r) => r.id),
+    (await rowsOf<{ id: string }>(tx, sql`select distinct pm.payer_account_id as id from payment_methods pm join payer_accounts pa on pa.id = pm.payer_account_id where pa.org_id = ${orgId} and pm.status = 'active'`)).map((r) => r.id),
   );
   for (const m of ms) if (isLive(m) && (m.providerSubscriptionId || (m.payerAccountId && payersWithMethod.has(m.payerAccountId)))) fact(m.athleteId).hasPaymentMethod = true;
   const directCoach = new Map<string, string>();

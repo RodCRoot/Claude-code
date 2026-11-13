@@ -125,6 +125,7 @@ export async function createMembershipAction(_p: ActionState, fd: FormData) {
         billingAnchorDay: optInt(fd, "anchorDay"),
         billingProvider: (s(fd, "billingProvider") || "manual") as InternalBillingProvider,
         stubOverride: s(fd, "stubOverride") ? { amountMinor: money(fd, "stubOverride", "the first-period amount"), reason: s(fd, "stubOverrideReason") } : null,
+        requireAgreement: fd.get("requireAgreement") === "on",
         today: todayLocal(),
       }),
     );
@@ -241,8 +242,17 @@ export async function cancelSubscriptionAction(_p: ActionState, fd: FormData) {
 export async function cutoverAction(_p: ActionState, fd: FormData) {
   return run(async () => {
     const v = await requireViewer();
-    await db.transaction((tx) => cutoverMembership(tx, v, { membershipId: s(fd, "membershipId"), firstBillDate: s(fd, "firstBillDate"), zenPlannerStopped: fd.get("zpStopped") === "on", today: todayLocal() }));
+    await db.transaction((tx) => cutoverMembership(tx, v, { membershipId: s(fd, "membershipId"), firstBillDate: s(fd, "firstBillDate"), overrideReason: String(fd.get("overrideReason") ?? "") || null, zenPlannerStopped: fd.get("zpStopped") === "on", today: todayLocal() }));
     return { ok: true, message: "Membership now billed by Teamwork Hub from the chosen date." };
+  });
+}
+
+export async function requireAgreementAction(_p: ActionState, fd: FormData) {
+  return run(async () => {
+    const v = await requireViewer();
+    const { requireAgreement } = await import("@/lib/agreements/issue");
+    const r = await db.transaction((tx) => requireAgreement(tx, v, s(fd, "membershipId")));
+    return { ok: true, message: r.created ? "Membership agreement issued for signature." : "The current agreement already matches this membership." };
   });
 }
 

@@ -87,6 +87,19 @@ function meta(o: Obj): Obj {
   return (o.metadata && typeof o.metadata === "object" ? o.metadata : {}) as Obj;
 }
 
+/**
+ * The parsed payload is what gets stored in webhook_events. PaymentMethod events carry more than we may
+ * keep (routing number, fingerprints, billing address): reduce them to the display fields we use.
+ */
+function redactMethodObject(type: string, o: Obj) {
+  if (!type.startsWith("payment_method.")) return;
+  const card = (o.card && typeof o.card === "object" ? o.card : null) as Obj | null;
+  const bank = (o.us_bank_account && typeof o.us_bank_account === "object" ? o.us_bank_account : null) as Obj | null;
+  for (const k of Object.keys(o)) if (!["id", "object", "customer", "type", "card", "us_bank_account", "created", "livemode"].includes(k)) delete o[k];
+  if (card) o.card = { brand: card.brand, last4: card.last4, exp_month: card.exp_month, exp_year: card.exp_year };
+  if (bank) o.us_bank_account = { bank_name: bank.bank_name, last4: bank.last4 };
+}
+
 /** Map a Stripe event to our provider-agnostic shape. Unknown types are explicitly ignored. */
 export function normalizeStripeEvent(type: string, o: Obj): NormalizedEvent {
   switch (type) {
@@ -94,6 +107,21 @@ export function normalizeStripeEvent(type: string, o: Obj): NormalizedEvent {
     case "checkout.session.async_payment_succeeded":
     case "checkout.session.async_payment_failed":
     case "checkout.session.expired": {
+      if (o.mode === "setup") {
+        // Setup mode saves a payment method; nothing is charged. Activation comes from setup_intent.succeeded.
+        if (type !== "checkout.session.completed" && type !== "checkout.session.expired") return { kind: "ignored", reason: `setup-mode ${type} carries no state` };
+        return {
+          kind: "method_setup",
+          status: type === "checkout.session.expired" ? "expired" : "session_completed",
+          setupId: str(meta(o).setup_id) ?? str(o.client_reference_id),
+          providerSessionId: str(o.id),
+          providerSetupIntentId: idOf(o.setup_intent),
+          providerCustomerId: idOf(o.customer),
+          providerMethodId: null,
+          mandateRef: null,
+          verificationUrl: null,
+        };
+      }
       if (o.mode === "subscription") {
         // Subscription mode: money state arrives via invoice.paid; the completed session only links the subscription.
         const subId = idOf(o.subscription);
@@ -210,6 +238,88 @@ export function normalizeStripeEvent(type: string, o: Obj): NormalizedEvent {
         currentPeriodEnd: periodEnd ? addDaysYmd(periodEnd, -1) : null,
       };
     }
+    case "setup_intent.succeeded":
+    case "setup_intent.requires_action":
+    case "setup_intent.setup_failed":
+    case "setup_intent.canceled": {
+      const next = (o.next_action ?? {}) as Obj;
+      const micro = (next.verify_with_microdeposits ?? {}) as Obj;
+      const err = (o.last_setup_error ?? {}) as Obj;
+      if (type === "setup_intent.requires_action" && next.type !== "verify_with_microdeposits") {
+        return { kind: "ignored", reason: `setup_intent.requires_action (${String(next.type ?? "unknown")}) is completed on the hosted page` };
+      }
+      return {
+        kind: "method_setup",
+        status: type === "setup_intent.succeeded" ? "succeeded" : type === "setup_intent.requires_action" ? "requires_verification" : "failed",
+        setupId: str(meta(o).setup_id),
+        providerSessionId: null,
+        providerSetupIntentId: str(o.id),
+        providerCustomerId: idOf(o.customer),
+        providerMethodId: idOf(o.payment_method) ?? idOf(err.payment_method),
+        mandateRef: idOf(o.mandate),
+        verificationUrl: str(micro.hosted_verification_url),
+        failureCode: str(err.code) ?? (type === "setup_intent.canceled" ? "canceled" : null),
+        failureMessage: str(err.message),
+      };
+    }
+    case "payment_method.attached":
+    case "payment_method.updated":
+    case "payment_method.automatically_updated":
+    case "payment_method.detached": {
+      const id = str(o.id);
+      if (!id) return { kind: "ignored", reason: `${type} without an id` };
+      const card = (o.card ?? {}) as Obj;
+      const bank = (o.us_bank_account ?? {}) as Obj;
+      const t = str(o.type);
+      // Only display fields are read. Fingerprints, routing numbers and anything else are never stored.
+      return {
+        kind: "method_update",
+        phase: type.endsWith("attached") ? "attached" : type.endsWith("detached") ? "detached" : "updated",
+        providerMethodId: id,
+        providerCustomerId: idOf(o.customer),
+        type: t,
+        brand: t === "card" ? str(card.brand) : null,
+        bankName: t === "us_bank_account" ? str(bank.bank_name) : null,
+        last4: t === "card" ? str(card.last4) : t === "us_bank_account" ? str(bank.last4) : null,
+        expMonth: t === "card" ? num(card.exp_month) : null,
+        expYear: t === "card" ? num(card.exp_year) : null,
+      };
+    }
+    case "mandate.updated": {
+      const id = str(o.id);
+      if (!id) return { kind: "ignored", reason: "mandate.updated without an id" };
+      return { kind: "mandate", mandateRef: id, providerMethodId: idOf(o.payment_method), status: str(o.status) ?? "unknown" };
+    }
+    case "payment_intent.processing":
+    case "payment_intent.succeeded":
+    case "payment_intent.payment_failed":
+    case "payment_intent.canceled": {
+      // Only our own off-session charges are driven by PaymentIntent events. Hosted Checkout payments keep
+      // using checkout.session.* (a payer can fail one card and succeed with another inside one session).
+      if (str(meta(o).origin) !== "autopay") return { kind: "ignored", reason: `${type} for a payment not created by autopay` };
+      const err = (o.last_payment_error ?? {}) as Obj;
+      const errPm = (err.payment_method ?? {}) as Obj;
+      const types = Array.isArray(o.payment_method_types) ? (o.payment_method_types as string[]) : [];
+      return {
+        kind: "payment",
+        status: type === "payment_intent.processing" ? "processing" : type === "payment_intent.succeeded" ? "succeeded" : "failed",
+        attemptId: str(meta(o).attempt_id),
+        providerRef: str(o.id),
+        providerTxnId: str(o.id),
+        amountMinor: num(type === "payment_intent.succeeded" ? (o.amount_received ?? o.amount) : o.amount),
+        currency: cur(o.currency),
+        methodType: str(meta(o).method_type) ?? str(errPm.type) ?? (types.length === 1 ? types[0] : null),
+        failureCode: type === "payment_intent.canceled" ? "canceled" : (str(err.decline_code) ?? str(err.code)),
+        failureMessage: str(err.message),
+      };
+    }
+    case "charge.succeeded":
+    case "charge.updated": {
+      const bt = idOf(o.balance_transaction);
+      const pi = idOf(o.payment_intent);
+      if (!bt || !pi) return { kind: "ignored", reason: `${type} without a balance transaction yet` };
+      return { kind: "fee_hint", providerTxnId: pi, balanceTransactionId: bt };
+    }
     default:
       return { kind: "ignored", reason: `unhandled event type ${type}` };
   }
@@ -290,6 +400,7 @@ export const stripeAdapter: PaymentProviderAdapter = {
     const payload = JSON.parse(rawBody) as Obj;
     const type = String(payload.type ?? "unknown");
     const obj = ((payload.data as Obj | undefined)?.object ?? {}) as Obj;
+    redactMethodObject(type, obj);
     return {
       providerEventId: String(payload.id ?? ""),
       type,
@@ -320,7 +431,7 @@ export function stripeCapabilities(): ProviderCapabilities {
     label: "Stripe",
     oneTimeCheckout: { supported: true, evidence: "verified_docs", note: "Checkout Sessions (mode=payment), hosted page; fulfilment must be webhook-driven.", source: "https://docs.stripe.com/checkout/fulfillment" },
     recurring: { supported: true, evidence: "verified_docs", note: "Stripe Billing: recurring Price per product version (lookup_key), Checkout Session mode=subscription with subscription_data.metadata + billing_cycle_anchor; invoice.paid / invoice.payment_failed / customer.subscription.* drive local state. Contract-tested with signed fixtures only; never exercised against a sandbox.", source: "https://docs.stripe.com/billing/subscriptions/webhooks" },
-    savedMethods: { supported: true, evidence: "verified_docs", note: "Customer + PaymentMethod tokens; we store references only.", source: "https://docs.stripe.com/payments/ach-direct-debit" },
+    savedMethods: { supported: true, evidence: "verified_docs", note: "Checkout in setup mode saves a card or US bank account to a Customer; Teamwork stores the reference, brand/bank name and last four only. Off-session PaymentIntents charge it for autopay. Contract-tested with signed fixtures only; never exercised against a sandbox.", source: "https://docs.stripe.com/payments/save-and-reuse" },
     bankDebit: { supported: true, evidence: "verified_docs", note: "ACH Direct Debit: delayed notification, up to 4 business days; can fail after initial success (arrives as a dispute). Disputes up to 60 days.", source: "https://docs.stripe.com/payments/ach-direct-debit" },
     refundsViaApi: { supported: true, evidence: "verified_docs", note: "Refunds API with Idempotency-Key (keys ≥24h old may be pruned). ACH: full refunds only, async up to 3 business days.", source: "https://docs.stripe.com/api/idempotent_requests" },
     disputesViaWebhook: { supported: true, evidence: "verified_docs", note: "charge.dispute.created / closed.", source: "https://docs.stripe.com/payments/ach-direct-debit" },
@@ -342,7 +453,7 @@ function stripeSecret(): string {
   return key;
 }
 
-async function stripeCall(method: "GET" | "POST", path: string, params: Record<string, string | number | undefined | null>, idempotencyKey?: string): Promise<Obj> {
+export async function stripeCall(method: "GET" | "POST", path: string, params: Record<string, string | number | undefined | null>, idempotencyKey?: string): Promise<Obj> {
   const key = stripeSecret();
   const body = form(params);
   const url = method === "GET" ? `https://api.stripe.com${path}${body ? `?${body}` : ""}` : `https://api.stripe.com${path}`;

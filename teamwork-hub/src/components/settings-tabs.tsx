@@ -16,6 +16,7 @@ export function SettingsTabs({ current }: { current: string }) {
           { key: "community", href: "/settings/community", label: "Community" },
           { key: "security", href: "/settings/security", label: "My security" },
           { key: "integrations", href: "/settings/integrations", label: "Integrations" },
+          { key: "payments", href: "/settings/payments", label: "Payments & agreements" },
           { key: "journey", href: "/settings/journey", label: "Member journey" },
           { key: "check-ins", href: "/settings/check-ins", label: "Session check-ins" },
           { key: "newswatch", href: "/settings/newswatch", label: "News watch" },

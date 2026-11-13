@@ -25,7 +25,7 @@ import { audit, type AuditActor } from "@/lib/audit";
 import { grantCredits } from "@/lib/credits";
 import { enqueue } from "@/lib/jobs";
 import { CAP_DAYS_PER_MONTH, effectiveNoticeDays, membershipPolicy, partialPeriodPriceMinor, type MembershipPolicy } from "@/lib/membership-policy";
-import { percentOf } from "@/lib/money";
+import { formatMoney, percentOf } from "@/lib/money";
 import { addDaysYmd, daysBetween, localToUtc, todayLocal } from "@/lib/time";
 import { UserError } from "./errors";
 import { createInvoiceRecord, invoiceMoney } from "./invoices";
@@ -170,6 +170,10 @@ export type CreateMembershipInput = {
   endDate?: string | null;
   today: string;
   isDemo?: boolean;
+  /** Create the membership as "awaiting agreement": a membership agreement is issued for signature. */
+  requireAgreement?: boolean;
+  /** Do not issue the first bill now (the guided sign-up flow issues it when the family finishes). */
+  deferFirstBill?: boolean;
 };
 
 /** What creating this membership would bill: shown to staff before they confirm. */
@@ -196,8 +200,8 @@ export async function previewMembershipStart(tx: Tx, v: Viewer, input: Pick<Crea
   };
 }
 
-export async function createMembership(tx: Tx, v: Viewer, input: CreateMembershipInput) {
-  assertCan(v, "billing.manage");
+export async function createMembership(tx: Tx, v: Viewer, input: CreateMembershipInput, opts: { /** The guided sign-up flow authorizes the payer itself. */ authorizedBySignupFlow?: boolean } = {}) {
+  if (!opts.authorizedBySignupFlow) assertCan(v, "billing.manage");
   const [a] = await tx.select().from(athletes).where(and(eq(athletes.id, input.athleteId), eq(athletes.orgId, v.orgId)));
   if (!a) throw new UserError("Athlete not found.");
   const [p] = await tx.select().from(payerAccounts).where(and(eq(payerAccounts.id, input.payerAccountId), eq(payerAccounts.orgId, v.orgId)));
@@ -275,7 +279,14 @@ export async function createMembership(tx: Tx, v: Viewer, input: CreateMembershi
   // Internally invoiced plans bill the first period now. A mid-month start bills its stub right away
   // (due on the start date) even when the start is in the future, so the computation staff saw is what is billed.
   let firstInvoice = null;
-  if (billingProvider === "manual" && !trial && (stub || input.startDate <= input.today)) {
+  let deferFirst = !!input.deferFirstBill;
+  if (input.requireAgreement) {
+    const { agreementSettings, issueMembershipAgreement } = await import("@/lib/agreements/issue");
+    await issueMembershipAgreement(tx, { ...actorOf(v), orgId: v.orgId }, { membershipId: m.id, reason: "new", notify: !input.deferFirstBill });
+    // Org rule (off by default): billing waits for the signature. The renewal job bills once it is signed.
+    if ((await agreementSettings(tx, v.orgId)).billingWaitsForSignature) deferFirst = true;
+  }
+  if (!deferFirst && billingProvider === "manual" && !trial && (stub || input.startDate <= input.today)) {
     firstInvoice = await billPeriod(tx, actorOf(v), fresh, version, product.name, input.startDate, { stub, policy });
   }
   const [after] = await tx.select().from(memberships).where(eq(memberships.id, m.id));
@@ -319,6 +330,12 @@ export async function billPeriod(
     rule = `final period ends ${m.endDate}: ${p.rule}`;
   }
   const price = await periodPrice(tx, m, version, gross);
+  // Optional bank pay discount (off by default): the autopay method is a bank account when this bill is issued.
+  const { resolveAutopayMethod } = await import("./payment-methods");
+  const { autopaySettings, bankPayDiscountMinor } = await import("./autopay-settings");
+  const autopayMethod = await resolveAutopayMethod(tx, m);
+  const bankDiscount = autopayMethod?.type === "us_bank_account" && version.interval === "month" ? bankPayDiscountMinor(await autopaySettings(tx, m.orgId), price.net) : 0;
+  const memoParts = [rule ? `Partial period (${rule}).` : null, bankDiscount > 0 ? `Bank pay discount: ${formatMoney(bankDiscount, version.currency)} off this bill for paying by bank account.` : null].filter(Boolean);
   const fraction = version.priceMinor > 0 ? gross / version.priceMinor : 1;
   const credits = version.unlimited || version.classesPerWeek != null || !version.creditsPerPeriod ? undefined : Math.max(1, Math.ceil(version.creditsPerPeriod * Math.min(1, fraction)));
   const res = await createInvoiceRecord(tx, actor, {
@@ -329,10 +346,10 @@ export async function billPeriod(
     periodEnd,
     source: "membership_renewal",
     idempotencyKey: `membership:${m.id}:${periodStart}`,
-    discountMinor: price.discount,
+    discountMinor: price.discount + bankDiscount,
     dueDate: periodStart,
     isDemo: m.isDemo,
-    memo: rule ? `Partial period (${rule}).` : undefined,
+    memo: memoParts.length ? memoParts.join(" ") : undefined,
     lines: [
       {
         description: `${productName} — ${periodStart} to ${periodEnd}${stub ? " (first partial month)" : ""}`,
@@ -352,6 +369,14 @@ export async function billPeriod(
     .update(memberships)
     .set({ nextBillDate: m.endDate && nextBillDate > m.endDate ? null : nextBillDate, updatedAt: new Date() })
     .where(eq(memberships.id, m.id));
+  if (res.created && bankDiscount > 0) {
+    await event(tx, m, "bank_pay_discount", actor.actorUserId ?? null, { effectiveOn: periodStart, details: { invoiceId: res.invoice.id, discountMinor: bankDiscount, methodId: autopayMethod?.id } });
+  }
+  // Autopay: queue the off-session charge for this bill's due date (deduped per invoice).
+  if (res.created && m.autopay && res.invoice.status === "open" && res.invoice.totalMinor > 0) {
+    const { scheduleAutopayCharge } = await import("./autopay");
+    await scheduleAutopayCharge(tx, res.invoice, 1);
+  }
   if (stub && res.created) {
     await event(tx, m, "stub_billed", actor.actorUserId ?? null, { effectiveOn: periodStart, details: { ...stub, invoiceId: res.invoice.id, discountMinor: price.discount } });
   }
@@ -855,6 +880,9 @@ export async function changePlan(tx: Tx, v: Viewer, input: { membershipId: strin
   if (input.effectiveOn <= input.today) {
     await tx.update(memberships).set({ productVersionId: to.id, updatedAt: new Date() }).where(eq(memberships.id, m.id));
     await event(tx, m, "plan_changed", v.userId, { fromVersionId: from.id, toVersionId: to.id, effectiveOn: input.effectiveOn, details: { direction, note: input.note ?? null } });
+    // A different plan or price can require a new signature (configurable list of triggers).
+    const { syncMembershipAgreement } = await import("@/lib/agreements/issue");
+    await syncMembershipAgreement(tx, { ...actorOf(v), orgId: v.orgId }, m.id);
   } else {
     await event(tx, m, "plan_change_scheduled", v.userId, { fromVersionId: from.id, toVersionId: to.id, effectiveOn: input.effectiveOn, details: { direction, applied: false, note: input.note ?? null } });
   }
@@ -977,21 +1005,47 @@ export async function cancelMembership(
 }
 
 /**
- * Cutover from Zen Planner: only after staff confirm the Zen Planner recurring charge is stopped.
- * The first Teamwork bill date must be on/after today so no past period is billed twice.
+ * Cutover from Zen Planner. Requires, in this order:
+ * 1. staff confirm the Zen Planner recurring charge is stopped (never billed in both systems);
+ * 2. a first Teamwork bill date of today or later (no past period is billed twice);
+ * 3. the member's new membership agreement is signed AND the payer has an active saved payment method
+ *    (both collected in the guided sign-up flow). Autopay is then switched on.
+ * Staff can go ahead without 3 only with a written reason (for example the family will pay each bill at
+ * the front desk, or Stripe is not connected yet); that override is audited.
  */
-export async function cutoverMembership(tx: Tx, v: Viewer, input: { membershipId: string; firstBillDate: string; zenPlannerStopped: boolean; today: string }) {
+export async function cutoverMembership(
+  tx: Tx,
+  v: Viewer,
+  input: { membershipId: string; firstBillDate: string; zenPlannerStopped: boolean; today: string; /** Proceed without a signed agreement / saved method. */ overrideReason?: string | null },
+) {
   assertCan(v, "billing.manage");
   const m = await lockMembership(tx, v.orgId, input.membershipId);
   if (m.billingProvider !== "external_zenplanner") throw new UserError("This membership is not billed by Zen Planner.");
   if (!input.zenPlannerStopped) throw new UserError("Confirm the Zen Planner recurring charge has been stopped first (prevents double billing).");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.firstBillDate) || input.firstBillDate < input.today) throw new UserError("First Teamwork bill date must be today or later.");
+  const ready = await cutoverReadiness(tx, m);
+  const override = input.overrideReason?.trim() || null;
+  if ((!ready.agreementSigned || !ready.methodOnFile) && !override) {
+    const missing = [!ready.agreementSigned ? "a signed membership agreement" : null, !ready.methodOnFile ? "a saved payment method" : null].filter(Boolean).join(" and ");
+    throw new UserError(`Before cutting over, this member needs ${missing}. Start the sign-up flow for the family, or enter a reason to cut over without ${ready.agreementSigned ? "it" : "them"}.`, { overrideReason: "Reason required to skip" });
+  }
+  const autopay = ready.methodOnFile;
   await tx
     .update(memberships)
-    .set({ billingProvider: "manual", nextBillDate: input.firstBillDate, billingAnchorDay: Number(input.firstBillDate.slice(8, 10)), updatedAt: new Date() })
+    .set({ billingProvider: "manual", nextBillDate: input.firstBillDate, billingAnchorDay: Number(input.firstBillDate.slice(8, 10)), autopay, autopayMethodId: autopay ? m.autopayMethodId : null, updatedAt: new Date() })
     .where(eq(memberships.id, m.id));
-  await event(tx, m, "cutover_from_zenplanner", v.userId, { effectiveOn: input.firstBillDate, details: { confirmedZenPlannerStopped: true } });
-  await audit(tx, actorOf(v), "billing.membership.cutover", "membership", m.id, { summary: `Cut over from Zen Planner; first Teamwork bill ${input.firstBillDate}` });
+  await event(tx, m, "cutover_from_zenplanner", v.userId, { effectiveOn: input.firstBillDate, details: { confirmedZenPlannerStopped: true, agreementSigned: ready.agreementSigned, methodOnFile: ready.methodOnFile, autopay, overrideReason: override } });
+  await audit(tx, actorOf(v), "billing.membership.cutover", "membership", m.id, {
+    summary: `Cut over from Zen Planner; first Teamwork bill ${input.firstBillDate}; autopay ${autopay ? "on" : "off"}${override ? `; requirements skipped: ${override}` : ""}`,
+  });
+  return { autopay, ...ready };
+}
+
+/** What the Cut over step still needs for a Zen Planner-billed membership. */
+export async function cutoverReadiness(tx: Tx, m: Pick<Membership, "id" | "payerAccountId" | "agreementState">) {
+  const { paymentMethods } = await import("@/db/schema");
+  const active = m.payerAccountId ? await tx.select({ id: paymentMethods.id }).from(paymentMethods).where(and(eq(paymentMethods.payerAccountId, m.payerAccountId), eq(paymentMethods.status, "active"))).limit(1) : [];
+  return { agreementSigned: m.agreementState === "signed", methodOnFile: active.length > 0 };
 }
 
 export async function holdsFor(tx: Tx, membershipId: string) {

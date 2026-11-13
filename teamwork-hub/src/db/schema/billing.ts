@@ -135,6 +135,12 @@ export const memberships = pgTable(
     /** Commitment term (first full period → end). Null when the plan has no commitment. Never extended silently. */
     commitmentStartsOn: date("commitment_starts_on"),
     commitmentEndsOn: date("commitment_ends_on"),
+    /** Charge each bill automatically with a saved payment method (Teamwork-invoiced memberships only). */
+    autopay: boolean("autopay").notNull().default(false),
+    /** Saved method autopay uses; null = the payer account's default method. */
+    autopayMethodId: uuid("autopay_method_id"),
+    /** not_required | awaiting (a membership agreement must be signed) | signed. Maintained by src/lib/agreements. */
+    agreementState: text("agreement_state").$type<"not_required" | "awaiting" | "signed">().notNull().default("not_required"),
     createdBy: uuid("created_by"),
     isDemo: isDemo(),
     createdAt: createdAt(),
@@ -279,6 +285,10 @@ export const paymentAttempts = pgTable(
     failureCode: text("failure_code"),
     failureMessage: text("failure_message"),
     lastEventAt: ts("last_event_at"),
+    /** checkout = payer on a hosted page; autopay = off-session charge of a saved method. */
+    origin: text("origin").$type<"checkout" | "autopay">().notNull().default("checkout"),
+    /** Saved method charged (autopay only). */
+    paymentMethodId: uuid("payment_method_id"),
     createdBy: uuid("created_by"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -305,6 +315,8 @@ export const transactions = pgTable(
     status: text("status").$type<TxnStatus>().notNull(),
     amountMinor: minor("amount_minor").notNull(),
     feeMinor: minor("fee_minor").notNull().default(0),
+    /** Set only when the processor itself reported the fee (Stripe balance transaction). Null = fee unknown, not zero. */
+    feeReportedAt: ts("fee_reported_at"),
     currency: text("currency").notNull(),
     provider: text("provider").$type<PaymentProvider>().notNull(),
     providerTxnId: text("provider_txn_id"),
@@ -392,22 +404,175 @@ export const providerPlans = pgTable(
   (t) => [uniqueIndex("provider_plans_uq").on(t.orgId, t.provider, t.productVersionId, t.amountMinor, t.currency)],
 );
 
-/** Tokenized references only. */
-export const paymentMethods = pgTable("payment_methods", {
-  id: id(),
-  payerAccountId: uuid("payer_account_id")
-    .notNull()
-    .references(() => payerAccounts.id),
-  provider: text("provider").notNull(),
-  providerMethodId: text("provider_method_id").notNull(),
-  type: text("type").notNull(),
-  brand: text("brand"),
-  last4: text("last4"),
-  expMonth: integer("exp_month"),
-  expYear: integer("exp_year"),
-  isDefault: boolean("is_default").notNull().default(false),
-  createdAt: createdAt(),
-});
+export type PaymentMethodStatus = "active" | "requires_verification" | "failed" | "removed";
+export type PaymentMethodType = "card" | "us_bank_account";
+
+/** Evidence of the payer authorizing recurring bank debits, recorded by Teamwork before the hosted page. */
+export type MandateAcceptance = {
+  acceptedAt: string;
+  userId: string | null;
+  personId: string | null;
+  ip: string | null;
+  userAgent: string | null;
+  /** Version of the authorization text shown (src/lib/billing/mandate-text.ts). */
+  textVersion: string;
+  /** The exact text shown. */
+  text: string;
+};
+
+/**
+ * Saved payment methods. References and display details only: the card or bank account itself lives in
+ * the provider's vault. Never a full number, CVC, routing number or account number.
+ * A row becomes `active` only from a verified provider webhook.
+ */
+export const paymentMethods = pgTable(
+  "payment_methods",
+  {
+    id: id(),
+    payerAccountId: uuid("payer_account_id")
+      .notNull()
+      .references(() => payerAccounts.id),
+    provider: text("provider").notNull(),
+    /** Provider customer the method is attached to (reference only). */
+    providerCustomerId: text("provider_customer_id"),
+    providerMethodId: text("provider_method_id").notNull(),
+    type: text("type").notNull(),
+    brand: text("brand"),
+    /** Bank name for us_bank_account methods, as reported by the provider. */
+    bankName: text("bank_name"),
+    last4: text("last4"),
+    expMonth: integer("exp_month"),
+    expYear: integer("exp_year"),
+    /** Legacy rows (seeds, imports) default to active; the setup flow always writes the status explicitly. */
+    status: text("status").$type<PaymentMethodStatus>().notNull().default("active"),
+    isDefault: boolean("is_default").notNull().default(false),
+    /** Details (brand / last four) have arrived from the provider. */
+    detailsAt: ts("details_at"),
+    /** The provider confirmed the setup succeeded (setup_intent.succeeded). */
+    setupSucceededAt: ts("setup_succeeded_at"),
+    /** Provider mandate reference for bank debits (Stripe `mandate_…`). */
+    mandateRef: text("mandate_ref"),
+    mandateStatus: text("mandate_status"),
+    mandateAcceptance: jsonb("mandate_acceptance").$type<MandateAcceptance>(),
+    failureCode: text("failure_code"),
+    failureMessage: text("failure_message"),
+    setupId: uuid("setup_id"),
+    removedAt: ts("removed_at"),
+    removedBy: uuid("removed_by"),
+    lastEventAt: ts("last_event_at"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("payment_methods_provider_uq").on(t.provider, t.providerMethodId),
+    index("payment_methods_payer_idx").on(t.payerAccountId, t.status),
+  ],
+);
+
+export type MethodSetupStatus = "created" | "requires_verification" | "succeeded" | "failed" | "expired";
+
+/** One hosted "save a payment method" session. The browser return never changes it; verified webhooks do. */
+export const paymentMethodSetups = pgTable(
+  "payment_method_setups",
+  {
+    id: id(),
+    orgId: orgId(),
+    payerAccountId: uuid("payer_account_id")
+      .notNull()
+      .references(() => payerAccounts.id),
+    provider: text("provider").notNull(),
+    requestedType: text("requested_type").$type<PaymentMethodType>().notNull(),
+    status: text("status").$type<MethodSetupStatus>().notNull().default("created"),
+    providerSessionId: text("provider_session_id"),
+    providerSetupIntentId: text("provider_setup_intent_id"),
+    providerMethodId: text("provider_method_id"),
+    checkoutUrl: text("checkout_url"),
+    /** Provider-hosted page for entering microdeposit amounts, when the provider hands one back. */
+    verificationUrl: text("verification_url"),
+    mandateAcceptance: jsonb("mandate_acceptance").$type<MandateAcceptance>(),
+    /** Make this the payer's default once active. */
+    makeDefault: boolean("make_default").notNull().default(false),
+    /** Where to send the payer afterwards (sign-up flow id), if any. */
+    signupFlowId: uuid("signup_flow_id"),
+    idempotencyKey: text("idempotency_key").notNull(),
+    failureCode: text("failure_code"),
+    failureMessage: text("failure_message"),
+    startedBy: uuid("started_by"),
+    lastEventAt: ts("last_event_at"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("pm_setups_idem_uq").on(t.orgId, t.idempotencyKey),
+    uniqueIndex("pm_setups_session_uq").on(t.provider, t.providerSessionId),
+    uniqueIndex("pm_setups_intent_uq").on(t.provider, t.providerSetupIntentId),
+  ],
+);
+
+/**
+ * A membership agreement to sign for one membership on one product version. The signed text is frozen on
+ * the form request (rendered_body_markdown); `terms` is the snapshot used to decide when re-signing is needed.
+ */
+export const membershipAgreements = pgTable(
+  "membership_agreements",
+  {
+    id: id(),
+    orgId: orgId(),
+    membershipId: uuid("membership_id")
+      .notNull()
+      .references(() => memberships.id),
+    productVersionId: uuid("product_version_id")
+      .notNull()
+      .references(() => productVersions.id),
+    formRequestId: uuid("form_request_id").notNull(),
+    /** new | plan_change | price_change | commitment_change | payment_method_type | terms_changed | cutover | staff */
+    reason: text("reason").notNull(),
+    /** Terms the agreement was rendered from (see AgreementTerms in src/lib/agreements/terms.ts). */
+    terms: jsonb("terms").$type<Record<string, unknown>>().notNull(),
+    termsHash: text("terms_hash").notNull(),
+    signedAt: ts("signed_at"),
+    supersededAt: ts("superseded_at"),
+    supersededById: uuid("superseded_by_id"),
+    createdBy: uuid("created_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("membership_agreements_m_idx").on(t.membershipId), uniqueIndex("membership_agreements_req_uq").on(t.formRequestId)],
+);
+
+export type SignupFlowStatus = "open" | "completed" | "cancelled";
+
+/** Guided sign-up (new member or Zen Planner conversion). Step state is derived from the linked records. */
+export const signupFlows = pgTable(
+  "signup_flows",
+  {
+    id: id(),
+    orgId: orgId(),
+    kind: text("kind").$type<"new" | "cutover">().notNull(),
+    athleteId: uuid("athlete_id")
+      .notNull()
+      .references(() => athletes.id),
+    payerAccountId: uuid("payer_account_id")
+      .notNull()
+      .references(() => payerAccounts.id),
+    status: text("status").$type<SignupFlowStatus>().notNull().default("open"),
+    productVersionId: uuid("product_version_id").references(() => productVersions.id),
+    startDate: date("start_date"),
+    membershipId: uuid("membership_id").references(() => memberships.id),
+    /** The payer chose to pay each bill themselves (or no provider is configured). */
+    paymentChoice: text("payment_choice").$type<"autopay" | "manual">(),
+    startedBy: uuid("started_by"),
+    startedByStaff: boolean("started_by_staff").notNull().default(false),
+    completedAt: ts("completed_at"),
+    isDemo: isDemo(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("signup_flows_payer_idx").on(t.payerAccountId, t.status),
+    // One open flow per athlete: starting again resumes it.
+    uniqueIndex("signup_flows_open_uq").on(t.athleteId).where(sql`${t.status} = 'open'`),
+  ],
+);
 
 /** Raw provider webhooks; (provider, provider_event_id) uniqueness makes ingestion idempotent. */
 export const webhookEvents = pgTable(

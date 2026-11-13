@@ -10,7 +10,7 @@ import { contentHash } from "./hash";
 import { createRequest, formEvent } from "./requests";
 import { OPEN_STATUSES } from "./context";
 
-export const TEMPLATE_KINDS = ["waiver", "agreement", "intake", "medical", "media_release", "policy"] as const;
+export const TEMPLATE_KINDS = ["waiver", "agreement", "membership_agreement", "intake", "medical", "media_release", "policy"] as const;
 
 export const templateInputSchema = z.object({
   name: z.string().trim().min(2, "Name is required.").max(120),
@@ -157,6 +157,18 @@ export async function publishVersion(tx: Tx, v: Viewer, versionId: string, opts:
   const parsed = draftInputSchema.safeParse({ title: ver.title, bodyMarkdown: ver.bodyMarkdown, fields: ver.fields, signers: ver.signers });
   if (!parsed.success) throw new UserError(`Fix the draft before publishing: ${parsed.error.issues[0]?.message ?? "invalid"}`);
   if (!ver.signers.some((s) => s.required)) throw new UserError("At least one signer role must be required.");
+  const [tplRow] = await tx.select({ kind: formTemplates.kind }).from(formTemplates).where(eq(formTemplates.id, ver.templateId));
+  const isMembershipAgreement = tplRow?.kind === "membership_agreement";
+  if (isMembershipAgreement) {
+    // Merge fields are filled from the membership; a typo must never reach a signer.
+    const { assertAgreementBody } = await import("@/lib/agreements/issue");
+    try {
+      assertAgreementBody(ver.bodyMarkdown);
+    } catch (e) {
+      throw new UserError((e as Error).message);
+    }
+    if (ver.fields.length) throw new UserError("Membership agreements have no fill-in fields: every value comes from the membership.");
+  }
   const hash = contentHash({ title: ver.title, bodyMarkdown: ver.bodyMarkdown, fields: ver.fields, signers: ver.signers });
   const now = new Date();
   // Earlier versions deliberately stay "published": the immutability trigger only
@@ -168,7 +180,11 @@ export async function publishVersion(tx: Tx, v: Viewer, versionId: string, opts:
     .where(eq(formTemplateVersions.id, ver.id));
 
   let superseded = 0;
-  if (opts.requireResign) {
+  if (opts.requireResign && isMembershipAgreement) {
+    // Open agreements are re-rendered from their memberships on the new version (never a blank copy).
+    const { reissueOpenAgreements } = await import("@/lib/agreements/issue");
+    superseded = await reissueOpenAgreements(tx, { orgId: v.orgId, actorUserId: v.userId, actorRole: v.role });
+  } else if (opts.requireResign) {
     const older = await tx
       .select({ id: formTemplateVersions.id })
       .from(formTemplateVersions)

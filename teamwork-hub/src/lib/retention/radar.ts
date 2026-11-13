@@ -425,7 +425,7 @@ async function loadFacts(tx: Tx, orgId: string, today: string, tz: string, s: Re
     for (const c of await rowsOf<{ payer_account_id: string; brand: string | null; last4: string | null; exp_month: number; exp_year: number }>(
       tx,
       sql`select distinct on (payer_account_id) payer_account_id, brand, last4, exp_month, exp_year from payment_methods
-          where payer_account_id in (${pl}) and exp_month is not null and exp_year is not null order by payer_account_id, is_default desc, created_at desc`,
+          where payer_account_id in (${pl}) and status = 'active' and exp_month is not null and exp_year is not null order by payer_account_id, is_default desc, created_at desc`,
     )) {
       for (const f of athletesOf(c.payer_account_id)) f.card = { brand: c.brand, last4: c.last4, expMonth: Number(c.exp_month), expYear: Number(c.exp_year) };
     }
