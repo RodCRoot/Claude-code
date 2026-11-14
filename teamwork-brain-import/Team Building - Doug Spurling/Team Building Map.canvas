@@ -1,0 +1,238 @@
+{
+ "nodes": [
+  {
+   "id": "moc",
+   "type": "file",
+   "file": "Team Building - Doug Spurling/00 Team Building MOC.md",
+   "x": 700,
+   "y": -400,
+   "width": 420,
+   "height": 260,
+   "color": "6"
+  },
+  {
+   "id": "hire",
+   "type": "text",
+   "text": "## 1. HIRE",
+   "x": 0,
+   "y": 0,
+   "width": 260,
+   "height": 80,
+   "color": "1"
+  },
+  {
+   "id": "onb",
+   "type": "text",
+   "text": "## 2. ONBOARD",
+   "x": 450,
+   "y": 0,
+   "width": 260,
+   "height": 80,
+   "color": "2"
+  },
+  {
+   "id": "dev",
+   "type": "text",
+   "text": "## 3. DEVELOP",
+   "x": 900,
+   "y": 0,
+   "width": 260,
+   "height": 80,
+   "color": "3"
+  },
+  {
+   "id": "cul",
+   "type": "text",
+   "text": "## 4. CULTURE",
+   "x": 1350,
+   "y": 0,
+   "width": 260,
+   "height": 80,
+   "color": "4"
+  },
+  {
+   "id": "std",
+   "type": "text",
+   "text": "## 5. STANDARDS",
+   "x": 1800,
+   "y": 0,
+   "width": 260,
+   "height": 80,
+   "color": "5"
+  },
+  {
+   "id": "h1",
+   "type": "file",
+   "file": "Team Building - Doug Spurling/01 Hiring - Accountability Chart and 4 Rs.md",
+   "x": -30,
+   "y": 150,
+   "width": 320,
+   "height": 200
+  },
+  {
+   "id": "h2",
+   "type": "file",
+   "file": "Team Building - Doug Spurling/02 Hiring - Pay and Offer.md",
+   "x": -30,
+   "y": 400,
+   "width": 320,
+   "height": 200
+  },
+  {
+   "id": "h3",
+   "type": "file",
+   "file": "Team Building - Doug Spurling/03 Hiring - Funnel and Interview.md",
+   "x": -30,
+   "y": 650,
+   "width": 320,
+   "height": 200
+  },
+  {
+   "id": "o1",
+   "type": "file",
+   "file": "Team Building - Doug Spurling/04 Onboarding - Certification Model.md",
+   "x": 420,
+   "y": 150,
+   "width": 320,
+   "height": 200
+  },
+  {
+   "id": "d1",
+   "type": "file",
+   "file": "Team Building - Doug Spurling/05 Development - Weekly Rhythm Tools.md",
+   "x": 870,
+   "y": 150,
+   "width": 320,
+   "height": 200
+  },
+  {
+   "id": "c1",
+   "type": "file",
+   "file": "Team Building - Doug Spurling/06 Culture - Language Frameworks Traditions.md",
+   "x": 1320,
+   "y": 150,
+   "width": 320,
+   "height": 200
+  },
+  {
+   "id": "s1",
+   "type": "file",
+   "file": "Team Building - Doug Spurling/07 Standards.md",
+   "x": 1770,
+   "y": 150,
+   "width": 320,
+   "height": 200
+  },
+  {
+   "id": "tpl",
+   "type": "file",
+   "file": "Team Building - Doug Spurling/08 Templates and Checklists.md",
+   "x": 870,
+   "y": 450,
+   "width": 420,
+   "height": 240,
+   "color": "6"
+  },
+  {
+   "id": "sales",
+   "type": "file",
+   "file": "Team Building - Doug Spurling/Sales Consult - Connect Discover Evaluate Prescribe Close.md",
+   "x": 1320,
+   "y": 450,
+   "width": 320,
+   "height": 200
+  }
+ ],
+ "edges": [
+  {
+   "id": "moc-hire",
+   "fromNode": "moc",
+   "toNode": "hire",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "moc-onb",
+   "fromNode": "moc",
+   "toNode": "onb",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "moc-dev",
+   "fromNode": "moc",
+   "toNode": "dev",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "moc-cul",
+   "fromNode": "moc",
+   "toNode": "cul",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "moc-std",
+   "fromNode": "moc",
+   "toNode": "std",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "hire-h1",
+   "fromNode": "hire",
+   "toNode": "h1",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "h1h2",
+   "fromNode": "h1",
+   "toNode": "h2"
+  },
+  {
+   "id": "h2h3",
+   "fromNode": "h2",
+   "toNode": "h3"
+  },
+  {
+   "id": "onb-o1",
+   "fromNode": "onb",
+   "toNode": "o1",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "dev-d1",
+   "fromNode": "dev",
+   "toNode": "d1",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "cul-c1",
+   "fromNode": "cul",
+   "toNode": "c1",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "std-s1",
+   "fromNode": "std",
+   "toNode": "s1",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "h1tpl",
+   "fromNode": "h1",
+   "toNode": "tpl"
+  },
+  {
+   "id": "d1tpl",
+   "fromNode": "d1",
+   "toNode": "tpl"
+  }
+ ]
+}
