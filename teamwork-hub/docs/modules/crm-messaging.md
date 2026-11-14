@@ -162,11 +162,16 @@ Tests: `tests/crm-lead-lists.test.ts`, `e2e/lead-lists.spec.ts`.
   values through hidden fields into `inquiry.utm` (`{source, campaign, medium, term}`, the same shape
   the Zen Planner import already writes for Tracking Source / Name / Medium / Keywords). The lead page
   shows them as "Tracking". Each value is cut to 200 characters; nothing else from the address is kept.
+  The referral-link form (`/r/<code>?utm_source=…`) does the same through the same shared fields
+  component and the same intake, so a referred lead shows "Tracking" the same way. The values are
+  stored only in `inquiry.utm`: they are never read as a referral code and do not change who is
+  credited, the lead's Source, or what the page looks like for real, revoked and made-up codes
+  (tested in `growth-referrals.test.ts` and `e2e/lead-lists.spec.ts`).
 - **Sport is not interest.** Conversion, automation rules with a sport condition and message
   segments read the sport (`inquiry.sport`, falling back to an older `interest`), never an Interest
   list value.
 
-Not done: the referral-link form (`/r/<code>`) uses the lists but does not read UTM values; there is
+Not done: there is
 no bulk tool to move older leads onto list values; a referred lead's source is still set by the
 referral attribution after intake.
 

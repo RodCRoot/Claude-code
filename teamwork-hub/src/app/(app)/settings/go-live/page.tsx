@@ -106,7 +106,7 @@ function ItemRow({ item: i, today }: { item: GoLiveItem; today: string }) {
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
         {i.href ? (
           <Link href={i.href} className="inline-flex min-h-8 items-center font-semibold text-brand underline">
-            Fix it in {i.hrefLabel}
+            {i.status === "done" || i.status === "na" ? "Open" : "Fix it in"} {i.hrefLabel}
           </Link>
         ) : i.hrefLabel ? (
           <span className="text-ink-3">{i.hrefLabel}</span>

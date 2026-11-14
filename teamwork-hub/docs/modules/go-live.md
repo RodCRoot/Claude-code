@@ -28,7 +28,9 @@ A fixed subset, defined in `readiness.ts` (`BLOCKING_SECTIONS`, `NON_BLOCKING_IT
   PayPal or by hand (not by Zen Planner).
 
 An item blocks only while it is neither Done nor Not applicable. Everything else (messages, catalog,
-migration, people, open decisions) is listed but never blocks.
+migration, people, integrations, open decisions) is listed but never blocks, with one exception: an
+item outside those sections may set `blocksWhenWrong` when the hub has positive evidence that it is
+set up wrongly. Today that is only "The hub sees each visitor's real address" (see Integrations).
 
 ## Items and where each status comes from
 
@@ -96,6 +98,42 @@ agreement or an active saved payment method.
 Non-demo staff logins (active, invited, expired invite), guardians with and without a login,
 athletes under 18 with no guardian link, athletes with no birthday.
 
+### Integrations
+Optional connections. An integration that is simply not set up is **Not applicable** (the gym may
+never use it), so it does not count against "N of M done". None has a tick, because each is checked
+from real state.
+
+| Item | Source | Statuses |
+|---|---|---|
+| PayPal and Venmo | The three PayPal variables and `PAYPAL_ENV`; proof is a settled PayPal transaction on this organization's books with `verification = provider_verified` (the date of the latest is shown). The raw `webhook_events` count is not used: that table has no organization column | Not applicable with no values (Needs attention if a current membership is marked billed by PayPal); Needs attention when partly set (names the missing variables), when live credentials are set outside production mode, or when configured with no confirmed payment yet; Done once PayPal has confirmed a payment |
+| Hawkin Dynamics force plates | `HAWKIN_REFRESH_TOKEN`, `sync_runs` for provider `hawkin`, the Hawkin integration row's last error | Not applicable with no token (still says when a sync last worked); Not started with a token and no run; Needs attention when no run has succeeded or the most recent failed; Done with a successful run and no later failure |
+| Google Calendar for coaches | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `CALENDAR_TOKEN_KEY`; `calendar_connections` (connected, in error, latest `last_sync_at`) | Not applicable with no values; Needs attention when partly set, when a connection is in error (lists whose), or connected but never synced; Not started when no coach has connected; Done with a connected calendar and a recorded sync |
+| TeamBuildr history | `import_batches` with source `teambuildr`. There is no live connection, only file imports | Not applicable with none; Needs attention with an upload waiting; Done with a committed import (date of the latest) |
+| The hub sees each visitor's real address | See below | See below |
+
+**Visitor address (the "trusted proxy" question).** The hub has no setting for this. It always takes
+the **first** value of the `X-Forwarded-For` header: for the address on a sign-in record, the
+per-address limits on the public forms and the showcase page, and the address kept as signature
+evidence. That is correct only when the hosting proxy sets or replaces the header; if the proxy only
+appends to it, a visitor can choose the address the hub sees. The item says this in its detail every
+time, then:
+
+- **Not a hosted deployment** (demo mode, or `APP_URL` is not https): Not applicable. There is no
+  hosting proxy to check.
+- **Hosted, fewer than 5 sign-ins on record:** Not started (too little evidence).
+- **Hosted, and none of the last 20 sign-ins (at least 5) carries any address:** Needs attention and
+  **blocks going live**. This is the one thing the hub can actually see is wrong: the header is not
+  arriving, so every visitor shares one rate-limit bucket and signatures record no address. It
+  cannot be ticked away.
+- **Hosted and addresses arrive:** the hub shows how many of the last sign-ins carried one and how
+  many different addresses, but it cannot see whether the proxy replaces the header. So this is
+  Needs attention (not blocking) until a person attests `proxy_header_checked` ("I checked with the
+  hosting provider's documentation that its proxy sets or replaces the header", note required);
+  then Done, shown as attested. This is the only tick in the section, and only because the hub
+  truly cannot check it.
+
+A real trusted-hop setting (choose which hop to trust) is still not built; see `DECISIONS.md`.
+
 ### Open decisions
 `src/lib/golive/decisions.ts` is a typed list (id, question, current behaviour, where to change it,
 how to read the current value) of the open decisions in `DECISIONS.md` that map to a setting.
@@ -121,10 +159,28 @@ the same computation and renders nothing when N is 0.
 
 - No "send a test email" button: the email item reads real delivery records, so the first real
   message to a staff member's own address is the test.
-- The trusted proxy hop, PayPal and Venmo, Hawkin, Google Calendar and TeamBuildr are not on the
-  page (none of them decides whether families can safely use the hub).
+- There is still no setting for which proxy hop to trust; the page reports what the hub does and
+  what it can see (Integrations, visitor address). GoHighLevel and Zen Planner webhooks are not in the
+  Integrations section (GoHighLevel shows under Messages when it is the text provider).
+- PayPal proof needs a real confirmed payment; there is no "test the connection" button, and no
+  PayPal sandbox was contacted here.
 - The Today card recomputes the whole report on each load (about forty small queries). Fine at this
   size; cache it if Today becomes slow.
 - Built-in wording cannot be edited in the app; it needs a code change.
 - Verified against synthetic data and unit-test fixtures only. No real Stripe, email or bucket was
   contacted.
+
+## Browser test note: the access test that failed once
+
+`e2e/golive.spec.ts` "operations and families cannot open the page" failed once at 390px with
+"Tearing down context exceeded the test timeout". Reproduced on 2026-11-14: 2 failures in 15 runs,
+then 2 in 10 with protocol logging. Cause: the refusal is a redirect to `/denied` that arrives after
+the first bytes of the page (the loading shell streams first), so `page.goto` returned before it.
+The test then asserted only an absence (no "Go-live readiness" heading), which is true of the
+loading shell, and ended; the browser context was closed while the redirect was still committing
+and the close hung until the timeout. The page and the access rule were never wrong. The test now
+waits for `/denied` and its heading before asserting the absence, and waits for the Today page's
+heading before asserting that the card is absent. 15 of 15 after the change. The same ending in
+`e2e/events-waitlist.spec.ts` (coach refused on `/events`) was fixed the same way. No timeout was
+lengthened and no retry was added.
+

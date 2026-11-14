@@ -127,3 +127,14 @@ Built from `docs/ZENPLANNER-MAP.md`. Defaults in use, each changeable without co
 - **Discount review** groups by the saved family percent (10%, still unconfirmed; the 10 vs 15 question above decides it). For each non-standard rate the owner decides: keep, convert to the family discount, or end.
 - **Short-run programs** (challenges, Summer 8-week, Vertical Jump, All-Girl Speed & Strength) are not memberships here; they belong in Events.
 
+## Tightening pass (2026-11-14)
+
+Judgement calls made while closing gaps from checkpoint 12. Each is changeable.
+- **Waitlist offers: no navigation badge.** The app has no badge or notification pattern in the family or staff navigation, so none was invented. The offer is a callout at the top of the family Home and a card on staff Today instead.
+- **An expired offer disappears for the family before the next family is offered the spot.** Reads treat an offer past its expiry as not live at once; the spot is passed on only by a sweep (any camps page view, any registration, the nightly job). In between, the event can show a spot nobody holds; a registration attempt runs the sweep first, so it cannot be taken out of turn.
+- **The demo offer lasts 14 days, not 24 hours.** The seeded "Sample: Small Group Sprint Clinic" uses a 336-hour offer window so the demo screens are not empty the day after seeding. The default for real events is still 24 hours.
+- **Staff Today offer card shows no phone number.** It links to the athlete's profile (where contact details are permission-checked) and names the billing account.
+- **Go-live: an optional integration that is not set up is "Not applicable", not "Not started".** PayPal, Hawkin, Google Calendar and TeamBuildr are optional; counting them as undone would keep "N of M done" below full for a gym that never uses them.
+- **Go-live: PayPal is proven by a payment PayPal confirmed, not by a webhook count.** `webhook_events` has no organization column, so only a transaction on this organization's books counts.
+- **Go-live: the visitor-address item blocks only on positive evidence.** The hub always trusts the first `X-Forwarded-For` value and has no setting. It blocks only when a hosted server (not demo, https) has at least 5 recent sign-ins and none carries an address. When addresses do arrive it cannot tell whether the proxy replaces the header, so a person attests it (`proxy_header_checked`). Still open for Rod's host: which proxy hop to trust, and whether to build that as a setting.
+

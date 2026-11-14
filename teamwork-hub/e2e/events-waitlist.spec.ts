@@ -125,5 +125,9 @@ test("full clinic: a parent joins the waitlist, a spot is released, the parent i
 test("coaches cannot open the event page that holds the waitlist", async ({ page }) => {
   await login(page, USERS.marcus);
   await page.goto("/events");
+  // Wait for the refusal to land before asserting the absence and ending the test (see golive.spec.ts:
+  // ending with the redirect in flight can hang the context teardown).
+  await page.waitForURL(/\/denied$/);
+  await expect(page.getByRole("heading", { level: 1, name: "You don't have access to that" })).toBeVisible();
   await expect(page.getByRole("heading", { level: 1, name: "Camps & clinics" })).toHaveCount(0);
 });

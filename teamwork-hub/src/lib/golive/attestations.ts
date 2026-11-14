@@ -43,6 +43,13 @@ export const ATTESTATIONS: AttestationDef[] = [
     needsNote: false,
     noteHint: "Optional.",
   },
+  {
+    key: "proxy_header_checked",
+    label: "The hosting proxy sets the visitor address header",
+    statement: "I checked with the hosting provider's documentation that its proxy sets or replaces the X-Forwarded-For header, so its first value is the visitor's real address.",
+    needsNote: true,
+    noteHint: "Which hosting provider, and where you checked.",
+  },
 ];
 
 const DEF_BY_KEY = new Map(ATTESTATIONS.map((a) => [a.key, a]));

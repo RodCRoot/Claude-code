@@ -16,6 +16,15 @@ import { registrationClosedReason } from "./window";
  */
 export type WaitlistRow = typeof eventWaitlistEntries.$inferSelect;
 
+/**
+ * The one definition of a live offer: status `offered` AND the expiry is still ahead. The status
+ * alone is not enough, because an offer that ran out stays `offered` until a sweep visits its event.
+ * Every read and the accept path use this, so an expired offer is never shown as live or accepted.
+ */
+export function isLiveOffer(e: Pick<WaitlistRow, "status" | "offerExpiresAt">, now: Date): boolean {
+  return e.status === "offered" && !!e.offerExpiresAt && e.offerExpiresAt.getTime() > now.getTime();
+}
+
 const SYSTEM = (orgId: string): AuditActor => ({ orgId, actorUserId: null, actorRole: "system" });
 
 /** Live offers on an event, optionally leaving some out (the one being accepted right now). */

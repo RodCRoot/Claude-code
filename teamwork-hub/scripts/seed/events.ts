@@ -3,7 +3,8 @@ import { users } from "../../src/db/schema";
 import type { Viewer } from "../../src/lib/authz/policy";
 import { recordManualPayment } from "../../src/lib/billing/invoices";
 import { createEvent, setEventStatus } from "../../src/lib/events/events";
-import { registerForEvent } from "../../src/lib/events/registration";
+import { cancelEventRegistration, registerForEvent } from "../../src/lib/events/registration";
+import { joinEventWaitlist } from "../../src/lib/events/waitlist";
 import { addDaysYmd, localToUtc } from "../../src/lib/time";
 import type { SeedCtx } from "./context";
 
@@ -83,5 +84,35 @@ export async function seedEvents(ctx: SeedCtx) {
     await reg(camp.event.id, "aria");
     await payInFull(await reg(clinic.event.id, "jackson"), "Sample check 2042 (demo)");
   }
-  ctx.extra.events = { camp: camp.event.id, clinic: clinic.event.id, draft: draft.event.id };
+
+  // 4. A full two-spot clinic with a waitlist: one family holds a live offer, another is still waiting.
+  //    It starts after the two events above, so it is the third of the "next three" on family pages.
+  //    The 14-day offer window is a SAMPLE setting so the demo offer stays live for a while after
+  //    seeding (the default is 24 hours).
+  let waitlistClinic: string | null = null;
+  if (ctx.athletes.owen && ctx.athletes.jackson && ctx.athletes.maya && ctx.athletes.ava && ctx.users.alex && ctx.users.chris) {
+    const small = await createEvent(
+      tx,
+      erin,
+      {
+        name: "Sample: Small Group Sprint Clinic",
+        kind: "clinic",
+        description: "Sample description. Two athletes per coach for ninety minutes of start and acceleration work. This one is full, so it shows how the waitlist looks.",
+        capacity: 2,
+        priceMinor: 6000,
+        waitlistOfferHours: 336,
+        sessions: days(45, 1, "13:00", "14:30"),
+      },
+      { isDemo: true },
+    );
+    await publish(small.event.id);
+    await payInFull(await reg(small.event.id, "owen"), "Sample check 2043 (demo)");
+    const held = await reg(small.event.id, "jackson");
+    await joinEventWaitlist(tx, await viewer("alex"), { eventId: small.event.id, athleteIds: [ctx.athletes.maya], now });
+    await joinEventWaitlist(tx, await viewer("chris"), { eventId: small.event.id, athleteIds: [ctx.athletes.ava], now });
+    // The unpaid spot is released: Maya (first in line) is offered it, Ava keeps waiting.
+    await cancelEventRegistration(tx, erin, { registrationId: held.registrationIds[0], reason: "Sample: family asked to cancel (demo)", now });
+    waitlistClinic = small.event.id;
+  }
+  ctx.extra.events = { camp: camp.event.id, clinic: clinic.event.id, draft: draft.event.id, ...(waitlistClinic ? { waitlistClinic } : {}) };
 }
