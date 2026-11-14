@@ -148,3 +148,16 @@ Verified: `pnpm test` 1177/1177 (79 files); typecheck, lint, drift check clean. 
 Known gaps: `/reports/session-checkins` page loads slowly (about 11 s in a11y runs; the query is about 100 ms; cause not found). `journey.spec.ts` at 390px failed once late in a long run and passes on a fresh seed (order dependence suspected, not confirmed). Check-in and journey generators run on page view as well as nightly; no worker is deployed.
 
 In progress: saved payment methods (card and US bank account through Stripe-hosted collection), autopay, membership agreements filled from the plan, one sign-up flow (branch `claude/teamwork-hub-wip-signup`).
+
+## Checkpoint 12 — Sign-up and autopay, Zen Planner import, go-live readiness (2026-11-14)
+Merged migrations 0032 signup, 0033 zpimport, 0034 golive.
+- **Sign-up and autopay** (`/billing/signup`, `/billing/payment-methods`, Settings → Payments, `/reports/processing-fees`): cards and US bank accounts saved through Stripe-hosted collection, agreements filled from the plan and frozen once rendered, one sign-up flow, Charge now / Retry now. All Stripe calls are mocked; no keys exist. See `docs/modules/payments-autopay.md`.
+- **Zen Planner import** (`/imports/zenplanner/*`, webhooks under `/api/webhooks/zenplanner/`): grid-export schemas, discount review, reconciliation, a 20-plan draft catalog. Not yet run against a real export. See `docs/ZENPLANNER-MAP.md`.
+- **Go-live readiness** (`/settings/go-live`, Today card for owner/admin): about forty items in eight sections computed on each load; four manual attestations only; one sample-text marker everywhere (`src/lib/sample-text.ts`). See `docs/modules/go-live.md`.
+- **Lead lists and UTM**: Source, Interest and Priority pick-lists; old values normalised on read; `/reports/leads-by-source`.
+- **Camp and clinic waitlist**: released spots are offered to the first in line for 24 hours (setting); nothing is charged or sent automatically; nightly job `events.holds.nightly`.
+- **Coach-entered check-ins** (`/check-ins/<bookingId>/coach`): labelled "entered by coach", replacing a family answer needs a reason and keeps the earlier answer.
+
+Verified after the merge: typecheck, lint and drift check clean; `pnpm test` 1321/1321 (88 files). Full Playwright run: see the PR description for the latest numbers.
+
+Known gaps: families are not notified of a waitlist offer (no email provider); an expired offer can wait up to a day for the nightly job (no worker deployed); coach replacement of an answer is covered by unit tests only; `golive.spec.ts` mobile access test failed once for the build agent and was not reproduced; the offline sign-out purge test failed once on 2026-11-13 and passed five times on fresh data. PayPal, Hawkin, Google Calendar and TeamBuildr are not on the go-live page.
