@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Tx } from "@/db";
-import { auditEvents, formTemplateVersions, formTemplates, importBatches, integrations, messageTemplates, organizations, users, zpReconciliations } from "@/db/schema";
+import { auditEvents, calendarConnections, formTemplateVersions, formTemplates, importBatches, integrations, messageTemplates, organizations, syncRuns, users, zpReconciliations } from "@/db/schema";
 import { assertCan, type Viewer } from "@/lib/authz/policy";
 import { autopaySettingsOf } from "@/lib/billing/autopay-settings";
 import { growthFromSettings } from "@/lib/growth/settings";
@@ -23,7 +23,7 @@ import { BUILT_IN_WORDINGS } from "./wordings";
 export type GoLiveStatus = "done" | "attention" | "not_started" | "na";
 export const STATUS_LABEL: Record<GoLiveStatus, string> = { done: "Done", attention: "Needs attention", not_started: "Not started", na: "Not applicable" };
 
-export type SectionId = "hosting" | "payments" | "messages" | "legal" | "catalog" | "migration" | "people" | "decisions";
+export type SectionId = "hosting" | "payments" | "messages" | "legal" | "catalog" | "migration" | "people" | "integrations" | "decisions";
 
 export const SECTIONS: { id: SectionId; title: string; intro: string }[] = [
   { id: "hosting", title: "Hosting and safety", intro: "The server, its secrets, backups and who can sign in." },
@@ -33,6 +33,7 @@ export const SECTIONS: { id: SectionId; title: string; intro: string }[] = [
   { id: "catalog", title: "Catalog and policy", intro: "Plans, prices, policy numbers, locations and the class schedule." },
   { id: "migration", title: "Data migration", intro: "What has come across from Zen Planner and what is still billed there." },
   { id: "people", title: "People", intro: "Who has a login and whose records are incomplete." },
+  { id: "integrations", title: "Integrations", intro: "Optional connections, and how the hub learns a visitor's address. Nothing here blocks going live unless the hub can see it is set up wrongly." },
   { id: "decisions", title: "Open decisions", intro: "Questions with a working default. Confirm each one as it is, or change the setting." },
 ];
 
@@ -43,6 +44,8 @@ export const SECTIONS: { id: SectionId; title: string; intro: string }[] = [
  * - every item in Payments, but only when the hub bills families itself (see `billingHere`).
  * Everything else is worth doing but does not block. An item blocks only while it is neither
  * Done nor Not applicable.
+ * One item outside those sections can block: an item may set `blocksWhenWrong` when the hub has
+ * positive evidence that it is misconfigured (today only the client address item, see there).
  */
 export const BLOCKING_SECTIONS: SectionId[] = ["hosting", "legal", "payments"];
 export const NON_BLOCKING_ITEM_IDS = ["legal.message_templates"];
@@ -62,6 +65,8 @@ export type GoLiveItem = {
   hrefLabel: string | null;
   /** Counts toward "N block going live" right now. */
   blocking: boolean;
+  /** Set by an item in a non-blocking section when the hub has evidence it is set up wrongly. */
+  blocksWhenWrong?: boolean;
   /** A person's statement stands behind this status. */
   attested?: { byName: string; on: string; note: string | null } | null;
   /** This item can be ticked by a person: the attestation key and what they are stating. */
@@ -106,6 +111,14 @@ export type GoLiveEnv = {
   deliveryEnabled: boolean;
   deliveryTestRecipients: string;
   sentryDsn: string;
+  paypalClientId: string;
+  paypalClientSecret: string;
+  paypalWebhookId: string;
+  paypalEnv: string;
+  hawkinRefreshToken: string;
+  googleClientId: string;
+  googleClientSecret: string;
+  calendarTokenKey: string;
 };
 
 export const EXAMPLE_SESSION_SECRET = "replace-with-64-random-hex-characters-generated-locally-xxxxxxx";
@@ -132,6 +145,14 @@ export function goLiveEnv(e: Record<string, string | undefined> = process.env): 
     deliveryEnabled: s("DELIVERY_ENABLED") === "true",
     deliveryTestRecipients: s("DELIVERY_TEST_RECIPIENTS"),
     sentryDsn: s("SENTRY_DSN"),
+    paypalClientId: s("PAYPAL_CLIENT_ID"),
+    paypalClientSecret: s("PAYPAL_CLIENT_SECRET"),
+    paypalWebhookId: s("PAYPAL_WEBHOOK_ID"),
+    paypalEnv: (s("PAYPAL_ENV") || "sandbox").toLowerCase(),
+    hawkinRefreshToken: s("HAWKIN_REFRESH_TOKEN"),
+    googleClientId: s("GOOGLE_CLIENT_ID"),
+    googleClientSecret: s("GOOGLE_CLIENT_SECRET"),
+    calendarTokenKey: s("CALENDAR_TOKEN_KEY"),
   };
 }
 
@@ -878,6 +899,162 @@ export async function goLiveReadiness(tx: Tx, v: Viewer, opts: { env?: GoLiveEnv
     hrefLabel: "People",
   });
 
+  // ------------------------------------------------------------------ Integrations
+  // Optional connections. Each status comes from the server environment and from what the hub has
+  // recorded (verified webhooks, sync runs, calendar connections, import batches). An integration
+  // that is simply not set up is "Not applicable": the gym may never use it.
+  const missingNames = (pairs: [string, string][]) => pairs.filter(([, val]) => !val).map(([name]) => name);
+
+  // PayPal and Venmo (Venmo is offered through the same PayPal app).
+  const paypalMissing = missingNames([["PAYPAL_CLIENT_ID", env.paypalClientId], ["PAYPAL_CLIENT_SECRET", env.paypalClientSecret], ["PAYPAL_WEBHOOK_ID", env.paypalWebhookId]]);
+  const paypalSet = 3 - paypalMissing.length;
+  const paypalBilled = n((await one(sql`select count(*)::int as c from memberships where org_id = ${orgId} and status in ('active','paused','pending') and billing_provider = 'paypal'`)).c);
+  // Proof the connection works: a PayPal payment on this organization's books that PayPal itself
+  // confirmed (a verified webhook or capture). webhook_events has no organization column, so the
+  // raw event count is not used.
+  const paypalHook = await one(sql`
+    select max(occurred_at) as last, count(*)::int as c from transactions
+    where org_id = ${orgId} and provider = 'paypal' and verification = 'provider_verified' and status = 'settled'`);
+  const paypalLive = env.paypalEnv === "live";
+  const paypalLiveOutsideProd = paypalSet === 3 && paypalLive && env.appMode !== "production";
+  add({
+    id: "integrations.paypal",
+    section: "integrations",
+    title: "PayPal and Venmo",
+    status: paypalSet === 0 ? (paypalBilled ? "attention" : "na") : paypalSet < 3 || paypalLiveOutsideProd ? "attention" : paypalHook.last ? "done" : "attention",
+    why: "Families can only pay by PayPal or Venmo when the PayPal app is connected and PayPal can tell the hub a payment went through.",
+    detail:
+      paypalSet === 0
+        ? paypalBilled
+          ? `Not configured, but ${plural(paypalBilled, "current membership")} ${paypalBilled === 1 ? "is" : "are"} marked as billed by PayPal.`
+          : "Not configured. Families are not offered PayPal or Venmo."
+        : paypalSet < 3
+          ? `${paypalSet} of 3 PayPal values are set. Missing: ${paypalMissing.join(", ")}.`
+          : paypalLiveOutsideProd
+            ? "Live PayPal credentials are set but the server is not in production mode, so the hub refuses to use them."
+            : `Configured, mode ${paypalLive ? "LIVE" : "SANDBOX"}. ${
+                paypalHook.last
+                  ? `Last payment confirmed by PayPal on ${day(paypalHook.last as string)} (${plural(n(paypalHook.c), "confirmed payment")}).`
+                  : "No payment confirmed by PayPal is on record yet, so the connection is not proven."
+              }`,
+    href: "/billing/providers",
+    hrefLabel: "Billing, Providers",
+  });
+
+  // Hawkin Dynamics: the integration row's last check and the last sync run that succeeded.
+  const [hawkinRow] = await tx.select().from(integrations).where(and(eq(integrations.orgId, orgId), eq(integrations.provider, "hawkin")));
+  const hawkinRuns = await tx
+    .select({ status: syncRuns.status, startedAt: syncRuns.startedAt, finishedAt: syncRuns.finishedAt })
+    .from(syncRuns)
+    .where(and(eq(syncRuns.orgId, orgId), eq(syncRuns.provider, "hawkin")))
+    .orderBy(desc(syncRuns.startedAt))
+    .limit(50);
+  const hawkinOk = hawkinRuns.find((r) => r.status === "succeeded" || r.status === "partial");
+  const hawkinLatest = hawkinRuns[0];
+  const hawkinFailing = !!hawkinLatest && hawkinLatest.status === "failed";
+  add({
+    id: "integrations.hawkin",
+    section: "integrations",
+    title: "Hawkin Dynamics force plates",
+    status: !env.hawkinRefreshToken ? "na" : hawkinOk && !hawkinFailing ? "done" : hawkinRuns.length ? "attention" : "not_started",
+    why: "Jump and force-plate results reach athlete profiles and progress reports through this sync; without it they arrive only by file import.",
+    detail: !env.hawkinRefreshToken
+      ? `Not connected (no HAWKIN_REFRESH_TOKEN). Force-plate results come in by file import only.${hawkinOk ? ` The last sync that worked was on ${day(hawkinOk.finishedAt ?? hawkinOk.startedAt)}.` : ""}`
+      : hawkinOk
+        ? `Token set. Last successful sync on ${day(hawkinOk.finishedAt ?? hawkinOk.startedAt)}.${hawkinFailing ? ` The most recent sync, on ${day(hawkinLatest.startedAt)}, failed${hawkinRow?.lastError ? `: ${String(hawkinRow.lastError).slice(0, 160)}` : "."}` : ""}`
+        : hawkinRuns.length
+          ? `Token set, but no sync has succeeded (${plural(hawkinRuns.length, "attempt")}).${hawkinRow?.lastError ? ` Last error: ${String(hawkinRow.lastError).slice(0, 160)}` : ""}`
+          : "Token set. No sync has been run yet.",
+    href: "/imports/hawkin",
+    hrefLabel: "Imports, Hawkin",
+  });
+
+  // Google Calendar: app credentials, then each coach's own connection.
+  const googleMissing = missingNames([["GOOGLE_CLIENT_ID", env.googleClientId], ["GOOGLE_CLIENT_SECRET", env.googleClientSecret], ["CALENDAR_TOKEN_KEY", env.calendarTokenKey]]);
+  const googleSet = 3 - googleMissing.length;
+  const cals = await tx
+    .select({ status: calendarConnections.status, lastSyncAt: calendarConnections.lastSyncAt, name: users.displayName })
+    .from(calendarConnections)
+    .innerJoin(users, eq(users.id, calendarConnections.userId))
+    .where(and(eq(calendarConnections.orgId, orgId), eq(calendarConnections.provider, "google")));
+  const calConnected = cals.filter((c) => c.status === "connected");
+  const calErrors = cals.filter((c) => c.status === "error");
+  const calLastSync = calConnected.map((c) => c.lastSyncAt).filter((d): d is Date => !!d).sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+  add({
+    id: "integrations.google_calendar",
+    section: "integrations",
+    title: "Google Calendar for coaches",
+    status: googleSet === 0 ? "na" : googleSet < 3 || calErrors.length ? "attention" : !calConnected.length ? "not_started" : calLastSync ? "done" : "attention",
+    why: "Coaches who connect a calendar get their sessions copied to it and their busy times respected; nothing else depends on it.",
+    detail:
+      googleSet === 0
+        ? "Not configured. Coaches cannot connect a Google calendar; the hub's own calendar works without it."
+        : googleSet < 3
+          ? `${googleSet} of 3 Google Calendar values are set. Missing or not valid: ${googleMissing.join(", ")}.`
+          : `Configured. ${plural(calConnected.length, "coach calendar")} connected${calErrors.length ? `, ${calErrors.length} with an error` : ""}. ${calLastSync ? `Last sync on ${day(calLastSync)}.` : calConnected.length ? "No sync has been recorded yet." : "No coach has connected one yet."}`,
+    list: cap(calErrors.map((c) => `${c.name}: connection error`)),
+    href: "/schedule/settings",
+    hrefLabel: "Schedule settings",
+  });
+
+  // TeamBuildr: there is no live connection, only file imports of exported history.
+  const tb = await tx
+    .select({ status: importBatches.status, committedAt: importBatches.committedAt })
+    .from(importBatches)
+    .where(and(eq(importBatches.orgId, orgId), eq(importBatches.source, "teambuildr")));
+  const tbCommitted = tb.filter((b) => b.status === "committed");
+  const tbOpen = tb.filter((b) => ["uploaded", "mapped", "validated"].includes(b.status));
+  const tbLast = tbCommitted.map((b) => b.committedAt).filter((d): d is Date => !!d).sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+  add({
+    id: "integrations.teambuildr",
+    section: "integrations",
+    title: "TeamBuildr history",
+    status: tbOpen.length ? "attention" : tbCommitted.length ? "done" : "na",
+    why: "Past training history from TeamBuildr only exists here if its export files are imported; there is no live connection to keep in step.",
+    detail: tbOpen.length
+      ? `${plural(tbOpen.length, "TeamBuildr upload")} waiting to be reviewed and committed.${tbLast ? ` Last committed import on ${day(tbLast)}.` : ""}`
+      : tbCommitted.length
+        ? `${plural(tbCommitted.length, "TeamBuildr import")} committed${tbLast ? `, the latest on ${day(tbLast)}` : ""}. File import only; nothing syncs by itself.`
+        : "No TeamBuildr export has been imported. File import only; there is no live connection to set up.",
+    href: "/imports",
+    hrefLabel: "Imports",
+  });
+
+  // The visitor's address. The hub has no setting for this: it always takes the FIRST value of the
+  // X-Forwarded-For header (sign-in records, per-address rate limits, signature evidence). That is
+  // right only when the hosting proxy sets or replaces that header. The hub cannot see what the
+  // proxy does, so a hosted setup is "done" only on a person's statement. What it CAN see is a
+  // hosted server where no sign-in carries any address at all: then the header is not arriving,
+  // and that is the one case that blocks.
+  const hosted = !demo && env.appUrl.startsWith("https://");
+  const signIns = (await many(sql`
+    select s.ip from auth_sessions s join users u on u.id = s.user_id
+    where u.org_id = ${orgId} order by s.created_at desc limit 20`)) as { ip: string | null }[];
+  const withAddress = signIns.filter((x) => !!x.ip).length;
+  const distinctAddresses = new Set(signIns.map((x) => x.ip).filter(Boolean)).size;
+  const noHeader = hosted && signIns.length >= 5 && withAddress === 0;
+  const proxyAtt = att.get("proxy_header_checked");
+  const trusts = "The hub trusts the first address in the X-Forwarded-For header and has no setting to change that.";
+  add({
+    id: "integrations.trusted_proxy",
+    section: "integrations",
+    title: "The hub sees each visitor's real address",
+    status: !hosted ? "na" : noHeader ? "attention" : proxyAtt && withAddress > 0 ? "done" : signIns.length < 5 ? "not_started" : "attention",
+    why: "Per-address limits on the public forms and the address kept as signature evidence are only as good as the address the hosting proxy passes on.",
+    detail: !hosted
+      ? `${trusts} This server is not a hosted deployment (${demo ? "demo mode" : "APP_URL is not https"}), so there is no hosting proxy to check.`
+      : noHeader
+        ? `${trusts} None of the last ${signIns.length} sign-ins carried any address, so the hosting proxy is not passing that header: every visitor looks the same to the rate limits and signatures record no address.`
+        : signIns.length < 5
+          ? `${trusts} Only ${plural(signIns.length, "sign-in")} on record, too few to tell whether the hosting proxy passes it.`
+          : `${trusts} ${withAddress} of the last ${signIns.length} sign-ins carried an address (${plural(distinctAddresses, "different address", "different addresses")}). That matches a hosted deployment only if the proxy sets or replaces the header; if it merely adds to it, a visitor can choose the address the hub sees. The hub cannot tell which. ${proxyAtt ? attestLine(proxyAtt) : "Not confirmed by a person yet."}`,
+    href: null,
+    hrefLabel: "See docs/SECURITY-REVIEW.md, Trusted proxy for client IP",
+    blocksWhenWrong: noHeader,
+    attested: hosted && !noHeader ? attested(proxyAtt) : null,
+    ...(hosted && !noHeader && signIns.length >= 5 ? attestProps("proxy_header_checked") : {}),
+  });
+
   // ------------------------------------------------------------------ Open decisions
   for (const d of OPEN_DECISIONS) {
     const value = d.value(settings);
@@ -906,9 +1083,7 @@ export async function goLiveReadiness(tx: Tx, v: Viewer, opts: { env?: GoLiveEnv
     blocking:
       i.status !== "done" &&
       i.status !== "na" &&
-      BLOCKING_SECTIONS.includes(i.section) &&
-      !NON_BLOCKING_ITEM_IDS.includes(i.id) &&
-      (i.section !== "payments" || billingHere),
+      ((BLOCKING_SECTIONS.includes(i.section) && !NON_BLOCKING_ITEM_IDS.includes(i.id) && (i.section !== "payments" || billingHere)) || i.blocksWhenWrong === true),
   }));
   const sections: GoLiveSection[] = SECTIONS.map((s) => {
     const its = final.filter((i) => i.section === s.id);

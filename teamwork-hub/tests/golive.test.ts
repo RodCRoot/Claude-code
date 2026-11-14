@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, desc, eq } from "drizzle-orm";
-import { auditEvents, formTemplateVersions, formTemplates, goLiveAttestations, jobs, memberships, organizations, payerAccounts, paymentMethods, transactions, users, webhookEvents } from "@/db/schema";
+import { auditEvents, authSessions, calendarConnections, formTemplateVersions, formTemplates, goLiveAttestations, importBatches, integrations, jobs, memberships, organizations, payerAccounts, paymentMethods, syncRuns, transactions, users, webhookEvents } from "@/db/schema";
 import { AuthzError } from "@/lib/authz/policy";
 import { UserError } from "@/lib/billing/errors";
 import { saveAutopaySettings, autopaySettingsOf } from "@/lib/billing/autopay-settings";
@@ -50,9 +50,9 @@ describe("go-live readiness: access and shape", () => {
     await expect(db.transaction((tx) => attest(tx, erin, { key: "sms_not_used" }))).rejects.toBeInstanceOf(AuthzError);
   });
 
-  it("groups items into the eight sections, each with a status, a reason and somewhere to go", async () => {
+  it("groups items into the nine sections, each with a status, a reason and somewhere to go", async () => {
     const r = await report();
-    expect(r.sections.map((s) => s.id)).toEqual(["hosting", "payments", "messages", "legal", "catalog", "migration", "people", "decisions"]);
+    expect(r.sections.map((s) => s.id)).toEqual(["hosting", "payments", "messages", "legal", "catalog", "migration", "people", "integrations", "decisions"]);
     const all = r.sections.flatMap((s) => s.items);
     expect(all.length).toBeGreaterThan(30);
     expect(new Set(all.map((i) => i.id)).size).toBe(all.length);
@@ -364,5 +364,156 @@ describe("catalog, migration and people", () => {
     expect(["done", "attention"]).toContain(item(r, "people.athletes_without_birthday").status);
     // Demo staff logins do not count as real staff accounts.
     expect(item(r, "people.staff_accounts").status).toBe("not_started");
+  });
+});
+
+describe("integrations", () => {
+  const IDS = ["integrations.paypal", "integrations.hawkin", "integrations.google_calendar", "integrations.teambuildr", "integrations.trusted_proxy"];
+  let bare: Awaited<ReturnType<typeof seedOrg>>;
+  let owner: V;
+  const rep = (env: GoLiveEnv) => goLiveReadiness(db, owner, { env, now: NOW });
+  beforeAll(async () => {
+    bare = await seedOrg("2026-03-02", { modules: [] });
+    owner = await viewerFor(bare, "rod");
+  });
+
+  it("with nothing configured every integration is Not applicable, says so plainly, links somewhere, and never blocks", async () => {
+    const r = await rep(DEMO_ENV);
+    const sec = r.sections.find((s) => s.id === "integrations")!;
+    expect(sec.items.map((i) => i.id)).toEqual(IDS);
+    for (const i of sec.items) {
+      expect(i.status, i.id).toBe("na");
+      expect(i.blocking, i.id).toBe(false);
+      expect(i.attestKey, i.id).toBeUndefined();
+      expect(i.why.split(/[.!?] /).length, i.id).toBe(1); // one sentence
+    }
+    expect(item(r, "integrations.paypal").detail).toMatch(/Not configured/);
+    expect(item(r, "integrations.hawkin").detail).toMatch(/Not connected/);
+    expect(item(r, "integrations.google_calendar").detail).toMatch(/Not configured/);
+    expect(item(r, "integrations.teambuildr").detail).toMatch(/No TeamBuildr export has been imported/);
+    expect(item(r, "integrations.trusted_proxy").detail).toMatch(/first address in the X-Forwarded-For header.*not a hosted deployment/);
+    expect(sec.total).toBe(0);
+  });
+
+  it("PayPal: partial values name what is missing; configured is proven only by a payment PayPal confirmed; live outside production is refused", async () => {
+    const full = { paypalClientId: "id", paypalClientSecret: "secret", paypalWebhookId: "wh" };
+    let i = item(await rep({ ...DEMO_ENV, paypalClientId: "id" }), "integrations.paypal");
+    expect(i.status).toBe("attention");
+    expect(i.detail).toMatch(/1 of 3 PayPal values are set\. Missing: PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID\./);
+    expect(i.detail).not.toContain("secret\"");
+    i = item(await rep({ ...DEMO_ENV, ...full }), "integrations.paypal");
+    expect(i.status).toBe("attention");
+    expect(i.detail).toMatch(/Configured, mode SANDBOX\. No payment confirmed by PayPal/);
+    expect(i.blocking).toBe(false);
+    i = item(await rep({ ...DEMO_ENV, ...full, paypalEnv: "live" }), "integrations.paypal");
+    expect(i.status).toBe("attention");
+    expect(i.detail).toMatch(/not in production mode/);
+
+    const [payer] = await db.insert(payerAccounts).values({ orgId: bare.orgId, name: "Sample Payer (test)" }).returning();
+    const txn = (verification: "provider_verified" | "staff_attested") =>
+      db.insert(transactions).values({ orgId: bare.orgId, payerAccountId: payer.id, kind: "charge", status: "settled", amountMinor: 1000, currency: "USD", provider: "paypal", providerTxnId: `pp_${randomUUID()}`, verification, occurredAt: NOW, ...(verification === "staff_attested" ? { recordedBy: bare.users.rod, manualReference: "Sample (test)" } : {}) });
+    await txn("staff_attested");
+    expect(item(await rep({ ...DEMO_ENV, ...full }), "integrations.paypal").status).toBe("attention"); // not confirmed by PayPal
+    await txn("provider_verified");
+    i = item(await rep({ ...PROD_ENV, ...full, paypalEnv: "live" }), "integrations.paypal");
+    expect(i.status).toBe("done");
+    expect(i.detail).toMatch(/mode LIVE\. Last payment confirmed by PayPal on Mar 2, 2026 \(1 confirmed payment\)/);
+    // Another organization's payment proves nothing here.
+    expect(item(await goLiveReadiness(db, rod, { env: { ...DEMO_ENV, ...full }, now: NOW }), "integrations.paypal").status).toBe("attention");
+  });
+
+  it("Hawkin: token, then the last sync that succeeded; a failing latest sync needs attention", async () => {
+    const env = { ...DEMO_ENV, hawkinRefreshToken: "token-value" };
+    let i = item(await rep(env), "integrations.hawkin");
+    expect(i.status).toBe("not_started");
+    expect(i.detail).toBe("Token set. No sync has been run yet.");
+    expect(i.detail).not.toContain("token-value");
+    await db.insert(syncRuns).values({ orgId: bare.orgId, provider: "hawkin", kind: "tests", status: "failed", startedAt: new Date("2026-02-20T15:00:00Z"), finishedAt: new Date("2026-02-20T15:00:05Z"), error: "401" });
+    await db.update(integrations).set({ lastError: "Hawkin refused the token (sample)" }).where(and(eq(integrations.orgId, bare.orgId), eq(integrations.provider, "hawkin")));
+    i = item(await rep(env), "integrations.hawkin");
+    expect(i.status).toBe("attention");
+    expect(i.detail).toMatch(/no sync has succeeded \(1 attempt\)\. Last error: Hawkin refused the token \(sample\)/);
+    await db.insert(syncRuns).values({ orgId: bare.orgId, provider: "hawkin", kind: "tests", status: "succeeded", startedAt: new Date("2026-02-25T15:00:00Z"), finishedAt: new Date("2026-02-25T15:01:00Z") });
+    i = item(await rep(env), "integrations.hawkin");
+    expect(i.status).toBe("done");
+    expect(i.detail).toBe("Token set. Last successful sync on Feb 25, 2026.");
+    await db.insert(syncRuns).values({ orgId: bare.orgId, provider: "hawkin", kind: "tests", status: "failed", startedAt: new Date("2026-03-01T15:00:00Z") });
+    i = item(await rep(env), "integrations.hawkin");
+    expect(i.status).toBe("attention");
+    expect(i.detail).toMatch(/Last successful sync on Feb 25, 2026\. The most recent sync, on Mar 1, 2026, failed/);
+    // Token removed: not applicable again, but it still says when it last worked.
+    i = item(await rep(DEMO_ENV), "integrations.hawkin");
+    expect(i.status).toBe("na");
+    expect(i.detail).toMatch(/Not connected.*last sync that worked was on Feb 25, 2026/);
+  });
+
+  it("Google Calendar: credentials, then coaches' own connections and the last sync", async () => {
+    const env = { ...DEMO_ENV, googleClientId: "id", googleClientSecret: "s", calendarTokenKey: "k" };
+    let i = item(await rep({ ...DEMO_ENV, googleClientId: "id" }), "integrations.google_calendar");
+    expect(i.status).toBe("attention");
+    expect(i.detail).toMatch(/1 of 3 .* GOOGLE_CLIENT_SECRET, CALENDAR_TOKEN_KEY/);
+    i = item(await rep(env), "integrations.google_calendar");
+    expect(i.status).toBe("not_started");
+    expect(i.detail).toMatch(/0 coach calendars connected\. No coach has connected one yet\./);
+    const [conn] = await db.insert(calendarConnections).values({ orgId: bare.orgId, userId: bare.users.marcus, status: "connected" }).returning();
+    expect(item(await rep(env), "integrations.google_calendar").status).toBe("attention"); // connected, never synced
+    await db.update(calendarConnections).set({ lastSyncAt: new Date("2026-03-01T15:00:00Z") }).where(eq(calendarConnections.id, conn.id));
+    i = item(await rep(env), "integrations.google_calendar");
+    expect(i.status).toBe("done");
+    expect(i.detail).toBe("Configured. 1 coach calendar connected. Last sync on Mar 1, 2026.");
+    await db.insert(calendarConnections).values({ orgId: bare.orgId, userId: bare.users.tess, status: "error", lastError: "revoked" });
+    i = item(await rep(env), "integrations.google_calendar");
+    expect(i.status).toBe("attention");
+    expect(i.list).toHaveLength(1);
+    expect(i.blocking).toBe(false);
+  });
+
+  it("TeamBuildr: file imports only; an upload waiting needs attention, a committed import is done", async () => {
+    await db.insert(importBatches).values({ orgId: bare.orgId, source: "teambuildr", entityType: "teambuildr.workouts", status: "uploaded" });
+    let i = item(await rep(DEMO_ENV), "integrations.teambuildr");
+    expect(i.status).toBe("attention");
+    expect(i.detail).toMatch(/1 TeamBuildr upload waiting/);
+    await db.update(importBatches).set({ status: "committed", committedAt: new Date("2026-02-27T15:00:00Z") }).where(and(eq(importBatches.orgId, bare.orgId), eq(importBatches.source, "teambuildr")));
+    i = item(await rep(DEMO_ENV), "integrations.teambuildr");
+    expect(i.status).toBe("done");
+    expect(i.detail).toMatch(/1 TeamBuildr import committed, the latest on Feb 27, 2026\. File import only/);
+  });
+
+  it("visitor address: says what is trusted; blocks only when a hosted server sees no address at all; otherwise a person confirms the proxy", async () => {
+    const ID = "integrations.trusted_proxy";
+    const signIn = (ip: string | null) => db.insert(authSessions).values({ userId: bare.users.rod, tokenHash: randomUUID(), expiresAt: new Date(NOW.getTime() + 3_600_000), ip });
+    // Hosted, too few sign-ins to tell.
+    let i = item(await rep(PROD_ENV), ID);
+    expect(i.status).toBe("not_started");
+    expect(i.blocking).toBe(false);
+    expect(i.attestKey).toBeUndefined();
+    // Hosted and no sign-in carries an address: the hub can tell this is wrong, so it blocks.
+    for (let k = 0; k < 5; k++) await signIn(null);
+    i = item(await rep(PROD_ENV), ID);
+    expect(i.status).toBe("attention");
+    expect(i.blocking).toBe(true);
+    expect(i.detail).toMatch(/None of the last 5 sign-ins carried any address/);
+    expect(i.attestKey).toBeUndefined(); // cannot be ticked away
+    await expect(db.transaction((tx) => attest(tx, owner, { key: "integrations.trusted_proxy" }))).rejects.toBeInstanceOf(UserError);
+    expect((await rep(PROD_ENV)).blockingItems.some((b) => b.id === ID)).toBe(true);
+    // The same data on a local or demo server is not a hosted deployment: nothing to check, nothing blocks.
+    i = item(await rep(DEMO_ENV), ID);
+    expect(i.status).toBe("na");
+    expect(i.blocking).toBe(false);
+    // Addresses arrive: the hub still cannot see whether the proxy replaces the header, so a person says so.
+    await signIn("203.0.113.7");
+    await signIn("203.0.113.8");
+    i = item(await rep(PROD_ENV), ID);
+    expect(i.status).toBe("attention");
+    expect(i.blocking).toBe(false);
+    expect(i.detail).toMatch(/2 of the last 7 sign-ins carried an address \(2 different addresses\)/);
+    expect(i.detail).toMatch(/Not confirmed by a person yet/);
+    expect(i.attestKey).toBe("proxy_header_checked");
+    await expect(db.transaction((tx) => attest(tx, owner, { key: "proxy_header_checked", note: "" }))).rejects.toBeInstanceOf(UserError);
+    await db.transaction((tx) => attest(tx, owner, { key: "proxy_header_checked", note: "Sample host docs, proxy section (test)" }));
+    i = item(await rep(PROD_ENV), ID);
+    expect(i.status).toBe("done");
+    expect(i.attested?.byName).toBe(owner.displayName);
+    expect(i.blocking).toBe(false);
   });
 });
