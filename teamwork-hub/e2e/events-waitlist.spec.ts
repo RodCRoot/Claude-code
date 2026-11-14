@@ -15,6 +15,10 @@ const noSideScroll = async (page: Page) => expect(await page.evaluate(() => docu
 const letters = () => Array.from({ length: 6 }, () => String.fromCharCode(97 + Math.floor(Math.random() * 26))).join("");
 const ymd = (daysAhead: number) => new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0, 10);
 
+/** Set SHOTS=1 to save screenshots under docs/screenshots/golive/. */
+const shot = async (page: Page, name: string) => {
+  if (process.env.SHOTS) await page.screenshot({ path: `docs/screenshots/golive/${test.info().project.name}-${name}.png`, fullPage: true });
+};
 async function switchTo(page: Page, who: string) {
   await page.context().clearCookies();
   await login(page, who);
@@ -62,6 +66,7 @@ test("full clinic: a parent joins the waitlist, a spot is released, the parent i
   await page.getByRole("button", { name: "Join the waitlist" }).click();
   await expect(page.getByTestId("waitlist-place")).toContainText("Maya Parker");
   await expect(page.getByTestId("waitlist-place")).toContainText("On the waitlist, place 1");
+  await shot(page, "waitlist-family-place");
   await expect(page.getByTestId("waitlist-offer")).toHaveCount(0);
   await noSideScroll(page);
   await page.goto("/shop/camps");
@@ -86,6 +91,7 @@ test("full clinic: a parent joins the waitlist, a spot is released, the parent i
   await reg.getByRole("button", { name: "Cancel registration" }).click();
   // Offered, not registered: no registration row for Maya, and the spot is not shown as free.
   await expect(row).toContainText(/Offered until/);
+  await shot(page, "waitlist-staff-offer");
   await expect(page.getByText("0 of 1", { exact: true })).toBeVisible();
   await noSideScroll(page);
 
@@ -96,6 +102,7 @@ test("full clinic: a parent joins the waitlist, a spot is released, the parent i
   await page.goto(`/shop/camps/${eventId}`);
   await expect(page.getByText("A spot has opened for Maya")).toBeVisible();
   await expect(page.getByTestId("waitlist-offer")).toContainText("Nothing has been charged");
+  await shot(page, "waitlist-family-offer");
   await noSideScroll(page);
   await page.getByRole("button", { name: /Take the spot for Maya/ }).click();
   await page.waitForURL(/registered=1/);

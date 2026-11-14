@@ -12,11 +12,16 @@ test.describe.configure({ mode: "serial" });
 // Compared with the viewport, not innerWidth: a too-wide page widens innerWidth with it on a phone.
 const noSideScroll = async (page: Page) => expect(await page.evaluate(() => document.documentElement.scrollWidth), `${page.url()} scrolls sideways`).toBeLessThanOrEqual(page.viewportSize()!.width + 1);
 
+/** Set SHOTS=1 to save screenshots under docs/screenshots/golive/ (the top of the page; the full page is very long). */
+const shot = async (page: Page, name: string) => {
+  if (process.env.SHOTS) await page.screenshot({ path: `docs/screenshots/golive/${test.info().project.name}-${name}.png` });
+};
 test("owner sees what is left, grouped, with honest statuses; the Today card links to it", async ({ page }) => {
   await login(page, USERS.rod);
   await page.goto("/today");
   const card = page.getByTestId("golive-today-card");
   await expect(card).toContainText(/Go-live: \d+ blocking items?/);
+  await shot(page, "today-card");
   await noSideScroll(page);
   await card.click();
   await page.waitForURL(/\/settings\/go-live/);
@@ -34,6 +39,7 @@ test("owner sees what is left, grouped, with honest statuses; the Today card lin
   // Sample wording is listed item by item.
   await expect(page.locator('[data-item="legal.wording.ach_mandate"]')).toHaveAttribute("data-status", "attention");
   await expect(page.locator('[data-item^="legal.form."]').first()).toBeVisible();
+  await shot(page, "readiness-page");
   // System-checked items offer no tick.
   await expect(mode.getByText("Record this yourself")).toHaveCount(0);
   await expect(page.locator('[data-item="payments.stripe_keys"]').locator("details")).toHaveCount(0);

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { requireViewer } from "@/lib/auth/viewer";
 import { formToObject, safeAction, UserError, type ActionState } from "@/lib/actions";
+import { coachSubmitAfter, coachSubmitReady } from "@/lib/checkins/coach-entry";
 import { submitAfter, submitReady } from "@/lib/checkins/core";
 import { HURT } from "@/lib/checkins/questions";
 import { resetCheckinSettings, saveCheckinSettings } from "@/lib/checkins/settings";
@@ -119,4 +120,62 @@ export const resetCheckinSettingsAction = safeAction(async () => {
   await db.transaction((tx) => resetCheckinSettings(tx, v));
   revalidatePath("/settings/check-ins");
   return { ok: true, message: "Reset to the defaults." };
+});
+
+// --- Coach entry: a coach types in what the athlete told them (rules in src/lib/checkins/coach-entry.ts) ---
+
+const refreshCoachEntry = (bookingId: string, sessionId: string) => {
+  revalidatePath(`/check-ins/${bookingId}/coach`);
+  revalidatePath(`/schedule/sessions/${sessionId}`);
+  revalidatePath("/check-ins");
+  revalidatePath("/today");
+};
+
+export const coachSubmitReadyAction = safeAction(async (_p: ActionState, fd: FormData) => {
+  const v = await requireViewer();
+  const bookingId = s(fd, "bookingId");
+  const r = await db.transaction((tx) =>
+    coachSubmitReady(tx, v, {
+      bookingId,
+      readiness: s(fd, "readiness") || undefined,
+      sleepQuality: s(fd, "sleepQuality"),
+      sleepHours: s(fd, "sleepHours"),
+      soreness: s(fd, "soreness") || undefined,
+      fatigue: s(fd, "fatigue"),
+      mood: s(fd, "mood"),
+      stress: s(fd, "stress"),
+      hurt: s(fd, "hurt"),
+      spot: spotFrom(fd),
+      note: s(fd, "note"),
+      replace: s(fd, "replace"),
+      replaceReason: s(fd, "replaceReason"),
+    }),
+  );
+  refreshCoachEntry(bookingId, r.checkin.sessionId);
+  return { ok: true, message: `Saved as entered by you.${r.replaced ? " The earlier answer is kept on the record as replaced." : ""}${r.reasons.includes("sharp_pain") ? ` ${HURT.sharpNote}` : ""}` };
+});
+
+export const coachSubmitAfterAction = safeAction(async (_p: ActionState, fd: FormData) => {
+  const v = await requireViewer();
+  const bookingId = s(fd, "bookingId");
+  const r = await db.transaction((tx) =>
+    coachSubmitAfter(tx, v, {
+      bookingId,
+      rpe: s(fd, "rpe"),
+      liked: fd.getAll("liked").filter((x): x is string => typeof x === "string"),
+      likedText: s(fd, "likedText"),
+      disliked: fd.getAll("disliked").filter((x): x is string => typeof x === "string"),
+      dislikedText: s(fd, "dislikedText"),
+      nothingToChange: s(fd, "nothingToChange"),
+      hurt: s(fd, "hurt"),
+      spot: spotFrom(fd),
+      hurtStartedInSession: s(fd, "hurtStartedInSession"),
+      soreness: s(fd, "soreness"),
+      note: s(fd, "note"),
+      replace: s(fd, "replace"),
+      replaceReason: s(fd, "replaceReason"),
+    }),
+  );
+  refreshCoachEntry(bookingId, r.checkin.sessionId);
+  return { ok: true, message: `Saved as entered by you.${r.replaced.length ? " The earlier answer is kept on the record as replaced." : ""}${r.sharp ? ` ${HURT.sharpNote}` : ""}` };
 });

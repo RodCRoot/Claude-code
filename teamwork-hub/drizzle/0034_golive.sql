@@ -33,6 +33,7 @@ CREATE TABLE "go_live_attestations" (
 );
 --> statement-breakpoint
 ALTER TABLE "events" ADD COLUMN "waitlist_offer_hours" integer DEFAULT 24 NOT NULL;--> statement-breakpoint
+ALTER TABLE "session_checkins" ADD COLUMN "replacements" jsonb DEFAULT '[]'::jsonb NOT NULL;--> statement-breakpoint
 ALTER TABLE "event_waitlist_entries" ADD CONSTRAINT "event_waitlist_entries_event_id_events_id_fk" FOREIGN KEY ("event_id") REFERENCES "public"."events"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "event_waitlist_entries" ADD CONSTRAINT "event_waitlist_entries_athlete_id_athletes_id_fk" FOREIGN KEY ("athlete_id") REFERENCES "public"."athletes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "event_waitlist_entries" ADD CONSTRAINT "event_waitlist_entries_payer_account_id_payer_accounts_id_fk" FOREIGN KEY ("payer_account_id") REFERENCES "public"."payer_accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint

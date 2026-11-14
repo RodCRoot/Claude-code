@@ -13,6 +13,10 @@ test.describe.configure({ mode: "serial" });
 const noSideScroll = async (page: Page) => expect(await page.evaluate(() => document.documentElement.scrollWidth), `${page.url()} scrolls sideways`).toBeLessThanOrEqual(page.viewportSize()!.width + 1);
 const letters = () => Array.from({ length: 7 }, () => String.fromCharCode(97 + Math.floor(Math.random() * 26))).join("");
 
+/** Set SHOTS=1 to save screenshots under docs/screenshots/golive/. */
+const shot = async (page: Page, name: string) => {
+  if (process.env.SHOTS) await page.screenshot({ path: `docs/screenshots/golive/${test.info().project.name}-${name}.png`, fullPage: true });
+};
 async function openLead(page: Page, surname: string) {
   await page.goto(`/people/leads?q=${surname}&view=list`);
   await page.getByRole("link", { name: new RegExp(surname) }).first().click();
@@ -37,6 +41,7 @@ test("public form: source and interest come from the lists, and tracking values 
   await source.selectOption("Other");
   await page.getByLabel("Where did you hear about us?").fill("County fair booth");
   await page.getByLabel("What are you most interested in?").selectOption("Performance Training");
+  await shot(page, "public-lead-form");
   await expect(page.getByLabel("Priority")).toHaveCount(0); // staff only
   await noSideScroll(page);
   await page.getByRole("button", { name: "Send inquiry" }).click();
@@ -49,6 +54,7 @@ test("public form: source and interest come from the lists, and tracking values 
   await expect(inquiry).toContainText("Performance Training");
   await expect(inquiry).toContainText("Volleyball");
   await expect(page.getByTestId("lead-utm")).toHaveText("Source: newsletter · Name: spring-speed · Medium: email · Keywords: speed training");
+  await shot(page, "lead-with-tracking");
   await noSideScroll(page);
 });
 
@@ -91,6 +97,7 @@ test("owner: the report and the scoreboard group leads by the normalised source"
   await login(page, USERS.rod);
   await page.goto("/reports/leads-by-source");
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Leads by source and interest");
+  await shot(page, "leads-by-source-report");
   const table = page.getByRole("table").first();
   await expect(table).toContainText("Source");
   await expect(table).not.toContainText("web_inquiry");

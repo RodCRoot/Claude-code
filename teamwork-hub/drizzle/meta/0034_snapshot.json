@@ -1,5 +1,5 @@
 {
-  "id": "aef4c35a-e48d-4b59-9905-34058dfdf47f",
+  "id": "c883c6f0-7cd7-42ab-a9fe-dccfffb4ea63",
   "prevId": "26471e50-e7e1-43e0-bfcd-4510e5633c3d",
   "version": "7",
   "dialect": "postgresql",
@@ -26900,6 +26900,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'{}'::jsonb"
+        },
+        "replacements": {
+          "name": "replacements",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
         },
         "logged_by_parent": {
           "name": "logged_by_parent",
