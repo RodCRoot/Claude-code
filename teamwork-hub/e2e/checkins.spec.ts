@@ -186,6 +186,8 @@ test("kiosk: after a PIN check-in the ready check takes a few taps, then the pad
   // A second PIN entry for the same class offers no second ready check.
   await page.locator("#kiosk-pin").fill("2580");
   await page.locator("#kiosk-pin").press("Enter");
-  await expect(page.getByText(/Hi Eli/).first()).toBeVisible();
-  await expect(page.getByRole("region", { name: "Quick ready check" })).toHaveCount(0);
+  // The seed gives Eli another class on some weekdays (Saturday skills); the PIN then checks him into
+  // that one and may offer its ready check. What must never happen is a second one for this class.
+  await expect(page.getByText(/Hi Eli|checked in, Eli/).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: `Quick ready check for Kiosk demo (${info.project.name})? Four taps.` })).toHaveCount(0);
 });
