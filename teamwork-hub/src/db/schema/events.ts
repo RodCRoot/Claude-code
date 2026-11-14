@@ -38,6 +38,8 @@ export const events = pgTable(
     requiredFormTemplateIds: jsonb("required_form_template_ids").$type<string[]>().notNull().default([]),
     /** How long an unpaid registration holds its spot. */
     holdHours: integer("hold_hours").notNull().default(48),
+    /** How long a waitlisted family has to accept a spot that was offered to them. */
+    waitlistOfferHours: integer("waitlist_offer_hours").notNull().default(24),
     isDemo: isDemo(),
     createdBy: uuid("created_by").references(() => users.id),
     publishedAt: ts("published_at"),
@@ -50,6 +52,7 @@ export const events = pgTable(
     check("events_price_ck", sql`${t.priceMinor} >= 0 and (${t.earlyBirdPriceMinor} is null or ${t.earlyBirdPriceMinor} >= 0)`),
     check("events_sibling_ck", sql`${t.siblingDiscountPercent} is null or (${t.siblingDiscountPercent} between 1 and 100)`),
     check("events_hold_ck", sql`${t.holdHours} between 1 and 720`),
+    check("events_waitlist_offer_ck", sql`${t.waitlistOfferHours} between 1 and 720`),
   ],
 );
 
@@ -117,5 +120,53 @@ export const eventRegistrations = pgTable(
     index("event_reg_invoice_idx").on(t.invoiceId),
     index("event_reg_submit_idx").on(t.orgId, t.submitKey),
     check("event_reg_amount_ck", sql`${t.amountMinor} >= 0 and ${t.basePriceMinor} >= 0 and ${t.siblingDiscountMinor} >= 0`),
+  ],
+);
+
+/**
+ * waiting  = in line, in `position` order
+ * offered  = a released spot is reserved for this athlete until offer_expires_at (nothing is charged
+ *            and no message is sent; the family sees the offer in the app)
+ * accepted = the family took the offer; `registration_id` is the normal registration it created
+ * expired  = the offer ran out; the spot went to the next in line
+ * declined = the family said no to the offer, or left the waitlist
+ * removed  = staff removed the entry
+ */
+export type EventWaitlistStatus = "waiting" | "offered" | "accepted" | "expired" | "declined" | "removed";
+
+export const eventWaitlistEntries = pgTable(
+  "event_waitlist_entries",
+  {
+    id: id(),
+    orgId: orgId(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id),
+    athleteId: uuid("athlete_id")
+      .notNull()
+      .references(() => athletes.id),
+    /** The billing account that would be invoiced on acceptance (same rule as registering). */
+    payerAccountId: uuid("payer_account_id")
+      .notNull()
+      .references(() => payerAccounts.id),
+    status: text("status").$type<EventWaitlistStatus>().notNull().default("waiting"),
+    /** Order in line among waiting entries; lower is earlier. Staff can reorder. */
+    position: integer("position").notNull(),
+    offeredAt: ts("offered_at"),
+    offerExpiresAt: ts("offer_expires_at"),
+    registrationId: uuid("registration_id").references(() => eventRegistrations.id),
+    addedByUserId: uuid("added_by_user_id").references(() => users.id),
+    closedAt: ts("closed_at"),
+    closedByUserId: uuid("closed_by_user_id").references(() => users.id),
+    closedReason: text("closed_reason"),
+    isDemo: isDemo(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    // One live entry per athlete per event.
+    uniqueIndex("event_waitlist_live_uq").on(t.eventId, t.athleteId).where(sql`${t.status} in ('waiting','offered')`),
+    index("event_waitlist_event_idx").on(t.eventId, t.status, t.position),
+    index("event_waitlist_offer_idx").on(t.orgId, t.status, t.offerExpiresAt),
   ],
 );

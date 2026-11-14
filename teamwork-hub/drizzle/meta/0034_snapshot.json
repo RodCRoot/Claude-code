@@ -1,5 +1,5 @@
 {
-  "id": "f6d714d0-d49d-4c8a-b768-b859ef035f3c",
+  "id": "aef4c35a-e48d-4b59-9905-34058dfdf47f",
   "prevId": "26471e50-e7e1-43e0-bfcd-4510e5633c3d",
   "version": "7",
   "dialect": "postgresql",
@@ -19641,6 +19641,282 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.event_waitlist_entries": {
+      "name": "event_waitlist_entries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_id": {
+          "name": "event_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "athlete_id": {
+          "name": "athlete_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payer_account_id": {
+          "name": "payer_account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'waiting'"
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "offered_at": {
+          "name": "offered_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "offer_expires_at": {
+          "name": "offer_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "registration_id": {
+          "name": "registration_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "added_by_user_id": {
+          "name": "added_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "closed_by_user_id": {
+          "name": "closed_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "closed_reason": {
+          "name": "closed_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_demo": {
+          "name": "is_demo",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "event_waitlist_live_uq": {
+          "name": "event_waitlist_live_uq",
+          "columns": [
+            {
+              "expression": "event_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "athlete_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"event_waitlist_entries\".\"status\" in ('waiting','offered')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_waitlist_event_idx": {
+          "name": "event_waitlist_event_idx",
+          "columns": [
+            {
+              "expression": "event_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "position",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_waitlist_offer_idx": {
+          "name": "event_waitlist_offer_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "offer_expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "event_waitlist_entries_event_id_events_id_fk": {
+          "name": "event_waitlist_entries_event_id_events_id_fk",
+          "tableFrom": "event_waitlist_entries",
+          "tableTo": "events",
+          "columnsFrom": [
+            "event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "event_waitlist_entries_athlete_id_athletes_id_fk": {
+          "name": "event_waitlist_entries_athlete_id_athletes_id_fk",
+          "tableFrom": "event_waitlist_entries",
+          "tableTo": "athletes",
+          "columnsFrom": [
+            "athlete_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "event_waitlist_entries_payer_account_id_payer_accounts_id_fk": {
+          "name": "event_waitlist_entries_payer_account_id_payer_accounts_id_fk",
+          "tableFrom": "event_waitlist_entries",
+          "tableTo": "payer_accounts",
+          "columnsFrom": [
+            "payer_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "event_waitlist_entries_registration_id_event_registrations_id_fk": {
+          "name": "event_waitlist_entries_registration_id_event_registrations_id_fk",
+          "tableFrom": "event_waitlist_entries",
+          "tableTo": "event_registrations",
+          "columnsFrom": [
+            "registration_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "event_waitlist_entries_added_by_user_id_users_id_fk": {
+          "name": "event_waitlist_entries_added_by_user_id_users_id_fk",
+          "tableFrom": "event_waitlist_entries",
+          "tableTo": "users",
+          "columnsFrom": [
+            "added_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "event_waitlist_entries_closed_by_user_id_users_id_fk": {
+          "name": "event_waitlist_entries_closed_by_user_id_users_id_fk",
+          "tableFrom": "event_waitlist_entries",
+          "tableTo": "users",
+          "columnsFrom": [
+            "closed_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.events": {
       "name": "events",
       "schema": "",
@@ -19759,6 +20035,13 @@
           "notNull": true,
           "default": 48
         },
+        "waitlist_offer_hours": {
+          "name": "waitlist_offer_hours",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 24
+        },
         "is_demo": {
           "name": "is_demo",
           "type": "boolean",
@@ -19850,6 +20133,10 @@
         "events_hold_ck": {
           "name": "events_hold_ck",
           "value": "\"events\".\"hold_hours\" between 1 and 720"
+        },
+        "events_waitlist_offer_ck": {
+          "name": "events_waitlist_offer_ck",
+          "value": "\"events\".\"waitlist_offer_hours\" between 1 and 720"
         }
       },
       "isRLSEnabled": false

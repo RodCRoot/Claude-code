@@ -11,6 +11,7 @@ import { releaseExpiredHolds } from "@/lib/events/registration";
 import { onlinePaymentAvailable } from "@/lib/growth/shop";
 import { formatMoney } from "@/lib/money";
 import { fmt, fmtDate, fmtTime } from "@/lib/time";
+import { AcceptOfferForm, JoinWaitlistForm, LeaveWaitlistForm } from "@/components/events/waitlist-family";
 import { RegisterForm } from "./register-form";
 
 export const metadata = { title: "Camp or clinic" };
@@ -34,8 +35,11 @@ export default async function CampDetailPage({ params, searchParams }: { params:
   const blocked = athletes.filter((a) => a.state === "blocked");
   const heldInvoices = [...new Set(held.map((a) => a.invoiceId).filter((x): x is string => !!x))];
   const holdUntil = held.find((a) => a.holdExpiresAt)?.holdExpiresAt ?? null;
+  const offered = athletes.filter((a) => a.state === "offered");
+  const waitlisted = athletes.filter((a) => a.state === "waitlisted");
   const full = e.spotsLeft === 0;
   const canRegisterNow = !e.closedReason && !full && open.length > 0;
+  const canJoinWaitlist = !e.closedReason && full && open.length > 0;
 
   return (
     <>
@@ -72,6 +76,21 @@ export default async function CampDetailPage({ params, searchParams }: { params:
               )}
             </Callout>
           ) : null}
+          {offered.map((a) => (
+            <Callout key={a.athleteId} tone="ok" title={`A spot has opened for ${a.first}`}>
+              <p data-testid="waitlist-offer">
+                It is held for {a.first} until {a.offerExpiresAt ? fmt(a.offerExpiresAt, "EEE, MMM d 'at' h:mm a", e.tz) : "the offer runs out"}. Nothing has been charged. Taking the spot creates a bill, and the spot is confirmed once the bill is paid. If you do not answer in time, the spot goes to the next family in line.
+              </p>
+              {a.canAct && a.entryId ? (
+                <div className="mt-2 flex flex-wrap items-start gap-2">
+                  <AcceptOfferForm entryId={a.entryId} formKey={randomUUID()} first={a.first} online={online} />
+                  <LeaveWaitlistForm entryId={a.entryId} label="No thanks" confirm={`Pass on this spot for ${a.first}? It will be offered to the next family in line.`} />
+                </div>
+              ) : (
+                <p className="mt-1">The adult who pays on the billing account can take the spot, or the front desk can help.</p>
+              )}
+            </Callout>
+          ))}
           {registered.length ? (
             <Callout tone="ok" title={`${registered.map((a) => a.first).join(" and ")} ${registered.length === 1 ? "is" : "are"} registered`}>
               Payment is confirmed and every session is on the calendar.{" "}
@@ -130,7 +149,7 @@ export default async function CampDetailPage({ params, searchParams }: { params:
                 <Callout tone="info">{e.closedReason}</Callout>
               ) : full ? (
                 <Callout tone="info" title="This is full">
-                  Every spot is taken or being held. Spots that are not paid for are released, so it is worth checking back. The front desk can also help.
+                  Every spot is taken or being held. {canJoinWaitlist ? "You can join the waitlist below. If a spot opens it is offered to the first athlete in line." : "Spots that are not paid for are released, so it is worth checking back. The front desk can also help."}
                 </Callout>
               ) : athletes.length === 0 ? (
                 <Callout tone="info" title="No athletes are linked to your login">
@@ -152,8 +171,25 @@ export default async function CampDetailPage({ params, searchParams }: { params:
                 />
               ) : null}
 
-              {blocked.length || held.length || registered.length ? (
+              {canJoinWaitlist ? <JoinWaitlistForm eventId={e.id} athletes={open.map((a) => ({ athleteId: a.athleteId, name: a.name }))} offerLabel={holdLabel(e.waitlistOfferHours)} /> : null}
+
+              {blocked.length || held.length || registered.length || waitlisted.length || offered.length ? (
                 <ul className="space-y-2">
+                  {offered.map((a) => (
+                    <li key={a.athleteId} className="flex items-center justify-between gap-2 rounded-md border border-edge px-3 py-2 text-sm">
+                      <span className="font-medium">{a.name}</span>
+                      <Badge variant="green">Spot offered</Badge>
+                    </li>
+                  ))}
+                  {waitlisted.map((a) => (
+                    <li key={a.athleteId} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-edge px-3 py-2 text-sm" data-testid="waitlist-place">
+                      <span className="font-medium">{a.name}</span>
+                      <span className="flex flex-wrap items-center gap-2">
+                        <Badge variant="yellow">On the waitlist{a.place ? `, place ${a.place}` : ""}</Badge>
+                        {a.canAct && a.entryId ? <LeaveWaitlistForm entryId={a.entryId} label="Leave the waitlist" confirm={`Take ${a.first} off the waitlist?`} /> : null}
+                      </span>
+                    </li>
+                  ))}
                   {[...registered, ...held].map((a) => (
                     <li key={a.athleteId} className="flex items-center justify-between gap-2 rounded-md border border-edge px-3 py-2 text-sm">
                       <span className="font-medium">{a.name}</span>

@@ -14,9 +14,14 @@ export function SpotsBadge({ e }: { e: Pick<FamilyEvent, "spotsLeft" | "closedRe
   return <Badge variant={e.spotsLeft <= 5 ? "yellow" : "green"}>{e.spotsLeft === 1 ? "1 spot left" : `${e.spotsLeft} spots left`}</Badge>;
 }
 
-export function MineBadges({ e }: { e: Pick<FamilyEvent, "mine"> }) {
+export function MineBadges({ e }: { e: Pick<FamilyEvent, "mine" | "waitlist"> }) {
   return (
     <>
+      {e.waitlist.map((w) => (
+        <Badge key={w.id} variant={w.status === "offered" ? "green" : "yellow"}>
+          {w.first}: {w.status === "offered" ? "spot offered" : "on the waitlist"}
+        </Badge>
+      ))}
       {e.mine.map((m) => (
         <Badge key={m.athleteId} variant={m.status === "confirmed" ? "green" : "yellow"}>
           {m.first}: {m.status === "confirmed" ? "registered" : "awaiting payment"}
@@ -60,7 +65,7 @@ export function EventCard({ e }: { e: FamilyEvent }) {
       </div>
       <div className="mt-4 border-t border-edge bg-th px-4 py-3">
         <ButtonLink href={`/shop/camps/${e.id}`} className="w-full" variant={e.closedReason || e.spotsLeft === 0 ? "secondary" : "primary"}>
-          {e.mine.length ? "View registration" : e.closedReason || e.spotsLeft === 0 ? "View details" : "Details and registration"}
+          {e.waitlist.some((w) => w.status === "offered") ? "See your offered spot" : e.mine.length ? "View registration" : e.closedReason ? "View details" : e.spotsLeft === 0 ? (e.waitlist.length ? "View waitlist" : "Details and waitlist") : "Details and registration"}
         </ButtonLink>
       </div>
     </li>
@@ -96,7 +101,7 @@ export async function UpcomingEventsCard({ v, className }: { v: Viewer; classNam
                 </span>
                 <span className="shrink-0 text-right">
                   <span className="block text-sm font-bold tabular">{priceLabel(e)}</span>
-                  <span className="block text-[11px] text-ink-2">{e.mine.some((m) => m.status === "held") ? "Awaiting payment" : e.mine.length ? "Registered" : e.spotsLeft === 0 ? "Full" : e.spotsLeft === 1 ? "1 spot left" : `${e.spotsLeft} spots left`}</span>
+                  <span className="block text-[11px] text-ink-2">{e.waitlist.some((w) => w.status === "offered") ? "Spot offered" : e.mine.some((m) => m.status === "held") ? "Awaiting payment" : e.mine.length ? "Registered" : e.waitlist.length ? "On the waitlist" : e.spotsLeft === 0 ? "Full" : e.spotsLeft === 1 ? "1 spot left" : `${e.spotsLeft} spots left`}</span>
                 </span>
               </Link>
             </li>

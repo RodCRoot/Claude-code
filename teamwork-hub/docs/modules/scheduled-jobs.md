@@ -11,6 +11,7 @@ Module `scheduled`. Code in `src/lib/scheduled/jobs.ts`, handlers registered in
 | Referral progress (started, earned, new family discount, refund withholding) | `/refer`, People → Referrals, invoice creation | `growth.referrals.nightly` | `syncReferrals` |
 | Team challenge completions and challenge badges | Athlete Home, `/leaderboards` | `community.challenges.nightly` | `syncChallengeCompletions` |
 | Auto-achieved goals, XP ledger, badges | Athlete Home, `/goals`, performance page | `engagement.refresh.nightly` | `evaluateGoals`, `syncXp`, `syncBadges` (what `refreshEngagement` does) |
+| Camps and clinics: unpaid holds that ran out (spot released, unpaid invoice voided), waitlist offers that ran out, freed spots offered to the next in line | `/shop/camps`, `/shop/camps/<id>`, `/events`, `/events/<id>`, every registration and waitlist join | `events.holds.nightly` | `releaseExpiredHolds` (see `docs/modules/events.md`) |
 | Monthly recap finalization | first view of a closed month | `recap.monthly` (already existed, daily) | `runMonthlyRecaps` |
 | Member journey: checklists started from memberships, holds, cancellations and visit counts; detectable steps ticked | `/follow-ups`, the journey panel on a person page | `journey.sync.nightly` | `syncJourneys` (see `docs/modules/journey.md`) |
 
