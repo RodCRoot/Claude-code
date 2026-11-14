@@ -122,6 +122,27 @@ describe("attribution rules", () => {
     }
   });
 
+  it("tracking values from a referral link are kept on the lead and change nothing about attribution", async () => {
+    const code = parkerCode;
+    const utm = { source: "newsletter", campaign: "bring-a-friend", medium: "email", term: "speed training" };
+    const plain = await refer(code);
+    const tracked = await refer(code, { utm });
+    // Same attribution outcome with and without tracking values.
+    expect(tracked.referral.attributed).toBe(true);
+    expect(plain.referral.attributed).toBe(true);
+    const [a, b] = [await referralOf(plain.leadId), await referralOf(tracked.leadId)];
+    expect({ status: b.status, via: b.attachedVia, referrer: b.referrerPayerAccountId, codeId: b.codeId }).toEqual({ status: a.status, via: a.attachedVia, referrer: a.referrerPayerAccountId, codeId: a.codeId });
+    expect(b.referrerPayerAccountId).toBe(ctx.payers.parker);
+    const leadRow = async (id: string) => (await testDb().select().from(leads).where(eq(leads.id, id)))[0];
+    expect((await leadRow(tracked.leadId)).inquiry).toMatchObject({ utm, channel: "web_inquiry" });
+    expect("utm" in ((await leadRow(plain.leadId)).inquiry as Record<string, unknown>)).toBe(false);
+    // A utm_source is never read as a referral code.
+    const madeUp = await refer("zzzzzzzzzz", { utm: { source: code, campaign: "", medium: "", term: "" } });
+    expect(madeUp.referral.attributed).toBe(false);
+    expect(await referralOf(madeUp.leadId)).toBeUndefined();
+    expect((await leadRow(madeUp.leadId)).inquiry).toMatchObject({ utm: { source: code, campaign: null, medium: null, term: null } });
+  });
+
   it("blocks self-referral (the inquirer pays on the referrer's account)", async () => {
     const r = await refer(parkerCode, { email: "alex.parker@example.test", contactFirstName: "Alex", contactLastName: "Parker" });
     expect(r.referral).toMatchObject({ attributed: false, reason: "self_referral" });

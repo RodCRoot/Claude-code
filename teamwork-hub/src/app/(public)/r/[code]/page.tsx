@@ -1,4 +1,4 @@
-import { leadLists } from "@/lib/crm/lead-vocab";
+import { leadLists, utmFrom } from "@/lib/crm/lead-vocab";
 import { StableForm, StableSubmit } from "@/app/(app)/messages/_components/stable-form";
 import { InquiryFields } from "@/app/(public)/inquire/_components/inquiry-fields";
 import { Callout, Card, CardBody } from "@/components/ui";
@@ -17,8 +17,12 @@ export const metadata = { title: "A friend invited you", robots: { index: false,
  * codes exist. The code is only checked when the (rate-limited) form is submitted, and the
  * answer is the same thanks page either way. Nothing about the referring family is shown.
  */
-export default async function ReferralLanding({ params }: { params: Promise<{ code: string }> }) {
+export default async function ReferralLanding({ params, searchParams }: { params: Promise<{ code: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { code } = await params;
+  // Tracking values in the page address travel with the form (hidden fields) and are kept on the
+  // lead, exactly as on /inquire. They never touch the referral code or who is credited.
+  const sp = await searchParams;
+  const utm = utmFrom(Object.fromEntries(Object.entries(sp).filter(([, x]) => typeof x === "string")));
   // Carry at most 16 URL-safe characters into the form; anything else is dropped.
   const ref = /^[A-Za-z0-9]{1,16}$/.test(code) ? code.toLowerCase() : "";
   // The offer text depends only on the organization's settings, never on the code, so the page
@@ -52,7 +56,7 @@ export default async function ReferralLanding({ params }: { params: Promise<{ co
               <label htmlFor="website">Website</label>
               <input id="website" name="website" type="text" tabIndex={-1} autoComplete="off" />
             </div>
-            <InquiryFields lists={leadLists()} />
+            <InquiryFields lists={leadLists()} utm={utm} />
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <StableSubmit pendingText="Sending…" size="lg">
                 Send inquiry

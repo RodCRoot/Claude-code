@@ -5,7 +5,7 @@ import { login, USERS } from "./helpers";
  * Lead Source, Interest and Priority as lists, and UTM capture on the public form
  * (run against `pnpm build && pnpm start` seeded with `pnpm db:fresh`).
  * Every person is fictional and each run uses its own made-up surname, so the desktop and mobile
- * projects and reruns never collide. Two public inquiries per run stay far below the hourly limit.
+ * projects and reruns never collide. Three public inquiries per run stay far below the hourly limit.
  */
 test.describe.configure({ mode: "serial" });
 
@@ -56,6 +56,37 @@ test("public form: source and interest come from the lists, and tracking values 
   await expect(page.getByTestId("lead-utm")).toHaveText("Source: newsletter · Name: spring-speed · Medium: email · Keywords: speed training");
   await shot(page, "lead-with-tracking");
   await noSideScroll(page);
+});
+
+test("referral link form: tracking values in the link are kept on the lead and shown the same way", async ({ page }) => {
+  const surname = `Zx${letters()}`;
+  // A made-up code: the page is identical for real and made-up codes, and nothing is attributed,
+  // so this test leaves no referral behind for other specs to trip over.
+  await page.goto("/r/zzutmcheck?utm_source=newsletter&utm_campaign=bring-a-friend&utm_medium=email&utm_term=speed%20training");
+  await expect(page.getByRole("heading", { level: 1, name: "A friend thought you would like it here" })).toBeVisible();
+  await expect(page.locator('input[type="hidden"][name="utm_source"]')).toHaveValue("newsletter");
+  await expect(page.locator('input[type="hidden"][name="utm_campaign"]')).toHaveValue("bring-a-friend");
+  await expect(page.locator('input[type="hidden"][name="ref"]')).toHaveValue("zzutmcheck");
+  await noSideScroll(page);
+  await page.locator("#contactFirstName").fill("Pat");
+  await page.locator("#contactLastName").fill(surname);
+  await page.locator("#email").fill(`pat.${surname.toLowerCase()}@example.test`);
+  await page.locator("#athleteFirstName").fill("Kit");
+  await page.locator("#athleteLastName").fill(surname);
+  await page.locator("#athleteAge").fill("13");
+  await page.getByRole("button", { name: "Send inquiry" }).click();
+  await page.waitForURL(/\/inquire\/thanks/);
+
+  await login(page, USERS.erin);
+  await openLead(page, surname);
+  await expect(page.getByTestId("lead-utm")).toHaveText("Source: newsletter · Name: bring-a-friend · Medium: email · Keywords: speed training");
+  await noSideScroll(page);
+
+  // Without tracking values the form carries none and the page is otherwise the same.
+  await page.context().clearCookies();
+  await page.goto("/r/zzutmcheck");
+  await expect(page.getByRole("heading", { level: 1, name: "A friend thought you would like it here" })).toBeVisible();
+  await expect(page.locator('input[name="utm_source"]')).toHaveCount(0);
 });
 
 test("staff: add a lead from the lists, then edit source, interest and priority", async ({ page }) => {
