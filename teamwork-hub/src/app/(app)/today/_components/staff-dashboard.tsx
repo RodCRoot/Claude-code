@@ -21,6 +21,7 @@ import { MilestonesCard } from "@/components/retention/milestones-card";
 import { NewsClipsTodayCard } from "@/components/newswatch/cards";
 import { CompetingThisWeekCard } from "@/components/wins/staff";
 import { FollowUpsTodayCard } from "@/components/journey/today-card";
+import { GoLiveTodayCard } from "@/components/golive/today-card";
 
 /** Front-desk dashboard (owner/admin/operations): KPI row + widget grid. Same data and checks as before. */
 export async function StaffToday({ v, tz, greeting, dateLabel }: { v: Viewer; tz?: string; greeting: string; dateLabel: string }) {
@@ -68,6 +69,7 @@ export async function StaffToday({ v, tz, greeting, dateLabel }: { v: Viewer; tz
         )}
       </div>
 
+      <GoLiveTodayCard v={v} className="mb-5" />
       <TimeClockCard v={v} tz={tz} />
 
       <div className="grid gap-4 lg:grid-cols-3">

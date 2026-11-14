@@ -1,3 +1,4 @@
+import { SEEDED_AS_SAMPLE } from "../../src/lib/sample-text";
 import { and, eq } from "drizzle-orm";
 import { creditBuckets, creditLedger, invoiceLines, leads, memberships, membershipEvents, organizations, products, productVersions, users } from "../../src/db/schema";
 import type { Viewer } from "../../src/lib/authz/policy";
@@ -39,6 +40,7 @@ export async function seedGrowth(ctx: SeedCtx) {
       reward: { type: "account_credit", amountMinor: 5000, credits: null, creditExpiryDays: null },
       // Owner decision 2026-11-11: the new family also gets $50 off (their first invoice).
       newFamilyDiscountMinor: 5000,
+      howItWorksIsSample: SEEDED_AS_SAMPLE,
       howItWorks: "Thank you for telling friends about us. When a new family joins through your link, you get a $50 account credit and they get $50 off their first invoice. (Sample wording for the demo.)",
     },
     offers: DEFAULT_GROWTH.offers,

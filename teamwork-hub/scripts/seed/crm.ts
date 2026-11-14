@@ -1,3 +1,4 @@
+import { SEEDED_AS_SAMPLE } from "../../src/lib/sample-text";
 import { eq, sql } from "drizzle-orm";
 import { automationRules, campaigns, inboundMessages, leads, messageTemplates, organizations, segments, users } from "../../src/db/schema";
 import { recordConsent } from "../../src/lib/messaging/preferences";
@@ -129,7 +130,7 @@ export async function seedCrm(ctx: SeedCtx) {
   ];
   const tplIds: Record<string, string> = {};
   for (const t of templates) {
-    const [row] = await tx.insert(messageTemplates).values({ orgId, key: t.key, name: t.name, channel: t.channel, subject: t.subject ?? null, body: t.body, isSample: true }).returning();
+    const [row] = await tx.insert(messageTemplates).values({ orgId, key: t.key, name: t.name, channel: t.channel, subject: t.subject ?? null, body: t.body, isSample: SEEDED_AS_SAMPLE }).returning();
     tplIds[t.key] = row.id;
   }
   const rules: { name: string; trigger: keyof typeof tplIds; channels: ("in_app" | "email" | "sms")[]; delay?: number; days?: number; task?: boolean }[] = [
@@ -166,7 +167,7 @@ export async function seedCrm(ctx: SeedCtx) {
       channel: "email",
       subject: "News from {{org_name}}",
       body: "SAMPLE TEXT: Hi {{recipient_first_name}}, a quick update for {{athlete_first_name}}'s family: … Thanks, {{org_name}}",
-      isSample: true,
+      isSample: SEEDED_AS_SAMPLE,
     })
     .returning();
   const [activeMembers] = await tx

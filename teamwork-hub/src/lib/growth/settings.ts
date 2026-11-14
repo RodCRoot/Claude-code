@@ -46,6 +46,8 @@ export type GrowthSettings = {
     blockSameHousehold: boolean;
     /** "How it works" text shown to families on /refer. */
     howItWorks: string;
+    /** The text above is still placeholder wording (see src/lib/sample-text.ts). Cleared by an owner in Settings. */
+    howItWorksIsSample: boolean;
   };
   offers: {
     /** Turn every family-facing suggestion off (staff still see opportunities). */
@@ -76,6 +78,7 @@ export const DEFAULT_GROWTH: GrowthSettings = {
     requireNewFamily: true,
     blockSameHousehold: true,
     howItWorks: "",
+    howItWorksIsSample: false,
   },
   offers: {
     familyFacing: true,
@@ -178,6 +181,7 @@ export function parseGrowthSettings(raw: Record<string, unknown>): { settings: G
       requireNewFamily: on(raw, "requireNewFamily"),
       blockSameHousehold: on(raw, "blockSameHousehold"),
       howItWorks: s(raw, "howItWorks").slice(0, 1200),
+      howItWorksIsSample: on(raw, "howItWorksIsSample"),
     },
     offers: {
       familyFacing: on(raw, "familyFacing"),

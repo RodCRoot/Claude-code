@@ -1,3 +1,4 @@
+import { defineWording } from "@/lib/sample-text";
 /**
  * Wins and Competitions: labels, limits, pure text rules and caption templates. Safe to import
  * from client components (no database, no zod). See docs/modules/wins.md.
@@ -169,3 +170,13 @@ export function parseScheduleLines(raw: string, maxLines = 80): { rows: ParsedSc
   });
   return { rows, errors };
 }
+
+export const WINS_MARKETING_WORDING = defineWording({
+  id: "wins_marketing_consent",
+  label: "Wins marketing consent",
+  version: MARKETING_POLICY_VERSION,
+  isSample: true,
+  shownAt: "Shown to a family before a win may be used in the gym's public marketing.",
+  source: "src/lib/wins/shared.ts",
+  href: "/wins/marketing",
+});

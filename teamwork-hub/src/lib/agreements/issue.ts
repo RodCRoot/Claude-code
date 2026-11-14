@@ -1,3 +1,4 @@
+import { SEEDED_AS_SAMPLE } from "@/lib/sample-text";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Tx } from "@/db";
 import { athletes, formRequests, formTemplates, formTemplateVersions, membershipAgreements, membershipEvents, memberships, organizations, people, products, productVersions } from "@/db/schema";
@@ -75,7 +76,7 @@ export async function ensureSampleAgreementTemplate(tx: Tx, actor: AuditActor & 
   const content = { title: "Membership Agreement", bodyMarkdown: SAMPLE_AGREEMENT_BODY, fields: [], signers: SAMPLE_AGREEMENT_SIGNERS };
   const [ver] = await tx
     .insert(formTemplateVersions)
-    .values({ templateId: t.id, version: 1, ...content, contentHash: contentHash(content), isSampleText: true, status: "published", publishedAt: new Date(), publishedBy: actor.actorUserId })
+    .values({ templateId: t.id, version: 1, ...content, contentHash: contentHash(content), isSampleText: SEEDED_AS_SAMPLE, status: "published", publishedAt: new Date(), publishedBy: actor.actorUserId })
     .returning();
   await audit(tx, actor, "agreements.sample_template", "form_template", t.id, { summary: `Created the SAMPLE membership agreement template${opts.isDemo ? " (demo)" : ""}; replace its text with approved language` });
   return { templateId: t.id, versionId: ver.id, created: true };

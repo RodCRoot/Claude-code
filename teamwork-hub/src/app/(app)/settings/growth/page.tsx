@@ -104,6 +104,13 @@ export default async function GrowthSettingsPage() {
             <Field label="How it works (shown to families)" htmlFor="howItWorks" hint="Plain text in your own words. Keep it friendly and short.">
               <Textarea id="howItWorks" name="howItWorks" rows={4} maxLength={1200} defaultValue={g.referral.howItWorks} />
             </Field>
+            <label className="flex min-h-11 items-start gap-2 text-sm">
+              <input type="checkbox" name="howItWorksIsSample" defaultChecked={g.referral.howItWorksIsSample} className="mt-1" />
+              <span>
+                This is still sample wording
+                <span className="block text-xs text-ink-3">Untick once the text above is your own. The go-live page lists it until then.</span>
+              </span>
+            </label>
             <p className="text-xs text-ink-3">An earned reward for the referring family is created as pending. Staff approve it in People → Referrals; only then is account credit or session credit issued. A pending reward is withheld if the new family&apos;s first payment is refunded in full.</p>
           </CardBody>
         </Card>

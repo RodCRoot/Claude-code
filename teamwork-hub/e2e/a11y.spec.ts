@@ -143,6 +143,7 @@ const STAFF = [
   "/settings/security",
   "/settings/integrations",
   "/settings/jobs",
+  "/settings/go-live",
   "/settings/journey",
   "/follow-ups",
   "/follow-ups/checklist",

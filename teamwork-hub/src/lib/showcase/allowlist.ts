@@ -1,3 +1,4 @@
+import { defineWording } from "@/lib/sample-text";
 /**
  * The Showcase allowlist (pure; no database, no Next). This file is the single definition of what
  * a Showcase may hold and show. Anything not named here cannot be stored in a config, cannot be
@@ -230,3 +231,13 @@ export const SHOWCASE_POLICY_TEXT =
   "The page is not listed in search engines and has no public directory. I choose who receives the link. " +
   "I can change what is shown or turn the link off at any time, and the link stops working right away when I do. " +
   "Wellness, health, injury, billing, notes, date of birth, address and account contact details are never shown.";
+
+export const SHOWCASE_CONSENT_WORDING = defineWording({
+  id: "showcase_consent",
+  label: "Showcase consent",
+  version: SHOWCASE_POLICY_VERSION,
+  isSample: true,
+  shownAt: "Shown to a guardian or adult athlete before a recruiting showcase link is published.",
+  source: "src/lib/showcase/allowlist.ts",
+  href: "/settings/showcase",
+});
