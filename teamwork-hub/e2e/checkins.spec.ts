@@ -165,10 +165,21 @@ test("coach sees the readiness strip with the pain flag; the front desk sees onl
 test("kiosk: after a PIN check-in the ready check takes a few taps, then the pad is back with nothing left on screen", async ({ page }, info) => {
   await login(page, USERS.kiosk);
   await page.goto("/kiosk");
-  await page.locator("#kiosk-pin").fill("2580");
-  await page.locator("#kiosk-pin").press("Enter");
   const panel = page.getByRole("region", { name: "Quick ready check" });
-  await expect(panel.getByRole("heading", { name: `Quick ready check for Kiosk demo (${info.project.name})? Four taps.` })).toBeVisible();
+  const ours = panel.getByRole("heading", { name: `Quick ready check for Kiosk demo (${info.project.name})? Four taps.` });
+  // The seed gives Eli another class on some weekdays (Saturday skills). While that class is inside its
+  // check-in window the PIN lands there first, so skip any other class's ready check and enter the PIN again.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await page.locator("#kiosk-pin").fill("2580");
+    await page.locator("#kiosk-pin").press("Enter");
+    await expect(page.getByText(/Hi Eli|checked in, Eli/).or(panel).first()).toBeVisible();
+    if (await ours.isVisible().catch(() => false)) break;
+    const skip = panel.getByRole("button", { name: "Skip" });
+    if (await skip.isVisible().catch(() => false)) await skip.click();
+    await expect(page.locator("#kiosk-pin")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("#kiosk-pin")).toHaveValue("", { timeout: 10_000 });
+  }
+  await expect(ours).toBeVisible();
   await expect(panel.getByRole("button", { name: "Skip" })).toBeVisible();
   await noSideScroll(page);
   await panel.getByRole("group", { name: "How ready do you feel today?" }).getByRole("button", { name: /Good/ }).click();
