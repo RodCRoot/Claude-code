@@ -1,0 +1,5 @@
+External ID,Athlete,Provider,Date,Metric,Value,Unit,Quality
+GEN-1,Rowan Ellis,SampleBand,2026-03-07,Resting HR,52,bpm,
+GEN-1,Rowan Ellis,SampleBand,2026-03-07,HRV RMSSD,88.4,ms,
+GEN-1,Rowan Ellis,SampleBand,2026-03-08,Resting HR,,bpm,
+GEN-1,Rowan Ellis,SampleBand,2026-03-08,Sleep Duration,7.25,h,estimate

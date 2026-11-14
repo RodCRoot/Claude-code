@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Invented test feed. Every college and person here is fictional. -->
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Imaginary College Athletics (fictional)</title>
+  <link href="https://athletics.example.org/" />
+  <updated>2026-03-01T12:00:00Z</updated>
+  <entry>
+    <title type="html">Brennick Oddfellow&#39;s late goal lifts Imaginary College &amp; clinches the title</title>
+    <link rel="alternate" type="text/html" href="https://athletics.example.org/news/2026/3/1/soccer-title.aspx" />
+    <link rel="enclosure" href="https://athletics.example.org/img.jpg" />
+    <id>tag:athletics.example.org,2026:1</id>
+    <published>2026-03-01T03:00:00Z</published>
+    <updated>2026-03-01T03:00:00Z</updated>
+    <summary type="html">&lt;p&gt;The Imaginary College soccer team won 2-1.&lt;/p&gt;</summary>
+  </entry>
+  <entry>
+    <title>Imaginary College announces spring schedule</title>
+    <link href="https://athletics.example.org/news/2026/2/27/schedule.aspx" />
+    <id>tag:athletics.example.org,2026:2</id>
+    <updated>2026-02-27T15:00:00Z</updated>
+  </entry>
+</feed>

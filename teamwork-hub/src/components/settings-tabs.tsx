@@ -1,0 +1,47 @@
+import Link from "next/link";
+import { Tabs } from "./ui";
+
+export function SettingsTabs({ current }: { current: string }) {
+  return (
+    <>
+      <Tabs
+        current={current}
+        tabs={[
+          { key: "org", href: "/settings", label: "Organization & policies" },
+          { key: "users", href: "/settings/users", label: "Users & roles" },
+          { key: "custom-fields", href: "/settings/custom-fields", label: "Custom fields" },
+          { key: "engagement", href: "/settings/engagement", label: "Engagement" },
+          { key: "growth", href: "/settings/growth", label: "Growth" },
+          { key: "showcase", href: "/settings/showcase", label: "Showcase & recaps" },
+          { key: "community", href: "/settings/community", label: "Community" },
+          { key: "security", href: "/settings/security", label: "My security" },
+          { key: "integrations", href: "/settings/integrations", label: "Integrations" },
+          { key: "payments", href: "/settings/payments", label: "Payments & agreements" },
+          { key: "journey", href: "/settings/journey", label: "Member journey" },
+          { key: "check-ins", href: "/settings/check-ins", label: "Session check-ins" },
+          { key: "newswatch", href: "/settings/newswatch", label: "News watch" },
+          { key: "jobs", href: "/settings/jobs", label: "Scheduled jobs" },
+          { key: "payroll", href: "/payroll", label: "Payroll" },
+          { key: "audit", href: "/settings/audit", label: "Audit log" },
+        ]}
+      />
+      <p className="-mt-3 mb-5 text-xs text-ink-3">
+        Module settings:{" "}
+        {[
+          ["/schedule/settings", "Schedule & policies"],
+          ["/billing/products", "Products & prices"],
+          ["/documents", "Form templates"],
+          ["/messages", "Templates & automations"],
+          ["/imports", "Import Center & exports"],
+        ].map(([href, label], i) => (
+          <span key={href}>
+            {i ? " · " : ""}
+            <Link href={href} className="underline">
+              {label}
+            </Link>
+          </span>
+        ))}
+      </p>
+    </>
+  );
+}

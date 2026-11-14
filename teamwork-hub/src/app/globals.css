@@ -1,0 +1,144 @@
+@import "tailwindcss";
+
+/*
+ * Teamwork Hub design tokens. Brand color is configurable per organization
+ * (Settings → Branding) and injected as --brand on <body>.
+ */
+:root {
+  --brand: #1565c0;
+  --brand-ink: #ffffff;
+  --bg: #eef1f5;
+  --surface: #ffffff;
+  --surface-2: #f4f6f9;
+  --edge: #d8dee7;
+  --ink: #1a2332;
+  --ink-2: #3a4657;
+  --ink-3: #596579;
+  /* Sidebar (studio-software style): deep navy rail with a bright accent; same in light and dark. */
+  --nav-bg: #13203a;
+  --nav-hover: #1c2c4c;
+  --nav-active: #23365c;
+  --nav-ink: #d3dbe8;
+  --nav-ink-3: #93a3bd;
+  --nav-accent: #4fc3f7;
+  /* Table header band and zebra rows. */
+  --th-bg: #f1f4f8;
+  --zebra: #fafbfd;
+  /* ok/warn are one step darker than Tailwind 700 so status text stays >= 4.5:1 on its own tinted badge background. */
+  --ok: #166534;
+  --warn: #92400e;
+  --bad: #b91c1c;
+  --info: #075985;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b0f17;
+    --surface: #121826;
+    --surface-2: #1a2232;
+    --edge: #2a3447;
+    --th-bg: #172033;
+    --zebra: #141b2a;
+    --nav-bg: #0a1222;
+    --ink: #eef2f8;
+    --ink-2: #c3cad6;
+    --ink-3: #9aa4b5;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --info: #38bdf8;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b0f17;
+  --surface: #121826;
+  --surface-2: #1a2232;
+  --edge: #2a3447;
+  --th-bg: #172033;
+  --zebra: #141b2a;
+  --nav-bg: #0a1222;
+  --ink: #eef2f8;
+  --ink-2: #c3cad6;
+  --ink-3: #9aa4b5;
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --bad: #f87171;
+  --info: #38bdf8;
+}
+
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-edge: var(--edge);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --color-info: var(--info);
+  --color-nav-bg: var(--nav-bg);
+  --color-nav-hover: var(--nav-hover);
+  --color-nav-active: var(--nav-active);
+  --color-nav-ink: var(--nav-ink);
+  --color-nav-ink-3: var(--nav-ink-3);
+  --color-nav-accent: var(--nav-accent);
+  --color-th: var(--th-bg);
+  --color-zebra: var(--zebra);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.kicker {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+}
+.skip-link:focus {
+  left: 1rem;
+  top: 1rem;
+  z-index: 100;
+  background: var(--surface);
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+}

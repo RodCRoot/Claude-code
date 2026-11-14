@@ -1,0 +1,8 @@
+{
+  "time_s": [0, 0.001, 0.002, 0.003, 0.004],
+  "force_right": [270.1, 270.4, 271.0, 269.8, 270.2],
+  "force_left": [262.3, 262.1, 262.9, 263.0, 262.5],
+  "force_combined": [532.4, 532.5, 533.9, 532.8, 532.7],
+  "velocity_m_s": [0, 0, 0.001, 0.001, 0.002],
+  "note": "SYNTHETIC SAMPLE — shape unverified against the real endpoint"
+}
