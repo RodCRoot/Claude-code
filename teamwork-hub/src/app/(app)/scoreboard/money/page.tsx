@@ -8,7 +8,7 @@ import { Callout, Card, CardBody, CardHeader, EmptyState, Field, Input, PageHead
 import { SCOREBOARD_EXPENSE_CATEGORIES } from "@/db/schema";
 import { formatMoney } from "@/lib/money";
 import { monthLabel } from "@/lib/scoreboard/core";
-import { EXPENSE_LABEL, marginView, moneyView, type MoneyMonth, type Pivot } from "@/lib/scoreboard/money";
+import { EXPENSE_LABEL, ZP_IMPORTED_LABEL, importedBillsView, marginView, moneyView, type MoneyMonth, type Pivot } from "@/lib/scoreboard/money";
 import { deleteExpenseAction, saveExpenseAction } from "../actions";
 import { loadScoreboard, type ScoreboardSearch } from "../_load";
 
@@ -63,6 +63,8 @@ export default async function MoneyPage({ searchParams }: { searchParams: Promis
   const { v, c, locations, programs, months, q, canManage } = await loadScoreboard(searchParams);
   const mv = await moneyView(db, c, { months });
   const mg = await marginView(db, v, c, { months });
+  const zp = await importedBillsView(db, c, { months });
+  const zpInRange = zp.months.some((m) => m.bills > 0);
   const qm = { ...q, months };
   const cur = mv.months[mv.months.length - 1];
   const prev = mv.months.length > 1 ? mv.months[mv.months.length - 2] : null;
@@ -168,6 +170,47 @@ export default async function MoneyPage({ searchParams }: { searchParams: Promis
           <PivotTable caption="Collected by location" first="Location" p={mv.byLocation} months={mv.months} />
         </CardBody>
       </Card>
+
+      {zp.totalBills > 0 ? (
+        <Card className="mb-5" id="zp-imported">
+          <CardHeader title={ZP_IMPORTED_LABEL} kicker="Imported history, not hub revenue" action={<ExportLink table="money-zp-imported" q={qm} />} />
+          <CardBody className="space-y-3 pt-0">
+            <Callout tone="info" title="Not part of any number above">
+              These are bills read from a Zen Planner export, by due date, as they stood on the day of the import. Teamwork did not collect this money and does not add it to Collected, Billed, Outstanding, the revenue groups or the margin.
+            </Callout>
+            <p className="text-sm text-ink-2">
+              {zp.totalBills.toLocaleString()} imported bill{zp.totalBills === 1 ? "" : "s"} on file, due {monthLabel(zp.firstDue!)} to {monthLabel(zp.lastDue!)}.{zpInRange ? "" : " None fall in the months shown; choose a longer range to see them."}
+            </p>
+            {zpInRange ? (
+              <Table caption={`${ZP_IMPORTED_LABEL}, by month of the bill due date`}>
+                <thead>
+                  <tr>
+                    <Th>Month (bill due date)</Th>
+                    <Th align="right">Bills</Th>
+                    <Th align="right">Billed in Zen Planner</Th>
+                    <Th align="right">Paid in Zen Planner</Th>
+                    <Th align="right">Unpaid at import</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {zp.months.map((m) => (
+                    <tr key={m.month}>
+                      <Td className="whitespace-nowrap font-medium">
+                        {m.label}
+                        {m.partial ? <span className="text-xs font-normal text-ink-3"> to date</span> : null}
+                      </Td>
+                      <Td align="right">{m.bills ? m.bills.toLocaleString() : <NA>none imported</NA>}</Td>
+                      <Td align="right">{money(m.billedMinor)}</Td>
+                      <Td align="right">{money(m.paidMinor)}</Td>
+                      <Td align="right">{money(m.unpaidMinor)}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            ) : null}
+          </CardBody>
+        </Card>
+      ) : null}
 
       <Card className="mb-5" id="margin">
         <CardHeader title="Operating margin" kicker="Management estimate, not accounting" action={mg.access === "ok" ? <ExportLink table="margin" q={qm} /> : undefined} />

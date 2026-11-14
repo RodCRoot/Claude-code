@@ -27,7 +27,7 @@ const STEPS = [
 const per = (interval: string, n: number) => (interval === "month" ? (n === 1 ? "month" : `${n} months`) : interval === "week" ? (n === 1 ? "week" : `${n} weeks`) : interval);
 const panel = "min-w-0 rounded-md border border-edge bg-surface p-4 shadow-[0_1px_3px_rgb(16_24_40/0.06)]";
 
-export default async function SignupFlowPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ setup?: string; setup_cancelled?: string }> }) {
+export default async function SignupFlowPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ setup?: string; setup_cancelled?: string; signed?: string }> }) {
   const v = await requireBillingViewer();
   const { id } = await params;
   const sp = await searchParams;
@@ -42,6 +42,9 @@ export default async function SignupFlowPage({ params, searchParams }: { params:
   const order = ["plan", "documents", "payment", "confirm", "done"];
   const at = order.indexOf(view.current);
   const cutover = view.flow.kind === "cutover";
+  // Arriving straight from the signing page (?signed=<request>): say what was signed and what is next.
+  const signedDoc = sp.signed ? (view.documents.find((d) => d.requestId === sp.signed && d.signed) ?? null) : null;
+  const toSign = view.documents.filter((d) => !d.signed).length;
   const t = view.terms;
   return (
     <>
@@ -81,6 +84,17 @@ export default async function SignupFlowPage({ params, searchParams }: { params:
       {returned ? (
         <Callout tone={returned.state === "failed" ? "bad" : returned.state === "active" ? "ok" : "info"} title={returned.state === "active" ? "Payment method saved" : returned.state === "failed" ? "The payment method was not saved" : returned.state === "verification" ? "One more step: verify your bank account" : "We are confirming your payment method"} className="mb-4">
           {returned.state === "active" ? "Choose it below to finish." : returned.state === "failed" ? "Nothing was saved. You can try again below." : returned.state === "verification" ? "Your bank will show two small deposits in 1 to 2 business days. Stripe emails you a link to confirm them. You can finish signing up now and pay each bill yourself until then." : "This usually takes a few seconds. Refresh this page. Nothing has been charged."}
+        </Callout>
+      ) : null}
+      {signedDoc ? (
+        <Callout tone="ok" title={`Signed: ${signedDoc.title}`} className="mb-4">
+          {view.current === "documents"
+            ? `${toSign} more to sign below.`
+            : view.current === "payment"
+              ? "Everything is signed. Next: choose how you will pay."
+              : view.current === "confirm"
+                ? "Everything is signed. Next: check the details and finish."
+                : "It is on file under Documents."}
         </Callout>
       ) : null}
       {sp.setup_cancelled ? <Callout tone="info" className="mb-4">You left the secure page before finishing. Nothing was saved.</Callout> : null}
@@ -163,7 +177,7 @@ export default async function SignupFlowPage({ params, searchParams }: { params:
                 ))}
               </ul>
               {view.documents.length === 0 ? <p className="text-sm text-ink-2">Nothing to sign yet.</p> : null}
-              <p className="mt-3 text-xs text-ink-3">After signing, come back to this page (Memberships, then Sign up) to continue. The front desk can also witness your signature in person.</p>
+              <p className="mt-3 text-xs text-ink-3">After you sign, you come straight back to this page to continue. The front desk can also witness your signature in person.</p>
             </section>
           ) : null}
 

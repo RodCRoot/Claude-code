@@ -3,12 +3,15 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { DB, Tx } from "@/db";
 import { invoices, memberships, paymentAttempts, paymentMethods, payerAccounts, transactions } from "@/db/schema";
 import { audit } from "@/lib/audit";
+import { AuthzError, can, type Viewer } from "@/lib/authz/policy";
 import { enqueue } from "@/lib/jobs";
 import { formatMoney } from "@/lib/money";
 import { getSavedMethodProvider } from "@/lib/payments";
 import type { NormalizedEvent } from "@/lib/payments/provider";
 import { addDaysYmd, fmtDate, localToUtc, todayLocal } from "@/lib/time";
+import { inScope, payablePayerIds } from "./access";
 import { autopaySettings } from "./autopay-settings";
+import { UserError } from "./errors";
 import { classifyDecline } from "./declines";
 import { invoiceMoney } from "./invoices";
 import { markMethodFailed, methodLabel, resolveAutopayMethod } from "./payment-methods";
@@ -162,6 +165,141 @@ export async function chargeInvoiceAutopay(db: DB, input: { orgId: string; invoi
     );
     return { charged: false, reason: "error", detail: (e as Error).message };
   }
+}
+
+// ---------------------------------------------------------------------------
+// "Charge now" / "Retry now": a person asks for the next autopay attempt today
+// ---------------------------------------------------------------------------
+
+/**
+ * Who may ask for an autopay bill to be charged now: billing staff (owner, admin, operations), or a
+ * person allowed to pay the payer account (it is their own saved method and their own bill).
+ */
+async function mayChargeNow(tx: Tx, v: Viewer, payerAccountId: string): Promise<boolean> {
+  if (can(v, "billing.manage")) return true;
+  if (v.role !== "guardian" && v.role !== "athlete") return false;
+  return inScope(await payablePayerIds(tx, v), payerAccountId);
+}
+
+export type ChargeNowView = {
+  invoiceId: string;
+  number: string;
+  membershipId: string;
+  balanceMinor: number;
+  currency: string;
+  /** The attempt this would be: autopay attempts so far + 1. Sent back with the confirmation. */
+  attemptNumber: number;
+  /** "Retry now" once an automatic attempt has failed, otherwise "Charge now". */
+  label: "Charge now" | "Retry now";
+  methodLabel: string | null;
+  lastFailure: { at: Date; message: string } | null;
+  configured: boolean;
+  missingEnv: string[];
+  /** Why it cannot be charged right now (plain words), or null when it can. */
+  blocked: string | null;
+};
+
+/**
+ * Whether an open bill could be charged now with the saved autopay method, and what that would do.
+ * Null when it does not apply: not an open, unpaid, Teamwork-invoiced membership bill with autopay on,
+ * or the viewer may not ask. Read-only.
+ */
+export async function chargeNowView(tx: Tx, v: Viewer, invoiceId: string): Promise<ChargeNowView | null> {
+  const [inv] = await tx.select().from(invoices).where(and(eq(invoices.id, invoiceId), eq(invoices.orgId, v.orgId)));
+  if (!inv || inv.status !== "open" || !inv.membershipId) return null;
+  if (!(await mayChargeNow(tx, v, inv.payerAccountId))) return null;
+  const [m] = await tx.select().from(memberships).where(eq(memberships.id, inv.membershipId));
+  if (!m || m.billingProvider !== "manual" || !m.autopay) return null;
+  const money = await invoiceMoney(tx, inv.id);
+  if (money.balanceMinor <= 0 && money.pendingMinor <= 0) return null;
+  const prior = await tx.select().from(paymentAttempts).where(and(eq(paymentAttempts.invoiceId, inv.id), eq(paymentAttempts.origin, "autopay")));
+  const failed = prior.filter((a) => a.status === "failed").sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  const method = await resolveAutopayMethod(tx, m);
+  const adapter = getSavedMethodProvider();
+  const blocked =
+    money.pendingMinor > 0
+      ? "A payment for this bill is already pending. It is not charged again while that is in flight."
+      : prior.some((a) => (IN_FLIGHT as readonly string[]).includes(a.status))
+        ? "An automatic charge for this bill is already in flight."
+        : !method
+          ? "There is no active saved payment method for this membership, so there is nothing to charge."
+          : null;
+  return {
+    invoiceId: inv.id,
+    number: inv.number,
+    membershipId: m.id,
+    balanceMinor: money.balanceMinor,
+    currency: inv.currency,
+    attemptNumber: prior.length + 1,
+    label: failed.length ? "Retry now" : "Charge now",
+    methodLabel: method ? methodLabel(method) : null,
+    lastFailure: failed[0] ? { at: failed[0].createdAt, message: failed[0].failureMessage ?? failed[0].failureCode ?? "The provider reported a failure" } : null,
+    configured: adapter.isConfigured(),
+    missingEnv: adapter.missingEnv(),
+    blocked,
+  };
+}
+
+/** Open bills of one membership that autopay will not pick up by itself, each with its charge-now state. */
+export async function unpaidAutopayBills(tx: Tx, v: Viewer, membershipId: string): Promise<ChargeNowView[]> {
+  const rows = await tx.select({ id: invoices.id }).from(invoices).where(and(eq(invoices.membershipId, membershipId), eq(invoices.orgId, v.orgId), eq(invoices.status, "open"))).orderBy(invoices.dueDate);
+  const out: ChargeNowView[] = [];
+  for (const r of rows) {
+    const c = await chargeNowView(tx, v, r.id);
+    if (c && c.balanceMinor > 0) out.push(c);
+  }
+  return out;
+}
+
+const NOW_REFUSALS: Record<Extract<AutopayOutcome, { charged: false }>["reason"], string> = {
+  not_open: "This bill is no longer open. Nothing was charged.",
+  not_membership: "Only membership bills invoiced by Teamwork can be charged this way. Nothing was charged.",
+  autopay_off: "Autopay is off for this membership. Nothing was charged.",
+  nothing_due: "Nothing is owed on this bill. Nothing was charged.",
+  pending_money: "A payment for this bill is already pending. Nothing more was charged.",
+  in_flight: "A charge for this bill is already in flight. Nothing more was charged.",
+  no_method: "There is no active saved payment method to charge. Nothing was charged.",
+  not_configured: "Stripe is not connected, so nothing was charged. Record a payment at the front desk instead.",
+  stale: "This bill was already charged or retried since this page was opened. Nothing more was charged. Reload to see where it stands.",
+  error: "Stripe did not accept the request. Nothing was charged.",
+};
+
+/**
+ * Staff (or the paying family) ask for the next autopay attempt now instead of on its scheduled day.
+ *
+ * It IS the next scheduled attempt: same lock, same in-flight rule and the same idempotency key
+ * `autopay:<invoice>:<attempt>` as the job, so a double click, two people at once, or the scheduled job
+ * arriving later all end in one attempt and one provider call. `attemptNumber` is the one the page
+ * showed; if another attempt happened in between, this is a no-op and says so.
+ * Never marks anything paid: only the verified webhook does.
+ */
+export async function chargeInvoiceNow(db: DB, v: Viewer, input: { invoiceId: string; attemptNumber: number }): Promise<{ message: string; attemptId: string; status: "submitted" | "declined" | "requires_action" }> {
+  const pre = await db.transaction(async (tx) => {
+    const [inv] = await tx.select().from(invoices).where(and(eq(invoices.id, input.invoiceId), eq(invoices.orgId, v.orgId)));
+    if (!inv || !(await mayChargeNow(tx, v, inv.payerAccountId))) throw new AuthzError();
+    return inv;
+  });
+  if (!Number.isInteger(input.attemptNumber) || input.attemptNumber < 1) throw new UserError("Reload the page and try again.");
+  const actor = { orgId: v.orgId, actorUserId: v.userId, actorRole: v.role };
+  const record = (summary: string, after: Record<string, unknown>) => db.transaction((tx) => audit(tx, actor, "billing.autopay.charge_now", "invoice", pre.id, { summary, after: { attemptNumber: input.attemptNumber, ...after } }));
+  // Checked here as well as inside the charge, so the honest state is reported before anything else.
+  if (!getSavedMethodProvider().isConfigured()) {
+    await record(`Charge now asked for ${pre.number}: refused, Stripe is not connected`, { outcome: "not_configured" });
+    throw new UserError(NOW_REFUSALS.not_configured);
+  }
+  const res = await chargeInvoiceAutopay(db, { orgId: v.orgId, invoiceId: pre.id, attemptNumber: input.attemptNumber });
+  if (!res.charged) {
+    await record(`Charge now asked for ${pre.number}: nothing charged (${res.reason.replaceAll("_", " ")})`, { outcome: res.reason });
+    throw new UserError(NOW_REFUSALS[res.reason]);
+  }
+  await record(`Charge now for ${pre.number}: attempt ${input.attemptNumber} ${res.status === "submitted" ? "sent to Stripe" : res.status === "declined" ? "declined" : "needs the customer to authenticate"}`, { outcome: res.status, attemptId: res.attemptId });
+  const message =
+    res.status === "submitted"
+      ? "The charge was sent to Stripe. This bill is marked paid only when Stripe confirms it; a bank payment stays pending for a few business days."
+      : res.status === "declined"
+        ? "The payment method was declined. Nothing was collected. The failure is listed under Payments."
+        : "The bank asked the customer to confirm this payment. Nothing was collected; ask the family to use Pay Now.";
+  return { message, attemptId: res.attemptId, status: res.status };
 }
 
 // ---------------------------------------------------------------------------

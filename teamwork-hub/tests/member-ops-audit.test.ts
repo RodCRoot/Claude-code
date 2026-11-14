@@ -16,6 +16,7 @@ import {
   productVersions,
   scheduleSessions,
   serviceTypes,
+  zpBills,
   type MemberRequestStatus,
   type MemberRequestType,
   type MembershipStatus,
@@ -24,7 +25,7 @@ import { AuthzError } from "@/lib/authz/policy";
 import { reportByKey, toCsv } from "@/lib/reports";
 import { localToUtc } from "@/lib/time";
 import { billDatesBetween, matchRequestKeyword, monthsBetween, weeklyCap } from "@/lib/member-ops/common";
-import { membershipAuditSweep, type ExceptionType, type MembershipException } from "@/lib/member-ops/membership-audit";
+import { IMPORTED_BILL_LABEL, billedBasis, membershipAuditSweep, type ExceptionType, type MembershipException } from "@/lib/member-ops/membership-audit";
 import { membershipStatusReport } from "@/lib/member-ops/status";
 import { closeTestDb, seedOrg, testDb, viewerFor } from "./helpers/db";
 
@@ -380,5 +381,58 @@ describe("membership status page", () => {
     await db().update(memberships).set({ discountId: d.id }).where(eq(memberships.id, fam.membershipId!));
     const again = await membershipAuditSweep(db(), ctx.orgId, { today: TODAY });
     expect(again.exceptions.filter((e) => e.type === "family_discount_missing")).toHaveLength(0);
+  });
+});
+
+describe("membership audit: imported Zen Planner bill history", () => {
+  const ariaOnly = async () => {
+    const r = await membershipAuditSweep(db(), ctx.orgId, { today: TODAY, athleteIds: [ctx.athletes.aria] });
+    return { r, e: r.exceptions.find((x) => x.type === "request_billed_anyway")! };
+  };
+  const zpBill = async (dueDate: string, due: number | null, paid: number | null) => {
+    const [m] = await db().select({ id: memberships.id }).from(memberships).where(eq(memberships.athleteId, ctx.athletes.aria));
+    await db()
+      .insert(zpBills)
+      .values({ orgId: ctx.orgId, personId: ctx.people.aria_castellanos, athleteId: ctx.athletes.aria, membershipId: m.id, sourceRecordId: `t-zp-${dueDate}`, description: "2x / week", dueDate, amountDueMinor: due, amountPaidMinor: paid, amountUnpaidMinor: due != null && paid != null ? due - paid : null });
+  };
+
+  it("without history the amount is an estimate and says so", async () => {
+    const { r, e } = await ariaOnly();
+    expect(e.impactMinor).toBe(14900);
+    expect(e.impactBasis).toContain("estimate");
+    expect(e.impactBasis).not.toContain(IMPORTED_BILL_LABEL);
+    expect(r.skipped.join(" ")).toContain("no imported bill history");
+  });
+
+  it("history that stops before the bill date leaves that date an estimate", async () => {
+    await zpBill("2026-09-01", 12900, 12900);
+    const { e } = await ariaOnly();
+    expect(e.impactMinor).toBe(14900);
+    expect(e.impactBasis).toContain("estimate");
+    expect(e.impactBasis).not.toContain(IMPORTED_BILL_LABEL);
+  });
+
+  it("with an imported bill the actual billed and paid amounts replace the estimate", async () => {
+    // Billed 129.00 (not the 149.00 plan rate), 100.00 paid so far.
+    await zpBill("2026-10-01", 12900, 10000);
+    const { r, e } = await ariaOnly();
+    expect(e.impactMinor).toBe(12900);
+    expect(e.impactBasis).toContain(IMPORTED_BILL_LABEL);
+    expect(e.impactBasis).toContain("billed $129.00, paid $100.00");
+    expect(e.impactBasis).not.toContain("estimate");
+    expect(e.detail).toContain("2026-10-01");
+    expect(r.skipped.join(" ")).toContain("have imported bill history");
+    // Another organization's sweep never sees these rows.
+    const other = await seedOrg();
+    expect((await membershipAuditSweep(db(), other.orgId, { today: TODAY })).exceptions.filter((x) => x.impactBasis.includes(IMPORTED_BILL_LABEL))).toEqual([]);
+  });
+
+  it("billedBasis labels every source", () => {
+    const none = { count: 0, billedMinor: 0, paidMinor: 0, noAmount: 0 };
+    expect(billedBasis({ count: 2, imported: null, estimatedCount: 0, estimatedMinor: 0 }, "after the request date")).toBe("2 bill(s) after the request date");
+    expect(billedBasis({ count: 1, imported: none, estimatedCount: 1, estimatedMinor: 14900 }, "after the request date")).toMatch(/^1 Zen Planner bill date\(s\) × plan rate after the request date \(estimate/);
+    const mixed = billedBasis({ count: 3, imported: { count: 2, billedMinor: 25800, paidMinor: 12900, noAmount: 1 }, estimatedCount: 1, estimatedMinor: 14900 }, "since the last visit");
+    expect(mixed).toContain("2 Zen Planner bill(s) since the last visit, from imported bill history: billed $258.00, paid $129.00 (1 with no amount in the export)");
+    expect(mixed).toContain("plus $149.00 for 1 Zen Planner bill date(s) × plan rate since the last visit (estimate");
   });
 });

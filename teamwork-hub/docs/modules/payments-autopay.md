@@ -84,7 +84,20 @@ called and no account or sandbox exists.
   charged; on a Zen Planner membership it is a stored preference that takes effect at cutover.
 - **When a bill is issued** (`billPeriod`, the one place membership invoices are created) and autopay is on, a job
   `billing.autopay_charge` is queued for the due date (deduped `billing.autopay_charge:<invoice>:1`). Turning autopay on
-  later does **not** charge bills that already exist; the family uses Pay Now for those.
+  later does **not** charge bills that already exist. Instead the membership page and the family's Payment Methods page
+  show "Autopay is on, but one bill is still unpaid" with each bill and a "Charge now…" link, and the confirmation
+  message after switching it on says the same (`unpaidAutopayBills`). Nothing is charged until someone confirms.
+- **Charge now / Retry now** (`chargeNowView`, `chargeInvoiceNow`; panel "Autopay" on the bill page). For an open, unpaid
+  bill of a Teamwork-invoiced membership with autopay on. Who: owner, admin, operations (`billing.manage`), and the
+  person allowed to pay that account, for their own bill and their own saved method (**decision**: the prompt above is
+  mostly seen by the family, and without this they could only re-enter a card through Pay Now). Coaches, view-only
+  payers and the kiosk get nothing. Two steps on the page, no browser dialog: the link opens `?charge=1`, which names the
+  amount, the method and the attempt number; only "Yes, charge" posts. It **is** the next automatic attempt made early:
+  it calls `chargeInvoiceAutopay` with "attempts so far + 1", so it shares the invoice lock, the in-flight rule and the
+  key `autopay:<invoice>:<n>` with the job. A double click, two people at once, a stale page, or the scheduled job
+  arriving later all end in one attempt and one Stripe call (tested). A decline goes through the same failure handling
+  and retry schedule as a scheduled attempt. Every request is audited as `billing.autopay.charge_now` with the person
+  and the outcome, including refusals. Without Stripe keys the panel says so and offers no button; the action refuses.
 - **Charging** (`chargeInvoiceAutopay`): under the invoice row lock it refuses if the invoice is not open, money is pending,
   an attempt is in flight, or the attempt number is not exactly "attempts so far + 1"; then inserts a `payment_attempts`
   row (`origin='autopay'`, unique key `autopay:<invoice>:<n>`), and outside the transaction creates an off-session
@@ -119,7 +132,9 @@ called and no account or sandbox exists.
   fee yet, and an estimate column that is empty unless the owner typed estimate rates in Settings.
 - **Query functions for other modules** (the scoreboard page was not edited):
   - `expiringCards(tx, orgId, { today?, withinDays? = 60 })` → active cards whose expiry month ends within the window.
-    Also listed on Settings, Payments and agreements.
+    Listed on Settings, Payments and agreements; on the owner scoreboard as the tile "Saved cards expiring within 60 days"
+    with its list (`cards_expiring`, definition v1); and on the follow-ups queue as the card "Saved cards about to
+    expire" (`ExpiringCardsCard`, owner / admin / operations only, not a journey step).
   - `autopayOffMembershipIds(tx, orgId)` and `AUTOPAY_READY_SQL`: "autopay off" = live Teamwork-invoiced membership with
     autopay off **or** no active saved method. The scoreboard's `autopay_off` row SQL now uses it (definition bumped to
     version 2 with the change explained). With no saved methods the listed memberships are the same as before.
@@ -178,7 +193,11 @@ left and resumed; one open flow per athlete (starting again returns it), shared 
    enrolled, pending referral new-family discount shown. Choosing creates the membership `pending`, `awaiting`, **first
    bill deferred**, and issues the agreement plus any required waivers not already valid. Re-choosing the same plan is a
    no-op; changing it before signing cancels the unbilled pending membership.
-2. **Sign**: links to the existing signing page (with a way back). Waivers are the existing required forms.
+2. **Sign**: links to the existing signing page (with a way back). Waivers are the existing required forms. When a
+   signature completes a document of an open flow, the signer is sent straight back to the flow
+   (`signupReturnPath`, `/billing/signup/<id>?signed=<request>`), which opens on the next step and says what was signed
+   and what is next. Only people who may use the flow are redirected; a document that still needs another signer, or
+   that is not part of a flow, stays on the document page as before.
 3. **Pay**: add a card / bank account (Stripe-hosted), choose a saved method for automatic payments, or "pay each bill
    myself". Not configured → honest notice and only the manual choice. Staff see a QR code and never enter payment details.
    Choosing a bank account after signing triggers the `bank_debit` re-sign (the flow steps back to Sign).
@@ -233,13 +252,13 @@ text, verify view); re-sign triggers and settings; awaiting-agreement eligibilit
 
 ## Known gaps
 
-- No staff "charge now" / "retry now" button; retries are automatic or the family pays with Pay Now.
 - The bank pay discount is decided when the bill is issued; if that bank charge fails and the bill is paid another way
   the discount stays.
 - Bank-debit disputes reopen the bill; a later `won` dispute re-settles it, but ACH disputes are normally final.
 - Removing a method when Stripe is not configured only marks it removed locally (said plainly to the user).
-- The flow page `/billing/signup/<id>` is not in the a11y sweep's dynamic list (the sweep's guardian has no open flow);
-  it is exercised by `e2e/signup.spec.ts` but not by axe.
-- Families must return to the flow page after signing (a link is shown on the document); there is no automatic redirect.
+- The a11y sweep reaches `/billing/signup/<id>` as the owner through one open sign-up the demo seed leaves at its first
+  step (`seedSignupDemoFlow`, opt-in like the history seeds); the later steps are exercised by `e2e/signup.spec.ts`, not by axe.
+- Charge now has no browser test that reaches Stripe (no fake-provider browser mode); the browser test covers the
+  not-configured state and the prompt, vitest covers the charge.
 - Payment methods saved outside this flow (Stripe dashboard) are picked up only if the customer is one we created.
 - `webhook_events` still has no org column (see `billing.md`); payer lookup by Stripe customer assumes one org per account.

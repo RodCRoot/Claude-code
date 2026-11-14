@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, like } from "drizzle-orm";
-import { disputes, invoices, jobs, memberships, organizations, paymentAttempts, paymentMethods, tasks, transactions } from "@/db/schema";
-import { AUTOPAY_JOB, chargeInvoiceAutopay, classifyAchFailure, failedAutopayNotices, FEE_JOB, processingFeesByMonth, recordProcessorFee } from "@/lib/billing/autopay";
+import { auditEvents, disputes, invoices, jobs, memberships, organizations, paymentAttempts, paymentMethods, tasks, transactions } from "@/db/schema";
+import { AUTOPAY_JOB, chargeInvoiceAutopay, chargeInvoiceNow, chargeNowView, classifyAchFailure, failedAutopayNotices, FEE_JOB, processingFeesByMonth, recordProcessorFee, unpaidAutopayBills } from "@/lib/billing/autopay";
 import { autopaySettingsOf, bankPayDiscountMinor, DEFAULT_AUTOPAY_SETTINGS, estimateFeeMinor, saveAutopaySettings } from "@/lib/billing/autopay-settings";
 import { createProduct } from "@/lib/billing/catalog";
 import { classifyDecline } from "@/lib/billing/declines";
@@ -274,6 +274,129 @@ describe("bank debits (ACH)", () => {
     for (const c of ["account_closed", "no_account", "debit_not_authorized", "revocation_of_authorization", "bank_account_restricted"]) expect(classifyAchFailure(c).action).toBe("method_failed");
     expect(classifyAchFailure("something_new").action).toBe("staff_review");
     expect(classifyAchFailure(null).action).toBe("staff_review");
+  });
+});
+
+describe("charge now / retry now", () => {
+  const view = async (u: string, invoiceId: string) => db().transaction(async (tx) => chargeNowView(tx, await who(u), invoiceId));
+  const nowAudits = (invoiceId: string) => db().select().from(auditEvents).where(and(eq(auditEvents.orgId, ctx.orgId), eq(auditEvents.action, "billing.autopay.charge_now"), eq(auditEvents.entityId, invoiceId)));
+  const posts = (api: ReturnType<typeof stripeMethodsApi>) => api.calls.filter((c) => c.path === "/v1/payment_intents" && c.method === "POST");
+
+  it("staff charge an unpaid autopay bill once: same key as the scheduled attempt, double clicks and the later job are no-ops, audited", async () => {
+    const { inv, method } = await autopayBill("ava", "chris_parker", "card");
+    const erin = await who("erin");
+    const v = (await view("erin", inv.id))!;
+    expect(v).toMatchObject({ label: "Charge now", attemptNumber: 1, balanceMinor: PRICE, configured: true, blocked: null, lastFailure: null });
+    expect(v.methodLabel).toContain(method.last4!);
+    const api = stripeMethodsApi();
+    vi.stubGlobal("fetch", api.fn);
+    const results = await Promise.allSettled([1, 2, 3].map(() => chargeInvoiceNow(db(), erin, { invoiceId: inv.id, attemptNumber: v.attemptNumber })));
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    for (const r of results) if (r.status === "rejected") expect(String(r.reason.message)).toMatch(/Nothing more was charged/);
+    expect(posts(api)).toHaveLength(1);
+    expect(posts(api)[0].idempotencyKey).toBe(`autopay:${inv.id}:1`);
+    const atts = await attemptsOf(inv.id);
+    expect(atts).toHaveLength(1);
+    expect(atts[0]).toMatchObject({ origin: "autopay", status: "created", idempotencyKey: `autopay:${inv.id}:1` });
+    // Stripe's synchronous answer never marks the bill paid.
+    expect((await invRow(inv.id)).status).toBe("open");
+    // The scheduled job for the same attempt arrives later: nothing more happens.
+    expect((await charge(inv.id, 1)).charged).toBe(false);
+    expect(posts(api)).toHaveLength(1);
+    // While that charge is in flight the page says so instead of offering another.
+    expect((await view("erin", inv.id))!.blocked).toMatch(/in flight/);
+    const audits = await nowAudits(inv.id);
+    expect(audits).toHaveLength(3);
+    expect(audits.every((a) => a.actorUserId === erin.userId && a.actorRole === "operations")).toBe(true);
+    expect(audits.filter((a) => /sent to Stripe/.test(a.summary ?? ""))).toHaveLength(1);
+    // The webhook settles it; after that there is nothing to charge and no action is offered.
+    await sendStripe(paymentIntentEvent("payment_intent.succeeded", { pi: atts[0].providerRef!, attemptId: atts[0].id, invoiceId: inv.id, amount: PRICE, methodType: "card" }));
+    expect((await invRow(inv.id)).status).toBe("paid");
+    expect(await view("erin", inv.id)).toBeNull();
+    await expect(chargeInvoiceNow(db(), erin, { invoiceId: inv.id, attemptNumber: 2 })).rejects.toThrow(/no longer open/);
+    expect(posts(api)).toHaveLength(1);
+  });
+
+  it("retry now after a decline is the next numbered attempt; the scheduled retry and a stale page then do nothing", async () => {
+    const { inv } = await autopayBill("ava", "chris_parker", "card");
+    const rod = await who("rod");
+    const api = stripeMethodsApi({ charge: (p) => ({ status: 200, body: { id: `pi_test_${p.get("metadata[attempt_id]")!.slice(0, 8)}`, status: "requires_payment_method", last_payment_error: { code: "card_declined", decline_code: "insufficient_funds", message: "Insufficient funds." } } }) });
+    vi.stubGlobal("fetch", api.fn);
+    await charge(inv.id, 1); // the scheduled attempt, declined; a retry is queued as attempt 2
+    expect(await jobFor(inv.id, 2)).toBeDefined();
+    const v = (await view("rod", inv.id))!;
+    expect(v).toMatchObject({ label: "Retry now", attemptNumber: 2, blocked: null });
+    expect(v.lastFailure!.message).toMatch(/Insufficient funds/);
+    const r = await chargeInvoiceNow(db(), rod, { invoiceId: inv.id, attemptNumber: 2 });
+    expect(r.status).toBe("declined");
+    expect(r.message).toMatch(/Nothing was collected/);
+    expect(posts(api).map((c) => c.idempotencyKey)).toEqual([`autopay:${inv.id}:1`, `autopay:${inv.id}:2`]);
+    // The retry that was already scheduled as attempt 2 is now stale.
+    expect(await charge(inv.id, 2)).toMatchObject({ charged: false, reason: "stale" });
+    // A page opened before the retry still carries attempt 2: refused, nothing sent.
+    await expect(chargeInvoiceNow(db(), rod, { invoiceId: inv.id, attemptNumber: 2 })).rejects.toThrow(/already charged or retried/);
+    expect(posts(api)).toHaveLength(2);
+    expect((await attemptsOf(inv.id)).map((a) => a.status)).toEqual(["failed", "failed"]);
+    await expect(chargeInvoiceNow(db(), rod, { invoiceId: inv.id, attemptNumber: 0 })).rejects.toThrow(/Reload/);
+  });
+
+  it("only billing staff and the paying family may ask; another organization cannot", async () => {
+    const { inv } = await autopayBill("ava", "chris_parker", "card");
+    const api = stripeMethodsApi();
+    vi.stubGlobal("fetch", api.fn);
+    for (const u of ["marcus", "tess", "alex", "jordan", "casey", "dana", "maya", "kiosk"]) {
+      expect(`${u}:${(await view(u, inv.id)) === null}`).toBe(`${u}:true`);
+      await expect(chargeInvoiceNow(db(), await who(u), { invoiceId: inv.id, attemptNumber: 1 })).rejects.toMatchObject({ name: "AuthzError" });
+    }
+    const other = await seedOrg(T, { modules: [] });
+    await expect(chargeInvoiceNow(db(), await viewerFor(other, "rod"), { invoiceId: inv.id, attemptNumber: 1 })).rejects.toMatchObject({ name: "AuthzError" });
+    expect(posts(api)).toHaveLength(0);
+    expect(await attemptsOf(inv.id)).toHaveLength(0);
+    for (const u of ["rod", "erin", "chris"]) expect((await view(u, inv.id))?.label).toBe("Charge now");
+    // The family's own request goes through the same path.
+    expect((await chargeInvoiceNow(db(), await who("chris"), { invoiceId: inv.id, attemptNumber: 1 })).status).toBe("submitted");
+    expect(posts(api)).toHaveLength(1);
+  });
+
+  it("without Stripe keys it says so, sends nothing, writes no attempt, and the request is still audited", async () => {
+    const { inv } = await autopayBill("ava", "chris_parker", "card");
+    delete process.env.STRIPE_SECRET_KEY;
+    const f = vi.fn();
+    vi.stubGlobal("fetch", f);
+    const v = (await view("erin", inv.id))!;
+    expect(v.configured).toBe(false);
+    expect(v.missingEnv).toContain("STRIPE_SECRET_KEY");
+    await expect(chargeInvoiceNow(db(), await who("erin"), { invoiceId: inv.id, attemptNumber: 1 })).rejects.toThrow(/Stripe is not connected, so nothing was charged/);
+    expect(f).not.toHaveBeenCalled();
+    expect(await attemptsOf(inv.id)).toHaveLength(0);
+    expect((await invRow(inv.id)).status).toBe("open");
+    expect((await nowAudits(inv.id)).map((a) => a.summary)).toEqual([expect.stringMatching(/refused, Stripe is not connected/)]);
+  });
+
+  it("autopay switched on for a membership that already has an unpaid bill: the bill is listed for a decision, never charged silently", async () => {
+    const rod = await who("rod");
+    const start = addDaysYmd(T, (dayOffset += 3));
+    await db().update(paymentMethods).set({ status: "removed", isDefault: false }).where(eq(paymentMethods.payerAccountId, ctx.payers.chris_parker));
+    await db().update(memberships).set({ status: "cancelled", autopay: false }).where(and(eq(memberships.athleteId, ctx.athletes.ava), eq(memberships.orgId, ctx.orgId)));
+    await activeMethod(ctx.payers.chris_parker, { type: "card" });
+    const { membership } = await db().transaction((tx) => createMembership(tx, rod, { athleteId: ctx.athletes.ava, payerAccountId: ctx.payers.chris_parker, productVersionId: versionId, startDate: start, billingAnchorDay: Number(start.slice(8, 10)), today: T }));
+    await db().transaction((tx) => generateRenewals(tx, ctx.orgId, start)); // billed with autopay OFF
+    const [inv] = await db().select().from(invoices).where(eq(invoices.membershipId, membership.id));
+    const list = (u: string) => db().transaction(async (tx) => unpaidAutopayBills(tx, await who(u), membership.id));
+    expect(await list("rod")).toEqual([]); // autopay off: nothing to offer
+    const api = stripeMethodsApi();
+    vi.stubGlobal("fetch", api.fn);
+    await db().transaction((tx) => setMembershipAutopay(tx, rod, { membershipId: membership.id, autopay: true }));
+    // Turning it on charged nothing and queued nothing.
+    expect(posts(api)).toHaveLength(0);
+    expect(await jobFor(inv.id, 1)).toBeUndefined();
+    expect(await attemptsOf(inv.id)).toHaveLength(0);
+    const offered = await list("rod");
+    expect(offered).toMatchObject([{ invoiceId: inv.id, number: inv.number, balanceMinor: PRICE, label: "Charge now", attemptNumber: 1, blocked: null }]);
+    expect(await list("chris")).toHaveLength(1);
+    expect(await list("jordan")).toEqual([]);
+    await chargeInvoiceNow(db(), rod, { invoiceId: inv.id, attemptNumber: offered[0].attemptNumber });
+    expect(posts(api).map((c) => c.idempotencyKey)).toEqual([`autopay:${inv.id}:1`]);
   });
 });
 

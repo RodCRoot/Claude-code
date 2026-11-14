@@ -171,6 +171,7 @@ athlete can download it only while a guardian's publication is live.
 | Section | Source | Needs |
 | --- | --- | --- |
 | Sessions attended, missed, plan | bookings; plan = membership's classes per week x days in month / 7, rounded | profile access |
+| Session check-ins, one line (from `tw_recap_v2`) | `session_checkins` for the month's attended bookings: ready checks and after checks answered of sessions attended (`checkin_completion_v1`), and the mean session RPE reported with the number of answers | counts: profile access; average effort: training access |
 | Workouts logged and planned, weekly streak | workouts, engagement streak as of the month's last day | training access |
 | New personal records | `detectPrs` over maxes, recorded in the month | training access |
 | Badges earned | `athlete_badges` earned in the month | training access |
@@ -187,10 +188,20 @@ athlete can download it only while a guardian's publication is live.
 - **Open, closing, final.** The current month is computed live. After the month ends there is a
   grace period (default 3 days) for coach notes. From then on the recap is finalized by the
   monthly job, or on first view if the job has not run.
-- **Snapshot.** Finalizing writes the numbers once to `monthly_recaps.snapshot` with the
-  calculation key `tw_recap_v1`. A database trigger refuses any later change to the snapshot,
+- **Snapshot.** Finalizing writes the numbers once to `monthly_recaps.snapshot` with the current
+  calculation key (`RECAP_CALC_KEY`). A database trigger refuses any later change to the snapshot,
   coach note, month, status or key, and any delete. A corrected attendance or a new test never
-  rewrites a month a family has read. A changed formula gets a new key; old months keep theirs.
+  rewrites a month a family has read. A changed formula or a new section gets a new key; old
+  months keep theirs.
+- **Versions.** `tw_recap_v1`: sessions, training, goals, next month (wins were added later as an
+  optional section under the same key). `tw_recap_v2` (current): v1 plus `sessionCheckins`, shown
+  as one line under Sessions, for example "Session check-ins: ready check answered for 3 and
+  after check for 3 of 4 attended sessions. Average effort reported: 6.5 out of 10 (2 answers)."
+  No v1 number changed. A stored v1 recap has no such section, so it renders exactly as before
+  and keeps saying "Calculation tw_recap_v1"; nothing is back-filled (the trigger would refuse
+  it). The line is left out when no session was attended. It holds counts and the effort
+  rating only, never an answer to a health question; a viewer without training access sees the
+  counts without the average.
 - **Coach queue.** Assigned coach, owner or admin (`training.manage` and `training.write` on the
   athlete). Notes are plain text, 1,200 characters, optional, and lock at finalization. The
   audit log records who saved a note and when, not its text. Operations cannot write notes.

@@ -136,6 +136,10 @@ Each ready check and each after check earns the existing check-in XP (kind `well
 
 After a PIN matches, `issueKioskReadyPass` mints a single-use pass if that athlete has a session whose ready-check window is open and unanswered. The kiosk then shows four questions as big buttons (readiness, sleep, soreness 0 to 10, does anything hurt), a Skip button, and a countdown that returns to the PIN pad after 25 seconds without a tap. It never prefills and never receives earlier answers; the panel's state is discarded when it closes. No free text and no body picture at the kiosk: "Something hurts" there becomes a coach alert without a location.
 
+## Monthly recap line
+
+Recaps finalized from snapshot version `tw_recap_v2` on carry one line under Sessions: ready checks and after checks answered of sessions attended that month (`checkin_completion_v1`) and the average session RPE reported, with how many answers it is the average of. Counts are shown with profile access, the average with training access (the effort rule above). No health answer is read into a recap. Recaps already stored under `tw_recap_v1` are unchanged and show no line. See `docs/modules/showcase.md`, Monthly recap.
+
 ## Exported functions for dashboards
 
 | Function | Returns |
@@ -156,7 +160,6 @@ After a PIN matches, `issueKioskReadyPass` mints a single-use pass if that athle
 
 ## Not done
 
-- No line in the monthly recap: recap snapshots are frozen under `tw_recap_v1` with an allow-list, so adding a field needs a new snapshot version.
 - No reminders or push prompts: the after check is offered on Athlete Home, the schedule and My Reservations once attendance is recorded and the session has ended.
 - The demo seed is opt-in history (`HISTORY_SEEDS`), so the default test seed has no check-ins.
 

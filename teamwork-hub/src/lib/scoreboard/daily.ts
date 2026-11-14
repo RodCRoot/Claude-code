@@ -6,7 +6,7 @@ import { weeklyCap } from "@/lib/member-ops/common";
 import { EXCEPTION_LABELS, membershipAuditSweep, type AuditResult } from "@/lib/member-ops/membership-audit";
 import { retentionRadar, type RadarResult } from "@/lib/retention/radar";
 import { addDaysYmd, isoWeekday, startOfWeekYmd } from "@/lib/time";
-import { AUTOPAY_READY_SQL } from "@/lib/billing/payment-methods";
+import { AUTOPAY_READY_SQL, expiringCards } from "@/lib/billing/payment-methods";
 import {
   activeOn,
   addMonths,
@@ -336,6 +336,24 @@ async function atRiskList(_c: Ctx, s: Shared): Promise<MetricRow[]> {
   return r.rows
     .filter((x) => x.level === "at_risk")
     .map((x) => ({ ref_kind: "person", ref_id: x.personId, name: x.name, detail: `${x.plan} · ${x.signals.map((g) => g.label).join(", ")}`, amount_minor: x.valueAtRiskMinor, day: null, athlete_id: x.athleteId, grp: null }));
+}
+
+/** Window of the "Saved cards expiring" tile, in days. The follow-ups card uses the same number. */
+export const CARDS_EXPIRING_DAYS = 60;
+
+/** `expiringCards()` as scoreboard rows: one row per saved card, linking to the payer's payment methods. */
+async function cardsExpiringList(c: Ctx, s: Shared): Promise<MetricRow[]> {
+  const cards = await expiringCards(s.tx, c.orgId, { today: c.today, withinDays: CARDS_EXPIRING_DAYS });
+  return cards.map((x) => ({
+    ref_kind: "link",
+    ref_id: `/billing/payment-methods?payer=${x.payerAccountId}`,
+    name: x.payerName,
+    detail: `${x.label} · ${x.autopayMemberships ? `autopay for ${x.autopayMemberships} membership${x.autopayMemberships === 1 ? "" : "s"}` : "not used for autopay"}${x.isDefault ? " · default method" : ""}`,
+    amount_minor: null,
+    day: x.expiresOn,
+    athlete_id: null,
+    grp: null,
+  }));
 }
 
 /** Conflict types from the membership audit shown under "Needs a decision" (the rest have their own tile). */
@@ -682,6 +700,19 @@ export const DAILY_METRICS: MetricDef[] = [
     dims: BOTH,
     rows: projectedRows,
     change: "stock",
+  },
+  {
+    key: "cards_expiring",
+    label: "Saved cards expiring within 60 days",
+    group: "Membership checks",
+    kind: "count",
+    version: 1,
+    definition:
+      "Active saved cards whose expiry month ends on or before 60 days from today, soonest first. A card is good through the last day of its expiry month, so a card expiring this month is listed until that day and one that has already lapsed stays listed until it is replaced or removed. One row per card, with whether autopay for a membership depends on it. Bank accounts do not expire and are not listed. Cards kept only in Zen Planner or on a Stripe or PayPal subscription are not visible to the Hub. The date shown is the last day the card works.",
+    filterNote: "A card belongs to a payer account, not to a location or a program, so this number is withheld while a filter is on.",
+    dims: { location: false, program: false },
+    list: cardsExpiringList,
+    change: { none: "Card expiry is read live; no history is stored." },
   },
   {
     key: "autopay_off",

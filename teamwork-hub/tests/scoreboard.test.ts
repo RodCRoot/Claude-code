@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { auditEvents, membershipEvents, staffPayRates, timeEntries } from "@/db/schema";
+import { auditEvents, membershipEvents, paymentMethods, staffPayRates, timeEntries, zpBills } from "@/db/schema";
+import { expiringCards } from "@/lib/billing/payment-methods";
 import { UserError } from "@/lib/actions";
 import { AuthzError, can } from "@/lib/authz/policy";
 import { calculatePayroll } from "@/lib/payroll/service";
@@ -9,7 +10,8 @@ import { AGING_ORDER, activeByLocation, classesToday, DAILY_METRICS, dailyScoreb
 import { definitionsFor } from "@/lib/scoreboard/definitions";
 import { payrollByMonth, slotUtilisation } from "@/lib/scoreboard/efficiency";
 import { deleteSpend, marketingEconomics, saveSpend } from "@/lib/scoreboard/marketing";
-import { marginView, moneyView, saveExpense } from "@/lib/scoreboard/money";
+import { ZP_IMPORTED_LABEL, importedBillsView, marginView, moneyView, saveExpense } from "@/lib/scoreboard/money";
+import { exportTable } from "@/lib/scoreboard/tables";
 import { bottleneck, monthlyScoreboard, TARGET_KEYS } from "@/lib/scoreboard/monthly";
 import { localToUtc } from "@/lib/time";
 import { closeTestDb, seedOrg, testDb, viewerFor } from "./helpers/db";
@@ -539,6 +541,126 @@ describe("where is the bottleneck? (rule of thumb)", () => {
     const filtered = bottleneck({ leads: null, showed: null, sold: 1, active: 50 }, targets, { leads: "n/a", showed: "n/a" });
     expect(filtered.stage).toBe("sales");
     expect(filtered.steps.find((s) => s.key === "leads")!.status).toBe("no_data");
+  });
+});
+
+describe("imported Zen Planner bill history is its own series", () => {
+  let org: Org;
+  let w: Awaited<ReturnType<typeof scoreboardWorld>>;
+  beforeAll(async () => {
+    org = await seedOrg(TODAY, { modules: [] });
+    w = await scoreboardWorld(org, TODAY);
+    const hub = await w.athlete();
+    await w.invoice(hub.payerId, { total: 4000, due: -3, status: "paid", paid: 4000, paidDaysAgo: 2 }); // the hub's only money: 40.00 in March
+    const north = await w.athlete();
+    const m = await w.membership(north, w.planA, { start: -400, billingProvider: "external_zenplanner" });
+    const loose = await w.athlete();
+    const bill = (personId: string, id: string, dueDate: string, due: number | null, paid: number | null, membershipId: string | null = null) =>
+      db()
+        .insert(zpBills)
+        .values({ orgId: org.orgId, personId, membershipId, sourceRecordId: id, dueDate, amountDueMinor: due, amountPaidMinor: paid, amountUnpaidMinor: due != null && paid != null ? due - paid : null });
+    await bill(north.personId, "zp-1", "2026-02-01", 10000, 10000, m.id);
+    await bill(north.personId, "zp-2", "2026-03-01", 10000, 2500, m.id); // 75.00 unpaid at import
+    await bill(loose.personId, "zp-3", "2026-03-05", 6000, 6000); // not matched to a membership
+    await bill(loose.personId, "zp-4", "2026-03-06", null, null); // no amount in the export
+    await bill(north.personId, "zp-old", "2024-06-01", 9900, 9900, m.id); // outside the months shown
+  });
+
+  it("totals by due month, blank months are null, and old history is reported but not shown", async () => {
+    const iv = await importedBillsView(db(), await ctxFor(org));
+    expect(iv.totalBills).toBe(5);
+    expect([iv.firstDue, iv.lastDue]).toEqual(["2024-06-01", "2026-03-06"]);
+    const by = Object.fromEntries(iv.months.map((m) => [m.month, m]));
+    expect(by["2026-02-01"]).toMatchObject({ bills: 1, billedMinor: 10000, paidMinor: 10000, unpaidMinor: 0 });
+    expect(by["2026-03-01"]).toMatchObject({ bills: 3, billedMinor: 16000, paidMinor: 8500, unpaidMinor: 7500, partial: true });
+    expect(by["2026-01-01"]).toMatchObject({ bills: 0, billedMinor: null, paidMinor: null, unpaidMinor: null });
+  });
+
+  it("never reaches collected, billed, outstanding or the revenue groups", async () => {
+    const mv = await moneyView(db(), await ctxFor(org));
+    const mar = mv.months.find((m) => m.month === "2026-03-01")!;
+    const feb = mv.months.find((m) => m.month === "2026-02-01")!;
+    expect([mar.collectedMinor, mar.billedMinor, mar.outstandingMinor]).toEqual([4000, 4000, 0]);
+    expect([feb.collectedMinor, feb.billedMinor]).toEqual([0, 0]);
+    expect(mv.outstandingNowMinor).toBe(0);
+    expect(mv.byOption.groups).toEqual(["Other sales"]);
+    const d = await daily(org);
+    expect(d.metrics.collected_mtd.value).toBe(4000);
+    expect(d.metrics.past_due.value).toBe(0);
+  });
+
+  it("a filter keeps only bills matched to a filtered membership; another organization sees none", async () => {
+    const northOnly = await importedBillsView(db(), await ctxFor(org, { locationId: w.locA.id }));
+    expect(northOnly.totalBills).toBe(3);
+    expect(northOnly.months.find((m) => m.month === "2026-03-01")).toMatchObject({ bills: 1, billedMinor: 10000, paidMinor: 2500 });
+    const south = await importedBillsView(db(), await ctxFor(org, { locationId: w.locB.id }));
+    expect(south.totalBills).toBe(0);
+    expect(south.months.every((m) => m.billedMinor === null)).toBe(true);
+    const other = await seedOrg(TODAY, { modules: [] });
+    expect((await importedBillsView(db(), await ctxFor(other))).totalBills).toBe(0);
+  });
+
+  it("exports as its own labelled table and has a versioned definition", async () => {
+    const c = await ctxFor(org);
+    const t = await exportTable(db(), await viewerFor(org, "rod"), c, "money-zp-imported", {});
+    expect(t!.rows.every((r) => r.source === ZP_IMPORTED_LABEL)).toBe(true);
+    expect(t!.columns.map((x) => x.label)).toContain("Billed in Zen Planner");
+    const defs = definitionsFor("money");
+    expect(defs.find((d) => d.key === "mv_zp_imported")).toMatchObject({ label: "Billed in Zen Planner, imported", version: 1 });
+    expect(defs.find((d) => d.key === "mv_collected")!.version).toBe(2);
+    expect(defs.find((d) => d.key === "mv_billed")!.version).toBe(2);
+  });
+});
+
+describe("saved cards expiring within 60 days", () => {
+  let org: Org;
+  let w: Awaited<ReturnType<typeof scoreboardWorld>>;
+  const ids: Record<string, string> = {};
+  beforeAll(async () => {
+    org = await seedOrg(TODAY, { modules: [] });
+    w = await scoreboardWorld(org, TODAY);
+    const a = await w.athlete("CardSoon");
+    const b = await w.athlete("CardLater");
+    const card = async (key: string, payerId: string, expMonth: number, expYear: number, o: Partial<typeof paymentMethods.$inferInsert> = {}) => {
+      const [m] = await db()
+        .insert(paymentMethods)
+        .values({ payerAccountId: payerId, provider: "stripe", providerMethodId: `pm_test_${key}_${org.orgId.slice(0, 8)}`, type: "card", brand: "visa", last4: "4242", expMonth, expYear, status: "active", isDefault: false, ...o })
+        .returning();
+      ids[key] = m.id;
+    };
+    await card("thisMonth", a.payerId, 3, 2026, { isDefault: true }); // good through Mar 31: 13 days left
+    await card("inWindow", a.payerId, 4, 2026); // Apr 30: 43 days
+    await card("lapsed", b.payerId, 2, 2026, { isDefault: true }); // already past, still active on file
+    await card("later", b.payerId, 6, 2026); // Jun 30: outside 60 days
+    await card("removed", b.payerId, 3, 2026, { status: "removed" });
+    await db().insert(paymentMethods).values({ payerAccountId: b.payerId, provider: "stripe", providerMethodId: `pm_test_bank_${org.orgId.slice(0, 8)}`, type: "us_bank_account", bankName: "First Example Bank", last4: "6789", status: "active", isDefault: false });
+    await w.membership(a, w.planA, { start: -30, autopay: true }); // autopay rides on a's default card
+  });
+
+  it("the tile counts the same cards as expiringCards(), and its list is those rows", async () => {
+    const c = await ctxFor(org);
+    const d = await daily(org);
+    const m = d.metrics.cards_expiring;
+    expect(m).toMatchObject({ value: 3, rowCount: 3, group: "Membership checks", na: null });
+    const direct = await expiringCards(db(), org.orgId, { today: TODAY, withinDays: 60 });
+    expect(direct.map((x) => x.methodId).sort()).toEqual([ids.thisMonth, ids.inWindow, ids.lapsed].sort());
+    const list = (await metricRows(db(), await viewerFor(org, "rod"), c, "cards_expiring"))!;
+    expect(list.rows.map((r) => r.day)).toEqual(["2026-02-28", "2026-03-31", "2026-04-30"]); // soonest first
+    expect(list.rows.every((r) => r.ref_kind === "link" && /^\/billing\/payment-methods\?payer=[0-9a-f-]{36}$/.test(r.ref_id!))).toBe(true);
+    expect(list.rows[1].name).toBe("CardSoon payer");
+    expect(list.rows[1].detail).toMatch(/Visa ending 4242.*autopay for 1 membership.*default method/);
+    expect(list.rows[2].detail).toMatch(/not used for autopay/);
+  });
+
+  it("is withheld under a filter, hidden from another organization, and defined once", async () => {
+    const north = await daily(org, { locationId: w.locA.id });
+    expect(north.metrics.cards_expiring.value).toBeNull();
+    expect(north.metrics.cards_expiring.na).toMatch(/location filter/);
+    const other = await seedOrg(TODAY, { modules: [] });
+    expect((await daily(other)).metrics.cards_expiring.value).toBe(0);
+    const def = definitionsFor("daily").find((x) => x.key === "cards_expiring")!;
+    expect(def.version).toBe(1);
+    expect(def.definition).toMatch(/last day of its expiry month/);
   });
 });
 

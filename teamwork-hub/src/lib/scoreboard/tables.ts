@@ -5,7 +5,7 @@ import type { Ctx } from "./core";
 import { dailyMetric, dailyScoreboard, metricRows } from "./daily";
 import { payrollByMonth, slotUtilisation } from "./efficiency";
 import { marketingEconomics } from "./marketing";
-import { EXPENSE_LABEL, marginView, moneyView, type Pivot } from "./money";
+import { EXPENSE_LABEL, ZP_IMPORTED_LABEL, importedBillsView, marginView, moneyView, type Pivot } from "./money";
 import { monthlyScoreboard } from "./monthly";
 
 /**
@@ -16,7 +16,7 @@ export type ExportTable = { name: string; columns: ReportColumn[]; rows: Record<
 
 const WEEKDAY = ["", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-export const EXPORT_TABLES = ["daily", "monthly", "slots", "payroll", "marketing-channels", "marketing-months", "marketing-spend", "money", "money-options", "money-locations", "margin", "expenses"] as const;
+export const EXPORT_TABLES = ["daily", "monthly", "slots", "payroll", "marketing-channels", "marketing-months", "marketing-spend", "money", "money-options", "money-locations", "money-zp-imported", "margin", "expenses"] as const;
 
 function pivotTable(name: string, first: string, p: Pivot, months: { month: string; label: string }[]): ExportTable {
   return {
@@ -159,6 +159,22 @@ export async function exportTable(tx: Tx, v: Viewer, c: Ctx, table: string, opts
           { key: "eventsMinor", label: "Camp and clinic revenue", kind: "money" },
         ],
         rows: mv.months,
+      };
+    }
+    case "money-zp-imported": {
+      // Imported history only. Deliberately its own table: nothing here is hub-collected revenue.
+      const iv = await importedBillsView(tx, c, { months: opts.months });
+      return {
+        name: table,
+        columns: [
+          { key: "label", label: "Month (bill due date)" },
+          { key: "source", label: "Source" },
+          { key: "bills", label: "Bills", kind: "int" },
+          { key: "billedMinor", label: "Billed in Zen Planner", kind: "money" },
+          { key: "paidMinor", label: "Paid in Zen Planner", kind: "money" },
+          { key: "unpaidMinor", label: "Unpaid in Zen Planner at import", kind: "money" },
+        ],
+        rows: iv.months.map((m) => ({ ...m, source: ZP_IMPORTED_LABEL })),
       };
     }
     case "margin":

@@ -45,6 +45,11 @@ export async function StaffToday({ v, tz, greeting, dateLabel }: { v: Viewer; tz
           <h1 className="text-[22px] font-bold tracking-tight">{`${greeting}, ${v.displayName.split(" ")[0]}`}</h1>
         </div>
         <div className="flex flex-wrap gap-2">
+          {can(v, "scoreboard.view") ? (
+            <ButtonLink href="/scoreboard" variant="secondary">
+              Owner scoreboard
+            </ButtonLink>
+          ) : null}
           <ButtonLink href="/kiosk" variant="secondary">
             Open check-in kiosk
           </ButtonLink>

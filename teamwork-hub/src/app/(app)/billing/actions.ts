@@ -9,6 +9,7 @@ import { requireViewer } from "@/lib/auth/viewer";
 import { safeAction, UserError, type ActionState } from "@/lib/actions";
 import { assertCan } from "@/lib/authz/policy";
 import { createProduct, createProductVersion, setProductActive, setProductLocations, versionOn, type VersionInput } from "@/lib/billing/catalog";
+import { chargeInvoiceNow } from "@/lib/billing/autopay";
 import { startCheckout } from "@/lib/billing/checkout";
 import { UserError as BillingUserError } from "@/lib/billing/errors";
 import { createManualInvoice, issueInvoice, markUncollectible, recordManualPayment, voidInvoice, type LineInput, type ManualMethod } from "@/lib/billing/invoices";
@@ -349,6 +350,16 @@ export async function startCheckoutAction(_p: ActionState, fd: FormData): Promis
   });
   if (url) redirect(url);
   return res;
+}
+
+/** "Charge now" / "Retry now" on an unpaid autopay bill: the confirmation step on the invoice page posts here. */
+export async function chargeNowAction(_p: ActionState, fd: FormData) {
+  return run(async () => {
+    const v = await requireViewer();
+    const r = await chargeInvoiceNow(db, v, { invoiceId: s(fd, "invoiceId"), attemptNumber: Number(s(fd, "attemptNumber")) });
+    // A decline is not an error of the request, but nothing was collected: show it as one.
+    return r.status === "submitted" ? { ok: true, message: r.message } : { ok: false, error: r.message };
+  });
 }
 
 export async function refundAction(_p: ActionState, fd: FormData) {

@@ -113,6 +113,46 @@ test("owner: schedule flags, payroll, marketing and money views", async ({ page 
   await shot(page, "money", info.project.name);
 });
 
+test("Today links to the scoreboard for owner and operations, not for a coach; expiring cards open their list", async ({ page }, info) => {
+  await login(page, USERS.rod);
+  await page.goto("/today");
+  await page.getByRole("main").getByRole("link", { name: "Owner scoreboard" }).click();
+  await expect(page).toHaveURL(/\/scoreboard$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Owner scoreboard" })).toBeVisible();
+
+  // Saved cards expiring: the tile's number is the length of the list behind it, and each row opens the payer's methods.
+  const tile = page.locator('[data-metric="cards_expiring"]');
+  await expect(tile).toContainText("Saved cards expiring within 60 days");
+  const n = Number((await tile.getByRole("link").innerText()).replace(/\D/g, ""));
+  expect(n).toBeGreaterThan(0); // the demo seed has a card that expires this month
+  await tile.getByRole("link").click();
+  await expect(page).toHaveURL(/\/scoreboard\/list\/cards_expiring/);
+  await expect(page.locator("main tbody tr")).toHaveCount(n);
+  await expect(page.locator("main tbody tr").first().getByRole("link").first()).toHaveAttribute("href", /^\/billing\/payment-methods\?payer=/);
+  await noSideScroll(page);
+  await shot(page, "cards-expiring-list", info.project.name);
+
+  // The same cards are on the front desk's follow-ups queue, as a card that is not a journey step.
+  await page.goto("/follow-ups");
+  const card = page.locator("#expiring-cards");
+  await expect(card.getByRole("heading", { name: "Saved cards about to expire" })).toBeVisible();
+  await expect(card.locator("li")).toHaveCount(n);
+  await noSideScroll(page);
+  await shot(page, "follow-ups-expiring-cards", info.project.name);
+  await page.context().clearCookies();
+
+  await login(page, USERS.erin);
+  await page.goto("/today");
+  await expect(page.getByRole("main").getByRole("link", { name: "Owner scoreboard" })).toBeVisible();
+  await page.context().clearCookies();
+
+  await login(page, USERS.marcus);
+  await page.goto("/today");
+  await expect(page.getByRole("main").getByRole("link", { name: "Owner scoreboard" })).toHaveCount(0);
+  await page.goto("/follow-ups");
+  await expect(page.locator("#expiring-cards")).toHaveCount(0);
+});
+
 test("operations sees the scoreboard without payroll; coaches are refused", async ({ page }) => {
   await login(page, USERS.erin);
   await page.goto("/scoreboard/efficiency");

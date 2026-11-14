@@ -84,11 +84,25 @@ export function ButtonLink({
   href: string;
   children: React.ReactNode;
 } & Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href">) {
+  // A file download or a route handler is not a page: next/link would prefetch it when it scrolls
+  // into view, which runs the export on every page view and leaves a request that never settles.
+  if (isFileHref(href, rest.download)) {
+    return (
+      <a href={href} className={buttonClass(variant, size, className)} {...rest}>
+        {children}
+      </a>
+    );
+  }
   return (
     <Link href={href} className={buttonClass(variant, size, className)} {...rest}>
       {children}
     </Link>
   );
+}
+
+/** True for links that must be a plain anchor (never prefetched): downloads and `/api/` route handlers. */
+export function isFileHref(href: string, download?: unknown): boolean {
+  return (download !== undefined && download !== false) || href.startsWith("/api/");
 }
 
 const badgeVariants = {

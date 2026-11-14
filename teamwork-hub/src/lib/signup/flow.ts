@@ -349,6 +349,24 @@ export async function signupView(tx: Tx, v: Viewer, flowId: string, today: strin
 }
 
 /** Price of a plan for this family before choosing it (family discount shown; nothing is created). */
+/**
+ * Where to send someone who has just finished signing a document: the open sign-up flow that the
+ * document belongs to, if they may use that flow. Null for a document that is not part of a flow
+ * (they stay on the document, as before) and for anyone the flow is not open to.
+ */
+export async function signupReturnPath(tx: Tx, v: Viewer, requestId: string, today: string): Promise<string | null> {
+  if (!UUID.test(requestId)) return null;
+  const [req] = await tx.select({ athleteId: formRequests.athleteId }).from(formRequests).where(and(eq(formRequests.id, requestId), eq(formRequests.orgId, v.orgId)));
+  if (!req?.athleteId) return null;
+  const flows = await tx.select({ id: signupFlows.id }).from(signupFlows).where(and(eq(signupFlows.orgId, v.orgId), eq(signupFlows.athleteId, req.athleteId), eq(signupFlows.status, "open")));
+  for (const f of flows) {
+    // signupView re-checks access; a viewer the flow is not open to simply gets no redirect.
+    const view = await signupView(tx, v, f.id, today).catch(() => null);
+    if (view?.documents.some((d) => d.requestId === requestId)) return `/billing/signup/${f.id}?signed=${requestId}`;
+  }
+  return null;
+}
+
 export function planPricePreview(priceMinor: number, familyDiscountPercent: number) {
   const discount = percentOf(priceMinor, familyDiscountPercent);
   return { grossMinor: priceMinor, discountMinor: discount, netMinor: priceMinor - discount };

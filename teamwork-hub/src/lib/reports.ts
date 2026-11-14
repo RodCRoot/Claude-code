@@ -46,7 +46,7 @@ export const REPORTS: ReportDef[] = [
     category: "Memberships",
     asOfOnly: true,
     definition:
-      "Read-only sweep of every membership as of the end date: billed while not attending, holds / in-season over the policy caps or with no end date, commitments that rolled into a new commitment or whose cancellation is held past notice, families with 2+ athletes missing the family discount, billed while unsigned required documents block booking, failing cards, requests left unprocessed, and requests sent before a bill date that billed anyway. Each exception carries a dollar figure and how it was computed (Zen Planner-billed amounts are estimates). Most expensive first. Nothing is changed.",
+      "Read-only sweep of every membership as of the end date: billed while not attending, holds / in-season over the policy caps or with no end date, commitments that rolled into a new commitment or whose cancellation is held past notice, families with 2+ athletes missing the family discount, billed while unsigned required documents block booking, failing cards, requests left unprocessed, and requests sent before a bill date that billed anyway. Each exception carries a dollar figure and how it was computed. For Zen Planner-billed memberships the figure is the billed amount from imported bill history where that was imported (labelled \"from imported bill history\", with the paid amount beside it), and an estimate (bill dates on the anchor day × plan rate, labelled as an estimate) where it was not or for dates after the last imported bill. Most expensive first. Nothing is changed.",
     cap: "reports.financial",
     columns: [
       { key: "exception", label: "Exception" },

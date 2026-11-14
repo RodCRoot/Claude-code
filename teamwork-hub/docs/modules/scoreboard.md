@@ -69,6 +69,7 @@ The exact text is in the Definitions drawer on the page (`definitionsFor("daily"
 | Billed this month | Invoices issued, excluding drafts and voids (Invoiced report's rule) |
 | Projected recurring revenue, next month | Monthly-equivalent net price x share of next month's days the membership is running and not on hold. Zen Planner-billed and trial memberships excluded |
 | Memberships with autopay off (definition v2) | Active memberships invoiced by Teamwork where nothing is charged automatically: autopay is off for the membership, or it is on but the payer has no active saved payment method (`AUTOPAY_READY_SQL` in `billing/payment-methods.ts`) |
+| Saved cards expiring within 60 days | `expiringCards()` (payments module): active saved cards whose expiry month ends within 60 days, one row per card, linking to the payer's payment methods. Withheld under a filter (a card belongs to a payer, not a location or program). Also shown as the card "Saved cards about to expire" on the follow-ups queue for owner, admin and operations |
 | Memberships expiring in 30 days | End date or scheduled cancellation in the next 30 days |
 | People with more than one active membership | Two or more active non-trial memberships (a regular plan paused for in-season is not a second one) |
 | Attending above the plan's weekly limit | The membership audit's `over_cap_usage` exceptions |
@@ -112,6 +113,10 @@ A pure function (`bottleneck`) reads the last complete month against the ideals 
 ## Money view
 
 Collected, refunds, net, billed, outstanding, account credits issued (referral rewards) and camp / clinic revenue per month; collected by membership option and by location (each a partition that adds up to collected). `scoreboard_expenses` holds optional monthly rent, software, other and a hand-entered payroll figure used only for months with no time-clock data. Operating margin = net collected minus those, marketing spend and payroll. It is labelled a management estimate, not accounting, on the page and in the export; when payroll is unknown or incomplete the margin is "not available" and the figure before payroll is shown.
+
+### Billed in Zen Planner, imported
+
+When the organization has rows in `zp_bills` (a Zen Planner bill export committed in Imports), the money view shows one more card, "Billed in Zen Planner, imported": bills, billed, paid and unpaid-at-import per month of the bill's due date (`importedBillsView`, definition `mv_zp_imported` v1, export table `money-zp-imported`). It is imported history from another system and is **never** added to Collected, Billed, Outstanding, the revenue groups or the margin; `mv_collected` and `mv_billed` say so (both now version 2, wording only, the rule did not change). A month with no imported bills is blank, not $0. Under a filter only bills matched to a filtered membership count. The card is hidden when nothing was imported; the demo seed imports no bills.
 
 ## Charts
 

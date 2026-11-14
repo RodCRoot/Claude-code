@@ -14,6 +14,7 @@ import { ReachOutItem } from "@/components/journey/reach-out";
 import { fmtDate } from "@/lib/time";
 import { syncJourneysAction } from "./actions";
 import { CheckinAlertsCard } from "@/components/checkins/alerts-card";
+import { ExpiringCardsCard } from "@/components/billing/expiring-cards-card";
 
 export const metadata = { title: "Today's follow-ups" };
 
@@ -44,6 +45,7 @@ export default async function FollowUpsPage({ searchParams }: { searchParams: Pr
       />
       <FollowUpTabs current="queue" showReport={can(v, "journey.report")} />
       <CheckinAlertsCard viewer={v} className="mb-4" />
+      <ExpiringCardsCard viewer={v} className="mb-4" />
 
       <form method="get" className="mb-4 flex flex-wrap items-end gap-3 rounded-md border border-edge bg-surface px-4 py-3">
         <div className="min-w-40 flex-1 sm:flex-none">

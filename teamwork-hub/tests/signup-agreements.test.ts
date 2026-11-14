@@ -17,7 +17,7 @@ import { createDraftVersion, publishVersion, saveDraft } from "@/lib/forms/templ
 import { verifyRequest } from "@/lib/forms/verify";
 import { membershipPolicy, saveMembershipPolicy } from "@/lib/membership-policy";
 import { checkEligibility } from "@/lib/scheduling/eligibility";
-import { choosePayment, choosePlan, completeSignup, publishedPlans, signupCandidates, signupView, startSignupFlow } from "@/lib/signup/flow";
+import { choosePayment, choosePlan, completeSignup, publishedPlans, signupCandidates, signupReturnPath, signupView, startSignupFlow } from "@/lib/signup/flow";
 import { addDaysYmd } from "@/lib/time";
 import { TEST_WHSEC } from "./fixtures/payments/stripe";
 import { activeMethod } from "./billing-helpers";
@@ -420,6 +420,16 @@ describe("the guided sign-up flow", () => {
     expect(view.familyDiscountPercent).toBe(0);
     // Cannot finish early.
     await expect(completeSignup(db(), chris, { flowId: id, today: T })).rejects.toThrow(/sign the membership agreement/);
+    // After signing a document of the flow, the people who may use the flow are sent back to it; nobody else is.
+    const agreementId = view.documents.find((d) => d.isAgreement)!.requestId;
+    const back = (u: string, requestId = agreementId) => db().transaction(async (tx) => signupReturnPath(tx, await who(u), requestId, T));
+    expect(await back("chris")).toBe(`/billing/signup/${id}?signed=${agreementId}`);
+    expect(await back("erin")).toBe(`/billing/signup/${id}?signed=${agreementId}`);
+    for (const u of ["alex", "jordan", "marcus"]) expect(`${u}:${await back(u)}`).toBe(`${u}:null`);
+    expect(await back("chris", "not-an-id")).toBeNull();
+    expect(await back("chris", "00000000-0000-4000-8000-000000000000")).toBeNull();
+    const other = await seedOrg(T, { modules: [] });
+    expect(await db().transaction(async (tx) => signupReturnPath(tx, await viewerFor(other, "rod"), agreementId, T))).toBeNull();
     for (const d of view.documents) await signInPerson(d.requestId);
     view = await db().transaction((tx) => signupView(tx, chris, id, T));
     expect(view.current).toBe("payment");
@@ -446,6 +456,7 @@ describe("the guided sign-up flow", () => {
     expect(await db().select().from(jobs).where(like(jobs.dedupeKey, `${AUTOPAY_JOB}:${invs[0].id}:%`))).toHaveLength(0);
     view = await db().transaction((tx) => signupView(tx, chris, id, T));
     expect(view.current).toBe("done");
+    expect(await back("chris")).toBeNull(); // a finished flow no longer pulls anyone back
     // A finished flow frees the athlete for nothing new: they are a member now.
     await expect(db().transaction((tx) => startSignupFlow(tx, chris, { athleteId: ctx.athletes.ava, payerAccountId: ctx.payers.chris_parker }))).rejects.toThrow(/already has a membership/);
   });
