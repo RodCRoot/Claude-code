@@ -256,6 +256,11 @@ export function CheckinTrends({ t, simple, firstName }: { t: AthleteTrends; simp
                       <Td>
                         <span className="text-xs text-ink-2">
                           {p.readyDone ? "Ready ✓" : "Ready: none"} · {p.afterDone ? "After ✓" : "After: none"}
+                          {p.readyEnteredByCoach || p.afterEnteredByCoach ? (
+                            <span className="block text-ink-3" data-testid="entered-by-coach">
+                              Entered by coach {[...new Set([p.readyEnteredByCoach, p.afterEnteredByCoach].filter(Boolean))].join(" and ")}
+                            </span>
+                          ) : null}
                         </span>
                       </Td>
                     </tr>

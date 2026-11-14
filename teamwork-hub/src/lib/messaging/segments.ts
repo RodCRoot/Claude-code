@@ -185,7 +185,7 @@ async function matchingLeads(tx: Tx, orgId: string, f: SegmentFilters) {
   const c = [sql`l.org_id = ${orgId}`];
   if (f.leadStage) c.push(sql`l.stage = ${f.leadStage}`);
   else c.push(sql`l.converted_at is null and not exists (select 1 from lead_stages s where s.org_id = l.org_id and s.key = l.stage and (s.is_won or s.is_lost))`);
-  if (f.sport) c.push(sql`lower(l.interest) = lower(${f.sport})`);
+  if (f.sport) c.push(sql`lower(coalesce(nullif(l.inquiry->>'sport', ''), l.interest)) = lower(${f.sport})`);
   if (f.tagId) c.push(sql`exists (select 1 from person_tags pt where pt.tag_id = ${f.tagId} and (pt.person_id = l.person_id or pt.person_id = l.contact_person_id))`);
   const res = await tx.execute(sql`select l.id, l.person_id, l.contact_person_id, p.first_name from leads l join people p on p.id = l.person_id where ${sql.join(c, sql` and `)} order by l.created_at limit 5000`);
   return res.rows as { id: string; person_id: string; contact_person_id: string | null; first_name: string }[];

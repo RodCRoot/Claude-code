@@ -22,6 +22,8 @@ import { ageOn } from "@/lib/messaging/routing";
 import { localToUtc, todayLocal } from "@/lib/time";
 import type { PossibleDuplicate } from "./intake";
 import { listStages } from "./stages";
+import { vocabOverrides } from "@/lib/zenplanner/vocab";
+import { KEEP, NO_SOURCE, leadPriority, leadSport, listChoice, normalizeLeadInterest, normalizeLeadSource, sourceDisplay, interestDisplay } from "./lead-vocab";
 
 export type Lead = typeof leads.$inferSelect;
 const actor = (v: Viewer) => ({ orgId: v.orgId, actorUserId: v.userId, actorRole: v.role });
@@ -42,6 +44,11 @@ export type LeadRow = {
   stage: string;
   source: string | null;
   interest: string | null;
+  /** Source and interest as shown and grouped (see lead-vocab.ts); the stored values are above. */
+  sourceLabel: string | null;
+  interestLabel: string | null;
+  sport: string | null;
+  priority: string | null;
   name: string;
   contactName: string | null;
   email: string | null;
@@ -77,7 +84,14 @@ export async function listLeads(tx: Tx, v: Viewer, f: LeadFilters = {}): Promise
   if (f.owner === "me") conds.push(eq(leads.ownerUserId, v.userId));
   else if (f.owner === "none") conds.push(sql`${leads.ownerUserId} is null`);
   else if (f.owner && z.string().uuid().safeParse(f.owner).success) conds.push(eq(leads.ownerUserId, f.owner));
-  if (f.source) conds.push(eq(leads.source, f.source));
+  const overrides = await vocabOverrides(tx, v.orgId);
+  if (f.source) {
+    // The filter is a normalised label; match every stored spelling that normalises to it.
+    const stored = await tx.selectDistinct({ s: leads.source }).from(leads).where(eq(leads.orgId, v.orgId));
+    const raws = stored.map((r) => r.s).filter((r): r is string => r != null && normalizeLeadSource(r, overrides).label === f.source);
+    if (f.source === NO_SOURCE) conds.push(raws.length ? sql`(${leads.source} is null or ${inArray(leads.source, raws)})` : sql`${leads.source} is null`);
+    else conds.push(raws.length ? inArray(leads.source, raws) : sql`false`);
+  }
   if (f.tag && z.string().uuid().safeParse(f.tag).success) {
     conds.push(
       sql`exists (select 1 from person_tags pt where pt.tag_id = ${f.tag} and (pt.person_id = ${leads.personId} or pt.person_id = ${leads.contactPersonId}))`,
@@ -130,6 +144,10 @@ export async function listLeads(tx: Tx, v: Viewer, f: LeadFilters = {}): Promise
         stage: r.lead.stage,
         source: r.lead.source,
         interest: r.lead.interest,
+        sourceLabel: sourceDisplay(r.lead.source, (r.lead.inquiry as Record<string, unknown>).sourceOther as string | null, overrides),
+        interestLabel: leadSport(r.lead, overrides) && !normalizeLeadInterest(r.lead.interest, overrides).onList ? null : interestDisplay(r.lead.interest, (r.lead.inquiry as Record<string, unknown>).interestOther as string | null, overrides),
+        sport: leadSport(r.lead, overrides),
+        priority: leadPriority(r.lead.inquiry as Record<string, unknown>),
         name: `${r.first} ${r.last}`,
         contactName: r.cFirst ? `${r.cFirst} ${r.cLast}` : null,
         email: r.cEmail ?? r.pEmail,
@@ -148,9 +166,11 @@ export async function listLeads(tx: Tx, v: Viewer, f: LeadFilters = {}): Promise
     .filter((r) => (f.minAge == null || (r.age != null && r.age >= f.minAge)) && (f.maxAge == null || (r.age != null && r.age <= f.maxAge)));
 }
 
+/** The normalised sources in use, for the list filter. */
 export async function leadSources(tx: Tx, orgId: string): Promise<string[]> {
-  const rows = await tx.selectDistinct({ s: leads.source }).from(leads).where(and(eq(leads.orgId, orgId), sql`${leads.source} is not null`));
-  return rows.map((r) => r.s!).sort();
+  const overrides = await vocabOverrides(tx, orgId);
+  const rows = await tx.selectDistinct({ s: leads.source }).from(leads).where(eq(leads.orgId, orgId));
+  return [...new Set(rows.map((r) => normalizeLeadSource(r.s, overrides).label))].sort();
 }
 
 async function loadLead(tx: Tx, v: Viewer, leadId: string, lock = false): Promise<Lead> {
@@ -222,6 +242,54 @@ export async function getLead(tx: Tx, v: Viewer, leadId: string) {
     possibleDuplicates: possibleDuplicates(lead),
     duplicateReview: ((lead.inquiry as Record<string, unknown>).duplicateReview as string) ?? "none",
   };
+}
+
+const marketingSchema = z.object({
+  source: z.string().trim().max(120).optional(),
+  sourceOther: z.string().trim().max(120).optional(),
+  interest: z.string().trim().max(120).optional(),
+  interestOther: z.string().trim().max(120).optional(),
+  priority: z.string().trim().max(20).optional(),
+});
+
+/**
+ * Staff edit of a lead's Source, Interest and Priority. Each must be a value from its list, empty
+ * (clears it), or KEEP (leave an older value that is not on the list exactly as stored). Audited.
+ */
+export async function updateLeadMarketing(tx: Tx, v: Viewer, leadId: string, input: z.input<typeof marketingSchema>) {
+  const d = marketingSchema.parse(input);
+  const lead = await loadLead(tx, v, leadId, true);
+  const overrides = await vocabOverrides(tx, v.orgId);
+  const inq = { ...(lead.inquiry as Record<string, unknown>) };
+  const pick = (key: "source" | "interest" | "priority", raw: string | undefined, other: string | undefined, label: string) => {
+    if (!raw) return { value: null, other: null };
+    const c = listChoice(key, raw, other, overrides);
+    if (!c.value) throw new DomainError(`Choose a ${label} from the list.`, { [key === "source" ? "leadSource" : key === "interest" ? "leadInterest" : "priority"]: "Not on the list" });
+    return c;
+  };
+  const before = { source: lead.source, interest: lead.interest, priority: leadPriority(inq), sourceOther: inq.sourceOther ?? null, interestOther: inq.interestOther ?? null };
+  let source = lead.source;
+  let interest = lead.interest;
+  if (d.source !== KEEP) {
+    const c = pick("source", d.source, d.sourceOther, "source");
+    source = c.value;
+    inq.sourceOther = c.other;
+  }
+  if (d.interest !== KEEP) {
+    // An older lead kept the sport in this column: move it aside before the list value replaces it.
+    const sport = leadSport(lead, overrides);
+    const c = pick("interest", d.interest, d.interestOther, "interest");
+    if (!("sport" in inq)) inq.sport = sport;
+    interest = c.value;
+    inq.interestOther = c.other;
+  }
+  if (d.priority !== KEEP) inq.priority = pick("priority", d.priority, undefined, "priority").value;
+  await tx.update(leads).set({ source, interest, inquiry: inq, updatedAt: new Date() }).where(eq(leads.id, lead.id));
+  await audit(tx, actor(v), "crm.lead_marketing_update", "lead", lead.id, {
+    summary: "Lead source, interest or priority changed",
+    before,
+    after: { source, interest, priority: inq.priority ?? null, sourceOther: inq.sourceOther ?? null, interestOther: inq.interestOther ?? null },
+  });
 }
 
 const stageSchema = z.object({ stage: z.string().min(1), lostReason: z.string().trim().max(500).optional() });

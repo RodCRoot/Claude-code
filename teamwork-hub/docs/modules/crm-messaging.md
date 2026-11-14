@@ -8,7 +8,7 @@ Owner module for leads, family messaging, message delivery, automations and the 
 |---|---|---|
 | `/inquire` (+ `/inquire/thanks`) | public | Assessment inquiry form. Honeypot (`website`), per-IP rate limit (5/hour, hashed IP stored on the lead), server validation (zod), consent checkboxes. `?org=<slug>` selects the org; otherwise the first org (single-tenant deploy). |
 | `/people/leads` | `crm.manage` | Board / List / Pipeline stages (CRUD, reorder). Filters: search, stage, owner, source, tag, age range. |
-| `/people/leads/new` | `crm.manage` | Staff-entered lead (walk-in, phone…), same intake path as the public form. |
+| `/people/leads/new` | `crm.manage` | Staff-entered lead (walk-in, phone…), same intake path as the public form. Source, Interest and Priority are lists (see "Lead lists"). |
 | `/people/leads/[id]` | `crm.manage` | Inquiry + consent, notes, tasks, stage/lost reason, owner, log contact, schedule assessment, tags, conversations with the lead contact, audit history, duplicate review. |
 | `/people/leads/[id]/convert` | `crm.manage` + `people.manage` | Review screen: athlete + guardian (link existing vs create new when duplicates exist — required), household, payer. |
 | `/messages` | staff with `messages.inbox` / families | Staff: shared inbox (all / mine / unassigned, open/closed, kind, athlete, subject search, unread). Families: their own threads only. |
@@ -130,6 +130,45 @@ Hard bounces / complaints flag the address in `undeliverable_addresses` (one act
 - Phone matching uses the last 10 digits (North American numbers); international numbers sharing those digits would collide.
 - No lead-capture embeds/landing-page builder beyond `/inquire`; no lead scoring, no attachments in messages.
 - Assessment scheduling links a lead to a session but does not create a booking (leads are not athletes until conversion).
+
+## Lead lists: Source, Interest, Priority and tracking
+
+Code: `src/lib/crm/lead-vocab.ts` (pure), `updateLeadMarketing` in `crm/leads.ts`, form fields in
+`src/app/(public)/inquire/_components/lead-list-fields.tsx`, report `src/lib/crm/lead-report.ts`.
+Tests: `tests/crm-lead-lists.test.ts`, `e2e/lead-lists.spec.ts`.
+
+- **The lists** are the gym's Zen Planner lists in `src/lib/zenplanner/vocab.ts` (Source, Interest,
+  Priority) plus values an owner adds under Imports → Zen Planner → Lists.
+- **Forms.** The public form asks "How did you hear about us?" (Source) and "What are you most
+  interested in?" (Interest). Staff add-lead adds Priority. Choosing "Other" shows a free-text box.
+  The lead page has "Edit source, interest and priority" (audited as `crm.lead_marketing_update`).
+  A value that is not on the list is never stored as typed: the server checks every choice.
+- **Where it is stored.** `leads.source` and `leads.interest` hold the list's own spelling when one
+  was chosen. The intake channel (web form, staff) moved to `inquiry.channel`; the "Other" text is
+  `inquiry.sourceOther` / `inquiry.interestOther`; priority is `inquiry.priority`; the athlete's sport
+  stays in `inquiry.sport`.
+- **Older values stay valid.** Before the lists, `source` held the channel (`web_inquiry`, `walk_in`,
+  `referral`, `staff`, or a staff-form key such as `instagram`) and `interest` held the sport. Those
+  rows are not rewritten. They are read through the normaliser: `web_inquiry` is Website, `walk_in` is
+  Walk-in, `referral` is Referral, `staff` is "No source", anything else is shown as stored (tidied).
+  The edit form offers an older value as "(as recorded)" so saving never loses it, and an older sport
+  in `interest` is moved to `inquiry.sport` before an Interest replaces it. A lead created without a
+  list choice still stores the channel, exactly as before.
+- **Grouping.** The leads list filter, the scoreboard marketing page (definition `mk_leads` v2) and
+  the report "Leads by source and interest" (`/reports/leads-by-source`, `crm.manage`) all group by
+  the normalised value, so `web_inquiry`, `Website` and `website` are one row. A marketing spend
+  channel is matched the same way.
+- **Tracking (UTM).** `/inquire?utm_source=…&utm_campaign=…&utm_medium=…&utm_term=…` carries the four
+  values through hidden fields into `inquiry.utm` (`{source, campaign, medium, term}`, the same shape
+  the Zen Planner import already writes for Tracking Source / Name / Medium / Keywords). The lead page
+  shows them as "Tracking". Each value is cut to 200 characters; nothing else from the address is kept.
+- **Sport is not interest.** Conversion, automation rules with a sport condition and message
+  segments read the sport (`inquiry.sport`, falling back to an older `interest`), never an Interest
+  list value.
+
+Not done: the referral-link form (`/r/<code>`) uses the lists but does not read UTM values; there is
+no bulk tool to move older leads onto list values; a referred lead's source is still set by the
+referral attribution after intake.
 
 ## GoHighLevel (GHL / LeadConnector)
 

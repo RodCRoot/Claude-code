@@ -1,3 +1,4 @@
+import { defineWording } from "@/lib/sample-text";
 /**
  * Family message style lint. Pure and dependency-free so the same rules run in the composers
  * (live, client side) and on the server (templates, campaigns, staff replies to families).
@@ -143,3 +144,13 @@ export function lintBlockMessage(r: LintResult, what = "This message"): string {
 /** SAMPLE app-first card-update instructions (no em dashes; never asks for card details in a message). */
 export const CARD_UPDATE_SNIPPET =
   "SAMPLE TEXT: Hi {{recipient_first_name}}, the card on file for {{athlete_first_name}}'s membership needs updating. The quickest way is in the app: open the Teamwork app, tap Billing, then Payment methods, and add the new card. If the app gives you any trouble, reply here and we'll send a secure link. Please never text or email card numbers. Thanks, {{org_name}}";
+
+export const CARD_UPDATE_WORDING = defineWording({
+  id: "card_update_instructions",
+  label: "Card update instructions",
+  version: "card-update-2026-1",
+  isSample: true,
+  shownAt: "Suggested text when staff ask a family to update the card on file.",
+  source: "src/lib/messaging/family-style.ts",
+  href: "/messages/templates",
+});

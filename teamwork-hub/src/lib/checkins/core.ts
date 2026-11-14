@@ -20,6 +20,7 @@ import {
   type CheckinAlertReason,
   type CheckinAnsweredBy,
   type CheckinChip,
+  type CheckinReplacement,
   type CheckinSection,
 } from "@/db/schema";
 import { UserError } from "@/lib/actions";
@@ -50,7 +51,9 @@ import { checkinSettings, PRE_GRACE_MINUTES, questionSetVersion, type CheckinSet
  *       above AND `health.read` on the child. A parent who may not see health data is never
  *       shown or asked health questions;
  * - the kiosk: the ready check only, with a single-use pass issued right after that athlete's PIN;
- * - staff: nobody. Staff read; they do not answer for an athlete.
+ * - staff: never as themselves. A coach may TYPE IN what an athlete told them out loud; that lives in
+ *   coach-entry.ts, is stamped role `coach` with the coach's name, and never passes through
+ *   `writableSections`.
  * Nothing here sends a message to anyone.
  */
 
@@ -65,6 +68,22 @@ export const KIOSK_PASS_MINUTES = 3;
 export const PRIOR_SESSION_MAX_DAYS = 10;
 
 export type SectionState = "open" | "editable" | "locked" | "closed" | "not_allowed";
+
+/** Names of the coaches who typed in any part of this check-in for the athlete, or null. A name, never an answer. */
+export function enteredByCoach(c: { answeredBy: CheckinAnsweredBy } | null | undefined): string | null {
+  if (!c) return null;
+  const names = [...new Set(Object.values(c.answeredBy).filter((a) => a?.role === "coach").map((a) => a!.name ?? "a coach"))];
+  return names.length ? names.join(" and ") : null;
+}
+
+/**
+ * Experience answers a coach may read with the athlete's name: the family ticked "show my coach my
+ * name", or a coach typed the answers in (then the coach already knows them, so the promise made to
+ * families is not involved).
+ */
+export function sharedWithCoach(c: { tellCoach: boolean; answeredBy: CheckinAnsweredBy }): boolean {
+  return c.tellCoach || c.answeredBy.experience?.role === "coach";
+}
 
 /** Which sections this viewer may answer for this athlete (see the header comment). */
 export async function writableSections(tx: Tx, v: Viewer, athleteId: string, today: string): Promise<Set<CheckinSection>> {
@@ -86,7 +105,7 @@ export async function writableSections(tx: Tx, v: Viewer, athleteId: string, tod
   return out;
 }
 
-async function loadBooking(tx: Tx, orgId: string, bookingId: string) {
+export async function loadBooking(tx: Tx, orgId: string, bookingId: string) {
   const [row] = await tx
     .select({ booking: bookings, session: scheduleSessions, first: people.firstName, preferred: people.preferredName, last: people.lastName, personId: athletes.personId, coach: users.displayName })
     .from(bookings)
@@ -209,10 +228,10 @@ export async function readyTarget(tx: Tx, v: Viewer, bookingId: string, now = ne
   const prefill = canWrite ? await wellnessPrefill(tx, v.orgId, row.booking.athleteId, today) : {};
   const prior = canWrite && settings.askPriorSoreness && existing?.priorSoreness == null ? await priorSessionToAsk(tx, v.orgId, row.booking.athleteId, row.session) : null;
   const spot = canWrite && existing ? await checkinSpot(tx, existing.id) : null;
-  return { ...row, settings, state, canWrite, window: win, existing: canWrite ? existing ?? null : null, done: !!existing, prefill, prior, spot, self: v.role === "athlete" };
+  return { ...row, settings, state, canWrite, window: win, existing: canWrite ? existing ?? null : null, done: !!existing, prefill, prior, spot, self: v.role === "athlete", enteredByCoach: enteredByCoach(existing), replacedByCoach: (existing?.replacements.length ?? 0) > 0 };
 }
 
-async function checkinSpot(tx: Tx, checkinId: string) {
+export async function checkinSpot(tx: Tx, checkinId: string) {
   const [r] = await tx.select().from(bodyRegionReports).where(eq(bodyRegionReports.sourceCheckinId, checkinId)).orderBy(desc(bodyRegionReports.reportedAt)).limit(1);
   return r ?? null;
 }
@@ -248,10 +267,10 @@ export const readySchema = z.object({
 });
 export type ReadyInput = z.input<typeof readySchema>;
 
-type Writer = { userId: string | null; role: "athlete" | "guardian" | "kiosk"; source: "app" | "kiosk"; auditActor: { orgId: string; actorUserId: string | null; actorRole: string } };
+export type Writer = { userId: string | null; role: "athlete" | "guardian" | "kiosk" | "coach"; source: "app" | "kiosk"; auditActor: { orgId: string; actorUserId: string | null; actorRole: string }; /** Coach entries only: the display name shown as "entered by coach <name>". */ name?: string };
 
 function stamp(prev: CheckinAnsweredBy, section: CheckinSection, w: Writer, now: Date): CheckinAnsweredBy {
-  return { ...prev, [section]: { userId: w.userId, role: w.role, at: now.toISOString() } };
+  return { ...prev, [section]: { userId: w.userId, role: w.role, at: now.toISOString(), ...(w.role === "coach" && w.name ? { name: w.name } : {}) } };
 }
 
 /** Keep the body-map row for this check-in in step with the hurt answer. Returns whether the pain is sharp. */
@@ -267,7 +286,10 @@ async function syncSpot(tx: Tx, orgId: string, checkinId: string, athleteId: str
   }
   if (hurt && spot && kind) {
     if (!isValidSpot(spot.view, spot.region, spot.side)) throw new UserError("Please tap the spot again.", { spot: "That spot is not valid" });
-    await recordBodyReport(tx, { orgId, athleteId, view: spot.view, region: spot.region, side: spot.side, kind, severity: spot.level, note: null, reportedBy: w.userId, auditActor: w.auditActor, sourceCheckinId: checkinId }, now);
+    // Readers take the latest report for a check-in. A correction made at the very same instant as the report it
+    // replaces must still sort after it, so it is stamped one millisecond later.
+    const at = current && current.reportedAt.getTime() >= now.getTime() ? new Date(current.reportedAt.getTime() + 1) : now;
+    await recordBodyReport(tx, { orgId, athleteId, view: spot.view, region: spot.region, side: spot.side, kind, severity: spot.level, note: null, reportedBy: w.userId, auditActor: w.auditActor, sourceCheckinId: checkinId }, at);
   }
 }
 
@@ -335,14 +357,14 @@ async function ensureReviewTask(tx: Tx, orgId: string, checkin: typeof sessionCh
 
 const TRAINING_TASK_REASONS: CheckinAlertReason[] = ["hurt_no_location", "pain_two_sessions", "soreness_above_baseline", "readiness_below_baseline"];
 
-async function saveReady(
+export async function saveReady(
   tx: Tx,
   orgId: string,
   row: NonNullable<Awaited<ReturnType<typeof loadBooking>>>,
   settings: CheckinSettings,
   input: z.infer<typeof readySchema>,
   w: Writer,
-  opts: { prefill: Prefill; prior: { bookingId: string } | null; existing: typeof sessionCheckins.$inferSelect | null },
+  opts: { prefill: Prefill; prior: { bookingId: string } | null; existing: typeof sessionCheckins.$inferSelect | null; replacement?: CheckinReplacement | null },
   now: Date,
 ) {
   // An item already answered in today's wellness is not asked again: its stored answer is used.
@@ -356,7 +378,7 @@ async function saveReady(
     return null;
   };
   const sleepQuality = pick(input.sleepQuality, "sleep_quality", true);
-  if (sleepQuality === null && w.source === "app") throw new UserError("Please answer the highlighted questions.", { sleepQuality: "Choose how you slept" });
+  if (sleepQuality === null && w.source === "app" && w.role !== "coach") throw new UserError("Please answer the highlighted questions.", { sleepQuality: "Choose how you slept" });
   const hurt = input.hurt ?? (input.spot ? true : null);
   const values = {
     questionSetVersion: questionSetVersion(settings),
@@ -375,6 +397,7 @@ async function saveReady(
     loggedByParent: w.role === "guardian",
     source: w.source,
     updatedAt: now,
+    ...(opts.replacement && opts.existing ? { replacements: [...opts.existing.replacements, opts.replacement] } : {}),
   };
   let checkin: typeof sessionCheckins.$inferSelect;
   if (opts.existing) {
@@ -410,7 +433,7 @@ async function saveReady(
   if (reasons.some((r) => TRAINING_TASK_REASONS.includes(r))) await ensureReviewTask(tx, orgId, checkin, row.personId, row.session.coachUserId, now);
   // The audit trail records that a check-in happened, never the health answers.
   await audit(tx, w.auditActor, opts.existing ? "checkin.ready_update" : "checkin.ready_submit", "session_checkin", checkin.id, {
-    summary: `Ready check ${opts.existing ? "updated" : "submitted"}${w.source === "kiosk" ? " at the kiosk" : w.role === "guardian" ? " by a parent / guardian" : ""}`,
+    summary: `Ready check ${opts.existing ? "updated" : "submitted"}${w.source === "kiosk" ? " at the kiosk" : w.role === "guardian" ? " by a parent / guardian" : w.role === "coach" ? ` (entered by coach ${w.name ?? ""} on the athlete's behalf${opts.replacement ? ", replacing an earlier answer" : ""})` : ""}`,
   });
   return { checkin, created: !opts.existing, reasons };
 }
@@ -588,6 +611,8 @@ export async function afterTarget(tx: Tx, v: Viewer, bookingId: string, now = ne
     feedback: feedback && allowed.has("experience") ? { rating: feedback.rating, tellCoach: feedback.tellCoach, mine: feedback.submittedByUserId === v.userId } : null,
     spot,
     self: v.role === "athlete",
+    enteredByCoach: enteredByCoach(existing),
+    replacedByCoach: (existing?.replacements.length ?? 0) > 0,
     durationMinutes: Math.max(1, Math.round((row.session.endsAt.getTime() - row.session.startsAt.getTime()) / 60_000)),
   };
 }
@@ -655,10 +680,51 @@ export async function submitAfter(tx: Tx, v: Viewer, raw: unknown, now = new Dat
   const input = afterSchema.parse(raw);
   const t = await afterTarget(tx, v, input.bookingId, now);
   if (t.state !== "open") throw new UserError(AFTER_STATE_TEXT[t.state]);
-  const can_ = (s: "effort" | "body" | "experience") => t.sections[s] === "open" || t.sections[s] === "editable";
-  if (can_("effort") && input.rpe === null && t.sections.effort === "open") throw new UserError("Please answer the highlighted questions.", { rpe: "Choose how hard it was" });
   const w: Writer = { userId: v.userId, role: v.role === "guardian" ? "guardian" : "athlete", source: "app", auditActor: actor(v) };
+  return saveAfter(
+    tx,
+    v.orgId,
+    t,
+    input,
+    w,
+    {
+      sections: t.sections,
+      rating: t.rating,
+      // Rating: the existing session-feedback path, so its history, radar signal and low-rating task keep working.
+      submitRating: async () => {
+        const ft = await feedbackTarget(tx, v, input.bookingId, now);
+        if (ft.state !== "open" && ft.state !== "editable") return null;
+        return (await submitFeedback(tx, v, { bookingId: input.bookingId, rating: input.rating, comment: input.note ?? undefined, tellCoach: input.tellCoach }, now)).id;
+      },
+    },
+    now,
+  );
+}
 
+export type AfterSaveCtx = {
+  settings: CheckinSettings;
+  raw: typeof sessionCheckins.$inferSelect | null;
+  durationMinutes: number;
+  booking: { id: string; athleteId: string; isDemo: boolean };
+  session: { id: string; startsAt: Date; timezone: string; title: string; coachUserId: string | null };
+  personId: string;
+};
+export type AfterSavePerms = {
+  sections: Record<"effort" | "body" | "experience", SectionState>;
+  rating: "open" | "editable" | "locked" | "closed";
+  submitRating?: () => Promise<string | null>;
+  /** Coach entry only: what this save replaces (already checked and described by the caller). */
+  replacements?: CheckinReplacement[];
+};
+
+/**
+ * Write the after check. Shared by the family path (`submitAfter`) and the coach-entry path
+ * (coach-entry.ts); the caller has already decided which sections this writer may write.
+ */
+export async function saveAfter(tx: Tx, orgId: string, t: AfterSaveCtx, input: z.infer<typeof afterSchema>, w: Writer, p: AfterSavePerms, now: Date) {
+  const can_ = (s: "effort" | "body" | "experience") => p.sections[s] === "open" || p.sections[s] === "editable";
+  // A coach typing in answers may have been told only some of them; the family form asks for effort first.
+  if (w.role !== "coach" && can_("effort") && input.rpe === null && p.sections.effort === "open") throw new UserError("Please answer the highlighted questions.", { rpe: "Choose how hard it was" });
   const set: Partial<typeof sessionCheckins.$inferInsert> = { questionSetVersion: questionSetVersion(t.settings), updatedAt: now };
   let answeredBy: CheckinAnsweredBy = t.raw?.answeredBy ?? {};
   const wrote: CheckinSection[] = [];
@@ -682,21 +748,25 @@ export async function submitAfter(tx: Tx, v: Viewer, raw: unknown, now = new Dat
     return [...new Set(keys)].map((k) => known.get(k)).filter((c): c is CheckinChip => !!c).map((c) => ({ key: c.key, label: c.label }));
   };
   const hasExperience = input.liked.length > 0 || input.disliked.length > 0 || !!input.likedText || !!input.dislikedText || input.nothingToChange || !!input.note || input.rating !== null;
-  if (can_("experience") && (hasExperience || t.sections.experience === "editable")) {
+  if (can_("experience") && (hasExperience || p.sections.experience === "editable")) {
     set.likedChips = pickChips(input.liked, t.settings.likedChips, t.raw?.likedChips ?? []);
     set.likedText = input.likedText;
     set.dislikedChips = input.nothingToChange ? [] : pickChips(input.disliked, t.settings.dislikedChips, t.raw?.dislikedChips ?? []);
     set.dislikedText = input.nothingToChange ? null : input.dislikedText;
     set.nothingToChange = input.nothingToChange ? true : input.disliked.length || input.dislikedText ? false : null;
     set.note = input.note;
-    set.tellCoach = input.tellCoach;
+    // "Show my coach my name" is the family's choice. A coach-entered answer never sets or clears it:
+    // it is visible to the coach because the coach typed it (see `sharedWithCoach` in views.ts).
+    if (w.role !== "coach") set.tellCoach = input.tellCoach;
     answeredBy = stamp(answeredBy, "experience", w, now);
     wrote.push("experience");
   }
-  const ratingWritable = (t.rating === "open" || t.rating === "editable") && input.rating !== null;
+  const ratingWritable = !!p.submitRating && (p.rating === "open" || p.rating === "editable") && input.rating !== null;
   if (!wrote.length && !ratingWritable) throw new UserError("There is nothing to save yet. Answer at least one question.");
-  if (v.role === "guardian" && wrote.length) set.loggedByParent = true;
+  if (w.role === "guardian" && wrote.length) set.loggedByParent = true;
   set.answeredBy = answeredBy;
+  const replaced = (p.replacements ?? []).filter((x) => wrote.includes(x.section));
+  if (replaced.length) set.replacements = [...(t.raw?.replacements ?? []), ...replaced];
 
   let checkin: typeof sessionCheckins.$inferSelect;
   if (t.raw) {
@@ -704,18 +774,14 @@ export async function submitAfter(tx: Tx, v: Viewer, raw: unknown, now = new Dat
   } else {
     [checkin] = await tx
       .insert(sessionCheckins)
-      .values({ orgId: v.orgId, bookingId: t.booking.id, sessionId: t.session.id, athleteId: t.booking.athleteId, phase: "post", questionSetVersion: questionSetVersion(t.settings), ...set, isDemo: t.booking.isDemo, createdAt: now })
+      .values({ orgId, bookingId: t.booking.id, sessionId: t.session.id, athleteId: t.booking.athleteId, phase: "post", questionSetVersion: questionSetVersion(t.settings), ...set, isDemo: t.booking.isDemo, createdAt: now })
       .onConflictDoUpdate({ target: [sessionCheckins.bookingId, sessionCheckins.phase], set })
       .returning();
   }
-  if (wrote.includes("effort")) await syncLoadRow(tx, v.orgId, checkin, t.session, w);
-  if (wrote.includes("body")) await syncSpot(tx, v.orgId, checkin.id, checkin.athleteId, hurt, input.spot, w, now);
-  // Rating: the existing session-feedback path, so its history, radar signal and low-rating task keep working.
+  if (wrote.includes("effort")) await syncLoadRow(tx, orgId, checkin, t.session, w);
+  if (wrote.includes("body")) await syncSpot(tx, orgId, checkin.id, checkin.athleteId, hurt, input.spot, w, now);
   let feedbackId: string | null = null;
-  if (ratingWritable) {
-    const ft = await feedbackTarget(tx, v, input.bookingId, now);
-    if (ft.state === "open" || ft.state === "editable") feedbackId = (await submitFeedback(tx, v, { bookingId: input.bookingId, rating: input.rating, comment: input.note ?? undefined, tellCoach: input.tellCoach }, now)).id;
-  }
+  if (ratingWritable) feedbackId = await p.submitRating!();
 
   const reasons = new Set<CheckinAlertReason>(checkin.alertReasons);
   if (wrote.includes("body")) {
@@ -724,7 +790,7 @@ export async function submitAfter(tx: Tx, v: Viewer, raw: unknown, now = new Dat
     if (hurt && !input.spot) reasons.add("hurt_no_location");
     if (hurt) {
       // "Two sessions running" compares with the session before, not with this session's own ready check.
-      if (await hurtInPreviousSession(tx, v.orgId, checkin.athleteId, t.session)) reasons.add("pain_two_sessions");
+      if (await hurtInPreviousSession(tx, orgId, checkin.athleteId, t.session)) reasons.add("pain_two_sessions");
     }
   }
   if (wrote.includes("experience")) {
@@ -732,18 +798,18 @@ export async function submitAfter(tx: Tx, v: Viewer, raw: unknown, now = new Dat
     if (checkin.dislikedText) reasons.add("disliked_comment");
   }
   [checkin] = await tx.update(sessionCheckins).set({ alertReasons: [...reasons] }).where(eq(sessionCheckins.id, checkin.id)).returning();
-  if ([...reasons].some((r) => TRAINING_TASK_REASONS.includes(r))) await ensureReviewTask(tx, v.orgId, checkin, t.personId, t.session.coachUserId, now);
+  if ([...reasons].some((r) => TRAINING_TASK_REASONS.includes(r))) await ensureReviewTask(tx, orgId, checkin, t.personId, t.session.coachUserId, now);
   if (reasons.has("disliked_comment") && !checkin.experienceTaskId) {
     // Same routing as a low rating: to the coach only when the family chose to share, otherwise to the owner and not linked to the athlete.
-    const shared = checkin.tellCoach && !!t.session.coachUserId;
+    const shared = (checkin.tellCoach || checkin.answeredBy.experience?.role === "coach") && !!t.session.coachUserId;
     const [task] = await tx
       .insert(tasks)
       .values({
-        orgId: v.orgId,
+        orgId,
         title: DISLIKE_TASK_TITLE,
         description: `Someone said there was something they did not like or wanted changed after a session. Open /check-ins/responses/${checkin.id} to read it (visible to roles allowed). Nothing was sent to the family.`,
         dueAt: new Date(now.getTime() + 2 * 86_400_000),
-        assigneeUserId: shared ? t.session.coachUserId : await firstOwner(tx, v.orgId),
+        assigneeUserId: shared ? t.session.coachUserId : await firstOwner(tx, orgId),
         relatedPersonId: shared ? t.personId : null,
         relatedType: "session_checkin",
         relatedId: checkin.id,
@@ -755,11 +821,11 @@ export async function submitAfter(tx: Tx, v: Viewer, raw: unknown, now = new Dat
       .returning();
     if (task) {
       [checkin] = await tx.update(sessionCheckins).set({ experienceTaskId: task.id }).where(eq(sessionCheckins.id, checkin.id)).returning();
-      await audit(tx, SYSTEM(v.orgId), "task.create", "task", task.id, { summary: DISLIKE_TASK_TITLE });
+      await audit(tx, SYSTEM(orgId), "task.create", "task", task.id, { summary: DISLIKE_TASK_TITLE });
     }
   }
-  await audit(tx, actor(v), t.raw ? "checkin.after_update" : "checkin.after_submit", "session_checkin", checkin.id, {
-    summary: `After check ${t.raw ? "updated" : "submitted"}: ${[...wrote, ...(feedbackId ? ["rating"] : [])].join(", ")}${v.role === "guardian" ? " (by a parent / guardian)" : ""}`,
+  await audit(tx, w.auditActor, t.raw ? "checkin.after_update" : "checkin.after_submit", "session_checkin", checkin.id, {
+    summary: `After check ${t.raw ? "updated" : "submitted"}: ${[...wrote, ...(feedbackId ? ["rating"] : [])].join(", ")}${w.role === "guardian" ? " (by a parent / guardian)" : w.role === "coach" ? ` (entered by coach ${w.name ?? ""} on the athlete's behalf${replaced.length ? `, replacing an earlier answer for: ${replaced.map((x) => x.section).join(", ")}` : ""})` : ""}`,
   });
   return { checkin, wrote, feedbackId, load: wrote.includes("effort") ? srpeLoad(checkin.durationMinutes, checkin.rpe) : null, sharp: reasons.has("sharp_pain") };
 }

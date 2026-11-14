@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Field, Input, Select, Textarea } from "@/components/ui";
+import { Field, Input, Textarea } from "@/components/ui";
+import { LeadListFields, type LeadListsProp } from "./lead-list-fields";
 
 export const PREFERRED_TIME_OPTIONS = ["Weekday mornings", "Weekday afternoons", "Weekday evenings", "Weekends"];
 
@@ -9,7 +10,7 @@ export const PREFERRED_TIME_OPTIONS = ["Weekday mornings", "Weekday afternoons",
  * Shared inquiry fields (public /inquire form and staff "Add lead").
  * Field names match createLeadFromInquiry's schema.
  */
-export function InquiryFields({ staff = false }: { staff?: boolean }) {
+export function InquiryFields({ staff = false, lists, utm }: { staff?: boolean; lists?: LeadListsProp; utm?: { source: string | null; campaign: string | null; medium: string | null; term: string | null } | null }) {
   const [forWho, setForWho] = useState<"child" | "self">("child");
   const you = staff ? "Contact" : "Your";
   return (
@@ -79,21 +80,21 @@ export function InquiryFields({ staff = false }: { staff?: boolean }) {
         </div>
       </fieldset>
 
-      <Field label={staff ? "Source" : "How did you hear about us?"} htmlFor="heardFrom">
-        {staff ? (
-          <Select id="heardFrom" name="source" defaultValue="walk_in">
-            <option value="walk_in">Walk-in</option>
-            <option value="phone">Phone call</option>
-            <option value="referral">Referral</option>
-            <option value="event">Event</option>
-            <option value="instagram">Instagram</option>
-            <option value="google">Google</option>
-            <option value="other">Other</option>
-          </Select>
-        ) : (
+      {lists ? (
+        <LeadListFields lists={lists} staff={staff} />
+      ) : (
+        <Field label={staff ? "Source" : "How did you hear about us?"} htmlFor="heardFrom">
           <Input id="heardFrom" name="heardFrom" maxLength={120} />
-        )}
-      </Field>
+        </Field>
+      )}
+      {utm ? (
+        <>
+          <input type="hidden" name="utm_source" value={utm.source ?? ""} />
+          <input type="hidden" name="utm_campaign" value={utm.campaign ?? ""} />
+          <input type="hidden" name="utm_medium" value={utm.medium ?? ""} />
+          <input type="hidden" name="utm_term" value={utm.term ?? ""} />
+        </>
+      ) : null}
 
       <fieldset className="space-y-2 rounded-lg border border-edge p-4">
         <legend className="px-1 text-sm font-medium text-ink-2">Communication consent</legend>

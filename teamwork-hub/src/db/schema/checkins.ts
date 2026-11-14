@@ -20,7 +20,25 @@ import { bookings, scheduleSessions } from "./scheduling";
 export type CheckinPhase = "pre" | "post";
 /** Parts of a check-in that may be answered by different people (athlete at the gym, parent at home). */
 export type CheckinSection = "ready" | "effort" | "body" | "experience";
-export type CheckinAnsweredBy = Partial<Record<CheckinSection, { userId: string | null; role: "athlete" | "guardian" | "kiosk"; at: string }>>;
+/**
+ * `coach` = a staff member typed in what the athlete told them out loud (`name` is the staff member's
+ * display name at the time, so "entered by coach <name>" survives a later rename).
+ */
+export type CheckinAnsweredBy = Partial<Record<CheckinSection, { userId: string | null; role: "athlete" | "guardian" | "kiosk" | "coach"; at: string; name?: string }>>;
+/**
+ * One entry each time a coach-entered answer replaced an answer the athlete, a parent or the kiosk had
+ * already given for a section. `values` holds what was there before (health values included, so it is
+ * only ever returned to viewers with health access). Nothing is overwritten without one of these.
+ */
+export type CheckinReplacement = {
+  section: CheckinSection;
+  at: string;
+  byUserId: string;
+  byName: string;
+  reason: string;
+  previous: { role: "athlete" | "guardian" | "kiosk" | "coach"; userId: string | null; at: string };
+  values: Record<string, unknown>;
+};
 /** A quick-pick chip as it read when it was tapped, so later edits to the list never rewrite history. */
 export type CheckinChip = { key: string; label: string };
 export type CheckinAlertReason = "sharp_pain" | "hurt_no_location" | "pain_two_sessions" | "soreness_above_baseline" | "readiness_below_baseline" | "disliked_comment";
@@ -88,6 +106,8 @@ export const sessionCheckins = pgTable(
 
     // ---- Bookkeeping ----
     answeredBy: jsonb("answered_by").$type<CheckinAnsweredBy>().notNull().default({}),
+    /** Visible record of every time a coach-entered answer replaced someone's own answer. Append-only in practice. */
+    replacements: jsonb("replacements").$type<CheckinReplacement[]>().notNull().default([]),
     /** Any section was entered by a parent / guardian on the athlete's behalf. */
     loggedByParent: boolean("logged_by_parent").notNull().default(false),
     source: text("source").$type<"app" | "kiosk">().notNull().default("app"),

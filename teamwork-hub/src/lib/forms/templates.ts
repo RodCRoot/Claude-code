@@ -1,3 +1,4 @@
+import { SEEDED_AS_SAMPLE } from "@/lib/sample-text";
 import { and, desc, eq, inArray, lt } from "drizzle-orm";
 import { z } from "zod";
 import type { Tx } from "@/db";
@@ -57,7 +58,7 @@ export async function createTemplate(tx: Tx, v: Viewer, input: TemplateInput) {
   const data = templateInputSchema.parse(input);
   const [t] = await tx.insert(formTemplates).values({ orgId: v.orgId, ...data }).returning();
   const content = { title: data.name, bodyMarkdown: STARTER_BODY, fields: [] as FormField[], signers: DEFAULT_SIGNERS };
-  await tx.insert(formTemplateVersions).values({ templateId: t.id, version: 1, ...content, contentHash: contentHash(content), isSampleText: true, status: "draft" });
+  await tx.insert(formTemplateVersions).values({ templateId: t.id, version: 1, ...content, contentHash: contentHash(content), isSampleText: SEEDED_AS_SAMPLE, status: "draft" });
   await audit(tx, { orgId: v.orgId, actorUserId: v.userId, actorRole: v.role }, "forms.template_create", "form_template", t.id, { summary: `Created form template ${t.name}`, after: data });
   return t;
 }
@@ -102,7 +103,7 @@ export async function createDraftVersion(tx: Tx, v: Viewer, templateId: string) 
       ...content,
       contentHash: contentHash(content),
       // Edited text must be re-approved: new drafts start as sample text.
-      isSampleText: true,
+      isSampleText: SEEDED_AS_SAMPLE,
       status: "draft",
     })
     .returning();

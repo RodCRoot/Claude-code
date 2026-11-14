@@ -7,6 +7,7 @@
  * | `community.challenges.nightly` | `syncChallengeCompletions` | Athlete Home, /leaderboards |
  * | `engagement.refresh.nightly` | `evaluateGoals` + `syncXp` + `syncBadges` (= `refreshEngagement`) | Athlete Home, /goals, performance page |
  * | `newswatch.fetch.nightly` | `runNewsWatch` (src/lib/newswatch/job.ts) | none: it only runs here or from Run now |
+ * | `events.holds.nightly` | `releaseExpiredHolds` (unpaid camp holds, waitlist offers that ran out) | family and staff camps pages, every registration |
  * | `recap.monthly` (daily, already existed) | `runMonthlyRecaps` | first view of a closed month |
  *
  * Retention (radar, win-back, milestones) is computed live from other tables on every view and
@@ -34,6 +35,7 @@ import { audit } from "@/lib/audit";
 import { assertCan, type Viewer } from "@/lib/authz/policy";
 import { syncChallengeCompletions } from "@/lib/community/challenges";
 import { evaluateGoals } from "@/lib/engagement/goals";
+import { releaseExpiredHolds } from "@/lib/events/registration";
 import { syncBadges, syncXp } from "@/lib/engagement/sync";
 import { syncReferrals } from "@/lib/growth/referrals";
 import { syncJourneys } from "@/lib/journey/sync";
@@ -48,6 +50,7 @@ export const REFERRALS_NIGHTLY_JOB = "growth.referrals.nightly";
 export const CHALLENGES_NIGHTLY_JOB = "community.challenges.nightly";
 export const ENGAGEMENT_NIGHTLY_JOB = "engagement.refresh.nightly";
 export const JOURNEY_NIGHTLY_JOB = "journey.sync.nightly";
+export const EVENT_HOLDS_NIGHTLY_JOB = "events.holds.nightly";
 
 /** Facility-local hour (0 to 23) after which the nightly jobs for that date are created. */
 export const NIGHTLY_HOUR = 2;
@@ -55,7 +58,7 @@ const MAX_ERRORS_KEPT = 5;
 
 export const NEWSWATCH_NIGHTLY_JOB = NEWS_JOB_TYPE;
 
-export const NIGHTLY_JOB_TYPES = [REFERRALS_NIGHTLY_JOB, CHALLENGES_NIGHTLY_JOB, ENGAGEMENT_NIGHTLY_JOB, JOURNEY_NIGHTLY_JOB, NEWSWATCH_NIGHTLY_JOB] as const;
+export const NIGHTLY_JOB_TYPES = [REFERRALS_NIGHTLY_JOB, CHALLENGES_NIGHTLY_JOB, ENGAGEMENT_NIGHTLY_JOB, JOURNEY_NIGHTLY_JOB, NEWSWATCH_NIGHTLY_JOB, EVENT_HOLDS_NIGHTLY_JOB] as const;
 
 export const SCHEDULED_JOBS: { type: string; label: string; schedule: string; does: string; manual: boolean }[] = [
   {
@@ -84,6 +87,13 @@ export const SCHEDULED_JOBS: { type: string; label: string; schedule: string; do
     label: "Member journey",
     schedule: "Nightly, after 2:00 AM facility time",
     does: "Starts onboarding, touchpoint, milestone, hold and offboarding checklists from memberships, holds, cancellations and visit counts, and ticks the steps the system can already see are done. Sends nothing.",
+    manual: true,
+  },
+  {
+    type: EVENT_HOLDS_NIGHTLY_JOB,
+    label: "Camp and clinic holds and waitlist offers",
+    schedule: "Nightly, after 2:00 AM facility time",
+    does: "Releases unpaid camp and clinic spots whose hold ran out (voiding the unpaid bill), ends waitlist offers that were not accepted in time, and offers each freed spot to the next athlete in line. Charges nothing and sends nothing. The same check also runs whenever a camps page is opened or someone registers.",
     manual: true,
   },
   {
@@ -209,6 +219,18 @@ export async function runJourneyNightly(db: DB, orgId: string, opts: RunOpts = {
   return db.transaction((tx) => syncJourneys(tx, orgId, { now, today: todayLocal(tz, now) }));
 }
 
+/**
+ * Camps and clinics: release unpaid holds that ran out, end waitlist offers that were not accepted in
+ * time and offer freed spots to the next in line. The same function the camps pages and every
+ * registration call; each event is decided under its row lock, so a page load at the same moment
+ * changes nothing the second time. Charges nothing and sends nothing.
+ */
+export async function runEventHoldsNightly(db: DB, orgId: string, opts: RunOpts = {}) {
+  const now = opts.now ?? new Date();
+  const released = await db.transaction((tx) => releaseExpiredHolds(tx, orgId, now));
+  return { holdsReleased: released };
+}
+
 const orgOf = (payload: Record<string, unknown>, job: { orgId: string | null }) => {
   const orgId = (typeof payload.orgId === "string" && payload.orgId) || job.orgId;
   if (!orgId) throw new Error("payload.orgId is required");
@@ -223,6 +245,7 @@ export function scheduledJobHandlers(db: DB): Record<string, JobHandler> {
     [ENGAGEMENT_NIGHTLY_JOB]: (p, job) => runEngagementNightly(db, orgOf(p, job)),
     [JOURNEY_NIGHTLY_JOB]: (p, job) => runJourneyNightly(db, orgOf(p, job)),
     [NEWSWATCH_NIGHTLY_JOB]: (p, job) => runNewsWatch(db, orgOf(p, job)),
+    [EVENT_HOLDS_NIGHTLY_JOB]: (p, job) => runEventHoldsNightly(db, orgOf(p, job)),
   };
 }
 

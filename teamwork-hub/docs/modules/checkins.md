@@ -14,6 +14,7 @@ Ideas were taken from the feature list of TeamBuildr's sports science suite as r
 | Session check-ins: alerts, class view | `/check-ins` (staff) | owner, admin, operations; coaches see their own classes |
 | One athlete's trends | `/check-ins/athletes?id=…` | staff with the athlete in scope |
 | One response | `/check-ins/responses/[id]` | staff, cut down to what they may see |
+| Coach entry | `/check-ins/[bookingId]/coach`, from "Enter for <athlete>" on the session's Readiness card | a coach, owner or admin with training access to that athlete |
 | Readiness strip, planned intensity | card "Readiness" on `/schedule/sessions/[id]` | staff |
 | Alerts | card on `/follow-ups` and on `/check-ins` | staff, per alert |
 | Kiosk ready check | `/kiosk`, right after a PIN check-in | the athlete whose PIN matched |
@@ -55,6 +56,7 @@ The chip lists are **defaults** an owner can edit; each default is labelled "Def
 
 ## Where each answer is stored (nothing twice)
 
+- `session_checkins.replacements` (JSON list): the visible record of every coach-entered answer that replaced someone's own.
 - `session_checkins`: one row per booking and phase (`pre` / `post`), unique on `(booking_id, phase)`, with `question_set_version` = wording version + the organization's revision (for example `1.3`). Chips are stored as `{key, label}` as they read when tapped, so editing the list never rewrites history. Unanswered is NULL, never 0 (a CHECK constraint holds every scale in range).
 - **Rating**: stays in `session_feedback` (retention module), written through the existing `submitFeedback`. No rows were migrated because the table did not change: the rating history is continuous by construction, and the retention radar signal, the "Session feedback averages" report, the 24 hour edit rule and the low-rating task all keep working untouched.
 - **Session RPE**: also writes ONE `activity_sessions` row (`source = 'session_checkin'`, minutes = the session's scheduled length), updated in place on a correction. That row is what Sports Science → Load already sums, so there is no second load number.
@@ -77,7 +79,8 @@ Decided in `writableSections` (`core.ts`) and re-checked on every submit:
 | Parent, athlete under 13, no health access (demo: Jordan for Eli) | no | yes | no | yes, if they may book |
 | Parent, athlete 13 or older | no | no | no | yes, if they may book (the old feedback rule) |
 | Parent who may not book (demo: Casey) | no | no | no | no |
-| Staff | no | no | no | no |
+| Staff, as themselves | no | no | no | no |
+| A coach typing in what the athlete said (see "Coach entry") | yes, with health access | yes | yes, with health access | likes, dislikes and notes only when the family has not answered; never the rating |
 | Kiosk | only with a pass for that athlete | no | no | no |
 
 "Under 13 with training and booking access" is the existing `training.log_at_home` capability (the rule for finishing an at-home session). **Decision:** that capability is reused for the effort answer; the health answers additionally need `health.read`, because a parent who may not see health data should not be shown or asked health questions. A parent's answers are saved as logged by a parent (`logged_by_parent`, and `answered_by` records who answered each part and when).
@@ -88,13 +91,60 @@ Different people can answer different parts (the athlete at the gym, a parent at
 
 **Prefill.** If the athlete already did today's daily wellness, items that are the same item (same key; scales also the same 1 to 5 range: `sleep_quality`, `sleep_hours`, `fatigue`, `mood`, `stress`) are not asked again; the stored answer is used and listed in `prefilled`. Nothing is converted between scales: the wellness soreness (1 to 5) and readiness (1 to 10) never fill the check-in's 0 to 10 and 1 to 5 questions.
 
+## Coach entry (`coach-entry.ts`)
+
+A coach asks a young athlete out loud and types the answers in. Open decision "should a coach be
+able to fill one in on behalf of a young athlete?" (DECISIONS.md, owner tools 2) is built as follows.
+
+- **Who.** A coach, owner or admin with `training.write` on that athlete (coaches: assigned athletes
+  only). The whole ready check and the body questions of the after check also need `health.write`.
+  Operations has neither and can enter nothing. Other coaches, families and other organizations are
+  refused.
+- **Where.** The Readiness card on the session page shows "Enter for <athlete>" (or "Enter or correct
+  for") to staff who may; it opens `/check-ins/<bookingId>/coach`, which reuses the same question
+  wording and form components.
+- **Windows.** Ready check: from the usual opening time until the session **ends** (the family's own
+  window still closes 15 minutes after the start; a coach asks at the start of class and may type it
+  in during class). After check: the same windows as the family.
+- **Marked everywhere.** Each section a coach enters is stamped in `answered_by` with
+  `role: "coach"`, the coach's user id and name, and shown as "Entered by coach <name>" on the roster
+  strip (also to staff without health access, since it is a name and not an answer), the response
+  page, the athlete's trends, and the family's own ready and after pages. The name drops a leading
+  "Coach" from the display name so it never reads "coach Coach ...".
+- **Audited.** `checkin.coach_entry` (or `checkin.coach_replace`) names the coach and the athlete
+  and never contains an answer; the ordinary `checkin.ready_submit` / `checkin.after_submit` entries
+  also say "entered by coach".
+- **Never a silent overwrite.** If the athlete, a parent or the kiosk already answered a section,
+  the coach must tick "replace" and give a reason. The earlier answer is appended to
+  `session_checkins.replacements` (who replaced it, when, why, who had answered and when, and the
+  earlier values) and shown as "Replaced" on the response page, as "(replaced an earlier answer)" on
+  the roster strip, and on the family's page. Earlier values are health or training data and are
+  returned only to viewers with that access. A coach correcting a coach's entry is a plain
+  correction with no replacement record.
+- **The family's own words are not replaceable.** A coach cannot replace likes, dislikes or notes the
+  family wrote, and never enters the 1 to 5 rating (it stays in `session_feedback`, written by the
+  athlete or a parent).
+- **The privacy promise.** "Show my coach my name" is the family's tick and a coach entry never sets
+  or clears it. Likes and dislikes a coach typed in are visible to the coach with the athlete's name
+  because the coach already knows them (`sharedWithCoach` in `core.ts`); a "did not like" follow-up
+  for a coach-entered comment goes to the session's coach. What the athlete wrote without the tick
+  stays hidden from the coach, including after a coach replaces that athlete's effort answer (tested).
+- **XP.** Unchanged: one award per booking and phase through the existing ledger key
+  `session_checkin:<bookingId>:<phase>`, whoever answered and however many corrections follow
+  (tested: coach entry, athlete adding their part, a coach correction and two sync passes give one
+  award).
+- **After a coach entry** the athlete or parent sees that part as done and cannot change it (the
+  existing "a part answered by one person is locked for everyone else" rule). They can still answer
+  the parts the coach did not enter, and the rating.
+- Alerts (sharp pain, something hurts, baseline deviations) work exactly as for the athlete's own answer.
+
 ## Who sees what
 
 | Data | Rule |
 |---|---|
 | Health answers: readiness, sleep, soreness, tiredness, mood, stress, pain, the ready-check note | `health.read` on the athlete. Operations and a guardian without health access never receive them (left out of the returned objects, not just hidden). |
 | Effort: RPE, load | `training.read` |
-| Experience: likes, dislikes, rating, notes | The family always sees its own. Owner, admin and operations see every response (`feedback.review`). A coach sees a named response only when the family ticked "show my coach" and it is their session or their athlete; otherwise class totals, and those only from the anonymity minimum (`anonymityMinResponses`, default 3). |
+| Experience: likes, dislikes, rating, notes | The family always sees its own. Owner, admin and operations see every response (`feedback.review`). A coach sees a named response only when the family ticked "show my coach" (or the coach typed the answers in, see "Coach entry") and it is their session or their athlete; otherwise class totals, and those only from the anonymity minimum (`anonymityMinResponses`, default 3). |
 
 On the roster strip, a viewer without health access for an athlete sees "Ready check done" and, when there is a note, a pain answer or an alert, "Has a note for the coach". A coach running a class sees health details only for athletes assigned to them.
 
@@ -154,7 +204,8 @@ Recaps finalized from snapshot version `tw_recap_v2` on carry one line under Ses
 ## Assumptions to confirm
 
 - "Show my coach my name…" is **off** unless ticked, the same default the old feedback form had. Coaches therefore read few named comments; flipping the default is a one-line change but changes a privacy promise families were given.
-- Staff cannot enter a check-in for an athlete (for example a coach asking a 10 year old out loud).
+- A coach may enter a check-in for any athlete they coach, at any age (see "Coach entry"). Limit it to younger athletes if that is the intent.
+- After a coach entry the athlete cannot replace the coach's answers themselves; they ask the coach to correct them.
 - Next-day soreness is asked about the most recent attended session within 10 days, and not when it was earlier the same day.
 - The ready check closes 15 minutes after the session starts (fixed), not at the end of the session.
 

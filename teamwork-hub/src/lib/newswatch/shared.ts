@@ -1,3 +1,4 @@
+import { defineWording } from "@/lib/sample-text";
 /**
  * News watch: labels, wording, settings shape and the pure matching rules. Safe to import from
  * client components (no database). See docs/modules/newswatch.md.
@@ -318,3 +319,13 @@ export function alumniDisplayName(a: { firstName: string; lastName: string; full
   if (a.fullNameOk) return `${first} ${last}`.trim();
   return last ? `${first} ${last.charAt(0).toUpperCase()}.` : first;
 }
+
+export const NEWS_WATCH_WORDING = defineWording({
+  id: "newswatch_optin",
+  label: "News watch opt-in",
+  version: NEWS_WATCH_POLICY_VERSION,
+  isSample: true,
+  shownAt: "Shown to a family before they switch on news watch for an athlete.",
+  source: "src/lib/newswatch/shared.ts",
+  href: "/settings/newswatch",
+});

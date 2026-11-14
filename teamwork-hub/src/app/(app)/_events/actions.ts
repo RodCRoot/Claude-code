@@ -9,6 +9,7 @@ import { requireViewer } from "@/lib/auth/viewer";
 import { UserError as BillingUserError } from "@/lib/billing/errors";
 import { addEventSession, createEvent, setEventStatus, updateEvent, type EventInput, type EventSessionInput } from "@/lib/events/events";
 import { cancelEventRegistration, registerForEvent } from "@/lib/events/registration";
+import { acceptWaitlistOffer, joinEventWaitlist, leaveEventWaitlist, moveWaitlistEntry, removeWaitlistEntry } from "@/lib/events/waitlist";
 import { parseMoneyToMinor } from "@/lib/money";
 
 async function run(paths: string[], fn: () => Promise<ActionState | void>): Promise<ActionState> {
@@ -62,6 +63,7 @@ function eventInput(fd: FormData): EventInput {
     maxAge: intOrNull(fd, "maxAge", "Maximum age"),
     requiredFormTemplateIds: all(fd, "requiredFormTemplateIds").filter(Boolean),
     holdHours: intOrNull(fd, "holdHours", "Unpaid hold"),
+    waitlistOfferHours: intOrNull(fd, "waitlistOfferHours", "Waitlist offer"),
   };
 }
 
@@ -156,4 +158,66 @@ export async function registerForEventAction(_p: ActionState, fd: FormData): Pro
   });
   if (res.ok && done) redirect(`/shop/camps/${eventId}?registered=1`);
   return res;
+}
+
+// --- Waitlist ------------------------------------------------------------------------------------
+
+const WAITLIST_PATHS = ["/shop", "/events", "/today", "/billing"];
+
+/** Family (or staff on a family's behalf): join the line for named athletes. Same checks as registering. */
+export async function joinWaitlistAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  return run(WAITLIST_PATHS, async () => {
+    const v = await requireViewer();
+    const athleteIds = all(fd, "athleteIds").filter(Boolean);
+    if (!athleteIds.length) throw new UserError("Choose who to add to the waitlist.", { athleteIds: "Choose at least one athlete" });
+    const reason = s(fd, "overrideReason");
+    const r = await db.transaction((tx) => joinEventWaitlist(tx, v, { eventId: s(fd, "eventId"), athleteIds, override: reason ? { reason } : null }));
+    const offeredNow = r.positions.some((p) => p === 0);
+    return { ok: true, message: offeredNow ? "Added. A spot was free, so it is offered now: see the offer on this page." : `Added to the waitlist${r.positions.length === 1 ? ` at place ${r.positions[0]}` : ""}. Nothing was charged.` };
+  });
+}
+
+/** Accept an offered spot: creates the normal registration and bill. Nothing is charged here. */
+export async function acceptWaitlistOfferAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  let eventId: string | null = null;
+  let family = false;
+  const res = await run(WAITLIST_PATHS, async () => {
+    const v = await requireViewer();
+    family = v.role === "guardian" || v.role === "athlete";
+    const r = await db.transaction(async (tx) => {
+      const out = await acceptWaitlistOffer(tx, v, { entryId: s(fd, "entryId"), idempotencyKey: s(fd, "key") });
+      return out;
+    });
+    eventId = r.eventId;
+    const inv = r.invoices[0];
+    return { ok: true, message: inv?.status === "paid" ? "Registered and confirmed (nothing to pay)." : `Spot held. Invoice ${inv?.number ?? ""} is open: it is confirmed once the bill is paid.` };
+  });
+  if (res.ok && eventId && family) redirect(`/shop/camps/${eventId}?registered=1`);
+  return res;
+}
+
+/** Family: say no to an offer, or leave the line. Staff with schedule.manage may do the same. */
+export async function leaveWaitlistAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  return run(WAITLIST_PATHS, async () => {
+    const v = await requireViewer();
+    await db.transaction((tx) => leaveEventWaitlist(tx, v, { entryId: s(fd, "entryId") }));
+    return { ok: true, message: "Done. The athlete is off the waitlist." };
+  });
+}
+
+export async function removeWaitlistEntryAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  return run(WAITLIST_PATHS, async () => {
+    const v = await requireViewer();
+    await db.transaction((tx) => removeWaitlistEntry(tx, v, { entryId: s(fd, "entryId"), reason: s(fd, "reason") }));
+    return { ok: true, message: "Removed from the waitlist." };
+  });
+}
+
+export async function moveWaitlistEntryAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  return run(WAITLIST_PATHS, async () => {
+    const v = await requireViewer();
+    const direction = s(fd, "direction") === "up" ? "up" : "down";
+    const r = await db.transaction((tx) => moveWaitlistEntry(tx, v, { entryId: s(fd, "entryId"), direction }));
+    return { ok: true, message: r.moved ? "Moved." : "Already at that end of the line." };
+  });
 }

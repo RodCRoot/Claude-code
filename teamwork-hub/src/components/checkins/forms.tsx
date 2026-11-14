@@ -9,8 +9,36 @@ type Action = (prev: ActionState, fd: FormData) => Promise<ActionState>;
 const input = "h-12 w-full rounded-lg border border-edge bg-surface px-3 text-base";
 const area = "w-full rounded-lg border border-edge bg-surface px-3 py-2 text-base";
 
+/**
+ * Coach entry: a coach is typing in what the athlete said. `replaces` names whose answer is already
+ * there (the athlete, a parent, the kiosk); replacing it needs the tick and a reason.
+ */
+export type CoachEntry = { athleteFirst: string; replaces: string | null };
+
+function CoachEntryNote({ entry }: { entry: CoachEntry }) {
+  return (
+    <div className="space-y-2 rounded-lg border border-edge bg-surface-2 px-3 py-3 text-sm">
+      <p className="text-ink-2">This is saved as entered by you on {entry.athleteFirst}&apos;s behalf, and shown that way to {entry.athleteFirst}, the family and other staff.</p>
+      {entry.replaces ? (
+        <>
+          <label className="flex min-h-11 items-start gap-2 font-medium">
+            <input type="checkbox" name="replace" className="mt-1 size-5" />
+            <span>Replace the answer already given by {entry.replaces}. Their answer is kept on the record and shown as replaced.</span>
+          </label>
+          <label htmlFor="replaceReason" className="block text-xs font-medium text-ink-2">
+            Why are you replacing it?
+          </label>
+          <input id="replaceReason" name="replaceReason" maxLength={200} className={input} />
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 export type ReadyFormProps = {
   action: Action;
+  /** Set when a coach is entering this for the athlete. */
+  entry?: CoachEntry;
   bookingId: string;
   editing: boolean;
   ask: { sleepHours: boolean; fatigue: boolean; mood: boolean; stress: boolean };
@@ -85,8 +113,9 @@ export function ReadyForm(p: ReadyFormProps) {
           {PRE_NOTE.hint}
         </p>
       </div>
+      {p.entry ? <CoachEntryNote entry={p.entry} /> : null}
       <SubmitButton size="lg" className="min-h-14 w-full text-lg" pendingText="Saving…">
-        {p.editing ? "Update ready check" : "I am ready"}
+        {p.entry ? `Save the ready check for ${p.entry.athleteFirst}` : p.editing ? "Update ready check" : "I am ready"}
       </SubmitButton>
       <p className="text-xs text-ink-3">{DISCLAIMER}</p>
     </ActionForm>
@@ -95,6 +124,8 @@ export function ReadyForm(p: ReadyFormProps) {
 
 export type AfterFormProps = {
   action: Action;
+  /** Set when a coach is entering this for the athlete: no rating, no "show my coach" tick. */
+  entry?: CoachEntry;
   bookingId: string;
   show: { effort: boolean; body: boolean; experience: boolean; rating: boolean };
   editing: boolean;
@@ -168,6 +199,7 @@ export function AfterForm(p: AfterFormProps) {
               {POST_NOTE.hint}
             </p>
           </div>
+          {p.entry ? null : (
           <label className="flex min-h-11 items-start gap-2 text-sm">
             <input type="checkbox" name="tellCoach" defaultChecked={d.tellCoach} className="mt-1 size-5" />
             <span>
@@ -176,10 +208,12 @@ export function AfterForm(p: AfterFormProps) {
               <span className="block text-xs text-ink-3">{TELL_COACH.hint}</span>
             </span>
           </label>
+          )}
         </>
       ) : null}
+      {p.entry ? <CoachEntryNote entry={p.entry} /> : null}
       <SubmitButton size="lg" className="min-h-14 w-full text-lg" pendingText="Saving…">
-        {p.editing ? "Update my answers" : "Send"}
+        {p.entry ? `Save the after check for ${p.entry.athleteFirst}` : p.editing ? "Update my answers" : "Send"}
       </SubmitButton>
       {p.show.body ? <p className="text-xs text-ink-3">{DISCLAIMER}</p> : null}
     </ActionForm>

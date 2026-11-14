@@ -109,7 +109,7 @@ Each one is a setting or a small change, not a rebuild. The current behaviour is
 
 ## Open decisions for Rod (owner tools wave)
 1. Check-ins: likes, dislikes and rating reach the coach with the athlete's name only if the athlete ticks "show my coach" (the old form's promise). Make named the default?
-2. Check-ins: should a coach be able to fill one in on behalf of a young athlete?
+2. Check-ins: should a coach be able to fill one in on behalf of a young athlete? **Built (2026-11-14):** a coach with access to the athlete can, at any age, labelled "entered by coach"; see `docs/modules/checkins.md`, "Coach entry". Still open: limit it to younger athletes?
 3. News watch: the Bedford Times-Mail is effectively not covered by free feeds. Paid news service, or add Bedford clips by hand?
 4. News watch: the news search feed is a third-party service; review its terms before real use.
 5. Wins: consent wording, caption templates and XP values are sample values.

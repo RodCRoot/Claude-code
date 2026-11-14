@@ -3,12 +3,16 @@ import { StableForm, StableSubmit } from "@/app/(app)/messages/_components/stabl
 import { Card, CardBody, PageHeader } from "@/components/ui";
 import { requireCap } from "@/lib/auth/viewer";
 import { InquiryFields } from "@/app/(public)/inquire/_components/inquiry-fields";
+import { db } from "@/db";
+import { leadLists } from "@/lib/crm/lead-vocab";
+import { vocabOverrides } from "@/lib/zenplanner/vocab";
 import { createLeadAction } from "../actions";
 
 export const metadata = { title: "Add lead" };
 
 export default async function NewLeadPage() {
-  await requireCap("crm.manage");
+  const v = await requireCap("crm.manage");
+  const lists = leadLists(await vocabOverrides(db, v.orgId));
   return (
     <>
       <PageHeader
@@ -19,7 +23,7 @@ export default async function NewLeadPage() {
       <Card className="max-w-3xl">
         <CardBody className="pt-5">
           <StableForm action={createLeadAction}>
-            <InquiryFields staff />
+            <InquiryFields staff lists={lists} />
             <div className="mt-6 flex items-center gap-3">
               <StableSubmit>Create lead</StableSubmit>
               <Link href="/people/leads" className="text-sm text-ink-3 underline">

@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gte, inArray, lt, lte, ne } from "drizzle-orm";
 import type { Tx } from "@/db";
-import { athletes, bodyRegionReports, bookings, people, scheduleSessions, sessionCheckins, sessionFeedback, tasks, users, type CheckinAlertReason, type CheckinChip } from "@/db/schema";
+import { athletes, bodyRegionReports, bookings, people, scheduleSessions, sessionCheckins, sessionFeedback, tasks, users, type CheckinAlertReason, type CheckinAnsweredBy, type CheckinChip } from "@/db/schema";
 import { UserError } from "@/lib/actions";
 import { accessibleAthleteIds, athleteCapabilities, AuthzError, can, coachAthleteIds, isStaff, type Viewer } from "@/lib/authz/policy";
 import { audit } from "@/lib/audit";
@@ -10,7 +10,7 @@ import { regionLabel } from "@/lib/science/body-regions";
 import { srpeLoad } from "@/lib/science/formulas";
 import { localDayBounds, localYmd } from "@/lib/time";
 import { baselineV1, chipCounts, completionV1, farFromBaseline, intensityGapV1, meanOrNull, type Baseline } from "./baseline";
-import { afterTarget, readyTarget } from "./core";
+import { afterTarget, enteredByCoach, readyTarget, sharedWithCoach } from "./core";
 import { checkinSettings } from "./settings";
 
 /**
@@ -99,6 +99,12 @@ export type ReadinessRow = {
   bookingId: string;
   athleteId: string;
   done: boolean;
+  /** "<name>" when a coach typed the ready check in for the athlete (shown to every staff viewer; it is not an answer). */
+  enteredByCoach: string | null;
+  /** A coach-entered answer replaced the athlete's own; the earlier answer is on the response page. */
+  replaced: boolean;
+  /** This viewer may enter (or correct) a check-in for this athlete from the roster. */
+  canCoachEnter: boolean;
   /** For viewers WITHOUT health access: something in the ready check is meant for the coach. */
   hasNote: boolean;
   /** Null without health access for this athlete, or when no ready check was answered. */
@@ -148,13 +154,14 @@ export async function sessionReadiness(tx: Tx, v: Viewer, sessionId: string): Pr
   const pre = new Map(checks.filter((c) => c.phase === "pre").map((c) => [c.bookingId, c]));
   const healthIds = await accessibleAthleteIds(tx, v, "health.read");
   const trainIds = await accessibleAthleteIds(tx, v, "training.read");
+  const writeIds = await accessibleAthleteIds(tx, v, "training.write");
   const sees = (ids: string[] | "all", a: string) => ids === "all" || ids.includes(a);
   const spots = checks.length ? await tx.select().from(bodyRegionReports).where(and(eq(bodyRegionReports.orgId, v.orgId), inArray(bodyRegionReports.sourceCheckinId, checks.map((c) => c.id)))).orderBy(asc(bodyRegionReports.reportedAt)) : [];
   const rows: ReadinessRow[] = [];
   const bopts = { windowDays: settings.baselineWindowDays, minAnswers: settings.baselineMinAnswers };
   for (const r of roster) {
     const c = pre.get(r.bookingId);
-    const row: ReadinessRow = { bookingId: r.bookingId, athleteId: r.athleteId, done: !!c, hasNote: !!c && (!!c.note || c.hurt === true || c.alertReasons.length > 0), health: null };
+    const row: ReadinessRow = { bookingId: r.bookingId, athleteId: r.athleteId, done: !!c, enteredByCoach: enteredByCoach(c), replaced: (c?.replacements.length ?? 0) > 0, canCoachEnter: (v.role === "coach" || v.role === "owner" || v.role === "admin") && sees(writeIds, r.athleteId), hasNote: !!c && (!!c.note || c.hurt === true || c.alertReasons.length > 0), health: null };
     if (c && sees(healthIds, r.athleteId)) {
       const history = await tx
         .select({ at: scheduleSessions.startsAt, readiness: sessionCheckins.readiness, soreness: sessionCheckins.soreness })
@@ -216,6 +223,9 @@ export type TrendPoint = {
   title: string;
   readyDone: boolean;
   afterDone: boolean;
+  /** Coach names when a coach typed in the ready check / any part of the after check. */
+  readyEnteredByCoach: string | null;
+  afterEnteredByCoach: string | null;
   // health (null without access or when unanswered)
   readiness: number | null;
   sleepQuality: number | null;
@@ -288,7 +298,8 @@ export async function athleteCheckinTrends(tx: Tx, v: Viewer, athleteId: string,
   const sorenessSeries = series((c) => c.soreness, pre);
   const sleepSeries = series((c) => c.sleepQuality, pre);
   const rpeSeries = series((c) => c.rpe, post);
-  const shared = (c?: { tellCoach: boolean }) => access.experience === "all" || (access.experience === "shared" && !!c?.tellCoach);
+  // The rating (session_feedback) follows the family's own tick; likes and dislikes are also shared when a coach typed them in.
+  const shared = (c?: { tellCoach: boolean; answeredBy?: CheckinAnsweredBy }) => access.experience === "all" || (access.experience === "shared" && !!c && (c.tellCoach || c.answeredBy?.experience?.role === "coach"));
 
   const points: TrendPoint[] = rows.map((r) => {
     const a = pre.get(r.bookingId);
@@ -305,6 +316,8 @@ export async function athleteCheckinTrends(tx: Tx, v: Viewer, athleteId: string,
       title: r.title,
       readyDone: !!a,
       afterDone: !!b,
+      readyEnteredByCoach: enteredByCoach(a),
+      afterEnteredByCoach: enteredByCoach(b),
       readiness: access.health ? (a?.readiness ?? null) : null,
       sleepQuality: access.health ? (a?.sleepQuality ?? null) : null,
       sleepHours: access.health ? (a?.sleepHours ?? null) : null,
@@ -450,7 +463,7 @@ export async function checkinInsights(tx: Tx, orgId: string, scope: InsightScope
     if (opts.withComments)
       for (const c of posts) {
         // A coach reads a comment only when the family chose to share it; reviewers read all.
-        if (!opts.reviewer && !c.tellCoach) continue;
+        if (!opts.reviewer && !sharedWithCoach(c)) continue;
         const r = g.rows.find((x) => x.bookingId === c.bookingId)!;
         const base = { checkinId: c.id, date: localYmd(r.startsAt, r.timezone), athleteName: names.get(c.athleteId) ?? null };
         if (c.likedText) comments.push({ ...base, kind: "liked", text: c.likedText });
@@ -518,9 +531,9 @@ async function loadCheckin(tx: Tx, orgId: string, id: string) {
 }
 
 /** May this staff member read the experience answers of this response with the athlete's name? */
-async function experienceVisible(tx: Tx, v: Viewer, c: { tellCoach: boolean; athleteId: string }, session: { coachUserId: string | null }): Promise<boolean> {
+async function experienceVisible(tx: Tx, v: Viewer, c: { tellCoach: boolean; athleteId: string; answeredBy: CheckinAnsweredBy }, session: { coachUserId: string | null }): Promise<boolean> {
   if (can(v, "feedback.review")) return true;
-  if (v.role !== "coach" || !c.tellCoach) return false;
+  if (v.role !== "coach" || !sharedWithCoach(c)) return false;
   return session.coachUserId === v.userId || (await coachAthleteIds(tx, v)).includes(c.athleteId);
 }
 
@@ -551,6 +564,19 @@ export async function checkinDetail(tx: Tx, v: Viewer, id: string) {
     coachName: r.coach,
     questionSetVersion: c.questionSetVersion,
     via: (c.source === "kiosk" ? "kiosk" : c.loggedByParent ? "parent" : "app") as "kiosk" | "parent" | "app",
+    enteredByCoach: enteredByCoach(c),
+    /** Which parts a coach typed in, by whom and when. */
+    coachEntered: (Object.entries(c.answeredBy) as [string, NonNullable<CheckinAnsweredBy[keyof CheckinAnsweredBy]>][]).filter(([, a]) => a.role === "coach").map(([section, a]) => ({ section, name: a.name ?? "a coach", at: a.at })),
+    /** Every time a coach-entered answer replaced someone's own. The earlier values are health or training data and follow those rules. */
+    replacements: c.replacements.map((x) => ({
+      section: x.section,
+      at: x.at,
+      byName: x.byName,
+      reason: x.reason,
+      previousBy: x.previous.role === "guardian" ? "a parent" : x.previous.role === "kiosk" ? "the athlete at the kiosk" : x.previous.role === "coach" ? "a coach" : "the athlete",
+      previousAt: x.previous.at,
+      values: (x.section === "effort" ? effort : health) ? x.values : null,
+    })),
     health: health
       ? { readiness: c.readiness, sleepQuality: c.sleepQuality, sleepHours: c.sleepHours, soreness: c.soreness, fatigue: c.fatigue, mood: c.mood, stress: c.stress, priorSoreness: c.priorSoreness, hurt: c.hurt, hurtStartedInSession: c.hurtStartedInSession, spot: spot ? spotView(spot) : null, note: c.phase === "pre" ? c.note : null, reasons: c.alertReasons.filter((x) => x !== "disliked_comment"), prefilled: c.prefilled }
       : null,

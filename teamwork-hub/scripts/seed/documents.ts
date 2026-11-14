@@ -1,3 +1,4 @@
+import { SEEDED_AS_SAMPLE } from "../../src/lib/sample-text";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { eq, sql } from "drizzle-orm";
@@ -148,7 +149,7 @@ export async function seedDocuments(ctx: SeedCtx) {
     const content = { title, bodyMarkdown, fields, signers };
     const [v] = await tx
       .insert(formTemplateVersions)
-      .values({ templateId, version, ...content, contentHash: contentHash(content), isSampleText: true, status: "draft" })
+      .values({ templateId, version, ...content, contentHash: contentHash(content), isSampleText: SEEDED_AS_SAMPLE, status: "draft" })
       .returning();
     return v;
   }

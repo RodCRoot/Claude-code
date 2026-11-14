@@ -1,3 +1,4 @@
+import { leadSport } from "@/lib/crm/lead-vocab";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/db";
@@ -62,7 +63,7 @@ export default async function ConvertLeadPage({ params }: { params: Promise<{ id
                 <p className="text-sm text-ink-3">Date of birth on file: {fmtDate(ap.dateOfBirth)}</p>
               )}
               <Field label="Primary sport" htmlFor="sport">
-                <Input id="sport" name="sport" defaultValue={pv.lead.interest ?? ""} maxLength={80} />
+                <Input id="sport" name="sport" defaultValue={leadSport(pv.lead) ?? ""} maxLength={80} />
               </Field>
             </div>
           </CardBody>

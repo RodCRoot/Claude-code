@@ -5,6 +5,7 @@ import { localDayBounds } from "@/lib/time";
 import { membershipAuditSweep } from "@/lib/member-ops/membership-audit";
 import { RETENTION_REPORTS } from "@/lib/retention/reports";
 import { GROWTH_REPORTS } from "@/lib/growth/reports";
+import { LEAD_REPORTS } from "@/lib/crm/lead-report";
 import { CHECKIN_REPORTS } from "@/lib/checkins/reports";
 
 export type ReportColumn = { key: string; label: string; kind?: "money" | "int" | "pct" | "date" | "datetime" | "text" };
@@ -538,6 +539,7 @@ export const REPORTS: ReportDef[] = [
   },
   ...RETENTION_REPORTS,
   ...GROWTH_REPORTS,
+  ...LEAD_REPORTS,
   ...CHECKIN_REPORTS,
 ];
 

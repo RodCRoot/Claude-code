@@ -13,7 +13,8 @@ import { ageLabel, paymentLabel, staffEventDetail } from "@/lib/events/queries";
 import { releaseExpiredHolds } from "@/lib/events/registration";
 import { formatMoney } from "@/lib/money";
 import { fmt, fmtDate, fmtTime } from "@/lib/time";
-import { addEventSessionAction, cancelRegistrationAction, setEventStatusAction, staffRegisterAction } from "../../_events/actions";
+import { addEventSessionAction, cancelRegistrationAction, joinWaitlistAction, moveWaitlistEntryAction, removeWaitlistEntryAction, setEventStatusAction, staffRegisterAction, acceptWaitlistOfferAction } from "../../_events/actions";
+import { staffWaitlist } from "@/lib/events/waitlist";
 import { EventForm } from "../_form";
 
 export const metadata = { title: "Event" };
@@ -43,6 +44,9 @@ export default async function EventDetailPage({ params, searchParams }: { params
       : Promise.resolve([]),
   ]);
   const ages = ageLabel(e);
+  const waitlist = await staffWaitlist(db, v, e.id);
+  const line = waitlist.filter((w) => w.status === "waiting" || w.status === "offered");
+  const lineIds = new Set(line.map((w) => w.athleteId));
 
   return (
     <>
@@ -193,6 +197,102 @@ export default async function EventDetailPage({ params, searchParams }: { params
             </details>
           </CardBody>
         ) : null}
+      </Card>
+
+      <Card className="mb-5" id="waitlist">
+        <CardHeader title="Waitlist" kicker={line.length ? `${counts.waiting} waiting, ${counts.offered} offered a spot` : `Offers last ${e.waitlistOfferHours} hours`} />
+        {line.length === 0 ? (
+          <CardBody>
+            <p className="text-sm text-ink-2">Nobody is waiting. When the event is full, families can join the waitlist from the camp page, and you can add an athlete below.</p>
+          </CardBody>
+        ) : (
+          <ul className="divide-y divide-edge">
+            {line.map((w) => (
+              <li key={w.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 text-sm" data-testid="waitlist-row">
+                <span className="min-w-0">
+                  <Link href={`/people/${w.personId}`} className="font-semibold hover:underline">
+                    {w.athleteName}
+                  </Link>
+                  <span className="block text-xs text-ink-2">
+                    {w.payerName} · joined {fmt(w.joinedAt, "MMM d h:mm a", tz)}
+                    {w.addedBy ? ` · added by ${w.addedBy}` : ""}
+                  </span>
+                </span>
+                <span className="flex flex-wrap items-center gap-2">
+                  {w.status === "offered" ? (
+                    <Badge variant="green">Offered until {w.offerExpiresAt ? fmt(w.offerExpiresAt, "MMM d h:mm a", tz) : ""}</Badge>
+                  ) : (
+                    <Badge variant="yellow">Place {w.place}</Badge>
+                  )}
+                  {w.status === "waiting" ? (
+                    <>
+                      <ActionForm action={moveWaitlistEntryAction}>
+                        <input type="hidden" name="entryId" value={w.id} />
+                        <SubmitButton name="direction" value="up" variant="outline" size="sm" pendingText="…">
+                          Move up<span className="sr-only"> {w.athleteName}</span>
+                        </SubmitButton>
+                      </ActionForm>
+                      <ActionForm action={moveWaitlistEntryAction}>
+                        <input type="hidden" name="entryId" value={w.id} />
+                        <SubmitButton name="direction" value="down" variant="outline" size="sm" pendingText="…">
+                          Move down<span className="sr-only"> {w.athleteName}</span>
+                        </SubmitButton>
+                      </ActionForm>
+                    </>
+                  ) : canRegister ? (
+                    <ActionForm action={acceptWaitlistOfferAction}>
+                      <input type="hidden" name="entryId" value={w.id} />
+                      <input type="hidden" name="key" value={randomUUID()} />
+                      <SubmitButton size="sm" pendingText="Registering…">
+                        Accept for the family<span className="sr-only"> ({w.athleteName})</span>
+                      </SubmitButton>
+                    </ActionForm>
+                  ) : null}
+                  <ActionForm action={removeWaitlistEntryAction} className="flex items-center gap-1">
+                    <input type="hidden" name="entryId" value={w.id} />
+                    <label className="sr-only" htmlFor={`wl-reason-${w.id}`}>
+                      Reason for removing {w.athleteName}
+                    </label>
+                    <Input id={`wl-reason-${w.id}`} name="reason" placeholder="Reason" maxLength={200} className="h-8 w-32 text-xs" />
+                    <SubmitButton variant="ghost" size="sm" pendingText="…">
+                      Remove<span className="sr-only"> {w.athleteName}</span>
+                    </SubmitButton>
+                  </ActionForm>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <CardBody className="border-t border-edge">
+          <p className="text-xs text-ink-3">
+            When a held or confirmed spot is released, the first athlete in line is offered it for {e.waitlistOfferHours} hours. The family sees the offer on the camp page; no message is sent and nothing is charged. Accepting creates the usual registration and invoice. An offer that is not answered passes to the next in line.
+          </p>
+          {canRegister && d.spotsLeft === 0 ? (
+            <ActionForm action={joinWaitlistAction} className="mt-3 flex flex-wrap items-end gap-2" resetOnSuccess>
+              <input type="hidden" name="eventId" value={e.id} />
+              <Field label="Add an athlete to the waitlist" htmlFor="wl-athlete">
+                <Select id="wl-athlete" name="athleteIds" required defaultValue="" className="h-11">
+                  <option value="" disabled>
+                    Choose an athlete
+                  </option>
+                  {roster
+                    .filter((a) => !liveIds.has(a.id) && !lineIds.has(a.id))
+                    .map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.last}, {a.first}
+                      </option>
+                    ))}
+                </Select>
+              </Field>
+              <Field label="Override age or forms (reason)" htmlFor="wl-override">
+                <Input id="wl-override" name="overrideReason" maxLength={200} className="h-11" />
+              </Field>
+              <SubmitButton variant="secondary" pendingText="Adding…">
+                Add to waitlist
+              </SubmitButton>
+            </ActionForm>
+          ) : null}
+        </CardBody>
       </Card>
 
       <div className="grid gap-5 lg:grid-cols-2">

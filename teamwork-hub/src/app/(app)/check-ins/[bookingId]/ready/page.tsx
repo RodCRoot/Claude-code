@@ -41,6 +41,11 @@ export default async function ReadyCheckPage({ params }: { params: Promise<{ boo
         {!t.canWrite ? (
           <Callout tone={t.state === "done" ? "ok" : "info"} title={t.state === "done" ? "Ready check done" : undefined}>
             {t.state === "not_open_yet" ? `The ready check opens ${fmt(t.window.opensAt, "EEE h:mm a", tz)}, a few hours before the session.` : READY_STATE_TEXT[t.state as keyof typeof READY_STATE_TEXT]}
+            {t.enteredByCoach ? (
+              <span className="mt-1 block" data-testid="entered-by-coach">
+                Entered by coach {t.enteredByCoach} from what {t.self ? "you" : t.firstName} told them at the gym.{t.replacedByCoach ? " It replaced an earlier answer, which is kept on the record." : ""}
+              </span>
+            ) : null}
           </Callout>
         ) : (
           <Card>

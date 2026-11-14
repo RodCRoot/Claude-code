@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Tx } from "@/db";
-import { athletes, bookings, eventRegistrations, events, eventSessions, invoices, people, scheduleSessions } from "@/db/schema";
+import { athletes, bookings, eventRegistrations, events, eventSessions, eventWaitlistEntries, invoices, people, scheduleSessions } from "@/db/schema";
 import { audit, type AuditActor } from "@/lib/audit";
 import { billingTask } from "@/lib/billing/tasks";
 
@@ -18,13 +18,21 @@ export async function lockEvent(tx: Tx, orgId: string, eventId: string): Promise
   return e ?? null;
 }
 
-/** Seats taken: confirmed registrations plus held ones (expired holds are released by `releaseExpiredHolds`). */
+/**
+ * Seats taken: confirmed registrations, held ones (expired holds are released by `releaseExpiredHolds`),
+ * and spots currently offered to someone on the waitlist (an offer reserves its seat until it is
+ * accepted, declined or runs out).
+ */
 export async function seatsTaken(tx: Tx, eventId: string): Promise<number> {
   const [r] = await tx
     .select({ n: sql<number>`count(*)::int` })
     .from(eventRegistrations)
     .where(and(eq(eventRegistrations.eventId, eventId), inArray(eventRegistrations.status, ["held", "confirmed"])));
-  return r?.n ?? 0;
+  const [o] = await tx
+    .select({ n: sql<number>`count(*)::int` })
+    .from(eventWaitlistEntries)
+    .where(and(eq(eventWaitlistEntries.eventId, eventId), eq(eventWaitlistEntries.status, "offered")));
+  return (r?.n ?? 0) + (o?.n ?? 0);
 }
 
 export async function eventSessionRows(tx: Tx, eventId: string) {

@@ -1,3 +1,4 @@
+import { leadSport } from "./lead-vocab";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Tx } from "@/db";
@@ -207,7 +208,7 @@ export async function convertLead(tx: Tx, v: Viewer, input: z.input<typeof conve
   } else {
     const [a] = await tx
       .insert(athletes)
-      .values({ orgId: v.orgId, personId: ath.personId, sport: d.sport ?? lead.interest ?? null, active: true, isDemo: lead.isDemo })
+      .values({ orgId: v.orgId, personId: ath.personId, sport: d.sport ?? leadSport(lead) ?? null, active: true, isDemo: lead.isDemo })
       .returning();
     athleteId = a.id;
   }

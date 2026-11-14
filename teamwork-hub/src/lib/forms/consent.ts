@@ -1,3 +1,4 @@
+import { defineWording } from "@/lib/sample-text";
 /**
  * The exact electronic-signature consent statement shown next to the signing
  * checkbox. It is stored verbatim in every signature row, so changing this text
@@ -29,3 +30,13 @@ export const IDENTITY_NOTICE =
   "witness. The method used is recorded with the signature and printed on the completed PDF. Identity checks " +
   "reduce the risk of someone signing in another person's name; they do not by themselves make a document legally " +
   "enforceable.";
+
+export const ESIGN_CONSENT_WORDING = defineWording({
+  id: "esign_consent",
+  label: "Electronic signature consent",
+  version: ESIGN_CONSENT_VERSION,
+  isSample: true,
+  shownAt: "Shown next to the signing checkbox on every form and stored with every signature.",
+  source: "src/lib/forms/consent.ts",
+  href: "/documents",
+});

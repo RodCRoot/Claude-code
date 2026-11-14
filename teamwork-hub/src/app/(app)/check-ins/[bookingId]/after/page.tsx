@@ -49,6 +49,13 @@ export default async function AfterCheckPage({ params }: { params: Promise<{ boo
             {t.feedback.rating} of 5 ({ratingLabel}). {t.feedback.mine ? "A rating can be changed for 24 hours after it is left." : "It was left by another person on the account."} One rating per session.
           </Callout>
         ) : null}
+        {t.enteredByCoach ? (
+          <Callout tone="info" title={`Entered by coach ${t.enteredByCoach}`}>
+            <span data-testid="entered-by-coach">
+              Part of this after check was entered by coach {t.enteredByCoach} from what {t.self ? "you" : t.firstName} told them at the gym.{t.replacedByCoach ? " It replaced an earlier answer, which is kept on the record." : ""} Those answers are not shown again below.
+            </span>
+          </Callout>
+        ) : null}
         {t.state !== "open" ? (
           <Callout tone="info">{AFTER_STATE_TEXT[t.state]}</Callout>
         ) : (

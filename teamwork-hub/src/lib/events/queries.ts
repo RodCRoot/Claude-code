@@ -1,7 +1,7 @@
 import Papa from "papaparse";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Tx } from "@/db";
-import { athletes, eventRegistrations, events, eventSessions, formTemplates, invoices, payerAccounts, people, scheduleSessions, users, type EventRegistrationStatus } from "@/db/schema";
+import { athletes, eventRegistrations, events, eventSessions, eventWaitlistEntries, formTemplates, invoices, payerAccounts, people, scheduleSessions, users, type EventRegistrationStatus } from "@/db/schema";
 import { accessibleAthleteIds, assertCan, athleteCapabilities, can, payerAccountIdsFor, type Viewer } from "@/lib/authz/policy";
 import { int } from "@/lib/billing/util";
 import { CSV_FORMULA_ESCAPE } from "@/lib/csv";
@@ -12,6 +12,7 @@ import { fmt, localYmd } from "@/lib/time";
 import type { EventRow } from "./confirm";
 import { eventPriceOn } from "./pricing";
 import { eventEligibilitySpec, registrationClosedReason } from "./registration";
+import { familyWaitlistEntries, type FamilyWaitlistEntry } from "./waitlist";
 
 export type EventSessionView = { id: string; startsAt: Date; endsAt: Date; status: string };
 
@@ -28,7 +29,8 @@ async function sessionsByEvent(tx: Tx, eventIds: string[]): Promise<Map<string, 
   return out;
 }
 
-export type EventCounts = { confirmed: number; held: number; cancelled: number; expired: number; heldMinor: number; paidMinor: number };
+/** `offered` = spots reserved by a live waitlist offer; `waiting` = athletes still in line. */
+export type EventCounts = { confirmed: number; held: number; cancelled: number; expired: number; heldMinor: number; paidMinor: number; offered: number; waiting: number };
 
 async function countsByEvent(tx: Tx, orgId: string, eventIds: string[]): Promise<Map<string, EventCounts>> {
   const out = new Map<string, EventCounts>();
@@ -47,11 +49,21 @@ async function countsByEvent(tx: Tx, orgId: string, eventIds: string[]): Promise
     .leftJoin(invoices, eq(invoices.id, eventRegistrations.invoiceId))
     .where(and(eq(eventRegistrations.orgId, orgId), inArray(eventRegistrations.eventId, eventIds)))
     .groupBy(eventRegistrations.eventId);
-  for (const r of rows) out.set(r.eventId, { confirmed: r.confirmed, held: r.held, cancelled: r.cancelled, expired: r.expired, heldMinor: int(r.heldMinor), paidMinor: int(r.paidMinor) });
+  for (const r of rows) out.set(r.eventId, { confirmed: r.confirmed, held: r.held, cancelled: r.cancelled, expired: r.expired, heldMinor: int(r.heldMinor), paidMinor: int(r.paidMinor), offered: 0, waiting: 0 });
+  const line = await tx
+    .select({
+      eventId: eventWaitlistEntries.eventId,
+      offered: sql<number>`count(*) filter (where ${eventWaitlistEntries.status} = 'offered')::int`,
+      waiting: sql<number>`count(*) filter (where ${eventWaitlistEntries.status} = 'waiting')::int`,
+    })
+    .from(eventWaitlistEntries)
+    .where(and(eq(eventWaitlistEntries.orgId, orgId), inArray(eventWaitlistEntries.eventId, eventIds)))
+    .groupBy(eventWaitlistEntries.eventId);
+  for (const l of line) out.set(l.eventId, { ...(out.get(l.eventId) ?? NO_COUNTS), offered: l.offered, waiting: l.waiting });
   return out;
 }
 
-const NO_COUNTS: EventCounts = { confirmed: 0, held: 0, cancelled: 0, expired: 0, heldMinor: 0, paidMinor: 0 };
+const NO_COUNTS: EventCounts = { confirmed: 0, held: 0, cancelled: 0, expired: 0, heldMinor: 0, paidMinor: 0, offered: 0, waiting: 0 };
 
 /** "Ages 10 to 14", "Ages 10 and up", "Ages 14 and under" or null. */
 export function ageLabel(e: Pick<EventRow, "minAge" | "maxAge">): string | null {
@@ -89,6 +101,9 @@ export type FamilyEvent = {
   /** Null when registration is open. */
   closedReason: string | null;
   holdHours: number;
+  waitlistOfferHours: number;
+  /** The viewer's own athletes on this event's waitlist (waiting or offered a spot). */
+  waitlist: FamilyWaitlistEntry[];
   mine: { athleteId: string; first: string; status: EventRegistrationStatus; invoiceId: string | null; holdExpiresAt: Date | null }[];
 };
 
@@ -117,6 +132,7 @@ async function toFamilyEvents(tx: Tx, v: Viewer, rows: EventRow[], now: Date): P
             ),
           )
       : [];
+  const myWaitlist = await familyWaitlistEntries(tx, v, ids, athleteIds);
   const today = localYmd(now, tz);
   return rows
     .map((e) => {
@@ -139,9 +155,11 @@ async function toFamilyEvents(tx: Tx, v: Viewer, rows: EventRow[], now: Date): P
         siblingDiscountPercent: e.siblingDiscountPercent,
         currency: e.currency,
         capacity: e.capacity,
-        spotsLeft: Math.max(0, e.capacity - c.confirmed - c.held),
+        spotsLeft: Math.max(0, e.capacity - c.confirmed - c.held - c.offered),
         closedReason: registrationClosedReason(e, sessions[0]?.startsAt ?? null, now, tz),
         holdHours: e.holdHours,
+        waitlistOfferHours: e.waitlistOfferHours,
+        waitlist: myWaitlist.filter((w) => w.eventId === e.id),
         mine: mineRows.filter((m) => m.eventId === e.id).map((m) => ({ athleteId: m.athleteId, first: m.first, status: m.status, invoiceId: viewablePayers.includes(m.payerAccountId) ? m.invoiceId : null, holdExpiresAt: m.holdExpiresAt })),
       };
     })
@@ -168,10 +186,16 @@ export type AthleteOption = {
   name: string;
   first: string;
   /** registered = paid and confirmed; held = spot held, invoice unpaid; open = may register now; blocked = cannot, see reasons. */
-  state: "registered" | "held" | "open" | "blocked";
+  state: "registered" | "held" | "open" | "blocked" | "waitlisted" | "offered";
   reasons: string[];
   invoiceId: string | null;
   holdExpiresAt: Date | null;
+  /** Waitlist entry (states waitlisted and offered): its id, place in line, and when an offer runs out. */
+  entryId?: string;
+  place?: number | null;
+  offerExpiresAt?: Date | null;
+  /** This login may accept or leave for the athlete (same rule as registering: pay and book). */
+  canAct?: boolean;
 };
 
 /** One published (or closed, if the family is already registered) event with the viewer's athletes and what each may do. */
@@ -179,7 +203,7 @@ export async function familyEventDetail(tx: Tx, v: Viewer, eventId: string, now 
   const [row] = await tx.select().from(events).where(and(eq(events.id, eventId), eq(events.orgId, v.orgId)));
   if (!row || row.status === "draft") return null;
   const [event] = await toFamilyEvents(tx, v, [row], now);
-  if (row.status === "closed" && !event.mine.length) return null;
+  if (row.status === "closed" && !event.mine.length && !event.waitlist.length) return null;
 
   const payable = await shopAthletes(tx, v);
   const visible = await accessibleAthleteIds(tx, v, "profile.read");
@@ -204,6 +228,11 @@ export async function familyEventDetail(tx: Tx, v: Viewer, eventId: string, now 
     const reasons: string[] = [];
     const canPay = payable.some((p) => p.athleteId === a.id);
     const canBook = (await athleteCapabilities(tx, v, a.id)).has("booking.create");
+    const entry = event.waitlist.find((w) => w.athleteId === a.id);
+    if (entry) {
+      out.push({ athleteId: a.id, name, first: a.first, state: entry.status === "offered" ? "offered" : "waitlisted", reasons: [], invoiceId: null, holdExpiresAt: null, entryId: entry.id, place: entry.place, offerExpiresAt: entry.offerExpiresAt, canAct: canPay && canBook });
+      continue;
+    }
     if (!canPay) reasons.push(`Your login can view ${a.first}'s account but cannot pay on it. The adult who pays on the billing account can register ${a.first}, or the front desk can help.`);
     else if (!canBook) reasons.push(`Your login is not set up to book for ${a.first}. The front desk can help.`);
     else if (firstStart) {
@@ -252,7 +281,7 @@ export async function listStaffEvents(tx: Tx, v: Viewer, now = new Date()): Prom
     const sessions = sess.get(event.id) ?? [];
     const c = counts.get(event.id) ?? NO_COUNTS;
     const refundedMinor = refunds.get(event.id) ?? 0;
-    return { event, sessions, dates: dateRangeLabel(sessions.filter((s) => s.status === "scheduled"), tz), counts: c, spotsLeft: Math.max(0, event.capacity - c.confirmed - c.held), refundedMinor, netRevenueMinor: c.paidMinor - refundedMinor, upcoming: event.status !== "draft" && sessions.some((s) => s.status === "scheduled" && s.endsAt > now) };
+    return { event, sessions, dates: dateRangeLabel(sessions.filter((s) => s.status === "scheduled"), tz), counts: c, spotsLeft: Math.max(0, event.capacity - c.confirmed - c.held - c.offered), refundedMinor, netRevenueMinor: c.paidMinor - refundedMinor, upcoming: event.status !== "draft" && sessions.some((s) => s.status === "scheduled" && s.endsAt > now) };
   });
   rows.sort((a, b) => (b.sessions[0]?.startsAt.getTime() ?? 0) - (a.sessions[0]?.startsAt.getTime() ?? 0));
   return { rows, tz };
@@ -339,7 +368,7 @@ export async function staffEventDetail(tx: Tx, v: Viewer, eventId: string) {
     sessions,
     dates: dateRangeLabel(sessions.filter((s) => s.status === "scheduled"), tz),
     counts: c,
-    spotsLeft: Math.max(0, event.capacity - c.confirmed - c.held),
+    spotsLeft: Math.max(0, event.capacity - c.confirmed - c.held - c.offered),
     refundedMinor,
     netRevenueMinor: c.paidMinor - refundedMinor,
     registrations,

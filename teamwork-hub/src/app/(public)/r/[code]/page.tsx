@@ -1,3 +1,4 @@
+import { leadLists } from "@/lib/crm/lead-vocab";
 import { StableForm, StableSubmit } from "@/app/(app)/messages/_components/stable-form";
 import { InquiryFields } from "@/app/(public)/inquire/_components/inquiry-fields";
 import { Callout, Card, CardBody } from "@/components/ui";
@@ -51,7 +52,7 @@ export default async function ReferralLanding({ params }: { params: Promise<{ co
               <label htmlFor="website">Website</label>
               <input id="website" name="website" type="text" tabIndex={-1} autoComplete="off" />
             </div>
-            <InquiryFields />
+            <InquiryFields lists={leadLists()} />
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <StableSubmit pendingText="Sending…" size="lg">
                 Send inquiry

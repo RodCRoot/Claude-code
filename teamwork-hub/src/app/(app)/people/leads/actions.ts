@@ -17,6 +17,7 @@ import {
   completeLeadTask,
   markContacted,
   resolveDuplicateFlag,
+  updateLeadMarketing,
   scheduleAssessment,
   setLeadTag,
 } from "@/lib/crm/leads";
@@ -32,7 +33,7 @@ const refresh = (leadId?: string) => {
 export const createLeadAction = domainAction(async (_p: ActionState, fd: FormData): Promise<ActionState> => {
   const v = await requireViewer();
   assertCan(v, "crm.manage");
-  const source = str(fd, "source") || "staff";
+  const source = "staff";
   const r = await db.transaction((tx) =>
     createLeadFromInquiry(
       tx,
@@ -48,6 +49,11 @@ export const createLeadAction = domainAction(async (_p: ActionState, fd: FormDat
         athleteAge: str(fd, "athleteAge"),
         sport: str(fd, "sport"),
         goals: str(fd, "goals"),
+        heardFrom: str(fd, "heardFrom"),
+        leadSource: str(fd, "leadSource"),
+        leadInterest: str(fd, "leadInterest"),
+        interestOther: str(fd, "interestOther"),
+        priority: str(fd, "priority"),
         preferredTimes: strs(fd, "preferredTimes").filter((t): t is (typeof PREFERRED_TIMES)[number] => (PREFERRED_TIMES as readonly string[]).includes(t)),
         consentEmail: bool(fd, "consentEmail"),
         consentSms: bool(fd, "consentSms"),
@@ -195,4 +201,20 @@ export const deleteStageAction = domainAction(async (_p: ActionState, fd: FormDa
   await db.transaction((tx) => deleteStage(tx, v, str(fd, "stageId")));
   refresh();
   return { ok: true, message: "Stage deleted." };
+});
+
+export const updateLeadMarketingAction = domainAction(async (_p: ActionState, fd: FormData): Promise<ActionState> => {
+  const v = await requireViewer();
+  const leadId = str(fd, "leadId");
+  await db.transaction((tx) =>
+    updateLeadMarketing(tx, v, leadId, {
+      source: str(fd, "leadSource"),
+      sourceOther: str(fd, "heardFrom"),
+      interest: str(fd, "leadInterest"),
+      interestOther: str(fd, "interestOther"),
+      priority: str(fd, "priority"),
+    }),
+  );
+  refresh(leadId);
+  return { ok: true, message: "Saved." };
 });

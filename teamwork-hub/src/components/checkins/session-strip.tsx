@@ -70,8 +70,23 @@ export async function SessionReadinessStrip({ viewer, sessionId, names }: { view
                         </p>
                       )}
                       {h.note ? <p className="rounded bg-surface-2 px-2 py-1 whitespace-pre-wrap">“{h.note}”</p> : null}
-                      {h.via !== "app" ? <p className="text-ink-3">{h.via === "kiosk" ? "Answered at the kiosk." : "Logged by a parent."}</p> : null}
+                      {h.via !== "app" && !row.enteredByCoach ? <p className="text-ink-3">{h.via === "kiosk" ? "Answered at the kiosk." : "Logged by a parent."}</p> : null}
                     </div>
+                  ) : null}
+                  {row.enteredByCoach || row.canCoachEnter ? (
+                    <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                      {row.enteredByCoach ? (
+                        <span className="font-medium text-ink-2" data-testid="entered-by-coach">
+                          Entered by coach {row.enteredByCoach}
+                          {row.replaced ? " (replaced an earlier answer)" : ""}
+                        </span>
+                      ) : null}
+                      {row.canCoachEnter ? (
+                        <Link href={`/check-ins/${row.bookingId}/coach`} className="inline-flex min-h-8 items-center font-semibold text-brand underline">
+                          {row.done ? "Enter or correct for" : "Enter for"} {names[row.athleteId] ?? "athlete"}
+                        </Link>
+                      ) : null}
+                    </p>
                   ) : null}
                 </li>
               );

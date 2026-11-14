@@ -1,3 +1,4 @@
+import { defineWording } from "@/lib/sample-text";
 /**
  * SAMPLE recurring ACH debit authorization shown to a payer before they save a bank account.
  * It is sample wording for the owner's lawyer to replace, not legal advice. Stripe's hosted page shows
@@ -20,3 +21,13 @@ export function mandateText(orgName: string): string {
 export const STORAGE_NOTICE =
   "Your card or bank account number is entered on a secure page run by Stripe, our payment processor, and is stored there. " +
   "Teamwork keeps only a reference, the brand or bank name, and the last four digits.";
+
+export const ACH_MANDATE_WORDING = defineWording({
+  id: "ach_mandate",
+  label: "Bank debit authorization",
+  version: MANDATE_TEXT_VERSION,
+  isSample: true,
+  shownAt: "Shown to a payer before they save a bank account, and printed in the membership agreement.",
+  source: "src/lib/billing/mandate-text.ts",
+  href: "/settings/payments",
+});

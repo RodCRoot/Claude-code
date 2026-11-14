@@ -59,6 +59,32 @@ export default async function CheckinResponsePage({ params }: { params: Promise<
         <p className="text-xs text-ink-3">
           {d.via === "kiosk" ? "Answered at the kiosk." : d.via === "parent" ? "Logged by a parent / guardian." : "Answered in the app."} Question set {d.questionSetVersion}. Self-reported; not a diagnosis and not clearance to train.
         </p>
+        {d.coachEntered.length ? (
+          <Callout tone="info" title={`Entered by coach ${d.enteredByCoach}`}>
+            <span data-testid="entered-by-coach">
+              The athlete told the coach these answers and the coach typed them in:{" "}
+              {d.coachEntered.map((c) => `${c.section === "ready" ? "the ready check" : c.section === "effort" ? "how hard it was" : c.section === "body" ? "the body questions" : "likes and dislikes"} (${c.name}, ${fmt(c.at, "MMM d h:mm a", d.timezone)})`).join("; ")}.
+            </span>
+          </Callout>
+        ) : null}
+        {d.replacements.map((x) => (
+          <Callout key={`${x.section}-${x.at}`} tone="warn" title="Replaced">
+            <span data-testid="checkin-replaced">
+              On {fmt(x.at, "MMM d 'at' h:mm a", d.timezone)} coach {x.byName} replaced the answer {x.previousBy} gave on {fmt(x.previousAt, "MMM d 'at' h:mm a", d.timezone)} for {x.section === "ready" ? "the ready check" : x.section === "effort" ? "how hard it was" : "the body questions"}. Reason: {x.reason}
+            </span>
+            {x.values ? (
+              <span className="mt-1 block text-xs">
+                Earlier answer:{" "}
+                {Object.entries(x.values)
+                  .filter(([, val]) => val !== null && val !== undefined && val !== "")
+                  .map(([k, val]) => `${k.replace(/([A-Z])/g, " $1").toLowerCase()} ${typeof val === "boolean" ? (val ? "yes" : "no") : String(val)}`)
+                  .join(", ") || "nothing recorded"}
+              </span>
+            ) : (
+              <span className="mt-1 block text-xs">The earlier answer is shown to staff with access to that part.</span>
+            )}
+          </Callout>
+        ))}
         {h ? (
           <Card>
             <CardHeader title={d.phase === "pre" ? "Before the session" : "Body"} kicker="Health answers" />

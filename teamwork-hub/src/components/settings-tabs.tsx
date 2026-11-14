@@ -8,6 +8,7 @@ export function SettingsTabs({ current }: { current: string }) {
         current={current}
         tabs={[
           { key: "org", href: "/settings", label: "Organization & policies" },
+          { key: "go-live", href: "/settings/go-live", label: "Go-live readiness" },
           { key: "users", href: "/settings/users", label: "Users & roles" },
           { key: "custom-fields", href: "/settings/custom-fields", label: "Custom fields" },
           { key: "engagement", href: "/settings/engagement", label: "Engagement" },

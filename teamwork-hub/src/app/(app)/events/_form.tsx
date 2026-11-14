@@ -1,7 +1,7 @@
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Field, Input, Select, Textarea } from "@/components/ui";
 import type { events } from "@/db/schema";
-import { EVENT_KINDS } from "@/lib/events/events";
+import { DEFAULT_WAITLIST_OFFER_HOURS, EVENT_KINDS } from "@/lib/events/events";
 import { DEFAULT_HOLD_HOURS } from "@/lib/events/pricing";
 import { createEventAction, updateEventAction } from "../_events/actions";
 import { SessionRows } from "./_session-rows";
@@ -71,6 +71,9 @@ export function EventForm({ event, forms, coaches, resources }: { event?: typeof
         </Field>
         <Field label="Unpaid hold (hours)" htmlFor="ev-hold" hint={`How long an unpaid registration keeps its spot. Default ${DEFAULT_HOLD_HOURS}.`}>
           <Input id="ev-hold" name="holdHours" type="number" inputMode="numeric" min={1} max={720} defaultValue={e?.holdHours ?? DEFAULT_HOLD_HOURS} className="h-11" />
+        </Field>
+        <Field label="Waitlist offer (hours)" htmlFor="ev-wl" hint={`When a spot opens, how long the first family in line has to take it. Default ${DEFAULT_WAITLIST_OFFER_HOURS}.`}>
+          <Input id="ev-wl" name="waitlistOfferHours" type="number" inputMode="numeric" min={1} max={720} defaultValue={e?.waitlistOfferHours ?? DEFAULT_WAITLIST_OFFER_HOURS} className="h-11" />
         </Field>
         <Field label="Early bird price ($)" htmlFor="ev-eb" hint="Optional. Must be lower than the price.">
           <Input id="ev-eb" name="earlyBirdPrice" inputMode="decimal" defaultValue={dollars(e?.earlyBirdPriceMinor)} className="h-11" />

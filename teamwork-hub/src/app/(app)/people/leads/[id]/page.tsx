@@ -39,7 +39,11 @@ import {
   scheduleAssessmentAction,
   setTagAction,
   toggleTaskAction,
+  updateLeadMarketingAction,
 } from "../actions";
+import { LeadListFields } from "@/app/(public)/inquire/_components/lead-list-fields";
+import { OTHER, interestDisplay, leadLists, leadPriority, leadSport, normalizeLeadInterest, normalizeLeadSource, sourceDisplay, utmFrom } from "@/lib/crm/lead-vocab";
+import { vocabOverrides } from "@/lib/zenplanner/vocab";
 
 export const metadata = { title: "Lead" };
 
@@ -62,6 +66,16 @@ export default async function LeadDetail({ params, searchParams }: { params: Pro
   const stage = stages.find((s) => s.key === lead.stage);
   const inq = lead.inquiry as Record<string, unknown>;
   const closed = !!lead.convertedAt;
+  const overrides = await vocabOverrides(db, v.orgId);
+  const lists = leadLists(overrides);
+  const nrmSource = normalizeLeadSource(lead.source, overrides);
+  const nrmInterest = normalizeLeadInterest(lead.interest, overrides);
+  const sport = leadSport(lead, overrides);
+  const srcLabel = sourceDisplay(lead.source, inq.sourceOther as string | null, overrides);
+  // An older lead kept the sport in the interest column: it is shown as the sport, not as an interest.
+  const intLabel = sport && sport === lead.interest ? null : interestDisplay(lead.interest, inq.interestOther as string | null, overrides);
+  const priority = leadPriority(inq);
+  const utm = utmFrom((inq.utm as Record<string, unknown>) ?? null);
 
   return (
     <>
@@ -73,7 +87,7 @@ export default async function LeadDetail({ params, searchParams }: { params: Pro
             <Badge variant={stage?.isWon ? "green" : stage?.isLost ? "red" : "blue"}>{stage?.label ?? lead.stage}</Badge>
           </span>
         }
-        description={[d.age != null ? `${d.age} yrs` : null, lead.interest, lead.source ? `via ${lead.source.replaceAll("_", " ")}` : null, `created ${fmtDate(lead.createdAt)}`]
+        description={[d.age != null ? `${d.age} yrs` : null, sport, srcLabel ? `via ${srcLabel}` : null, `created ${fmtDate(lead.createdAt)}`]
           .filter(Boolean)
           .join(" · ")}
         actions={
@@ -130,14 +144,47 @@ export default async function LeadDetail({ params, searchParams }: { params: Pro
                   </span>
                   {consent("email")?.capturedAt ? <span className="mt-0.5 block text-xs text-ink-3">{consent("email")?.consentSource} · {fmt(consent("email")!.capturedAt)}</span> : null}
                 </Item>
-                <Item label="Sport">{lead.interest ?? "—"}</Item>
+                <Item label="Sport">{sport ?? "—"}</Item>
+                <Item label="Source">{srcLabel ?? "—"}</Item>
+                <Item label="Interest">{intLabel ?? "—"}</Item>
+                <Item label="Priority">{priority ?? "—"}</Item>
                 <Item label="Age at inquiry">{typeof inq.athleteAge === "number" ? inq.athleteAge : "—"}</Item>
                 <Item label="Preferred times">{Array.isArray(inq.preferredTimes) && inq.preferredTimes.length ? (inq.preferredTimes as string[]).join(", ") : "—"}</Item>
-                <Item label="Heard from">{(inq.heardFrom as string) ?? "—"}</Item>
+                {inq.heardFrom && nrmSource.label !== OTHER ? <Item label="Heard from">{inq.heardFrom as string}</Item> : null}
+                {utm ? (
+                  <Item label="Tracking (from the link they followed)" wide>
+                    <span data-testid="lead-utm">
+                      {[utm.source ? `Source: ${utm.source}` : null, utm.campaign ? `Name: ${utm.campaign}` : null, utm.medium ? `Medium: ${utm.medium}` : null, utm.term ? `Keywords: ${utm.term}` : null].filter(Boolean).join(" · ")}
+                    </span>
+                  </Item>
+                ) : null}
                 <Item label="Goals" wide>
                   <span className="whitespace-pre-wrap">{(inq.goals as string) || "—"}</span>
                 </Item>
               </dl>
+              {!closed ? (
+                <details className="mt-4 rounded-lg border border-edge px-3 py-2">
+                  <summary className="min-h-8 cursor-pointer text-sm font-semibold">Edit source, interest and priority</summary>
+                  <ActionForm action={updateLeadMarketingAction} className="mt-3 space-y-3">
+                    <input type="hidden" name="leadId" value={lead.id} />
+                    <LeadListFields
+                      lists={lists}
+                      staff
+                      idPrefix="edit-"
+                      values={{
+                        source: nrmSource.onList ? nrmSource.label : null,
+                        sourceOther: (inq.sourceOther as string) ?? null,
+                        interest: nrmInterest.onList ? nrmInterest.label : null,
+                        interestOther: (inq.interestOther as string) ?? null,
+                        priority,
+                        keepSource: srcLabel && !nrmSource.onList ? srcLabel : null,
+                        keepInterest: lead.interest && !nrmInterest.onList ? lead.interest : null,
+                      }}
+                    />
+                    <SubmitButton variant="secondary">Save</SubmitButton>
+                  </ActionForm>
+                </details>
+              ) : null}
             </CardBody>
           </Card>
 

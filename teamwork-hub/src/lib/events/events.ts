@@ -10,6 +10,9 @@ import { createSession } from "@/lib/scheduling/sessions";
 import { localToUtc } from "@/lib/time";
 import { bookRegistrationIntoSessions, eventSessionRows, lockEvent, seatsTaken } from "./confirm";
 import { DEFAULT_HOLD_HOURS } from "./pricing";
+import { advanceWaitlist } from "./waitlist-core";
+
+export const DEFAULT_WAITLIST_OFFER_HOURS = 24;
 
 export const EVENT_KINDS: { value: EventKind; label: string }[] = [
   { value: "camp", label: "Camp" },
@@ -36,6 +39,8 @@ export type EventInput = {
   maxAge?: number | null;
   requiredFormTemplateIds?: string[];
   holdHours?: number | null;
+  /** Hours a waitlisted family has to accept an offered spot. Default 24. */
+  waitlistOfferHours?: number | null;
 };
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
@@ -68,6 +73,8 @@ async function validate(tx: Tx, orgId: string, i: EventInput) {
   if (minAge != null && maxAge != null && minAge > maxAge) throw new UserError("Minimum age cannot be above the maximum age.", { maxAge: "Below minimum" });
   const holdHours = i.holdHours ?? DEFAULT_HOLD_HOURS;
   if (!isInt(holdHours) || holdHours < 1 || holdHours > 720) throw new UserError("The unpaid hold must be between 1 and 720 hours.", { holdHours: "1 to 720" });
+  const waitlistOfferHours = i.waitlistOfferHours ?? DEFAULT_WAITLIST_OFFER_HOURS;
+  if (!isInt(waitlistOfferHours) || waitlistOfferHours < 1 || waitlistOfferHours > 720) throw new UserError("The waitlist offer must last between 1 and 720 hours.", { waitlistOfferHours: "1 to 720" });
   const formIds = [...new Set(i.requiredFormTemplateIds ?? [])];
   if (formIds.length) {
     const found = await tx.select({ id: formTemplates.id }).from(formTemplates).where(and(inArray(formTemplates.id, formIds), eq(formTemplates.orgId, orgId)));
@@ -88,6 +95,7 @@ async function validate(tx: Tx, orgId: string, i: EventInput) {
     maxAge,
     requiredFormTemplateIds: formIds,
     holdHours,
+    waitlistOfferHours,
   };
 }
 
@@ -166,6 +174,8 @@ export async function updateEvent(tx: Tx, v: Viewer, eventId: string, input: Eve
     const upcoming = (await eventSessionRows(tx, event.id)).filter((s) => s.status === "scheduled" && s.endsAt > new Date()).map((s) => s.id);
     if (upcoming.length) await tx.update(scheduleSessions).set({ capacity: values.capacity, title: values.name, updatedAt: new Date() }).where(and(inArray(scheduleSessions.id, upcoming), eq(scheduleSessions.orgId, v.orgId)));
   }
+  // More seats (or a reopened window) can free a spot for the first athlete on the waitlist.
+  await advanceWaitlist(tx, event, new Date(), actorOf(v));
   const pick = (e: typeof before) => Object.fromEntries(Object.keys(values).map((k) => [k, e[k as keyof typeof e]]));
   await audit(tx, actorOf(v), "events.update", "event", event.id, { summary: `Updated "${event.name}"`, before: pick(before), after: values });
   return event;

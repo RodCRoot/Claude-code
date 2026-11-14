@@ -1,6 +1,6 @@
 import { and, asc, eq, gt, inArray, like, lte, or, sql } from "drizzle-orm";
 import type { Tx } from "@/db";
-import { athletes, bookings, eventRegistrations, invoices, paymentAttempts, payerAccounts, payerBeneficiaries, people, scheduleSessions } from "@/db/schema";
+import { athletes, bookings, eventRegistrations, eventWaitlistEntries, invoices, paymentAttempts, payerAccounts, payerBeneficiaries, people, scheduleSessions } from "@/db/schema";
 import { UserError } from "@/lib/actions";
 import { audit, type AuditActor } from "@/lib/audit";
 import { assertCan, athleteCapabilities, AuthzError, can, type Viewer } from "@/lib/authz/policy";
@@ -12,20 +12,12 @@ import { orgTimezone } from "@/lib/scheduling/common";
 import { fmt, localYmd } from "@/lib/time";
 import { eventSessionRows, lockEvent, type EventRow, type RegistrationRow } from "./confirm";
 import { priceSeats } from "./pricing";
+import { advanceWaitlist, liveOfferCount } from "./waitlist-core";
+import { registrationClosedReason } from "./window";
 
 const KIND_WORD = { camp: "camp", clinic: "clinic", event: "event" } as const;
 
-/** Why registration is not open right now, or null when it is. Family-safe wording. */
-export function registrationClosedReason(e: Pick<EventRow, "status" | "registrationOpensOn" | "registrationClosesOn">, firstStart: Date | null, now: Date, tz: string): string | null {
-  if (e.status === "draft") return "Registration has not opened yet.";
-  if (e.status === "closed") return "Registration is closed.";
-  if (!firstStart) return "Dates have not been announced yet.";
-  const today = localYmd(now, tz);
-  if (e.registrationOpensOn && today < e.registrationOpensOn) return `Registration opens ${fmt(new Date(`${e.registrationOpensOn}T12:00:00Z`), "EEE, MMM d", "UTC")}.`;
-  if (e.registrationClosesOn && today > e.registrationClosesOn) return "Registration is closed.";
-  if (now >= firstStart) return "Registration is closed because this has already started.";
-  return null;
-}
+export { registrationClosedReason };
 
 /** Athletes a family login may register AND pay for: `can_pay` on the billing account and `can_book` on the athlete. */
 export async function registrableAthletes(tx: Tx, v: Viewer) {
@@ -148,6 +140,9 @@ export async function releaseExpiredHoldsForEvent(tx: Tx, event: EventRow, now: 
     if (!dead) await voidOrReissue(tx, SYSTEM(event.orgId), event, inv, `registration hold for ${event.name} expired unpaid`);
     released += due.length;
   }
+  // A released spot is OFFERED to the first athlete on the waitlist (never auto-charged); offers that
+  // ran out pass to the next. Runs on every pass so an expired offer moves on even when no hold was due.
+  await advanceWaitlist(tx, event, now);
   return released;
 }
 
@@ -159,9 +154,15 @@ export async function releaseExpiredHolds(tx: Tx, orgId: string, now = new Date(
     .leftJoin(invoices, eq(invoices.id, eventRegistrations.invoiceId))
     .where(and(eq(eventRegistrations.orgId, orgId), eq(eventRegistrations.status, "held"), or(lte(eventRegistrations.holdExpiresAt, now), inArray(invoices.status, ["void", "uncollectible"]))))
     .orderBy(asc(eventRegistrations.eventId));
+  const offers = await tx
+    .selectDistinct({ eventId: eventWaitlistEntries.eventId })
+    .from(eventWaitlistEntries)
+    .where(and(eq(eventWaitlistEntries.orgId, orgId), eq(eventWaitlistEntries.status, "offered"), lte(eventWaitlistEntries.offerExpiresAt, now)));
+  // Events in id order, so two passes at once take the event locks in the same order.
+  const eventIds = [...new Set([...rows.map((r) => r.eventId), ...offers.map((r) => r.eventId)])].sort();
   let n = 0;
-  for (const r of rows) {
-    const event = await lockEvent(tx, orgId, r.eventId);
+  for (const eventId of eventIds) {
+    const event = await lockEvent(tx, orgId, eventId);
     if (event) n += await releaseExpiredHoldsForEvent(tx, event, now);
   }
   return n;
@@ -169,58 +170,14 @@ export async function releaseExpiredHolds(tx: Tx, orgId: string, now = new Date(
 
 // --- Registering -----------------------------------------------------------------------------
 
-export type RegisterInput = {
-  eventId: string;
-  athleteIds: string[];
-  /** Client-generated per form render; a retry returns the same registrations. */
-  idempotencyKey: string;
-  /** Staff only: register despite age or form requirements. A reason is required. */
-  override?: { reason: string } | null;
-  now?: Date;
-};
-
-export type RegisterResult = {
-  created: boolean;
-  registrationIds: string[];
-  invoices: { id: string; number: string; totalMinor: number; status: string }[];
-  holdExpiresAt: Date | null;
-};
+export type Seat = { athleteId: string; name: string; payerAccountId: string };
 
 /**
- * Register one or more athletes for an event. Holds the seats and creates ONE open invoice per
- * billing account through the existing invoice flow. Nothing is charged and nobody is booked here:
- * the registration is confirmed (and the athlete booked into every session) only when the invoice
- * is settled, see `confirmEventRegistration`.
- * Capacity is decided under a row lock on the event, so concurrent registrations can never oversell.
+ * Who is being registered and on which billing account. Family logins: only athletes they may both
+ * pay and book for. Staff: any athlete in the organization that has a billing account.
+ * Shared by registration and the waitlist so both apply exactly the same permission rule.
  */
-export async function registerForEvent(tx: Tx, v: Viewer, input: RegisterInput): Promise<RegisterResult> {
-  const now = input.now ?? new Date();
-  const family = v.role === "guardian" || v.role === "athlete";
-  const staff = can(v, "billing.manage");
-  if (!family && !staff) throw new AuthzError("You don't have permission to register athletes for events.");
-  if (!/^[A-Za-z0-9-]{8,64}$/.test(input.idempotencyKey)) throw new UserError("Please reload the page and try again.");
-  if (input.override && !staff) throw new AuthzError("Only staff can override eligibility.");
-  if (input.override && !input.override.reason.trim()) throw new UserError("A reason is required to override eligibility.", { overrideReason: "Required" });
-  const athleteIds = [...new Set(input.athleteIds.filter(Boolean))];
-  if (!athleteIds.length) throw new UserError("Choose at least one athlete.");
-  if (athleteIds.length > 10) throw new UserError("Register up to 10 athletes at a time.");
-
-  const submitKey = `event:${v.userId}:${input.idempotencyKey}`;
-  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${submitKey}))`);
-  const prior = await tx.select().from(eventRegistrations).where(and(eq(eventRegistrations.orgId, v.orgId), eq(eventRegistrations.submitKey, submitKey)));
-  if (prior.length) return resultFor(tx, prior, false);
-
-  const event = await lockEvent(tx, v.orgId, input.eventId);
-  if (!event || (event.status === "draft" && !staff)) throw new UserError("That event was not found.");
-  const tz = await orgTimezone(tx, v.orgId);
-  const sessions = (await eventSessionRows(tx, event.id)).filter((s) => s.status === "scheduled");
-  const firstStart = sessions[0]?.startsAt ?? null;
-  const closed = registrationClosedReason(event, firstStart, now, tz);
-  if (closed) throw new UserError(closed);
-  await releaseExpiredHoldsForEvent(tx, event, now);
-
-  // --- Who, and on which billing account ------------------------------------------------------
-  type Seat = { athleteId: string; name: string; payerAccountId: string };
+export async function resolveSeats(tx: Tx, v: Viewer, athleteIds: string[], family: boolean): Promise<Seat[]> {
   const seats: Seat[] = [];
   if (family) {
     const allowed = await registrableAthletes(tx, v);
@@ -247,6 +204,64 @@ export async function registerForEvent(tx: Tx, v: Viewer, input: RegisterInput):
     }
   }
 
+  return seats;
+}
+
+
+
+export type RegisterInput = {
+  eventId: string;
+  athleteIds: string[];
+  /** Client-generated per form render; a retry returns the same registrations. */
+  idempotencyKey: string;
+  /** Staff only: register despite age or form requirements. A reason is required. */
+  override?: { reason: string } | null;
+  now?: Date;
+};
+
+export type RegisterResult = {
+  eventId: string | null;
+  created: boolean;
+  registrationIds: string[];
+  invoices: { id: string; number: string; totalMinor: number; status: string }[];
+  holdExpiresAt: Date | null;
+};
+
+/**
+ * Register one or more athletes for an event. Holds the seats and creates ONE open invoice per
+ * billing account through the existing invoice flow. Nothing is charged and nobody is booked here:
+ * the registration is confirmed (and the athlete booked into every session) only when the invoice
+ * is settled, see `confirmEventRegistration`.
+ * Capacity is decided under a row lock on the event, so concurrent registrations can never oversell.
+ */
+export async function registerForEvent(tx: Tx, v: Viewer, input: RegisterInput, internal: { reservedWaitlistEntryIds?: string[] } = {}): Promise<RegisterResult> {
+  const now = input.now ?? new Date();
+  const family = v.role === "guardian" || v.role === "athlete";
+  const staff = can(v, "billing.manage");
+  if (!family && !staff) throw new AuthzError("You don't have permission to register athletes for events.");
+  if (!/^[A-Za-z0-9-]{8,64}$/.test(input.idempotencyKey)) throw new UserError("Please reload the page and try again.");
+  if (input.override && !staff) throw new AuthzError("Only staff can override eligibility.");
+  if (input.override && !input.override.reason.trim()) throw new UserError("A reason is required to override eligibility.", { overrideReason: "Required" });
+  const athleteIds = [...new Set(input.athleteIds.filter(Boolean))];
+  if (!athleteIds.length) throw new UserError("Choose at least one athlete.");
+  if (athleteIds.length > 10) throw new UserError("Register up to 10 athletes at a time.");
+
+  const submitKey = `event:${v.userId}:${input.idempotencyKey}`;
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${submitKey}))`);
+  const prior = await tx.select().from(eventRegistrations).where(and(eq(eventRegistrations.orgId, v.orgId), eq(eventRegistrations.submitKey, submitKey)));
+  if (prior.length) return resultFor(tx, prior, false);
+
+  const event = await lockEvent(tx, v.orgId, input.eventId);
+  if (!event || (event.status === "draft" && !staff)) throw new UserError("That event was not found.");
+  const tz = await orgTimezone(tx, v.orgId);
+  const sessions = (await eventSessionRows(tx, event.id)).filter((s) => s.status === "scheduled");
+  const firstStart = sessions[0]?.startsAt ?? null;
+  const closed = registrationClosedReason(event, firstStart, now, tz);
+  if (closed) throw new UserError(closed);
+  await releaseExpiredHoldsForEvent(tx, event, now);
+
+  const seats = await resolveSeats(tx, v, athleteIds, family);
+
   // --- Already registered, eligibility ---------------------------------------------------------
   const live = await tx
     .select({ athleteId: eventRegistrations.athleteId, payerAccountId: eventRegistrations.payerAccountId, status: eventRegistrations.status })
@@ -262,7 +277,10 @@ export async function registerForEvent(tx: Tx, v: Viewer, input: RegisterInput):
   }
 
   // --- Capacity (under the event lock) ----------------------------------------------------------
-  const left = event.capacity - live.length;
+  // Spots offered to waitlisted athletes are reserved for them. The only exception is the offer being
+  // accepted through this very call (`acceptWaitlistOffer`), which is the seat this athlete takes.
+  const offers = await liveOfferCount(tx, event.id, internal.reservedWaitlistEntryIds ?? []);
+  const left = event.capacity - live.length - offers;
   if (left <= 0) throw new UserError(`This ${KIND_WORD[event.kind]} is full.`);
   if (seats.length > left) throw new UserError(`Only ${left} spot${left === 1 ? " is" : "s are"} left, and you chose ${seats.length} athletes.`);
 
@@ -326,6 +344,13 @@ export async function registerForEvent(tx: Tx, v: Viewer, input: RegisterInput):
     created.push(...regs);
     live.push(...regs.map((r) => ({ athleteId: r.athleteId, payerAccountId, status: "held" as const })));
   }
+  // An athlete who now has a spot is no longer in line: close their waitlist entry and point it at the registration.
+  for (const r of created) {
+    await tx
+      .update(eventWaitlistEntries)
+      .set({ status: "accepted", registrationId: r.id, closedAt: now, closedByUserId: v.userId, offerExpiresAt: null, updatedAt: now })
+      .where(and(eq(eventWaitlistEntries.eventId, event.id), eq(eventWaitlistEntries.athleteId, r.athleteId), inArray(eventWaitlistEntries.status, ["waiting", "offered"])));
+  }
   const fresh = await tx.select().from(eventRegistrations).where(inArray(eventRegistrations.id, created.map((r) => r.id)));
   return resultFor(tx, fresh, true);
 }
@@ -333,7 +358,7 @@ export async function registerForEvent(tx: Tx, v: Viewer, input: RegisterInput):
 async function resultFor(tx: Tx, regs: RegistrationRow[], created: boolean): Promise<RegisterResult> {
   const ids = [...new Set(regs.map((r) => r.invoiceId).filter((x): x is string => !!x))];
   const invs = ids.length ? await tx.select({ id: invoices.id, number: invoices.number, totalMinor: invoices.totalMinor, status: invoices.status }).from(invoices).where(inArray(invoices.id, ids)) : [];
-  return { created, registrationIds: regs.map((r) => r.id), invoices: invs, holdExpiresAt: regs.find((r) => r.status === "held")?.holdExpiresAt ?? null };
+  return { eventId: regs[0]?.eventId ?? null, created, registrationIds: regs.map((r) => r.id), invoices: invs, holdExpiresAt: regs.find((r) => r.status === "held")?.holdExpiresAt ?? null };
 }
 
 // --- Staff cancellation ------------------------------------------------------------------------
@@ -391,6 +416,7 @@ export async function cancelEventRegistration(tx: Tx, v: Viewer, input: { regist
       else outcome = await voidOrReissue(tx, actorOf(v), event, inv, `registration for ${event.name} cancelled: ${reason}`);
     }
   }
+  await advanceWaitlist(tx, event, now);
   await audit(tx, actorOf(v), "events.registration.cancel", "event_registration", reg.id, {
     summary: `Registration for ${event.name} cancelled (${reason}); spot released, ${upcoming.length} upcoming booking(s) removed, invoice: ${outcome.replaceAll("_", " ")}`,
     before: { status: reg.status },
