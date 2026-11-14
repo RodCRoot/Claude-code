@@ -158,6 +158,6 @@ Merged migrations 0032 signup, 0033 zpimport, 0034 golive.
 - **Camp and clinic waitlist**: released spots are offered to the first in line for 24 hours (setting); nothing is charged or sent automatically; nightly job `events.holds.nightly`.
 - **Coach-entered check-ins** (`/check-ins/<bookingId>/coach`): labelled "entered by coach", replacing a family answer needs a reason and keeps the earlier answer.
 
-Verified after the merge: typecheck, lint and drift check clean; `pnpm test` 1321/1321 (88 files). Full Playwright run: see the PR description for the latest numbers.
+Verified after the merge: typecheck, lint and drift check clean; `pnpm test` 1321/1321 (88 files). Full Playwright run (one worker, production build): 642 passed, 2 skipped, 0 failed, including the a11y sweep and the CSP crawl; offline suite 4/4 on a fresh seed.
 
 Known gaps: families are not notified of a waitlist offer (no email provider); an expired offer can wait up to a day for the nightly job (no worker deployed); coach replacement of an answer is covered by unit tests only; `golive.spec.ts` mobile access test failed once for the build agent and was not reproduced; the offline sign-out purge test failed once on 2026-11-13 and passed five times on fresh data. PayPal, Hawkin, Google Calendar and TeamBuildr are not on the go-live page.
