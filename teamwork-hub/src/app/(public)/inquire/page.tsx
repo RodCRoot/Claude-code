@@ -1,12 +1,21 @@
 import { StableForm, StableSubmit } from "@/app/(app)/messages/_components/stable-form";
 import { Card, CardBody } from "@/components/ui";
+import { db } from "@/db";
+import { leadLists, utmFrom } from "@/lib/crm/lead-vocab";
+import { publicOrg } from "@/lib/crm/public";
+import { vocabOverridesFromSettings } from "@/lib/zenplanner/vocab";
 import { submitInquiry } from "./actions";
 import { InquiryFields } from "./_components/inquiry-fields";
 
 export const metadata = { title: "Book an assessment" };
 
-export default async function InquirePage({ searchParams }: { searchParams: Promise<{ org?: string }> }) {
-  const { org } = await searchParams;
+export default async function InquirePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const sp = await searchParams;
+  const org = typeof sp.org === "string" ? sp.org : undefined;
+  const o = await publicOrg(db, org ?? null);
+  const lists = leadLists(vocabOverridesFromSettings(o?.settings));
+  // Tracking values in the page address travel with the form (hidden fields) and are kept on the lead.
+  const utm = utmFrom(Object.fromEntries(Object.entries(sp).filter(([, x]) => typeof x === "string")));
   return (
     <>
       <h1 className="text-2xl font-bold tracking-tight">Request an athlete assessment</h1>
@@ -22,7 +31,7 @@ export default async function InquirePage({ searchParams }: { searchParams: Prom
               <label htmlFor="website">Website</label>
               <input id="website" name="website" type="text" tabIndex={-1} autoComplete="off" />
             </div>
-            <InquiryFields />
+            <InquiryFields lists={lists} utm={utm} />
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <StableSubmit pendingText="Sending…" size="lg">
                 Send inquiry

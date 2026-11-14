@@ -1,3 +1,5 @@
+import { NO_SOURCE, normalizeLeadSource } from "@/lib/crm/lead-vocab";
+import { vocabOverrides } from "@/lib/zenplanner/vocab";
 import { and, eq, sql } from "drizzle-orm";
 import type { Tx } from "@/db";
 import { scoreboardMarketingSpend } from "@/db/schema";
@@ -16,7 +18,7 @@ import { monthlyScoreboard } from "./monthly";
 
 export const MARKETING_DEFINITIONS = [
   { key: "mk_spend", label: "Marketing spend", version: 1, definition: "The amounts entered by hand on this page, per calendar month and channel. Nothing is imported from an ad platform." },
-  { key: "mk_leads", label: "Leads by source", version: 1, definition: "Lead records created in the month, grouped by the lead's stored source (web inquiry, referral, walk-in and so on). Leads with no source are shown as \"No source\". A spend channel is matched to a lead source by name, ignoring case." },
+  { key: "mk_leads", label: "Leads by source", version: 2, definition: "Lead records created in the month, grouped by the lead's normalised source: the Source list's own spelling when the stored value is on the list or is an older spelling of one (web inquiry counts as Website, walk in as Walk-in), otherwise the stored text. Leads with no source, or entered by staff without one, are shown as \"No source\". A spend channel is matched to a lead source by name, ignoring case." },
   { key: "mk_cpl", label: "Cost per lead", version: 1, definition: "Spend divided by leads created in the same period, per channel and overall. Blank when there were no leads (never shown as $0)." },
   {
     key: "mk_cpm",
@@ -80,7 +82,9 @@ export async function listSpend(tx: Tx, orgId: string, first: string, last: stri
 
 /** Lead sources the CRM has stored, for the channel suggestions. */
 export async function leadSourceOptions(tx: Tx, orgId: string): Promise<string[]> {
-  return (await rowsOf<{ source: string }>(tx, sql`select distinct source from leads where org_id = ${orgId} and source is not null and source <> '' order by 1`)).map((r) => r.source);
+  const overrides = await vocabOverrides(tx, orgId);
+  const raw = (await rowsOf<{ source: string }>(tx, sql`select distinct source from leads where org_id = ${orgId} and source is not null and source <> '' order by 1`)).map((r) => r.source);
+  return [...new Set(raw.map((r) => normalizeLeadSource(r, overrides).label).filter((l) => l !== NO_SOURCE))].sort();
 }
 
 export type ChannelRow = { channel: string; spendMinor: number | null; leads: number; newMembers: number; costPerLeadMinor: number | null; costPerMemberMinor: number | null };
@@ -136,19 +140,28 @@ export async function marketingEconomics(tx: Tx, v: Viewer, ctx: Ctx, opts: { mo
     return ch.get(k)!;
   };
   const spendByMonth = new Map<string, number>();
+  // Leads are grouped by the normalised source (lead-vocab.ts): the list's spelling when the stored value is on the
+  // Source list or is an older spelling of one ("web_inquiry" is Website), otherwise the stored text tidied up.
+  // A spend channel is matched the same way, so "walk-in" spend lines up with Walk-in leads.
+  const overrides = await vocabOverrides(tx, c.orgId);
+  const chan = (raw: string) => (raw === "No lead record" ? raw : normalizeLeadSource(raw === "No source" ? null : raw, overrides).label);
+  const spendChan = (raw: string) => {
+    const nrm = normalizeLeadSource(raw, overrides);
+    return nrm.onList ? nrm.label : raw;
+  };
   for (const e of entries) {
-    const g = get(e.channel);
+    const g = get(spendChan(e.channel));
     g.spend = (g.spend ?? 0) + e.amountMinor;
     spendByMonth.set(e.month, (spendByMonth.get(e.month) ?? 0) + e.amountMinor);
   }
   const leadsByMonth = new Map<string, number>();
   for (const r of leadRows) {
-    get(String(r.channel)).leads += num(r.n);
+    get(chan(String(r.channel))).leads += num(r.n);
     leadsByMonth.set(ymdOf(r.m)!, (leadsByMonth.get(ymdOf(r.m)!) ?? 0) + num(r.n));
   }
   const membersByMonth = new Map<string, number>();
   for (const r of memberRows) {
-    get(String(r.channel)).members += num(r.n);
+    get(chan(String(r.channel))).members += num(r.n);
     membersByMonth.set(ymdOf(r.m)!, (membersByMonth.get(ymdOf(r.m)!) ?? 0) + num(r.n));
   }
 

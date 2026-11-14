@@ -31,6 +31,10 @@ export const submitInquiry = domainAction(async (_prev: ActionState, fd: FormDat
     goals: str(fd, "goals"),
     preferredTimes: strs(fd, "preferredTimes").filter((t): t is (typeof PREFERRED_TIMES)[number] => (PREFERRED_TIMES as readonly string[]).includes(t)),
     heardFrom: str(fd, "heardFrom"),
+    leadSource: str(fd, "leadSource"),
+    leadInterest: str(fd, "leadInterest"),
+    interestOther: str(fd, "interestOther"),
+    utm: { source: str(fd, "utm_source"), campaign: str(fd, "utm_campaign"), medium: str(fd, "utm_medium"), term: str(fd, "utm_term") },
     consentEmail: bool(fd, "consentEmail"),
     consentSms: bool(fd, "consentSms"),
   };

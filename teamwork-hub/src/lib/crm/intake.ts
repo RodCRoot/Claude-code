@@ -7,6 +7,8 @@ import { audit } from "@/lib/audit";
 import { enqueue } from "@/lib/jobs";
 import { DomainError } from "@/lib/messaging/errors";
 import { logConsentEvent } from "@/lib/messaging/preferences";
+import { vocabOverrides } from "@/lib/zenplanner/vocab";
+import { listChoice, utmFrom } from "./lead-vocab";
 import { ensureStages } from "./stages";
 
 export const PREFERRED_TIMES = ["Weekday mornings", "Weekday afternoons", "Weekday evenings", "Weekends"] as const;
@@ -35,6 +37,15 @@ export const inquirySchema = z
     goals: optional(2000),
     preferredTimes: z.array(z.enum(PREFERRED_TIMES)).default([]),
     heardFrom: optional(120),
+    /** A value from the Source list (see lead-vocab.ts). With "Other", heardFrom is its free text. */
+    leadSource: optional(60),
+    /** A value from the Interest list; interestOther is the free text for "Other". */
+    leadInterest: optional(60),
+    interestOther: optional(120),
+    /** A value from the Priority list (staff forms only). */
+    priority: optional(20),
+    /** Tracking values from the page address (utm_source, utm_campaign, utm_medium, utm_term). */
+    utm: z.object({ source: optional(200), campaign: optional(200), medium: optional(200), term: optional(200) }).optional(),
     consentEmail: z.boolean().default(false),
     consentSms: z.boolean().default(false),
   })
@@ -112,7 +123,9 @@ export async function createLeadFromInquiry(tx: Tx, orgId: string, input: Inquir
     const [{ n }] = await tx
       .select({ n: sql<number>`count(*)::int` })
       .from(leads)
-      .where(and(eq(leads.orgId, orgId), gt(leads.createdAt, since), eq(leads.source, "web_inquiry")));
+      .where(and(eq(leads.orgId, orgId), gt(leads.createdAt, since), // Same rows as before the Source list existed (source still holds the channel), plus web leads whose
+        // source column now holds a list value instead.
+        sql`(${leads.source} = 'web_inquiry' or (${leads.inquiry}->>'channel' = 'web_inquiry' and ${leads.inquiry}->>'sourceFromList' = 'true'))`));
     if (n >= RATE_LIMIT.orgWebMax) throw new DomainError("We're receiving an unusual number of inquiries right now. Please try again later or call the front desk.");
   }
 
@@ -143,6 +156,12 @@ export async function createLeadFromInquiry(tx: Tx, orgId: string, input: Inquir
 
   const dupes = await findPossibleDuplicates(tx, orgId, d.email, d.phone, [contact.id, athletePersonId]);
   const ownerUserId = await defaultLeadOwner(tx, orgId);
+  // List choices are checked against the org's lists; anything else is ignored, never stored as typed.
+  const overrides = await vocabOverrides(tx, orgId);
+  const src = listChoice("source", d.leadSource, d.heardFrom, overrides);
+  const int = listChoice("interest", d.leadInterest, d.interestOther, overrides);
+  const pri = listChoice("priority", d.priority, null, overrides);
+  const utm = utmFrom(d.utm ?? null);
   const [lead] = await tx
     .insert(leads)
     .values({
@@ -150,8 +169,9 @@ export async function createLeadFromInquiry(tx: Tx, orgId: string, input: Inquir
       personId: athletePersonId,
       contactPersonId: d.inquiringFor === "child" ? contact.id : null,
       stage: "new",
-      source,
-      interest: d.sport ?? null,
+      // The list value when one was chosen; otherwise the intake channel, as before (normalised when read).
+      source: src.value ?? source,
+      interest: int.value ?? d.sport ?? null,
       ownerUserId,
       isDemo: !!meta.isDemo,
       inquiry: {
@@ -161,6 +181,12 @@ export async function createLeadFromInquiry(tx: Tx, orgId: string, input: Inquir
         goals: d.goals ?? null,
         preferredTimes: d.preferredTimes,
         heardFrom: d.heardFrom ?? null,
+        channel: source,
+        sourceFromList: !!src.value,
+        sourceOther: src.other,
+        interestOther: int.other,
+        priority: pri.value,
+        ...(utm ? { utm } : {}),
         submittedAt: now.toISOString(),
         ipHash,
         possibleDuplicates: dupes,

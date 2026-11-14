@@ -108,7 +108,7 @@ A pure function (`bottleneck`) reads the last complete month against the ideals 
 
 ## Marketing economics
 
-`scoreboard_marketing_spend`: one amount per month and channel, typed in (no ad-platform integration). A channel is matched to a CRM lead source by name. Cost per lead, cost per new member (a member belongs to the source of the lead they were converted from), average monthly revenue per member, length of engagement, estimated lifetime revenue (the two multiplied) and its ratio to acquisition cost. The page states that this is gross revenue, not profit. Missing spend gives a blank, not $0.
+`scoreboard_marketing_spend`: one amount per month and channel, typed in (no ad-platform integration). A channel is matched to a CRM lead source by name. Leads are grouped by their normalised source (the Source list spelling; `web_inquiry` counts as Website; see `docs/modules/crm-messaging.md`, "Lead lists"). Cost per lead, cost per new member (a member belongs to the source of the lead they were converted from), average monthly revenue per member, length of engagement, estimated lifetime revenue (the two multiplied) and its ratio to acquisition cost. The page states that this is gross revenue, not profit. Missing spend gives a blank, not $0.
 
 ## Money view
 

@@ -99,6 +99,7 @@ const STAFF = [
   "/events",
   "/events/new",
   "/reports/growth-referrals",
+  "/reports/leads-by-source",
   "/scoreboard",
   "/scoreboard/monthly",
   "/scoreboard/efficiency",

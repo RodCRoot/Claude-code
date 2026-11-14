@@ -1,3 +1,4 @@
+import { leadSport } from "@/lib/crm/lead-vocab";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Tx } from "@/db";
 import {
@@ -153,7 +154,7 @@ export async function findCandidates(
       else conds.push(sql`${leads.createdAt} >= ${new Date(now.getTime() - 2 * 86_400_000)}`);
       const ls = await tx.select().from(leads).where(and(...conds)).orderBy(desc(leads.createdAt)).limit(SCAN_LIMIT);
       for (const l of ls) {
-        if (cond.sport && (l.interest ?? "").toLowerCase() !== cond.sport.toLowerCase()) continue;
+        if (cond.sport && (leadSport(l) ?? l.interest ?? "").toLowerCase() !== cond.sport.toLowerCase()) continue;
         const c = await leadCandidate(tx, orgId, l, "created", {});
         if (c) out.push(c);
       }

@@ -130,7 +130,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                 <option value="">Any</option>
                 {sources.map((s) => (
                   <option key={s} value={s}>
-                    {s.replaceAll("_", " ")}
+                    {s}
                   </option>
                 ))}
               </Select>
@@ -211,7 +211,7 @@ function Board({ rows, stages }: { rows: LeadRow[]; stages: LeadStage[] }) {
                           {r.name}
                         </Link>
                         <div className="truncate text-[11px] text-ink-3">
-                          {[r.age != null ? `${r.age} yrs` : null, r.interest, r.source?.replaceAll("_", " ")].filter(Boolean).join(" · ") || "—"}
+                          {[r.age != null ? `${r.age} yrs` : null, r.sport, r.interestLabel, r.sourceLabel].filter(Boolean).join(" · ") || "—"}
                         </div>
                       </div>
                     </div>
@@ -295,7 +295,7 @@ function LeadTable({ rows, stageLabel }: { rows: LeadRow[]; stageLabel: (k: stri
               <Td>
                 <Badge variant={r.stage === "won" ? "green" : r.stage === "lost" ? "red" : "neutral"}>{stageLabel(r.stage)}</Badge>
               </Td>
-              <Td>{r.source?.replaceAll("_", " ") ?? "—"}</Td>
+              <Td>{r.sourceLabel ?? "—"}</Td>
               <Td>{r.ownerName ?? "Unassigned"}</Td>
               <Td align="right">{r.age ?? "—"}</Td>
               <Td>{r.lastContactedAt ? fmt(r.lastContactedAt, "MMM d, h:mm a") : "—"}</Td>
