@@ -12,6 +12,7 @@ import { ShowcaseHomeCards } from "@/components/showcase/home-cards";
 import { PrBadge, ProgressBar } from "../../training/_components/tb";
 import { AnywhereGameDay, AnywhereHomeCards } from "@/components/anywhere/home-cards";
 import { UpcomingEventsCard } from "@/components/events/family";
+import { WaitlistOffersHomeCard } from "@/components/events/offers";
 import { CommunityHomeCards } from "@/components/community/home-cards";
 import { CompetingFamilyCard, WinsHomeCard } from "@/components/wins/family";
 import { communityOrg } from "@/lib/community/settings";
@@ -52,6 +53,9 @@ export async function AthleteHomeView({ v, tz, dateLabel, greeting, selected }: 
           </nav>
         ) : null}
       </Hero>
+
+      {/* Needs an answer before it runs out, so it sits above everything else. Covers every linked athlete. */}
+      <WaitlistOffersHomeCard v={v} className="mb-4" />
 
       {!child || !home ? (
         <div className="space-y-4">

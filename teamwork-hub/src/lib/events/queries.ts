@@ -32,7 +32,8 @@ async function sessionsByEvent(tx: Tx, eventIds: string[]): Promise<Map<string, 
 /** `offered` = spots reserved by a live waitlist offer; `waiting` = athletes still in line. */
 export type EventCounts = { confirmed: number; held: number; cancelled: number; expired: number; heldMinor: number; paidMinor: number; offered: number; waiting: number };
 
-async function countsByEvent(tx: Tx, orgId: string, eventIds: string[]): Promise<Map<string, EventCounts>> {
+/** `offered` counts LIVE offers only: one whose time has run out is not shown as holding a spot, even before the sweep has marked it expired. */
+async function countsByEvent(tx: Tx, orgId: string, eventIds: string[], now: Date): Promise<Map<string, EventCounts>> {
   const out = new Map<string, EventCounts>();
   if (!eventIds.length) return out;
   const rows = await tx
@@ -53,7 +54,7 @@ async function countsByEvent(tx: Tx, orgId: string, eventIds: string[]): Promise
   const line = await tx
     .select({
       eventId: eventWaitlistEntries.eventId,
-      offered: sql<number>`count(*) filter (where ${eventWaitlistEntries.status} = 'offered')::int`,
+      offered: sql<number>`count(*) filter (where ${eventWaitlistEntries.status} = 'offered' and ${eventWaitlistEntries.offerExpiresAt} > ${now.toISOString()}::timestamptz)::int`,
       waiting: sql<number>`count(*) filter (where ${eventWaitlistEntries.status} = 'waiting')::int`,
     })
     .from(eventWaitlistEntries)
@@ -111,7 +112,7 @@ async function toFamilyEvents(tx: Tx, v: Viewer, rows: EventRow[], now: Date): P
   if (!rows.length) return [];
   const tz = await orgTimezone(tx, v.orgId);
   const ids = rows.map((r) => r.id);
-  const [sess, counts] = await Promise.all([sessionsByEvent(tx, ids), countsByEvent(tx, v.orgId, ids)]);
+  const [sess, counts] = await Promise.all([sessionsByEvent(tx, ids), countsByEvent(tx, v.orgId, ids, now)]);
   // The viewer's own family: athletes they can see, and registrations on billing accounts they can view.
   const visible = await accessibleAthleteIds(tx, v, "profile.read");
   const viewablePayers = v.role === "guardian" || v.role === "athlete" ? await payerAccountIdsFor(tx, v, "view") : [];
@@ -132,7 +133,7 @@ async function toFamilyEvents(tx: Tx, v: Viewer, rows: EventRow[], now: Date): P
             ),
           )
       : [];
-  const myWaitlist = await familyWaitlistEntries(tx, v, ids, athleteIds);
+  const myWaitlist = await familyWaitlistEntries(tx, v, ids, athleteIds, now);
   const today = localYmd(now, tz);
   return rows
     .map((e) => {
@@ -276,7 +277,7 @@ export async function listStaffEvents(tx: Tx, v: Viewer, now = new Date()): Prom
   const all = await tx.select().from(events).where(eq(events.orgId, v.orgId)).orderBy(desc(events.createdAt));
   const ids = all.map((e) => e.id);
   const tz = await orgTimezone(tx, v.orgId);
-  const [sess, counts, refunds] = await Promise.all([sessionsByEvent(tx, ids), countsByEvent(tx, v.orgId, ids), refundedByEvent(tx, v.orgId, ids)]);
+  const [sess, counts, refunds] = await Promise.all([sessionsByEvent(tx, ids), countsByEvent(tx, v.orgId, ids, now), refundedByEvent(tx, v.orgId, ids)]);
   const rows = all.map((event) => {
     const sessions = sess.get(event.id) ?? [];
     const c = counts.get(event.id) ?? NO_COUNTS;
@@ -314,7 +315,7 @@ export async function staffEventDetail(tx: Tx, v: Viewer, eventId: string) {
   const [event] = await tx.select().from(events).where(and(eq(events.id, eventId), eq(events.orgId, v.orgId)));
   if (!event) return null;
   const tz = await orgTimezone(tx, v.orgId);
-  const [sess, counts, refunds] = await Promise.all([sessionsByEvent(tx, [event.id]), countsByEvent(tx, v.orgId, [event.id]), refundedByEvent(tx, v.orgId, [event.id])]);
+  const [sess, counts, refunds] = await Promise.all([sessionsByEvent(tx, [event.id]), countsByEvent(tx, v.orgId, [event.id], new Date()), refundedByEvent(tx, v.orgId, [event.id])]);
   const sessions = sess.get(event.id) ?? [];
   const c = counts.get(event.id) ?? NO_COUNTS;
   const registrations: StaffRegistration[] = (

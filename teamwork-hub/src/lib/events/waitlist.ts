@@ -9,7 +9,7 @@ import { checkEligibility } from "@/lib/scheduling/eligibility";
 import { orgTimezone } from "@/lib/scheduling/common";
 import { eventSessionRows, lockEvent, seatsTaken } from "./confirm";
 import { eventEligibilitySpec, registerForEvent, registrableAthletes, releaseExpiredHoldsForEvent, resolveSeats, type RegisterResult } from "./registration";
-import { advanceWaitlist, type WaitlistRow } from "./waitlist-core";
+import { advanceWaitlist, isLiveOffer, type WaitlistRow } from "./waitlist-core";
 import { registrationClosedReason } from "./window";
 
 /**
@@ -124,7 +124,7 @@ export async function acceptWaitlistOffer(tx: Tx, v: Viewer, input: { entryId: s
     return registerForEvent(tx, v, { eventId: event.id, athleteIds: [entry.athleteId], idempotencyKey: input.idempotencyKey, override: input.override, now });
   }
   if (entry.status !== "offered") throw new UserError(entry.status === "expired" ? "That offer has run out and the spot went to the next family in line." : "There is no spot on offer for this athlete right now.");
-  if (!entry.offerExpiresAt || entry.offerExpiresAt <= now) throw new UserError("That offer has run out and the spot went to the next family in line.");
+  if (!isLiveOffer(entry, now)) throw new UserError("That offer has run out and the spot went to the next family in line.");
   const result = await registerForEvent(tx, v, { eventId: event.id, athleteIds: [entry.athleteId], idempotencyKey: input.idempotencyKey, override: input.override, now }, { reservedWaitlistEntryIds: [entry.id] });
   // registerForEvent closes the athlete's waitlist entry (accepted + registration id).
   await audit(tx, actorOf(v), "events.waitlist.accept", "event_waitlist_entry", entry.id, {
@@ -221,7 +221,7 @@ export type StaffWaitlistEntry = {
 };
 
 /** The line for one event: offers first, then waiting in order, then recent closed entries. */
-export async function staffWaitlist(tx: Tx, v: Viewer, eventId: string): Promise<StaffWaitlistEntry[]> {
+export async function staffWaitlist(tx: Tx, v: Viewer, eventId: string, now = new Date()): Promise<StaffWaitlistEntry[]> {
   assertCan(v, "schedule.manage");
   const rows = await tx
     .select({ e: eventWaitlistEntries, personId: people.id, first: people.firstName, last: people.lastName, payerName: payerAccounts.name, addedBy: users.displayName })
@@ -235,6 +235,8 @@ export async function staffWaitlist(tx: Tx, v: Viewer, eventId: string): Promise
   const rank = (s: EventWaitlistStatus) => (s === "offered" ? 0 : s === "waiting" ? 1 : 2);
   let place = 0;
   return rows
+    // An offer whose time has run out is reported as expired even before the sweep has marked it.
+    .map((r) => (isLiveOffer(r.e, now) || r.e.status !== "offered" ? r : { ...r, e: { ...r.e, status: "expired" as const, closedReason: r.e.closedReason ?? "The offer was not accepted in time" } }))
     .map((r) => ({
       id: r.e.id,
       athleteId: r.e.athleteId,
@@ -254,7 +256,7 @@ export async function staffWaitlist(tx: Tx, v: Viewer, eventId: string): Promise
 export type FamilyWaitlistEntry = { id: string; eventId: string; athleteId: string; first: string; status: "waiting" | "offered"; place: number | null; offerExpiresAt: Date | null };
 
 /** The viewer's own athletes' live entries on the given events (never anyone else's, never the length of the line). */
-export async function familyWaitlistEntries(tx: Tx, v: Viewer, eventIds: string[], athleteIds: string[]): Promise<FamilyWaitlistEntry[]> {
+export async function familyWaitlistEntries(tx: Tx, v: Viewer, eventIds: string[], athleteIds: string[], now = new Date()): Promise<FamilyWaitlistEntry[]> {
   if (!eventIds.length || !athleteIds.length) return [];
   const rows = await tx
     .select({ e: eventWaitlistEntries, first: people.firstName })
@@ -266,6 +268,8 @@ export async function familyWaitlistEntries(tx: Tx, v: Viewer, eventIds: string[
   const placeBy = new Map<string, number>();
   const out: FamilyWaitlistEntry[] = [];
   for (const r of rows) {
+    // An offer whose time has run out is never shown as live, even before the sweep has marked it expired.
+    if (r.e.status === "offered" && !isLiveOffer(r.e, now)) continue;
     let place: number | null = null;
     if (r.e.status === "waiting") {
       place = (placeBy.get(r.e.eventId) ?? 0) + 1;

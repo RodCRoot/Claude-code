@@ -106,6 +106,33 @@ A full event no longer just says "Full".
 - **Audit.** `events.waitlist.join`, `.offer`, `.offer_expired`, `.accept`, `.leave`, `.remove`, `.reorder`.
 - A family sees only its own athletes' entries and their place, never who else is waiting.
 
+### Where an offer is shown (`offers.ts`, `src/components/events/offers.tsx`)
+
+| Who | Where | What |
+|---|---|---|
+| Guardian, athlete login | Home (`/today`), above everything else | One callout per live offer on any linked athlete: event (link), athlete, expiry as a facility-local day and time, "Take the spot" and "No thanks". The buttons are the same forms and server actions as the camp page (`acceptWaitlistOfferAction`, `leaveWaitlistAction`). A login that cannot pay and book for the athlete (Jordan, the athlete's own login) sees the offer with a sentence instead of buttons |
+| Guardian, athlete login | Camps list, camp page, the "Camps and clinics" card | As before: "spot offered" badge and the offer callout |
+| Owner, admin, operations (`schedule.manage`) | Today, card "Waitlist offers waiting on a family" | Athlete (link to the profile for contact details), billing account name, event (link to its waitlist), when the offer runs out. Hidden when there are none. Coaches do not get it |
+| Same | Event page, Waitlist card | As before: "Offered until ..." per entry |
+
+There is no count badge in the navigation: the app has no badge or notification pattern in either
+the family or the staff navigation, and none was invented for this.
+
+**A live offer has one definition** (`isLiveOffer` in `waitlist-core.ts`): status `offered` **and**
+`offer_expires_at` still ahead. The status alone is not enough, because an offer that ran out keeps
+the status `offered` until a sweep visits its event. Every read applies the rule itself, so nothing
+depends on the nightly job or on a page having swept first:
+
+- `familyLiveOffers`, `staffLiveOffers` (Home, Today) filter in the query. They are read-only and
+  never sweep.
+- `familyWaitlistEntries` (camps list, camp page, badges) drops an offer that has run out.
+- `staffWaitlist` (event page) reports it as `expired`, with no accept button.
+- `countsByEvent` ("N offered a spot", spots left) counts live offers only.
+- `acceptWaitlistOffer` refuses it ("That offer has run out...").
+
+Tested in `tests/events-offers.test.ts` (one minute before and after expiry with no sweep, row still
+`offered` in the database) and `e2e/events-offers.spec.ts`.
+
 ## Confirmation: only on settled payment
 
 `confirmEventRegistration` is called from the billing module's `applyInvoiceEntitlements` for lines
@@ -170,22 +197,29 @@ they use `SKIP LOCKED` and either leave that hold for the next pass (release) or
 
 ## Demo data
 
-`pnpm db:fresh` seeds three events, all flagged demo and named "Sample: ...": a three-day Holiday
+`pnpm db:fresh` seeds four events, all flagged demo and named "Sample: ...": a three-day Holiday
 Speed Camp (sample prices: $180, early bird $160, 10% sibling discount, ages 10 to 16), a one-day
-Change of Direction Clinic (sample $45, ages 12 and up) and a draft. Three front-desk registrations
-for roster-filler athletes: two paid by sample checks, one holding a spot unpaid.
+Change of Direction Clinic (sample $45, ages 12 and up), a draft, and a full two-spot Small Group
+Sprint Clinic (sample $60) with a waitlist. Front-desk registrations for roster-filler athletes:
+three paid by sample checks, one holding a spot unpaid.
+
+The Small Group Sprint Clinic exists so the offer screens are not empty: Maya Parker holds a live
+offer (Alex can answer it, Jordan can only see it) and Ava Parker is waiting at place 1. It is 45
+days out, after the clinic (12 days) and the camp (21 days), so it is the third of the "next three"
+on family pages and the first two stay where browser tests expect them. Its offer window is a sample
+14 days rather than the default 24 hours, so the demo offer stays live for two weeks after seeding;
+after that it expires like any offer and Ava is offered the spot. No browser test answers the seeded
+offer.
 
 ## Not done / follow-ups
 
-- **Waitlist offers are not announced.** No email, text or in-app notification is sent when a spot is
-  offered: the family has to open the camps page within the offer window (default 24 hours). Until
-  messaging is connected, the front desk should call the family; the event page shows who holds an
-  offer and until when.
-- Offers and holds that run out while nobody opens a page are processed by the nightly job, so an
-  offer can outlive its expiry by up to a day before the next family is offered the spot. Any camps
-  page view or registration processes it sooner.
+- **Waitlist offers are not announced outside the app.** No email or text is sent when a spot is
+  offered. The family sees it on their Home page and the camps pages; the front desk sees it on Today
+  and on the event page and should call the family within the offer window (default 24 hours).
+- Offers and holds that run out while nobody opens a camps page are processed by the nightly job, so
+  the *next* family can be offered the spot up to a day late. The expired offer itself is never shown
+  as live or accepted in the meantime (see "Where an offer is shown").
 - An athlete who declines or lets an offer run out can rejoin at the back; there is no limit on that.
-- The demo seed has no waitlisted athletes (the seeded events are not full).
 - Families cannot cancel or release their own unpaid hold online.
 - No emails or texts (registration received, payment reminder, hold about to expire).
 - Sessions cannot be removed from the event page; cancel that day's session on the calendar (it then
