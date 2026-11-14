@@ -137,6 +137,11 @@ able to fill one in on behalf of a young athlete?" (DECISIONS.md, owner tools 2)
   existing "a part answered by one person is locked for everyone else" rule). They can still answer
   the parts the coach did not enter, and the rating.
 - Alerts (sharp pain, something hurts, baseline deviations) work exactly as for the athlete's own answer.
+- **Browser coverage of replacement.** `e2e/checkins-coach-replace.spec.ts` (desktop and 390px): a parent
+  answers the effort for an under-13 athlete; the coach's save is refused without the tick, refused
+  with the tick but no reason (the stored answer is checked unchanged both times), then accepted; the
+  response page shows "Replaced" with who, why and the earlier value; the family page says "Entered
+  by coach" and that it replaced an earlier answer. No bug was found writing it.
 
 ## Who sees what
 
