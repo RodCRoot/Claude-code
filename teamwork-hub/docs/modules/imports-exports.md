@@ -23,11 +23,12 @@ Every mutation and download is written to `audit_events` (`import.*`, `hawkin.*`
 5. **Identity** (`identity.ts`), one decision per source person (identity key), never auto-merging:
    - (a) `external_ids` exact source id → linked;
    - (b) exact first+last AND exact DOB (or exact email for adults), exactly one candidate, and that person not already tied to a *different* id of the same source → **strong**, still needs staff confirmation ("Confirm all strong matches");
-   - (c) any other candidate (name-only, same surname + DOB, shared email) → `needs_review` with candidate list;
+   - (b2) Zen Planner Membership, Bill and Attendance grids only: exactly one person has this exact first+last name, no conflicting DOB, nothing else to confirm it → **name only**, a suggestion with its own bulk confirmation ("Confirm all name-only matches");
+   - (c) any other candidate (a shared name, same surname + DOB, shared email) → `needs_review` with candidate list;
    - (d) no candidate → create (if the schema allows) else review (link manually or skip).
-   Staff decide per person: link to a candidate / any person, create new, or skip.
+   Staff decide per person: link to a candidate / any person, create new, or skip. The step is paged (25 people), searchable and filterable by match type.
 6. **Preview**: counts by action, sample rows, rejected rows with reasons, warnings, limitations text. Coverage range is pre-filled from row dates and **must be confirmed** before commit.
-7. **Commit**: one transaction; blocked while any row needs review. Writes entities, `external_ids` (with `first_import_batch_id`), `created_entities` per row, and before-values of anything it changed on pre-existing records.
+7. **Commit**: one transaction; blocked while any row needs review. For the Zen Planner grid presets each row runs in its own savepoint: a row the database refuses is rejected with its reason and the rest commit (see "Commit: one bad row no longer stops the file"). Writes entities, `external_ids` (with `first_import_batch_id`), `created_entities` per row, and before-values of anything it changed on pre-existing records.
 8. **Reconciliation**: file rows vs staged rows (balanced?), committed/linked/updated/skipped/rejected, records created by type, per person × item counts, sampled values source text vs stored text/value/unit, null/precision/unit checks (incl. "null coerced to 0" = must be 0), duplicates, coverage; rejected-rows CSV.
 9. **Revert**: deletes created entities children-first, each type in a savepoint; anything later data still references is **kept and listed**; restores fields it filled on existing records; removes the `external_ids` it introduced (except for kept records); idempotent (second call is a no-op); audited.
 
@@ -86,6 +87,67 @@ What the real file needed, now handled (tests use fictional people):
 
 Not handled: `classes every month` and `class card (expire when full)` limits are recorded but not enforced (926 rows, all warned). The Person export should be re-run without the repeats and, if Zen Planner offers it, with the person id column, which would remove the name matching altogether.
 
+### Bill and Attendance grids: made ready before the real files arrive (2026-11-15)
+
+Neither grid has been exported yet. Using what the Person and Membership files showed, both presets were gone through field by field. Tests use fictional people only (`tests/zpimport-hardening.test.ts`, `tests/zpimport-volume.test.ts`); nobody has seen a real Bill or Attendance file, so every item below is a guess at the format that is now tolerated, not a confirmed format.
+
+The rule for both: **nothing in a row can reject the file or stop a commit.** A value is accepted, or left empty with a warning, or the one row is rejected with a reason staff can read (and download in the rejected-rows CSV).
+
+| What the file may send | Bill grid | Attendance grid |
+| --- | --- | --- |
+| Month-name dates (`Nov 14, 2026`), with a weekday (`Sat, Nov 14, 2026`), day first (`14 Nov 2026`) | Due Date, Bill Date, Payment Date, Birth Date | Date, Birth Date |
+| Date and time in one cell (`Nov 14, 2026 4:30 PM`, `Sat, Nov 14, 2026 at 4:30 PM`, `11/14/2026 16:30`) | the date part is used | the time is used when there is no Time column or it is blank |
+| Time written `4:30PM`, `4pm`, `4:30 p.m.`, `16:30`, `4:30 PM EST`, or a range `4:30 PM - 5:15 PM` | n/a | the start is used; a range sets the session length (5 to 480 minutes, otherwise 60) |
+| A time that is not a time (`All day`, `TBD`) | n/a | visit kept at the start of the day, warned |
+| ON / OFF, TRUE / FALSE, Y / N, 1 / 0, in any letter case | Paid On Time | Att., Rsvp, Canceled |
+| Another word in a yes/no column (`ERROR`) | Paid On Time left empty, warned | Rsvp / Canceled left empty, warned. **Att.: that row is rejected** (it cannot be counted or skipped safely) |
+| Blank cell in a column the preset used to require | Due Date blank: Bill Date, then Payment Date is used and the row says so. No date at all: that row is rejected | **Att. blank: not a visit, skipped** with the reason (before, the row was rejected). Date blank: that row is rejected |
+| Money as `$1,234.56`, `(45.00)`, `-45.00`, `-$45.00`, `$-45.00`, `45.00-`, `USD 45.00` | all four amounts; negative amounts are kept and flagged as a credit or refund | n/a |
+| Money that cannot be read (`ERROR`, `45.00 CR`) | left empty (never 0), warned | n/a |
+| Amounts that do not add up (Due minus Paid is not Unpaid) | all three kept as written, warned | n/a |
+| Status words in capitals (`PAID`, `NO SHOW`) | kept as written in `zp_status` | read without regard to case |
+| A `Status` column instead of `Att.` | n/a | Attended / Present / Checked In / Completed / Late count as a visit; Reserved, No Show, Canceled, Late Cancel, Waitlisted and the like are skipped; an unknown word rejects that row. When both columns are present, Att. decides |
+| A `Number` column | mapped to Bill ID (one per bill). If more than 5% of rows turn out to share a number, the validate step warns that the column may be the person's number and says how to unmap it | mapped to Attendance ID and folded into the row's identity together with person, date, time, class and location, so it is safe whichever it really is |
+| An account name instead of first and last name (`Acct Name`, `Bill To`) | used as the person's name | n/a |
+| A date that cannot be real (year before 1990, or far in the future) | that row is rejected | that row is rejected; Att. = Yes on a future date imports with a warning |
+| NUL bytes in a cell | removed at upload (they used to fail validation of the whole file) | same |
+| People with no birth date, families sharing one email | see Identity below | same |
+
+Mapping: the Bill preset needs one of Due Date / Bill Date / Payment Date mapped, and the Attendance preset needs Att. or Status mapped (`requireOneOf` on the schema); a file with neither is stopped at the mapping step with that reason.
+
+**Bills stay history only.** `commitBillGrid` writes `zp_bills` and nothing else: no invoice, no membership, no job, no athlete record for a payer (tested). Re-importing a bill that is already there skips it; a later change to its paid amount in Zen Planner is not picked up.
+
+**Database rules a row can hit.** Checked for `zp_bills`, `bookings`, `schedule_sessions`, `external_ids`, `athletes`, `memberships`, `credit_buckets`: required due date and person (now caught at validation), amounts beyond a `bigint` (an amount with more than 10 digits before the point is unreadable), unique bill and booking keys (already skip, never fail), session end after start, NUL bytes. Whatever is not foreseen is caught by the row savepoint below.
+
+**Volume.** A 20,000-row Attendance file and a 20,000-row Bill file (400 fictional people, generated inside the test) on the shared 4-core build machine, two measurements each, the slower one while the full test suite and a browser suite were running beside it:
+
+| Step | Attendance | Bills |
+| --- | --- | --- |
+| Upload + validate | 10 to 17 s | 7 to 8 s |
+| Review page (one of 16 pages of 25 people) | 0.1 s | n/a |
+| Confirm 400 strong matches | 0.2 to 0.3 s | 0.2 s |
+| Commit (18,800 visits / 19,905 bills, every row in its own savepoint) | 28 to 42 s | 24 to 35 s |
+
+The commit still runs inside one web request. If the real host has a request limit under about a minute, split the export by date range.
+
+### Commit: one bad row no longer stops the file
+
+`commitBatch` runs each row of a Zen Planner grid preset (Person, Membership, Bill, Attendance) inside its own savepoint. When the database refuses a row (a CHECK, a missing value, a foreign key, an exclusion, a value it cannot store) the savepoint is rolled back, the row becomes `invalid` with `Rejected at commit: <reason>` in its errors, and the commit goes on. The reason is plain words for the constraints an imported row can hit (`row-errors.ts`) and a generic sentence naming the rule for any other. The row shows in the Rejected count, in reconciliation and in the rejected-rows CSV; because everything it wrote is gone, uploading the file again imports just that row once the cause is fixed.
+
+- The commit keeps an id cache (the imported service, sessions, plans, households, parents). Ids cached by a row that is rolled back are forgotten (`RowCache`), so the next row creates them again instead of pointing at something that no longer exists (tested: the first visit of a file is refused after it created the service and the session).
+- Failures that are not about the row still abort the whole commit so it can be retried: lost connection, serialization failure or deadlock, out of resources, cancelled query, a query that is wrong (classes 08, 25, 40, 42, 53 to 58, XX).
+- A Person row that names another row of the file as its parent, when that parent row was rejected, imports without the guardian link and says so (existing behaviour).
+- **Not applied to the other schemas** (Hawkin, TeamBuildr, wearables, generic, GoHighLevel, the older Zen Planner schemas): they keep all-or-nothing commits. A Hawkin sync advances its checkpoint when the batch commits, so a silently rejected test would never be fetched again, and a TeamBuildr questionnaire is assembled from several rows, so dropping one would store a partial answer set.
+
+### Identity review with many people
+
+- Review was already one decision per source person; that is unchanged. What was missing was a way to get through a long list.
+- **Name-only tier.** For the Membership, Bill and Attendance grids (files that follow a Person import from the same account and cannot create people), a row whose exact first and last name belongs to exactly one person in Teamwork, with no conflicting birth date and nothing else to confirm it, is now a suggestion (`name_only`) instead of "ambiguous". It still waits for staff. **Confirm all name-only matches (N)** links them in one deliberate step with its own confirmation; strong matches keep their own button. A name two people share stays "several candidates" and is decided person by person. The Person grid and every other schema are unchanged (a name alone never suggests anyone there). The Bill and Attendance export steps now ask for Birth Date and Email columns when the grid offers them, which turns name-only matches into strong ones.
+- The step is **paged** (25 people), **searchable** by name or email, and **filterable** by how the person matched (strong / name only / several candidates / no match), counted in SQL (`reviewGroupPage`), so 400 people from a 20,000-row file load in about 0.1 s. A decision keeps the current search, filter and page.
+- "Link to someone else" is one type-ahead list shared by the whole page (up to 5,000 people) instead of a 2,000-option menu per person; the server accepts only a pick from that list, inside the organization.
+- The committed import page no longer scrolls sideways at 390px (the reconciliation tables widened their grid column).
+- For the 299 membership rows (41 people) left after the real dry run: the ones where "nothing but the name matches" and the name is unique become name-only suggestions; the ones where the name is shared still need a decision each. How the 41 split is not known here (the real file was not available to this session).
+
 ### Header matching
 
 Headers are compared without case or punctuation (`normHeader` in `mapping.ts`: "Att." = "att", "Shared?" = "shared", "Mbr. Begin Date" = "mbr begin date"), and every field has a short alias list. A header the preset does not recognize is listed on the mapping step ("Not recognized (will not be imported): ...") and left out; it never fails the import. Preset columns missing from the file are listed too and left empty. Staff can still remap any field by hand.
@@ -98,8 +160,8 @@ For every grid: open the report grid in Zen Planner Studio, choose columns, add 
 | --- | --- | --- |
 | `zenplanner.person_grid` | `person/index.cfm` | First Name, Last Name, Birth Date, Email, Phone, Status, Family ID, Family, Parent First, Parent Last, Parent Email, Special Needs, Medications, Allergies, Prospect Status, Source, Interest, Referred By, Prospect Priority, Sales Rep, Inquiry Date, Trial End Date, Tracking Source / Name / Medium / Keywords, Primary Instructor, Primary Location, Signup Date, Has Password?, Signed Documents, Groups |
 | `zenplanner.membership_grid` | `membership/index.cfm` | First Name, Last Name, Membership, Status, Mbr. Begin Date, Mbr. End Date, Months, Auto Renew, Renewal Type, Trial Member?, Cancel Date, Cancel By, Cancel Reason, Cancel Comments, Payment Amount, First Bill Due, Income Category, Att. Limit, Att. Limit Type, Class Card Att. Remaining, Shared?, Autopay?, Family ID, Birth Date, Email |
-| `zenplanner.bill_grid` | `bill/index.cfm` | First Name, Last Name, Description, Due Date, Amount Due, Amount Paid, Amount Unpaid, Discount Total, Paid On Time, Status (do not add the Autopay Account columns) |
-| `zenplanner.attendance_grid` | `attendance/index.cfm` | First Name, Last Name, Date, Time, Att., Rsvp, Canceled, Session Type, Program, Location, Staff Member |
+| `zenplanner.bill_grid` | `bill/index.cfm` | First Name, Last Name, Description, Due Date, Amount Due, Amount Paid, Amount Unpaid, Discount Total, Paid On Time, Status (do not add the Autopay Account columns). If offered: Number, Birth Date, Email |
+| `zenplanner.attendance_grid` | `attendance/index.cfm` | First Name, Last Name, Date, Time, Att., Rsvp, Canceled, Session Type, Program, Location, Staff Member. If offered: Birth Date, Email |
 
 No Task preset: the Task grid (10 fields) is short-lived staff work and is better re-created than imported.
 
@@ -125,7 +187,7 @@ No Task preset: the Task grid (10 fields) is short-lived staff work and is bette
 
 **Bill** (`commitBillGrid`): one row in `zp_bills` (due date, amounts, discount total, paid on time, status). **Never an invoice**: nothing payable, nothing shown to families. Autopay Account columns are never mapped. Two screens read `zp_bills`, both read-only. The **membership audit** uses the imported bills of a Zen Planner-billed membership (matched by `membership_id`) instead of its estimate: the exception shows the billed and paid amounts labelled "from imported bill history", and falls back to the labelled estimate when the membership has no imported bills or for bill dates after its last imported bill. The **scoreboard money view** shows them as a separate table, "Billed in Zen Planner, imported" (definition `mv_zp_imported`), never added to Collected, Billed or Outstanding. A bill that could not be matched to one membership (plan name not unique for the athlete) is in the scoreboard table but not in the audit.
 
-**Attendance**: a row is a visit **only when `Att.` = Yes**. Rsvp and Canceled are separate columns and never make a visit; those rows are skipped with the reason. Session Type, Program and Staff Member are kept as text on the imported session; Location links to a hub location on an exact name match.
+**Attendance**: a row is a visit **only when `Att.` = Yes** (or ON, TRUE, Y, 1). Rsvp and Canceled are separate columns and never make a visit; those rows are skipped with the reason, and so is a row whose Att. is blank. When the file has a Status column and no Att. value, the Status word decides. Session Type, Program and Staff Member are kept as text on the imported session; Location links to a hub location on an exact name match.
 
 Revert removes all of the above (leads, tags, health rows, alerts, bills, punch cards, holds); anything later data depends on is kept and listed. Imported plan versions always stay: a database trigger refuses deleting product versions (same as the older membership import).
 
@@ -291,4 +353,8 @@ Evidence levels: **verified in docs** = stated on the vendor's official page; **
 - `test_sessions (source, source_record_id)` and `maxes (source, source_record_id)` uniqueness is global, not per org: a vendor test id in two orgs is rejected at validation. Recommend making those indexes org-scoped (schema owner).
 - Revert leaves stored files on disk (the storage adapter has no delete); rows are removed.
 - XLSX is not read directly (save as CSV).
-- Very large files commit in one transaction (fine to tens of thousands of rows); split bigger exports by date.
+- Very large files commit in one transaction (20,000-row Bill and Attendance files measured at 24 to 42 s on the build machine); split bigger exports by date, or any export if the host limits a request to under a minute.
+- The Bill and Attendance grids have still not been exported: every format in "Bill and Attendance grids: made ready before the real files arrive" is a tolerated guess. Check the first real file's mapping step (which columns were recognized), the rejected rows and the warnings before committing.
+- A bill already imported is skipped on re-import; a later change to its paid amount in Zen Planner is not picked up.
+- The Payment Date of a bill is used only as a stand-in when the Due Date is blank; it is not stored on its own.
+- Row savepoints cover the Zen Planner grid presets only; other schemas still commit all or nothing.

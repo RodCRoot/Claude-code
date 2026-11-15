@@ -1,5 +1,5 @@
 import { matchVocab, PROSPECT_STATUS_TO_STAGE, type VocabKey } from "@/lib/zenplanner/vocab";
-import { asText, parseNumber, syntheticId, zonedLocalToInstant } from "../normalize";
+import { asText, parseDate, parseDateAndTime, parseMoneyMinor, parseNumber, parseTimeRange, syntheticId, zonedLocalToInstant } from "../normalize";
 import type { Evidence, FieldDef, FieldValue, ImportSchemaDef, NormalizeCtx } from "../types";
 import { emptyRow, identityFrom, resolveName } from "./common";
 
@@ -22,31 +22,33 @@ const PERSON_ID: FieldDef = { key: "source_person_id", label: "Person ID", type:
 const NAME_FIELDS: FieldDef[] = [
   { key: "first_name", label: "First Name", type: "text", aliases: ["first name", "firstname", "first"] },
   { key: "last_name", label: "Last Name", type: "text", aliases: ["last name", "lastname", "last"] },
-  { key: "full_name", label: "Name", type: "text", aliases: ["name", "full name", "person", "member", "member name"] },
+  { key: "full_name", label: "Name", type: "text", aliases: ["name", "full name", "person", "member", "member name", "attendee", "athlete", "client", "participant"] },
 ];
 
+const YES_WORDS = new Set(["yes", "y", "true", "t", "1", "x", "on", "checked", "✓", "✔", "attended", "present"]);
+const NO_WORDS = new Set(["no", "n", "false", "f", "0", "off", "unchecked", "absent"]);
+
+/** Yes/No as the grids write it: Yes/No, Y/N, TRUE/FALSE, ON/OFF (the real Autopay? column), 1/0, in any letter case. */
 const yes = (v: FieldValue, label: string, warnings: string[]): boolean | null => {
   const s = asText(v);
   if (s === null) return null;
   const t = s.trim().toLowerCase();
-  // The real grids write ON / OFF in the Autopay? column.
-  if (["yes", "y", "true", "1", "x", "on"].includes(t)) return true;
-  if (["no", "n", "false", "0", "off"].includes(t)) return false;
+  if (YES_WORDS.has(t)) return true;
+  if (NO_WORDS.has(t)) return false;
   warnings.push(`${label}: "${s}" is not Yes/No; left empty.`);
   return null;
 };
 
-/** "$178.99", "1,234.50", "(12.00)" → integer cents. Null (never 0) when empty; warns when unreadable. */
+/** "$178.99", "1,234.50", "(12.00)", "-$45.00" → integer cents. Null (never 0) when empty; warns when unreadable. */
 const money = (v: FieldValue, label: string, warnings: string[]): number | null => {
   const s = asText(v);
   if (s === null) return null;
-  const neg = /^\(.*\)$/.test(s.trim()) || /^-/.test(s.trim());
-  const n = parseNumber(s.trim().replace(/^[-(]\s*/, "").replace(/\)$/, "").replace(/^\$\s*/, ""));
-  if (!n) {
+  const cents = parseMoneyMinor(s);
+  if (cents === undefined) {
     warnings.push(`${label}: "${s}" is not an amount; left empty.`);
     return null;
   }
-  return Math.round(n.value * 100) * (neg ? -1 : 1);
+  return cents;
 };
 
 const int = (v: FieldValue, label: string, warnings: string[]): number | null => {
@@ -459,6 +461,14 @@ export const zpMembershipGrid: ImportSchemaDef = {
 // Bill
 // ---------------------------------------------------------------------------
 
+/** Names as the Bill grid may write them: the person, or the account that pays. */
+const BILL_NAME_FIELDS: FieldDef[] = NAME_FIELDS.map((f) => (f.key === "full_name" ? { ...f, aliases: [...(f.aliases ?? []), "acct name", "account name", "account", "bill to", "payer", "customer"] } : f));
+
+/** Calendar dates outside this window are almost certainly a typo or a misread column, never real history. */
+function implausibleDate(ymd: string, today: string, maxYearsAhead: number): boolean {
+  return ymd < "1990-01-01" || ymd > `${Number(today.slice(0, 4)) + maxYearsAhead}-12-31`;
+}
+
 export const zpBillGrid: ImportSchemaDef = {
   id: "zenplanner.bill_grid",
   source: "zenplanner",
@@ -471,49 +481,87 @@ export const zpBillGrid: ImportSchemaDef = {
   allowCreatePerson: false,
   limitations:
     GRID_LIMITS +
-    " Bills are history: they are kept in their own table, never become Teamwork invoices, and no family is ever asked to pay them here. Autopay Account and approval columns are not imported (payment account details stay in Zen Planner).",
+    " Bills are history: they are kept in their own table, never become Teamwork invoices, and no family is ever asked to pay them here. Autopay Account and approval columns are not imported (payment account details stay in Zen Planner). A bill with no Due Date is filed under its Bill Date or Payment Date and says so; a bill with no date at all is rejected. Amounts that cannot be read are left empty (never 0) and flagged. Re-importing a bill that is already in the history skips it: a later change to its paid amount in Zen Planner is not picked up.",
   exportHelp: {
     grid: "Bills (Bill report grid)",
     path: `${EXPORT_BASE}bill/index.cfm`,
     steps: [
       "In Zen Planner Studio open the Bill report grid (bill/index.cfm).",
       "Choose columns and add every column in the list below. Set the due-date range you want as history.",
+      "If the grid offers a Number (bill number), Birth Date or Email column, add them too: the number keeps a re-import from duplicating bills, and a birth date or email lets a bill be matched to the right person without a decision for each name.",
       "Export as CSV (bill/index.cfm?export=CSV&_c=<the chosen column names>). Do not add the Autopay Account columns.",
       "Import the Person grid first, then upload this file and choose this preset.",
     ],
     columns: ["First Name", "Last Name", "Description", "Due Date", "Amount Due", "Amount Paid", "Amount Unpaid", "Discount Total", "Paid On Time", "Status"],
   },
+  requireOneOf: [{ keys: ["due_date", "bill_date", "paid_date"], label: "A date: Due Date, Bill Date or Payment Date" }],
   fields: [
-    { key: "bill_id", label: "Bill ID", type: "text", aliases: ["bill id", "billid", "invoice id", "bill #", "bill number"] },
+    { key: "bill_id", label: "Bill ID", type: "text", aliases: ["bill id", "billid", "invoice id", "bill #", "bill number", "number", "bill no", "invoice number", "invoice #", "invoice no", "no"], hint: "The Bill grid's Number column when it has one: one per bill. If the column turns out to be the person's number, clear this mapping." },
     PERSON_ID,
-    ...NAME_FIELDS,
+    ...BILL_NAME_FIELDS,
     { key: "dob", label: "Birth Date", type: "date", aliases: ["birth date", "birthdate", "dob"] },
     { key: "email", label: "Email", type: "email", aliases: ["email", "email address"] },
-    { key: "description", label: "Description", type: "text", aliases: ["description", "bill description", "bill for", "item", "membership", "memo"] },
-    { key: "due_date", label: "Due Date", type: "date", required: true, aliases: ["due date", "duedate", "bill date", "due"] },
-    { key: "amount_due", label: "Amount Due", type: "text", aliases: ["amount due", "amountdue", "bill amount", "billamount", "amount"] },
-    { key: "amount_paid", label: "Amount Paid", type: "text", aliases: ["amount paid", "amountpaid", "paid"] },
-    { key: "amount_unpaid", label: "Amount Unpaid", type: "text", aliases: ["amount unpaid", "amountunpaid", "unpaid", "balance"] },
-    { key: "discount_total", label: "Discount Total", type: "text", aliases: ["discount total", "discounttotal", "discount"] },
+    { key: "description", label: "Description", type: "text", aliases: ["description", "bill description", "bill for", "item", "membership", "membership label", "memo"] },
+    { key: "due_date", label: "Due Date", type: "text", aliases: ["due date", "duedate", "due", "date due"], hint: "When a bill has no Due Date, its Bill Date or Payment Date is used and the row says so." },
+    { key: "bill_date", label: "Bill Date", type: "text", aliases: ["bill date", "billed", "billed on", "invoice date", "date", "created", "created date"] },
+    { key: "paid_date", label: "Payment Date", type: "text", aliases: ["payment date", "paid date", "date paid", "paid on"] },
+    { key: "amount_due", label: "Amount Due", type: "text", aliases: ["amount due", "amountdue", "bill amount", "billamount", "amount", "total", "total due"] },
+    { key: "amount_paid", label: "Amount Paid", type: "text", aliases: ["amount paid", "amountpaid", "paid", "paid amount"] },
+    { key: "amount_unpaid", label: "Amount Unpaid", type: "text", aliases: ["amount unpaid", "amountunpaid", "unpaid", "balance", "balance due", "amount owed"] },
+    { key: "discount_total", label: "Discount Total", type: "text", aliases: ["discount total", "discounttotal", "discount", "discounts"] },
     { key: "paid_on_time", label: "Paid On Time", type: "text", aliases: ["paid on time", "paidontime", "on time"] },
     { key: "status", label: "Status", type: "text", aliases: ["status", "bill status"] },
   ],
   normalize(f, _raw, ctx) {
     const r = emptyRow();
+    const today = ctx.today ?? new Date().toISOString().slice(0, 10);
     r.identity = identityFrom(f, ctx, { sourceEntityType: "member", needsAthlete: false }, r.errors);
-    const due = asText(f.due_date);
+    // Dates are read here, not by the generic typing step, so one odd cell never hides a usable date in another column.
+    const dateOf = (key: string, label: string): string | null => {
+      const s = asText(f[key]);
+      if (s === null) return null;
+      const d = parseDate(s);
+      if (!d) r.warnings.push(`${label}: unrecognized date "${s}"; ignored.`);
+      return d;
+    };
+    const dueRead = dateOf("due_date", "Due Date");
+    const billDate = dateOf("bill_date", "Bill Date");
+    const paidDate = dateOf("paid_date", "Payment Date");
+    let due = dueRead;
+    if (!due && billDate) {
+      due = billDate;
+      r.warnings.push("No Due Date; filed under its Bill Date.");
+    } else if (!due && paidDate) {
+      due = paidDate;
+      r.warnings.push("No Due Date; filed under its Payment Date.");
+    }
+    if (!due) r.errors.push("No usable Due Date, Bill Date or Payment Date: a bill needs a date to be kept as history.");
+    else if (implausibleDate(due, today, 10)) {
+      r.errors.push(`Due Date ${due} is outside the years a bill can belong to (1990 to ${Number(today.slice(0, 4)) + 10}).`);
+      due = null;
+    }
+    const amountDue = money(f.amount_due, "Amount Due", r.warnings);
+    const amountPaid = money(f.amount_paid, "Amount Paid", r.warnings);
+    const amountUnpaid = money(f.amount_unpaid, "Amount Unpaid", r.warnings);
+    const discountTotal = money(f.discount_total, "Discount Total", r.warnings);
+    const negative = [amountDue, amountPaid, amountUnpaid].some((a) => a != null && a < 0);
+    if (negative) r.warnings.push("Negative amount (a credit or refund in Zen Planner); kept as written.");
+    if (amountDue != null && amountPaid != null && amountUnpaid != null && amountDue - amountPaid !== amountUnpaid) {
+      r.warnings.push("Amount Due minus Amount Paid does not equal Amount Unpaid in the export; all three kept as written.");
+    }
+    const description = asText(f.description);
     r.data = {
-      description: asText(f.description),
+      description,
       dueDate: due,
-      amountDueMinor: money(f.amount_due, "Amount Due", r.warnings),
-      amountPaidMinor: money(f.amount_paid, "Amount Paid", r.warnings),
-      amountUnpaidMinor: money(f.amount_unpaid, "Amount Unpaid", r.warnings),
-      discountTotalMinor: money(f.discount_total, "Discount Total", r.warnings),
+      amountDueMinor: amountDue,
+      amountPaidMinor: amountPaid,
+      amountUnpaidMinor: amountUnpaid,
+      discountTotalMinor: discountTotal,
       paidOnTime: yes(f.paid_on_time, "Paid On Time", r.warnings),
       zpStatus: asText(f.status),
     };
     const personKey = asText(f.source_person_id) ?? `${resolveName(f).first}|${resolveName(f).last}|${asText(f.dob) ?? ""}`.toLowerCase();
-    r.sourceRecordId = asText(f.bill_id) ?? syntheticId(ctx.orgId, "zp-bill", personKey, due, asText(f.description), asText(f.amount_due));
+    r.sourceRecordId = asText(f.bill_id) ?? syntheticId(ctx.orgId, "zp-bill", personKey, due, description, asText(f.amount_due));
     if (due) r.dates.push(due);
     return r;
   },
@@ -522,6 +570,34 @@ export const zpBillGrid: ImportSchemaDef = {
 // ---------------------------------------------------------------------------
 // Attendance
 // ---------------------------------------------------------------------------
+
+/** Status words that say whether a visit happened, for exports that have a Status column instead of (or beside) Att. */
+const ZP_ATTENDANCE_STATUS: Record<string, { visit: boolean; why: string }> = {
+  attended: { visit: true, why: "" },
+  present: { visit: true, why: "" },
+  "checked in": { visit: true, why: "" },
+  "checked-in": { visit: true, why: "" },
+  "check in": { visit: true, why: "" },
+  completed: { visit: true, why: "" },
+  late: { visit: true, why: "" },
+  reserved: { visit: false, why: "Reserved only" },
+  registered: { visit: false, why: "Reserved only" },
+  booked: { visit: false, why: "Reserved only" },
+  rsvp: { visit: false, why: "Reserved only" },
+  pending: { visit: false, why: "Pending" },
+  waitlist: { visit: false, why: "Waitlisted" },
+  waitlisted: { visit: false, why: "Waitlisted" },
+  "no show": { visit: false, why: "No show" },
+  "no-show": { visit: false, why: "No show" },
+  noshow: { visit: false, why: "No show" },
+  absent: { visit: false, why: "Absent" },
+  missed: { visit: false, why: "Absent" },
+  canceled: { visit: false, why: "Canceled" },
+  cancelled: { visit: false, why: "Canceled" },
+  "late cancel": { visit: false, why: "Canceled" },
+  "late canceled": { visit: false, why: "Canceled" },
+  "late cancelled": { visit: false, why: "Canceled" },
+};
 
 export const zpAttendanceGrid: ImportSchemaDef = {
   id: "zenplanner.attendance_grid",
@@ -535,83 +611,127 @@ export const zpAttendanceGrid: ImportSchemaDef = {
   allowCreatePerson: false,
   limitations:
     GRID_LIMITS +
-    " Imported sessions are private historical records under an inactive 'Imported (Zen Planner)' service: they consume no credits, notify nobody, and are not bookable. Location is linked when its name matches a hub location exactly; Session Type, Program and Staff Member are kept as text on the session. Rows without a time are placed at the start of the day.",
+    " Imported sessions are private historical records under an inactive 'Imported (Zen Planner)' service: they consume no credits, notify nobody, and are not bookable. Location is linked when its name matches a hub location exactly; Session Type, Program and Staff Member are kept as text on the session. Rows without a time (or with a time that cannot be read) are placed at the start of the day. A blank Att. cell is read as not a visit and skipped; an Att. value that is neither yes nor no is rejected for that row only. When the export has a Status column instead of Att., only Attended / Present / Checked In / Completed / Late count as a visit.",
   exportHelp: {
     grid: "Attendance (Attendance report grid)",
     path: `${EXPORT_BASE}attendance/index.cfm`,
     steps: [
       "In Zen Planner Studio open the Attendance report grid (attendance/index.cfm).",
       "Choose columns and add every column in the list below. Att. must be included: it is the only column that says a visit happened.",
+      "If the grid offers Birth Date or Email columns, add them too: they let a visit be matched to the right person without a decision for each name.",
       "Set the date range, then export as CSV (attendance/index.cfm?export=CSV&_c=<the chosen column names>).",
       "Import the Person grid first, then upload this file and choose this preset.",
     ],
     columns: ["First Name", "Last Name", "Date", "Time", "Att.", "Rsvp", "Canceled", "Session Type", "Program", "Location", "Staff Member"],
   },
+  requireOneOf: [{ keys: ["att", "att_status"], label: "Att. (or a Status column that says who attended)" }],
   fields: [
+    { key: "attendance_id", label: "Attendance ID", type: "text", aliases: ["attendance id", "attendanceid", "att id", "record id", "number", "no"], hint: "Optional. Kept as part of the row's identity; safe to map even if the column is the person's number." },
     PERSON_ID,
     ...NAME_FIELDS,
     { key: "dob", label: "Birth Date", type: "date", aliases: ["birth date", "birthdate", "dob"] },
     { key: "email", label: "Email", type: "email", aliases: ["email", "email address"] },
-    { key: "date", label: "Date", type: "date", required: true, aliases: ["date", "attendance date", "att date", "class date", "session date"] },
-    { key: "time", label: "Time", type: "time", aliases: ["time", "start time", "class time", "session time"] },
-    { key: "att", label: "Att.", type: "text", required: true, aliases: ["att", "attended", "attendance", "att?"], hint: "Only Yes counts as a visit." },
+    { key: "date", label: "Date", type: "text", required: true, aliases: ["date", "attendance date", "att date", "class date", "session date", "date time", "datetime", "date/time", "start", "start date"], hint: "A date, or a date with a time (Nov 14, 2026 4:30 PM)." },
+    { key: "time", label: "Time", type: "text", aliases: ["time", "start time", "class time", "session time"], hint: "Optional when the Date column carries the time. A range (4:30 PM - 5:30 PM) sets the session length." },
+    { key: "att", label: "Att.", type: "text", aliases: ["att", "attended", "attendance", "att?", "attended?"], hint: "Only Yes (or ON) counts as a visit. Blank is read as not a visit." },
+    { key: "att_status", label: "Status", type: "text", aliases: ["status", "attendance status", "att status", "result"], hint: "Used only when Att. is not in the file or is blank on the row." },
     { key: "rsvp", label: "Rsvp", type: "text", aliases: ["rsvp", "rsvp?", "reserved", "reservation"] },
     { key: "canceled", label: "Canceled", type: "text", aliases: ["canceled", "cancelled", "canceled?", "cancelled?"] },
     { key: "session_type", label: "Session Type", type: "text", aliases: ["session type", "sessiontype", "type"] },
     { key: "program", label: "Program", type: "text", aliases: ["program", "program name"] },
     { key: "location", label: "Location", type: "text", aliases: ["location", "location name"] },
     { key: "staff", label: "Staff Member", type: "text", aliases: ["staff member", "staff", "instructor", "coach"] },
-    { key: "class_name", label: "Class", type: "text", aliases: ["class", "class name", "session", "session name", "event"] },
+    { key: "class_name", label: "Class", type: "text", aliases: ["class", "class name", "session", "session name", "event", "appointment"] },
   ],
   normalize(f, _raw, ctx) {
     const r = emptyRow();
+    const today = ctx.today ?? new Date().toISOString().slice(0, 10);
     r.identity = identityFrom(f, ctx, { sourceEntityType: "member", needsAthlete: true }, r.errors);
-    const date = asText(f.date);
-    const time = asText(f.time);
+
+    // Date, with the time taken from the Time column or from the Date cell itself ("Nov 14, 2026 4:30 PM").
+    const dateText = asText(f.date);
+    const dt = dateText ? parseDateAndTime(dateText) : null;
+    let date = dt?.date ?? null;
+    if (dateText && !date) r.errors.push(`Date: unrecognized date "${dateText}".`);
+    if (date && implausibleDate(date, today, 1)) {
+      r.errors.push(`Date ${date} is outside the years a visit can belong to (1990 to ${Number(today.slice(0, 4)) + 1}).`);
+      date = null;
+    }
+    const timeText = asText(f.time);
+    const range = timeText ? parseTimeRange(timeText) : null;
+    if (timeText && !range) r.warnings.push(`Time "${timeText}" is not a time; the visit is placed at the start of the day.`);
+    const time = range?.start ?? dt?.time ?? null;
+    const endTime = range ? range.end : (dt?.endTime ?? null);
+    let durationMinutes = 60;
+    if (time && endTime) {
+      const mins = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3, 5));
+      const d = mins(endTime) - mins(time);
+      if (d >= 5 && d <= 480) durationMinutes = d;
+    }
+
+    // Did a visit happen? Att. decides; Status is only consulted when Att. is absent or blank.
     const attText = asText(f.att);
-    const attWarn: string[] = [];
-    const att = yes(f.att, "Att.", attWarn);
-    if (attText !== null && att === null) r.errors.push(`Att. "${attText}" is not Yes/No.`);
+    const att = yes(f.att, "Att.", []);
+    const statusText = asText(f.att_status);
+    const statusWord = statusText ? ZP_ATTENDANCE_STATUS[statusText.trim().toLowerCase()] : undefined;
     const rsvp = yes(f.rsvp, "Rsvp", r.warnings);
     const canceled = yes(f.canceled, "Canceled", r.warnings);
     // A row is a visit only when Att. = Yes. Rsvp and Canceled never make (or unmake) a visit.
     let status: "attended" | "not_checkin" = "not_checkin";
     let skipReason: string | null = null;
-    if (att === true) {
+    if (attText !== null && att === null) {
+      r.errors.push(`Att. "${attText}" is neither yes nor no: this row cannot be counted or skipped safely.`);
+    } else if (att === true) {
       status = "attended";
       if (canceled) r.warnings.push("Att. = Yes on a row also marked Canceled; counted as a visit because Att. decides.");
-    } else if (canceled) skipReason = "Canceled, Att. is not Yes: not a visit";
-    else if (rsvp) skipReason = "Rsvp only, Att. is not Yes: not a visit";
-    else skipReason = "Att. is not Yes: not a visit";
+      if (statusWord && !statusWord.visit) r.warnings.push(`Att. = Yes but Status is "${statusText}"; counted as a visit because Att. decides.`);
+    } else if (att === false) {
+      skipReason = canceled ? "Canceled, Att. is not Yes: not a visit" : rsvp ? "Rsvp only, Att. is not Yes: not a visit" : "Att. is not Yes: not a visit";
+    } else if (statusText !== null) {
+      // No Att. value on this row: the Status word decides.
+      if (!statusWord) r.errors.push(`Status "${statusText}" is not a word this import knows (Attended, Present, Checked In, Reserved, No Show, Canceled ...) and Att. is blank.`);
+      else if (statusWord.visit) status = "attended";
+      else skipReason = `${statusWord.why}: not a visit`;
+    } else {
+      skipReason = canceled ? "Canceled, Att. is blank: not a visit" : rsvp ? "Rsvp only, Att. is blank: not a visit" : "Att. is blank: not a visit";
+    }
+
     let startsAt: string | null = null;
     if (date) {
       const z = zonedLocalToInstant(date, time ?? "00:00:00", ctx.tz);
       if (z.warning) r.warnings.push(z.warning);
-      if (!time && status === "attended") r.warnings.push("No time in export; session placed at start of day.");
+      if (!time && status === "attended" && !(timeText && !range)) r.warnings.push("No time in export; session placed at start of day.");
+      if (status === "attended" && date > today) r.warnings.push(`Att. = Yes on a date in the future (${date}); imported as written.`);
       startsAt = z.date.toISOString();
       r.dates.push(date);
     }
     const program = asText(f.program);
     const sessionType = asText(f.session_type);
+    const className = (asText(f.class_name) ?? program ?? sessionType ?? "Zen Planner visit").slice(0, 200);
     r.data = {
       date,
       time,
       startsAt,
       sourceTimestamp: [date, time].filter(Boolean).join(" "),
-      className: asText(f.class_name) ?? program ?? sessionType ?? "Zen Planner visit",
+      className,
       status,
       skipReason,
       att,
       rsvp,
       canceled,
+      zpStatus: statusText,
       sessionType,
       program,
       locationName: asText(f.location),
       staffName: asText(f.staff),
-      durationMinutes: 60,
+      durationMinutes,
     };
     const personKey = asText(f.source_person_id) ?? `${resolveName(f).first}|${resolveName(f).last}|${asText(f.dob) ?? ""}`.toLowerCase();
-    r.sourceRecordId = syntheticId(ctx.orgId, "zp-attendance", personKey, date, time, asText(f.class_name) ?? program ?? sessionType, asText(f.location));
+    const attendanceId = asText(f.attendance_id);
+    // The grid's own number is folded into the natural key rather than trusted alone: if the column is really the
+    // person's number, every visit still gets its own id. Files without the column keep the ids they always had.
+    const natural = [personKey, date, time, asText(f.class_name) ?? program ?? sessionType, asText(f.location)];
+    r.sourceRecordId = attendanceId ? syntheticId(ctx.orgId, "zp-attendance", ...natural, attendanceId) : syntheticId(ctx.orgId, "zp-attendance", ...natural);
     return r;
   },
 };

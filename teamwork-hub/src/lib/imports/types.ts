@@ -103,6 +103,8 @@ export type ImportSchemaDef = {
   /** external_ids.source_entity_type of the records this schema creates. */
   recordEntityType: string;
   fields: FieldDef[];
+  /** Groups of fields of which at least one must be mapped (e.g. any one of several date columns). */
+  requireOneOf?: { keys: string[]; label: string }[];
   /** Any unmapped header shaped like "Label (unit)" is a vendor metric column. */
   dynamicMetrics?: boolean;
   /** May unmatched people be created as new records? */
