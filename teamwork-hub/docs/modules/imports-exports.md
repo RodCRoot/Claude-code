@@ -67,6 +67,25 @@ Person and Membership grids were exported from the owner's account (students and
 - The Membership grid filters to `status is CURRENT` unless criteria are passed: use `&_f1=status&_o1=is not empty&_v1=` for the full history.
 - A few Person rows have an unquoted comma inside Address, which shifts later columns; the export step re-joins them into Address.
 
+#### Dry run of the real export (2026-11-15, private local database, nothing committed to the repo)
+
+The two files were run through the importer end to end on a throwaway local database. Totals only:
+- **Person grid:** 2,184 rows, of which 809 are exact repeats of another row (the export step wrote some people several times). 1,374 people created, 1 left for review, 0 rejected. 1,206 rows have no birth date. 214 rows name a Primary Instructor that matches no coach login.
+- **Membership grid:** 15,797 rows, one per Zen Planner membership Number. 15,498 imported, 299 rows (41 people) left for staff review because the name is shared or nothing but the name matches. 0 rejected.
+- **Imported current picture:** 225 active, 116 not started, 8 on hold. The file has 223 CURRENT plus 5 CANCEL PENDING, 119 NOT STARTED and 8 HOLD; the gap is inside the 299 rows left for review.
+- **Autopay ERROR:** 1,187 rows, 15 of them on memberships that are current, not started or on hold.
+- **Discount review:** 349 current memberships reviewed: 205 at list price, 3 family, 41 other, 100 with no list price (items sold without a label). 95 siblings have no family discount.
+
+What the real file needed, now handled (tests use fictional people):
+- **No Membership Label on 10,893 rows** (drop-ins, class tuition, one-off items; 59 of them current). They were rejected. They now import under a plan named `No label: <Income Category>`, flagged `no_membership_label`, and get no list price in the discount review.
+- **Autopay? is ON / OFF / ERROR**, not Yes/No. ERROR is recorded as unknown and flagged `autopay_error`. Hub autopay stays off for every imported membership regardless.
+- **Number** is the membership id. Without it, two memberships with the same person, plan and start date collapsed into one (153 rows).
+- **In Season memberships** failed the hub's fixed-term rule and aborted the whole commit. They now carry their end date as the end marker; one with no end date imports as a regular membership with a warning.
+- **Identity matching:** most children carry a parent's email and half the rows have no birth date, so nearly every row was "ambiguous" (11,462 rows skipped in the first run). The rule is now: exactly one person in the organization has this exact first and last name, and the birth date or the email matches, and the birth dates do not conflict. Two people with one name stay ambiguous. Matches are still confirmed by staff in bulk.
+- **List values** seen in the file were added to the Income Category, Membership Category and Cancel Reason lists.
+
+Not handled: `classes every month` and `class card (expire when full)` limits are recorded but not enforced (926 rows, all warned). The Person export should be re-run without the repeats and, if Zen Planner offers it, with the person id column, which would remove the name matching altogether.
+
 ### Header matching
 
 Headers are compared without case or punctuation (`normHeader` in `mapping.ts`: "Att." = "att", "Shared?" = "shared", "Mbr. Begin Date" = "mbr begin date"), and every field has a short alias list. A header the preset does not recognize is listed on the mapping step ("Not recognized (will not be imported): ...") and left out; it never fails the import. Preset columns missing from the file are listed too and left empty. Staff can still remap any field by hand.

@@ -20,8 +20,8 @@ export function identityKey(i: IdentityInput): string {
 /**
  * Identity matching rules (never merges silently):
  *  (a) external_ids exact source id → linked
- *  (b) exact first+last AND exact DOB (or exact email for adults) with exactly one
- *      candidate overall → "strong" (still confirmed by staff)
+ *  (b) exactly one person with this exact first+last name, AND the same DOB or the same email, AND no
+ *      conflicting DOB → "strong" (still confirmed by staff)
  *  (c) anything else with candidates (name-only, shared surname+DOB, shared email) → ambiguous
  *  (d) no candidates → none (create new when the schema allows)
  */
@@ -69,12 +69,20 @@ export async function matchPerson(tx: Tx, orgId: string, idSource: string, i: Id
     return { personId: p.id, reason: reasons.join(", ") };
   });
 
-  if (rows.length === 1) {
-    const p = rows[0];
-    const nameEq = !!first && !!last && p.firstName.toLowerCase() === first && p.lastName.toLowerCase() === last;
+  // Exactly one person in the organization carries this exact first + last name. Other candidates (a parent
+  // or sibling sharing the family email, a relative sharing surname + birth date) do not make it ambiguous:
+  // in the first real export most children carry a parent's email and half the rows have no birth date.
+  const isName = (p: (typeof rows)[number]) => !!first && !!last && p.firstName.toLowerCase() === first && p.lastName.toLowerCase() === last;
+  const sameName = rows.filter(isName);
+  if (sameName.length === 1) {
+    const p = sameName[0];
+    const at = rows.indexOf(p);
     const dobEq = !!i.dob && p.dob === i.dob;
-    const emailEq = !!email && p.email?.toLowerCase() === email && !!i.adult;
-    if (nameEq && (dobEq || emailEq)) {
+    const dobConflict = !!i.dob && !!p.dob && p.dob !== i.dob;
+    // Email alone is enough for adults, or for anyone when nobody else shares the name (rows.length covers
+    // every same-name person, so two people with one name and one email, such as a parent and a junior, stay ambiguous).
+    const emailEq = !!email && p.email?.toLowerCase() === email;
+    if (!dobConflict && (dobEq || emailEq)) {
       // A person already tied to a *different* record of the same source is not the same person.
       if (i.sourceId) {
         const other = await tx
@@ -90,11 +98,11 @@ export async function matchPerson(tx: Tx, orgId: string, idSource: string, i: Id
             ),
           );
         if (other.length) {
-          candidates[0].reason += `; already linked to ${idSource} id ${other.map((o) => o.sourceId).join(", ")}`;
+          candidates[at].reason += `; already linked to ${idSource} id ${other.map((o) => o.sourceId).join(", ")}`;
           return { confidence: "ambiguous", personId: null, candidates };
         }
       }
-      return { confidence: "strong", personId: p.id, candidates };
+      return { confidence: "strong", personId: p.id, candidates: [candidates[at], ...candidates.filter((_, k) => k !== at)] };
     }
   }
   return { confidence: "ambiguous", personId: null, candidates };

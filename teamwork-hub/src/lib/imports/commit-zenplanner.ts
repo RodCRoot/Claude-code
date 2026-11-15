@@ -315,13 +315,14 @@ export const commitMembershipGrid: Committer = async (c, row, out) => {
       startDate: String(n.startDate),
       endDate: (n.endDate as string) ?? null,
       nextBillDate: null,
-      cancelAt: (n.cancelDate as string) ?? null,
+      // In Season memberships are fixed-term in the hub: they always carry an end marker (the DB enforces it).
+      cancelAt: (n.cancelDate as string) ?? (n.inSeason ? ((n.endDate as string) ?? null) : null),
       cancelReason: (n.cancelReason as string) ?? null,
       // Billed by Zen Planner. Never invoiced, renewed or charged here; hub autopay stays off.
       billingProvider: "external_zenplanner",
       providerSubscriptionId: null,
       source: "zenplanner",
-      kind: n.inSeason ? "in_season" : "regular",
+      kind: n.inSeason && n.endDate ? "in_season" : "regular",
       commitmentStartsOn: commit ? String(n.startDate) : null,
       commitmentEndsOn: commit ? String(n.endDate) : null,
       autopay: false,

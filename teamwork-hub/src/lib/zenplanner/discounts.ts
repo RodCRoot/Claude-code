@@ -112,7 +112,9 @@ export async function discountReview(tx: Tx, v: Viewer, opts: { batchId?: string
     if (cat) {
       list = prices.get(cat.key) ?? cat.priceMinor;
       basis = "catalog";
-    } else if (r.versionPrice > 0) {
+    } else if (r.versionPrice > 0 && !r.d.planName.startsWith("No label:")) {
+      // Items sold without a Membership Label (drop-ins, tuition, one-off items) share one made-up plan per Income
+      // Category, so "the highest amount on the plan" is not a list price. They are listed as unknown instead.
       list = r.versionPrice;
       basis = "highest";
     }

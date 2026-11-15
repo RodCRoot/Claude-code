@@ -598,4 +598,77 @@ describe("real export formats (2026-11-14)", () => {
     expect(JSON.stringify(byName("Cass").normalized)).toMatch(/"active"/);
     expect(JSON.stringify(byName("Vega").normalized)).toMatch(/2026-11-01/);
   });
+
+  it("imports the awkward rows of the real export: shared family email, no birth date, ON/OFF/ERROR autopay, no label, In Season", async () => {
+    // Two fictional siblings carry one parent's email and no birth date, as most children do in the real Person grid.
+    const personCsv = [
+      "First Name,Last Name,Birth Date,Email,Status,Family ID",
+      "Orla,Nonreal,,household@nonreal.example,Student,FAM-REAL-1",
+      "Pim,Nonreal,,household@nonreal.example,Student,FAM-REAL-1",
+    ].join("\n");
+    const person = await uploadAndValidate(rod, "zenplanner.person_grid", "real-format-person.csv", new TextEncoder().encode(personCsv));
+    await confirmAndCommit(rod, person.batchId);
+
+    const csv = [
+      "First Name,Last Name,Birth Date,Email,Membership Label,Mbr. Status,Mbr. Begin Date,Mbr. End Date,Months,Payment Amount,Income Category,Autopay?,Number",
+      'Orla,Nonreal,,household@nonreal.example,Awkward Rows 2x,CURRENT,"Nov 1, 2026","Oct 31, 2027",12,$178.99,Sports Performance,ON,900001',
+      'Orla,Nonreal,,household@nonreal.example,Awkward Rows 2x,COMPLETED,"Nov 1, 2025","Oct 31, 2026",12,$178.99,Sports Performance,OFF,900002',
+      'Pim,Nonreal,,household@nonreal.example,,COMPLETED,"Jun 1, 2026","Jun 1, 2026",0,$20.00,Drop In,OFF,900003',
+      'Pim,Nonreal,,household@nonreal.example,In Season,CURRENT,"Nov 1, 2026","Jan 31, 2027",3,$99.00,Sports Performance,ERROR,900004',
+      'Pim,Nonreal,,household@nonreal.example,In Season,CURRENT,"Nov 1, 2026",,,$99.00,Sports Performance,ON,900005',
+    ].join("\n");
+    const { batchId, stats } = await uploadAndValidate(rod, "zenplanner.membership_grid", "real-format-awkward.csv", new TextEncoder().encode(csv));
+    expect(stats.rows).toBe(5);
+    expect(stats.status_invalid ?? 0).toBe(0);
+    // Same person + plan + start date twice would collapse without the Number column; here every row is its own record.
+    expect(stats.status_duplicate ?? 0).toBe(0);
+    const before = await tx((t) => batchRows(t, rod, batchId));
+    // A sibling sharing the email does not make the match ambiguous: one person has this exact name.
+    expect(before.map((r) => r.matchConfidence)).toEqual(["strong", "strong", "strong", "strong", "strong"]);
+    expect(new Set(before.map((r) => r.matchPersonId)).size).toBe(2);
+    const n = (i: number) => before[i].normalized as Record<string, unknown>;
+    expect(n(0).autopay).toBe(true);
+    expect(n(1).autopay).toBe(false);
+    expect(n(2).plan).toBe("No label: Drop In");
+    expect(n(2).flags).toContain("no_membership_label");
+    expect(n(3).autopay).toBeNull();
+    expect(n(3).flags).toContain("autopay_error");
+    expect(n(3).inSeason).toBe(true);
+    expect(n(4).inSeason).toBe(false); // no end date: imported as a regular membership, with a warning
+    expect(before[4].warnings?.join(" ")).toMatch(/no end date/);
+
+    await tx((t) => confirmStrongMatches(t, rod, batchId));
+    const out = await confirmAndCommit(rod, batchId);
+    expect(out).toMatchObject({ create: 5, reject: 0 });
+    const made = await db()
+      .select({ kind: memberships.kind, status: memberships.status, endDate: memberships.endDate, cancelAt: memberships.cancelAt, autopay: memberships.autopay, provider: memberships.billingProvider })
+      .from(memberships)
+      .innerJoin(externalIds, and(eq(externalIds.localId, memberships.id), eq(externalIds.localEntityType, "membership")))
+      .where(and(eq(memberships.orgId, rod.orgId), inArray(externalIds.sourceId, ["900001", "900002", "900003", "900004", "900005"])));
+    expect(made).toHaveLength(5);
+    // Never billed here, whatever Zen Planner's autopay said.
+    expect(made.every((m) => m.autopay === false && m.provider === "external_zenplanner")).toBe(true);
+    const inSeason = made.filter((m) => m.kind === "in_season");
+    expect(inSeason).toHaveLength(1);
+    expect(inSeason[0]).toMatchObject({ endDate: "2027-01-31", cancelAt: "2027-01-31" });
+  });
+
+  it("keeps two people with one name and one email apart", async () => {
+    const personCsv = [
+      "First Name,Last Name,Birth Date,Email,Status,Family ID",
+      'Rafe,Invented,"Feb 2, 1980",rafe@invented.example,Student,FAM-REAL-2',
+      'Rafe,Invented,"Mar 3, 2012",rafe@invented.example,Student,FAM-REAL-2',
+    ].join("\n");
+    const person = await uploadAndValidate(rod, "zenplanner.person_grid", "real-format-junior.csv", new TextEncoder().encode(personCsv));
+    await confirmAndCommit(rod, person.batchId);
+    const csv = [
+      "First Name,Last Name,Birth Date,Email,Membership Label,Mbr. Status,Mbr. Begin Date,Number",
+      'Rafe,Invented,,rafe@invented.example,Awkward Rows 2x,CURRENT,"Nov 1, 2026",900010',
+      'Rafe,Invented,"Mar 3, 2012",rafe@invented.example,Awkward Rows 2x,CURRENT,"Nov 1, 2026",900011',
+    ].join("\n");
+    const { batchId } = await uploadAndValidate(rod, "zenplanner.membership_grid", "real-format-junior-m.csv", new TextEncoder().encode(csv));
+    const rows = await tx((t) => batchRows(t, rod, batchId));
+    expect(rows.map((r) => r.matchConfidence)).toEqual(["ambiguous", "ambiguous"]);
+    expect(rows.every((r) => r.status === "needs_review")).toBe(true);
+  });
 });

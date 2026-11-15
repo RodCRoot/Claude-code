@@ -61,7 +61,8 @@ export const ZP_VOCAB: Record<VocabKey, VocabDef> = {
     key: "dropReason",
     label: "Drop / Cancel Reason",
     zpField: "Membership: Cancel Reason",
-    values: ["Price is too expensive", "Doesn't fit my schedule", "Membership Upgrade", "Administrative Drop"],
+    // From "Change membership" on: first seen in the real Membership grid export of 2026-11-14.
+    values: ["Price is too expensive", "Doesn't fit my schedule", "Membership Upgrade", "Administrative Drop", "Change membership", "Distance from home or work", "Multiple past dues with no proper reqs", "Didn't like instructor", "Need recovery", "Reevaluate", "Double Membership"],
     complete: false,
     total: 12,
   },
@@ -69,7 +70,8 @@ export const ZP_VOCAB: Record<VocabKey, VocabDef> = {
     key: "incomeCategory",
     label: "Income Category",
     zpField: "Membership: Income Category",
-    values: ["Sports Performance", "Youth", "Adult Performance Training", "Six Week Challenges"],
+    // The last five were first seen in the real Membership grid export of 2026-11-14.
+    values: ["Sports Performance", "Youth", "Adult Performance Training", "Six Week Challenges", "Drop In", "Class Tuition", "Fitness Together Contractor", "Personal Training", "Other", "Online Training"],
     complete: false,
     total: 12,
   },
@@ -77,7 +79,8 @@ export const ZP_VOCAB: Record<VocabKey, VocabDef> = {
     key: "membershipCategory",
     label: "Membership Category",
     zpField: "Membership option: Category",
-    values: ["Sport Performance and Youth Memberships", "In-Season", "Add-On"],
+    // The last four were first seen in the real Membership grid export of 2026-11-14.
+    values: ["Sport Performance and Youth Memberships", "In-Season", "Add-On", "Fitness Together Contractor", "6-week girl challenge", "Fall Reactivation", "Six Week Challenge"],
     complete: false,
     total: 14,
   },

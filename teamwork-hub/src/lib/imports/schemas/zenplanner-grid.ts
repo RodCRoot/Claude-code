@@ -29,8 +29,9 @@ const yes = (v: FieldValue, label: string, warnings: string[]): boolean | null =
   const s = asText(v);
   if (s === null) return null;
   const t = s.trim().toLowerCase();
-  if (["yes", "y", "true", "1", "x"].includes(t)) return true;
-  if (["no", "n", "false", "0"].includes(t)) return false;
+  // The real grids write ON / OFF in the Autopay? column.
+  if (["yes", "y", "true", "1", "x", "on"].includes(t)) return true;
+  if (["no", "n", "false", "0", "off"].includes(t)) return false;
   warnings.push(`${label}: "${s}" is not Yes/No; left empty.`);
   return null;
 };
@@ -329,12 +330,12 @@ export const zpMembershipGrid: ImportSchemaDef = {
     ],
   },
   fields: [
-    { key: "membership_id", label: "Membership ID", type: "text", aliases: ["membership id", "membershipid", "mbr id"] },
+    { key: "membership_id", label: "Membership ID", type: "text", aliases: ["membership id", "membershipid", "mbr id", "number", "membership number", "mbr number"], hint: "The Membership grid's Number column: one per membership." },
     PERSON_ID,
     ...NAME_FIELDS,
     { key: "dob", label: "Birth Date", type: "date", aliases: ["birth date", "birthdate", "dob"] },
     { key: "email", label: "Email", type: "email", aliases: ["email", "email address"] },
-    { key: "plan", label: "Membership", type: "text", required: true, aliases: ["membership", "membership label", "membership name", "mbr name", "membership option", "membership template", "plan", "plan name"] },
+    { key: "plan", label: "Membership", type: "text", hint: "Rows with no Membership Label (drop-ins, class tuition, one-off items in the real export) are imported under a plan named after their Income Category and flagged.", aliases: ["membership", "membership label", "membership name", "mbr name", "membership option", "membership template", "plan", "plan name"] },
     { key: "status", label: "Status", type: "text", aliases: ["status", "mbr status", "membership status"], hint: "When the column is missing the status is worked out from the cancel, end and hold dates." },
     { key: "start_date", label: "Mbr. Begin Date", type: "date", required: true, aliases: ["mbr begin date", "membership begin date", "begin date", "mbr begin", "start date"] },
     { key: "end_date", label: "Mbr. End Date", type: "date", aliases: ["mbr end date", "membership end date", "end date", "mbr end", "expiration date"] },
@@ -396,7 +397,23 @@ export const zpMembershipGrid: ImportSchemaDef = {
     const classCard = int(f.class_card_remaining, "Class Card Att. Remaining", r.warnings);
     const payment = money(f.payment_amount, "Payment Amount", r.warnings);
     if (payment === null) r.warnings.push("No Payment Amount; left empty (not 0) and listed as unknown in the discount review.");
-    const plan = asText(f.plan);
+    const incomeCategory = vocab("incomeCategory", "Income Category", f.income_category, ctx, flags, r.warnings);
+    let plan = asText(f.plan);
+    if (!plan) {
+      // About two thirds of the first real export: drop-ins, class tuition and other items sold without a label.
+      plan = `No label: ${incomeCategory ?? "no Income Category"}`;
+      flags.push("no_membership_label");
+      r.warnings.push(`No Membership Label; imported under "${plan}".`);
+    }
+    // Zen Planner writes ERROR when autopay is on but its saved payment method is failing.
+    const autopayText = asText(f.autopay);
+    const autopayError = !!autopayText && autopayText.trim().toLowerCase() === "error";
+    if (autopayError) {
+      flags.push("autopay_error");
+      r.warnings.push("Autopay? is ERROR in Zen Planner (the saved payment method is failing there); recorded as unknown and flagged.");
+    }
+    const inSeasonPlan = /in[\s-]?season/i.test(plan);
+    if (inSeasonPlan && !endDate) r.warnings.push("In Season membership with no end date; imported as a regular membership.");
     r.data = {
       plan,
       status: status ?? null,
@@ -412,20 +429,20 @@ export const zpMembershipGrid: ImportSchemaDef = {
       cancelComments: asText(f.cancel_comments),
       paymentAmountMinor: payment,
       firstBillDue: asText(f.first_bill_due),
-      incomeCategory: vocab("incomeCategory", "Income Category", f.income_category, ctx, flags, r.warnings),
+      incomeCategory,
       membershipCategory: vocab("membershipCategory", "Membership Category", f.membership_category, ctx, flags, r.warnings),
       attLimit,
       attLimitType,
       classesPerWeek,
       classCardRemaining: classCard,
       shared: yes(f.shared, "Shared?", r.warnings),
-      autopay: yes(f.autopay, "Autopay?", r.warnings),
+      autopay: autopayError ? null : yes(f.autopay, "Autopay?", r.warnings),
       discountName: asText(f.discount),
       holdReason: vocab("holdReason", "Hold Reason", f.hold_reason, ctx, flags, r.warnings),
       holdStart,
       holdEnd,
       familyId: asText(f.family_id),
-      inSeason: !!plan && /in[\s-]?season/i.test(plan),
+      inSeason: inSeasonPlan && !!endDate,
       flags,
     };
     if (classCard != null && classCard < 0) {
