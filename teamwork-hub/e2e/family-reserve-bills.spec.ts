@@ -18,7 +18,8 @@ test("guardian reserves from the day list with the family-member checklist, then
   await expect(page.getByRole("navigation", { name: "Schedule sections" }).getByRole("link")).toHaveText(["Calendar", "My Reservations", "Appointments", "My Attendance"]);
 
   // Two or more days ahead (outside any late-cancel window), find a class nobody in the family is in yet.
-  const picker = page.locator("main details.group > summary");
+  // A full class shows the same checklist under "Join waitlist"; this test needs one that can still be reserved.
+  const picker = page.locator("main details.group > summary", { hasText: /^Reserve/ });
   await expect(page.getByRole("link", { name: "Next day" })).toBeVisible();
   for (let i = 2; i < 10; i++) {
     const ymd = new Date(Date.now() + i * 86_400_000).toISOString().slice(0, 10);
@@ -27,7 +28,7 @@ test("guardian reserves from the day list with the family-member checklist, then
     if (await picker.count()) break;
   }
   await expect(picker.first(), "a class with Reserve for several family members").toBeVisible();
-  const row = page.locator("main li:has(details.group)").first();
+  const row = page.locator("main li:has(details.group)").filter({ has: page.locator("details.group > summary", { hasText: /^Reserve/ }) }).first();
   const href = await row.locator('a[href^="/schedule/classes/"]').first().getAttribute("href");
   const sameRow = page.locator(`main li:has(a[href="${href}"])`);
 

@@ -163,3 +163,11 @@ Verified after the merge: typecheck, lint and drift check clean; `pnpm test` 132
 Tightening pass (same day, no migration): live waitlist offers appear on the family Home and on staff Today, and an expired offer is never shown as live; browser test for a coach replacing a family's answer; UTM on the referral-link form; an Integrations section on the go-live page (PayPal and Venmo, Hawkin, Google Calendar, TeamBuildr, visitor address). The one-off `golive.spec.ts` failure was reproduced (2 in 15) and traced to the test ending while the redirect to `/denied` was still in flight; the test now waits for the redirect (30 of 30). `pnpm test` 1334/1334 (89 files).
 
 Known gaps: families get no email or text about a waitlist offer (no provider), only the Home card; after an offer expires the next family is offered the spot only when a sweep runs (a camps page view, a registration, or the nightly job; no worker is deployed); no setting for which proxy hop to trust; the offline sign-out purge test failed once on 2026-11-13 and has passed every run since, cause unknown.
+
+## Checkpoint 13 — First real Zen Planner export (2026-11-15)
+Another session exported the Person and Membership grids into Rod's private Drive folder and loaded Teamwork's draft member documents into the templates (still flagged as sample text). The export was dry-run on a throwaway local database; totals and the fixes it forced are in `docs/modules/imports-exports.md` → "Dry run of the real export". Result: 1,374 people and 15,498 of 15,797 membership rows import; 299 rows (41 people) need staff review. Bills and Attendance grids have not been exported.
+
+Verified: `pnpm test` 1339/1339 (89 files); typecheck and lint clean. Full Playwright run on Sunday 2026-11-15: 646 passed, 2 skipped, 4 failed (two tests at two sizes). Both were weekday-dependent tests, not app faults: the reserve test took the first class on the day even when it was full, and the wins test looked for tomorrow's game in this week's view. Both are fixed and their specs pass; a full rerun after the fix has not been done. Offline suite 4/4.
+
+Pattern worth knowing: three tests so far have failed only on a weekend because the seed is relative to today. Running the suite on each weekday would find the rest.
+

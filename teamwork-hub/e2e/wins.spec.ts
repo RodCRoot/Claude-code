@@ -154,7 +154,9 @@ test("staff see who competes this week and tomorrow, with a link to the existing
   await noSideScroll(page);
   await shot(page, "today-competing", info.project.name);
 
-  await page.goto("/wins/calendar");
+  // The seeded team game is tomorrow; on a Sunday that is next week, so open the week that holds tomorrow.
+  const tomorrow = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Indiana/Indianapolis" }).format(new Date(Date.now() + 86_400_000));
+  await page.goto(`/wins/calendar?start=${tomorrow}`);
   await expect(page.getByRole("heading", { level: 1, name: "Competition calendar" })).toBeVisible();
   await expect(page.locator("ol[aria-label^='Competitions']")).toContainText("Fictional Falls High School Volleyball (sample)");
   await noSideScroll(page);
