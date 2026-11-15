@@ -14,11 +14,11 @@ import { emptyRow, identityFrom, resolveName } from "./common";
 export const GRID_EVIDENCE: Evidence = "built from the 2026-11-13 account map; not yet tested against a real export file";
 
 const GRID_LIMITS =
-  "Preset built from the 2026-11-13 Zen Planner account map; not yet tested against a real export file. Check the first import's mapping and preview carefully. Billing stays in Zen Planner: nothing here creates invoices, charges, subscriptions, messages, or jobs, and nothing is ever written back to Zen Planner.";
+  "Preset built from the 2026-11-13 Zen Planner account map. The Person, Membership and Bill presets were run against real exports on 2026-11-15; the Attendance preset has not seen a real file. Check the first import's mapping and preview carefully. Billing stays in Zen Planner: nothing here creates invoices, charges, subscriptions, messages, or jobs, and nothing is ever written back to Zen Planner.";
 
 const EXPORT_BASE = "studio.zenplanner.com/zenplanner/studio/";
 
-const PERSON_ID: FieldDef = { key: "source_person_id", label: "Person ID", type: "text", aliases: ["person id", "personid", "member id", "zp id", "id"], hint: "Optional. Without it, people are matched by exact name plus birth date or email and always confirmed by staff." };
+const PERSON_ID: FieldDef = { key: "source_person_id", label: "Person ID", type: "text", aliases: ["person id", "personid", "member id", "zp id", "id", "bar code", "barcode"], hint: "The real Person and Membership grids have no Person ID column; their Bar Code column is the person's number in Zen Planner and is used as the key. Without a key, people are matched by exact name plus birth date or email and always confirmed by staff." };
 const NAME_FIELDS: FieldDef[] = [
   { key: "first_name", label: "First Name", type: "text", aliases: ["first name", "firstname", "first"] },
   { key: "last_name", label: "Last Name", type: "text", aliases: ["last name", "lastname", "last"] },
@@ -37,6 +37,14 @@ const yes = (v: FieldValue, label: string, warnings: string[]): boolean | null =
   if (NO_WORDS.has(t)) return false;
   warnings.push(`${label}: "${s}" is not Yes/No; left empty.`);
   return null;
+};
+
+/** The real Bill grid writes On-Time, Early or Late (blank on unpaid bills), not Yes/No. */
+const paidOnTime = (v: FieldValue, warnings: string[]): boolean | null => {
+  const t = asText(v)?.trim().toLowerCase().replace(/[\s_-]+/g, "") ?? null;
+  if (t === "ontime" || t === "early") return true;
+  if (t === "late") return false;
+  return yes(v, "Paid On Time", warnings);
 };
 
 /** "$178.99", "1,234.50", "(12.00)", "-$45.00" → integer cents. Null (never 0) when empty; warns when unreadable. */
@@ -557,7 +565,7 @@ export const zpBillGrid: ImportSchemaDef = {
       amountPaidMinor: amountPaid,
       amountUnpaidMinor: amountUnpaid,
       discountTotalMinor: discountTotal,
-      paidOnTime: yes(f.paid_on_time, "Paid On Time", r.warnings),
+      paidOnTime: paidOnTime(f.paid_on_time, r.warnings),
       zpStatus: asText(f.status),
     };
     const personKey = asText(f.source_person_id) ?? `${resolveName(f).first}|${resolveName(f).last}|${asText(f.dob) ?? ""}`.toLowerCase();

@@ -87,6 +87,23 @@ What the real file needed, now handled (tests use fictional people):
 
 Not handled: `classes every month` and `class card (expire when full)` limits are recorded but not enforced (926 rows, all warned). The Person export should be re-run without the repeats and, if Zen Planner offers it, with the person id column, which would remove the name matching altogether.
 
+#### Second dry run: the unfiltered full-history files (2026-11-15, private local database)
+
+A second set, exported straight from the Zen Planner grids with every status and all history, replaced the first one: `zp-01-people.csv`, `zp-02-memberships.csv`, `zp-03-bills.csv` in the same private Drive folder. Use these; ignore the two dated 2026-11-14 files. Attendance (about 57 MB) is not exported yet. Totals only:
+- **People:** 1,698 rows, no repeats. 1,696 created, 1 left for review, 1 rejected (an email that is not an email). 543 rows have a birth date.
+- **Memberships:** 15,812 rows. 15,797 imported, every one matched by key; 15 belong to the person left for review; 0 rejected. Imported current picture: 229 active, 119 not started, 7 on hold.
+- **Bills:** 18,709 rows, 2018 to 2027. 15,324 imported as history (nothing payable is created). 249 left for staff review. 3,135 rejected because the row names nobody: all are paid, almost all from 2018 to 2022, and look like bills of people since deleted in Zen Planner. Of the imported bills, 728 are unpaid for a total of $129,572, but 702 of those are future-dated instalments; the amount already past due is $3,938.
+
+What these files needed, now handled:
+- **Bar Code is the person key.** Neither grid has a Person ID column, but both carry Bar Code (the person's number in Zen Planner): unique per person and present on every membership row. The Person and Membership presets now map it as the person key, so memberships attach to people exactly, with no name matching. This took the Membership rows left for review from 331 to 15.
+- **Malformed addresses.** Zen Planner writes some addresses with unescaped quotes, which splits the Address cell and pushes later columns to the right (9 People rows, 85 Membership rows: emails landed in the Status column and the rows were rejected). The CSV reader now folds the surplus cells back into Address. The address itself is not imported.
+- **Paid On Time** is `On-Time`, `Early` or `Late`, not Yes/No.
+
+Still open:
+- **The Bill grid has no person key**, only names. 249 bill rows need a person chosen by staff (a shared name, or a name with nothing to confirm it). A Bar Code column on the Bill grid export would remove this.
+- **3,135 old paid bills name nobody** and are not imported. Revenue history before 2023 is therefore incomplete in the hub; Zen Planner remains the record for it.
+- The membership grid has no discount column. The 32 discounts are a separate list (`ref-discounts.txt` in "2 - Reference lists").
+
 ### Bill and Attendance grids: made ready before the real files arrive (2026-11-15)
 
 Neither grid has been exported yet. Using what the Person and Membership files showed, both presets were gone through field by field. Tests use fictional people only (`tests/zpimport-hardening.test.ts`, `tests/zpimport-volume.test.ts`); nobody has seen a real Bill or Attendance file, so every item below is a guess at the format that is now tolerated, not a confirmed format.

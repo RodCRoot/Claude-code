@@ -9,7 +9,7 @@ import { parseDate, parseDateAndTime, parseDateTime, parseMoneyMinor, parseTime,
 import { parseCsvText } from "@/lib/imports/parse";
 import { rejectedRowsCsv } from "@/lib/imports/reconcile";
 import { RowCache, rowRejectionReason } from "@/lib/imports/row-errors";
-import { zpAttendanceGrid, zpBillGrid } from "@/lib/imports/schemas/zenplanner-grid";
+import { zpAttendanceGrid, zpBillGrid, zpMembershipGrid, zpPersonGrid } from "@/lib/imports/schemas/zenplanner-grid";
 import type { ImportSchemaDef } from "@/lib/imports/types";
 import { UserError } from "@/lib/actions";
 import { closeTestDb, seedOrg, viewerFor } from "./helpers/db";
@@ -499,5 +499,39 @@ describe("Attendance grid import", () => {
     expect(await count(bookings, and(eq(bookings.orgId, ctx.orgId), eq(bookings.source, "zenplanner")))).toBe(5);
     const [row2] = await db().select().from(importRows).where(and(eq(importRows.batchId, again.batchId), eq(importRows.rowNumber, 2)));
     expect(row2.status).toBe("committed");
+  });
+});
+
+describe("what the full-history real exports showed", () => {
+  it("puts a row back in line when a malformed address splits into extra cells", () => {
+    // Zen Planner writes some addresses as "1 Pretend St"," IN"," 47000"""" (unescaped quotes).
+    const text = 'First Name,Last Name,Address,Email,Bar Code\r\n"Niko","Madeup","1 Pretend St"," IN"," 47000""""","niko@example.test","10001"\r\n"Ada","Invented","2 Nonreal Rd","ada@example.test","10002"\r\n';
+    const { rows } = parseCsvText(text);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ "First Name": "Niko", Address: "1 Pretend St, IN, 47000", Email: "niko@example.test", "Bar Code": "10001" });
+    expect(rows[1]).toMatchObject({ Address: "2 Nonreal Rd", Email: "ada@example.test", "Bar Code": "10002" });
+  });
+
+  it("leaves a row with extra cells alone when the file has no Address column", () => {
+    const { rows } = parseCsvText("First Name,Last Name\nNiko,Madeup,stray\n");
+    expect(rows[0]).toEqual({ "First Name": "Niko", "Last Name": "Madeup" });
+  });
+
+  it("uses Bar Code as the person key on the Person and Membership grids", () => {
+    expect(autoMap(zpPersonGrid, ["First Name", "Last Name", "Bar Code", "Email"]).source_person_id).toBe("Bar Code");
+    expect(autoMap(zpMembershipGrid, ["Number", "First Name", "Last Name", "Bar Code", "Mbr. Begin Date"]).source_person_id).toBe("Bar Code");
+    const p = row(zpPersonGrid, { "First Name": "Niko", "Last Name": "Madeup", "Bar Code": "10001" });
+    expect(p.sourceRecordId).toBe("10001");
+  });
+
+  it("reads On-Time, Early and Late in the Bill grid's Paid On Time column", () => {
+    const base = { "First Name": "Niko", "Last Name": "Madeup", "Bill #": "50001", Description: "Sports Performance", "Due Date": "Nov 4, 2026", "Amount Due": "$99.00", Status: "PAID" };
+    for (const [cell, want] of [["On-Time", true], ["Early", true], ["Late", false]] as const) {
+      const r = row(zpBillGrid, { ...base, "Paid On Time": cell });
+      expect(r.errors).toEqual([]);
+      expect(r.warnings.filter((w) => w.startsWith("Paid On Time"))).toEqual([]);
+      expect(r.data.paidOnTime).toBe(want);
+    }
+    expect(row(zpBillGrid, { ...base, "Paid On Time": null }).data.paidOnTime).toBeNull();
   });
 });
