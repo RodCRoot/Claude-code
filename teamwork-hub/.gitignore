@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/.e2e-at/
 
 # next.js
 /.next/
