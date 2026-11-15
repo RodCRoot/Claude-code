@@ -7,9 +7,11 @@ import type { Viewer } from "../../src/lib/authz/policy";
 import type { Role } from "../../src/db/schema";
 import { addDaysYmd, localToUtc } from "../../src/lib/time";
 import type { SeedCtx } from "./context";
+import { TEAMWORK_MEDIA_PERMISSION_OPTIONS, TEAMWORK_MEDIA_RELEASE_BODY, TEAMWORK_MINOR_RELEASE_BODY, TEAMWORK_USER_AGREEMENT_BODY } from "../../src/lib/forms/teamwork-drafts";
 
 /**
- * Documents seed: four SAMPLE-text templates with published versions (the waiver
+ * Documents seed: four SAMPLE-text templates (waiver, user agreement and media release carry Teamwork's
+ * draft wording pending attorney review) with published versions (the waiver
  * gets a v2 that supersedes open v1 requests), and requests in every state —
  * completed (real PDFs generated through src/lib/pdf), pending, partially signed
  * (waiting on a second guardian), superseded, and expired with a renewal issued.
@@ -31,51 +33,33 @@ function allowServerOnlyInScripts() {
   }
 }
 
-const WAIVER_V1 = `# Liability Waiver & Release
+// v1: the waiver section of the release Teamwork used in Zen Planner from Jan 2025 (shortened). v2: Teamwork's
+// draft minor participant release (src/lib/forms/teamwork-drafts.ts), published with "Require re-signing".
+const WAIVER_V1 = `# Teamwork Waiver and Release of Liability
 
-**SAMPLE TEXT — replace with Teamwork-approved language. This sample has not been reviewed by counsel.**
+**SAMPLE TEXT: earlier Teamwork wording kept for the demo history. Superseded by v2.**
 
-## Assumption of risk
+## Acknowledgment of risk
 
-Athletic training, strength and conditioning, speed and agility work, and sports-specific practice involve inherent risks, including but not limited to muscle strains, sprains, fractures, concussion, and, in rare cases, serious injury.
+I acknowledge that participation in athletic events, training, and exercise programs with T2 Indiana, Inc. involves inherent risks, including but not limited to:
 
-## Release
+- Physical injuries (bones, joints, muscles, internal organs)
+- Severe physical contact
+- Equipment failure or inadequacy
+- Exposure to communicable diseases
 
-In consideration of being allowed to participate in programs at Teamwork Bloomington ("Teamwork"), the undersigned:
+I voluntarily assume these risks and waive any claims for property damage, personal injury, or illness arising from my participation.
 
-1. Acknowledges the risks described above and voluntarily chooses to participate.
-2. Agrees to follow coaching instructions and facility rules.
-3. Releases Teamwork, its owners, coaches, and staff from claims arising from ordinary negligence to the extent permitted by law.
+## Release of liability
 
-## Medical treatment
+I release T2 Indiana, Inc., its staff, contractors, officers, and agents from any claims, including those due to negligence, that may result from my participation in activities conducted or sponsored by T2 Indiana, Inc.
 
-If the athlete is injured and a parent or guardian cannot be reached, Teamwork staff may seek emergency medical treatment for the athlete.
+## Parental consent
 
-_This waiver remains in effect for the renewal period configured by Teamwork._
+This waiver must be signed by a parent or legal guardian for athletes under 18. Participants 18 or older must sign this waiver themselves.
 `;
 
-const WAIVER_V2 = WAIVER_V1.replace(
-  "2. Agrees to follow coaching instructions and facility rules.",
-  "2. Agrees to follow coaching instructions, facility rules, and the posted equipment-use policy.\n3. Agrees to report any injury, illness, or concussion symptoms to Teamwork staff before training.",
-).replace("3. Releases Teamwork", "4. Releases Teamwork");
-
-const MEMBERSHIP = `# Membership Agreement
-
-**SAMPLE TEXT — replace with Teamwork-approved language. Prices and policies are set in Settings, not in this form.**
-
-## Membership
-
-The member (or the parent/guardian of a minor member) enrolls in the Teamwork membership selected at checkout. Plan details, prices, and session credits are shown on the invoice and in the member portal.
-
-## Billing
-
-- Recurring memberships renew automatically until cancelled.
-- Cancellation, hold, and refund rules follow the policy published by Teamwork at the time of signing.
-
-## Conduct
-
-Members agree to respect coaches, staff, other athletes, and the facility.
-`;
+const WAIVER_V2 = TEAMWORK_MINOR_RELEASE_BODY;
 
 const HEALTH = `# Athlete Health & Emergency Information
 
@@ -84,17 +68,6 @@ const HEALTH = `# Athlete Health & Emergency Information
 Please provide accurate health and emergency information so Teamwork coaches can train the athlete safely and respond in an emergency. This information is visible only to Teamwork staff with health access and to the athlete's authorized guardians.
 
 Update this form whenever anything changes.
-`;
-
-const MEDIA = `# Media Release
-
-**SAMPLE TEXT — replace with Teamwork-approved language.**
-
-Teamwork may photograph or record training sessions for coaching feedback and, with permission, for Teamwork's website and social media.
-
-- Choose the level of permission below.
-- You can change your choice at any time by asking staff for a new form; the change applies going forward.
-- Teamwork will never publish an athlete's contact details or school schedule.
 `;
 
 const WAIVER_SIGNERS: SignerRequirement[] = [
@@ -195,23 +168,20 @@ export async function seedDocuments(ctx: SeedCtx) {
   await setStepUpOverride({ requireForKinds: [], allowSessionMfa: true });
 
   // --- Templates -------------------------------------------------------------------
-  const waiver = await template("Liability Waiver & Release", "waiver", 12, true);
-  const membership = await template("Membership Agreement", "agreement", null, false);
+  const waiver = await template("Release of Liability", "waiver", 12, true);
+  const membership = await template("Member User Agreement", "agreement", null, false);
   const health = await template("Athlete Health & Emergency Info", "intake", 12, true);
-  const media = await template("Media Release", "media_release", null, false);
+  const media = await template("Photo, Video, Name, and Likeness Permission", "media_release", null, false);
   ctx.extra.formTemplates = { waiver: waiver.id, membership: membership.id, health: health.id, media: media.id };
 
-  const wv1 = await draft(waiver.id, 1, "Liability Waiver & Release", WAIVER_V1, [], WAIVER_SIGNERS);
+  const wv1 = await draft(waiver.id, 1, "Waiver and Release of Liability", WAIVER_V1, [], WAIVER_SIGNERS);
   await publishVersion(tx, rod, wv1.id, { requireResign: false });
   const mv1 = await draft(
     membership.id,
     1,
-    "Membership Agreement",
-    MEMBERSHIP,
-    [
-      { key: "billing_contact_email", label: "Billing contact email", type: "email", required: true },
-      { key: "membership_start", label: "Requested start date", type: "date", required: false },
-    ],
+    "Member User Agreement",
+    TEAMWORK_USER_AGREEMENT_BODY,
+    [{ key: "billing_contact_email", label: "Account holder email for notices", type: "email", required: true }],
     [
       { role: "guardian", required: true },
       { role: "adult_athlete", required: true },
@@ -226,9 +196,9 @@ export async function seedDocuments(ctx: SeedCtx) {
   const dv1 = await draft(
     media.id,
     1,
-    "Media Release",
-    MEDIA,
-    [{ key: "media_permission", label: "Media permission", type: "select", required: true, options: ["Full permission", "Internal coaching use only", "No photos or video"] }],
+    "Photo, Video, Name, and Likeness Permission",
+    TEAMWORK_MEDIA_RELEASE_BODY,
+    [{ key: "media_permission", label: "Permission level", type: "select", required: true, options: TEAMWORK_MEDIA_PERMISSION_OPTIONS }],
     [
       { role: "guardian", required: true },
       { role: "second_guardian", required: true },
@@ -268,7 +238,7 @@ export async function seedDocuments(ctx: SeedCtx) {
   req.waiverMasonV1 = (await issue(wv1.id, "mason", "mason_patel", 7)).id;
 
   // --- Waiver v2 (re-signing required) ---------------------------------------------
-  const wv2 = await draft(waiver.id, 2, "Liability Waiver & Release", WAIVER_V2, [], WAIVER_SIGNERS);
+  const wv2 = await draft(waiver.id, 2, "Minor Participant Release of Liability", WAIVER_V2, [], WAIVER_SIGNERS);
   await publishVersion(tx, rod, wv2.id, { requireResign: true });
   ctx.extra.formVersions = { waiverV1: wv1.id, waiverV2: wv2.id, membershipV1: mv1.id, healthV1: hv1.id, mediaV1: dv1.id };
 
@@ -308,7 +278,7 @@ export async function seedDocuments(ctx: SeedCtx) {
 
   // --- Media release: partially signed (needs second guardian) ----------------------
   req.mediaMaya = (await issue(dv1.id, "maya", "maya_parker", 14)).id;
-  await sign(req.mediaMaya, { v: alex, role: "guardian", name: "Alex Parker", values: { field_media_permission: "Internal coaching use only" }, when: at(5), ip: 10 });
+  await sign(req.mediaMaya, { v: alex, role: "guardian", name: "Alex Parker", values: { field_media_permission: "Limited permission" }, when: at(5), ip: 10 });
   req.mediaLeo = (await issue(dv1.id, "leo", "leo_rivera", 14)).id; // pending — Sam and Casey
 
   await setStepUpOverride(null);

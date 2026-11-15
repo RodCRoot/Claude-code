@@ -196,7 +196,7 @@ describe("snapshot: what was signed never changes", () => {
     // 1) Policy changes afterwards: the signed record is unchanged.
     await setPolicy({ cancellationNoticeDays: 60, familyDiscountPercent: 15 });
     expect((await reqRow(cur.formRequestId)).renderedBodyMarkdown).toBe(before);
-    expect(before).toContain("30 days written notice");
+    expect(before).toContain("Commitment end date: Oct 31, 2027");
     // 2) A new template version afterwards: unchanged.
     const rod = await who("rod");
     const [tpl] = await db().select().from(formTemplates).where(and(eq(formTemplates.orgId, ctx.orgId), eq(formTemplates.kind, "membership_agreement")));

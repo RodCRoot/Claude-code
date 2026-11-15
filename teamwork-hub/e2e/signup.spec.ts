@@ -82,7 +82,7 @@ test("parent chooses a plan; the agreement is filled in from the plan", async ({
   const body = page.locator("main");
   await expect(body).toContainText("SAMPLE TEXT");
   await expect(body).toContainText(`${f.first} Sample`);
-  await expect(body).toContainText("Cancellation requires");
+  await expect(body).toContainText("To cancel, you must email");
   await expect(body).not.toContainText("{{");
   await expect(page.getByText("Part of a membership sign-up")).toBeVisible();
   await noSideScroll(page);

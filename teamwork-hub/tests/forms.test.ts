@@ -151,7 +151,7 @@ describe("signing rules", () => {
     );
     expect(res.status).toBe("completed");
     const after = await ctxOf(R().mediaMaya);
-    expect(after.req.submittedData).toEqual({ media_permission: "Internal coaching use only" });
+    expect(after.req.submittedData).toEqual({ media_permission: "Limited permission" });
     expect(new Set(after.signatures.map((s) => s.dataHash)).size).toBe(1);
     expect(after.req.integrityHash).toMatch(/^[0-9a-f]{64}$/);
     expect((await verifyRequest(db, after, { checkPdfBytes: true })).ok).toBe(true);

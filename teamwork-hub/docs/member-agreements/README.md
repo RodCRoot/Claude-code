@@ -19,7 +19,7 @@ Four documents every member signs before training. They replace the three signat
 
 `html/` holds the same four documents as HTML, ready to paste into ZenPlanner's signature document editor (use the editor's source/HTML view).
 
-**Teamwork Hub:** these are the approved-language source for the Hub's Documents > Templates (waiver, media, membership agreement). They replace the seeded SAMPLE TEXT once counsel signs off. In the Hub, the media permission level can be a required select field on the template instead of a ZenPlanner custom field.
+**Teamwork Hub:** loaded into the Hub. The contract is the membership agreement template (`src/lib/agreements/sample-template.ts`), filled per member with plan, price, dates and payment method. The waiver, media release (with a required Permission level select) and user agreement are in `src/lib/forms/teamwork-drafts.ts` and the demo seed. All stay marked SAMPLE TEXT until an owner marks the attorney-approved wording.
 
 ## What changed from the current forms
 
