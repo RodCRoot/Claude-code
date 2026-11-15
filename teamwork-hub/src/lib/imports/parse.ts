@@ -39,7 +39,13 @@ export function parseCsvText(text: string): { headers: string[]; rows: Record<st
     return n ? `${h} (${n + 1})` : h;
   });
   if (body.length > MAX_ROWS) throw new ParseError(`The file has ${body.length} rows; split it into files of at most ${MAX_ROWS}.`);
-  const rows = body.map((cells) => {
+  // Zen Planner writes some addresses with unescaped quotes, which splits one Address cell into several and
+  // pushes every later column to the right. A row with extra cells is put back in line by folding the surplus
+  // into Address; without an Address column the row is left as it is.
+  const addr = uniq.findIndex((h) => h.toLowerCase() === "address");
+  const rows = body.map((raw) => {
+    const extra = raw.length - uniq.length;
+    const cells = extra > 0 && addr >= 0 ? [...raw.slice(0, addr), raw.slice(addr, addr + extra + 1).map((c) => c.replaceAll('"', "").trim()).filter(Boolean).join(", "), ...raw.slice(addr + extra + 1)] : raw;
     const r: Record<string, string | null> = {};
     uniq.forEach((h, i) => {
       const c = cells[i];

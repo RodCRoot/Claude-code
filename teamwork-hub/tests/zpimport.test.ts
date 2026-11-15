@@ -135,8 +135,10 @@ describe("Person grid", () => {
     expect(row("Atlas").warnings.join(" ")).toMatch(/Status "Staffish" is not recognized/);
     // The unmatched header is reported instead of failing.
     const [b] = await db().select().from(importBatches).where(eq(importBatches.id, batchId));
-    expect(unmatchedHeaders(["Bar Code", "First Name"], b.mapping)).toEqual(["Bar Code"]);
-    expect(Object.values(b.mapping)).not.toContain("Bar Code");
+    expect(unmatchedHeaders(["Shirt Size", "First Name"], b.mapping)).toEqual(["Shirt Size"]);
+    expect(Object.values(b.mapping)).not.toContain("Shirt Size");
+    // Bar Code is the person's number in Zen Planner and becomes the key.
+    expect(b.mapping.source_person_id).toBe("Bar Code");
 
     const groups = await tx((t) => reviewGroups(t, rod, batchId));
     expect(groups.length).toBe(3);
