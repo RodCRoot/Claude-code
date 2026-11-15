@@ -670,7 +670,8 @@ describe("real export formats (2026-11-14)", () => {
     ].join("\n");
     const { batchId } = await uploadAndValidate(rod, "zenplanner.membership_grid", "real-format-junior-m.csv", new TextEncoder().encode(csv));
     const rows = await tx((t) => batchRows(t, rod, batchId));
-    expect(rows.map((r) => r.matchConfidence)).toEqual(["ambiguous", "ambiguous"]);
+    // The shared email fits both, so it settles nothing; the birth date fits only the junior.
+    expect(rows.map((r) => r.matchConfidence)).toEqual(["ambiguous", "strong"]);
     expect(rows.every((r) => r.status === "needs_review")).toBe(true);
   });
 });
