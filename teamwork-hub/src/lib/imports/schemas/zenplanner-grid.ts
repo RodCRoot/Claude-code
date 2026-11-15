@@ -511,7 +511,7 @@ export const zpBillGrid: ImportSchemaDef = {
     { key: "email", label: "Email", type: "email", aliases: ["email", "email address"] },
     { key: "description", label: "Description", type: "text", aliases: ["description", "bill description", "bill for", "item", "membership", "membership label", "memo"] },
     { key: "due_date", label: "Due Date", type: "text", aliases: ["due date", "duedate", "due", "date due"], hint: "When a bill has no Due Date, its Bill Date or Payment Date is used and the row says so." },
-    { key: "bill_date", label: "Bill Date", type: "text", aliases: ["bill date", "billed", "billed on", "invoice date", "date", "created", "created date"] },
+    { key: "bill_date", label: "Bill Date", type: "text", aliases: ["bill date", "billed", "billed on", "invoice date", "date", "created", "created date", "create date"] },
     { key: "paid_date", label: "Payment Date", type: "text", aliases: ["payment date", "paid date", "date paid", "paid on"] },
     { key: "amount_due", label: "Amount Due", type: "text", aliases: ["amount due", "amountdue", "bill amount", "billamount", "amount", "total", "total due"] },
     { key: "amount_paid", label: "Amount Paid", type: "text", aliases: ["amount paid", "amountpaid", "paid", "paid amount"] },
