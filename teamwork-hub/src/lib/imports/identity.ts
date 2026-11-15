@@ -22,6 +22,7 @@ export function identityKey(i: IdentityInput): string {
  *  (a) external_ids exact source id → linked
  *  (b) exactly one person with this exact first+last name, AND the same DOB or the same email, AND no
  *      conflicting DOB → "strong" (still confirmed by staff)
+ *      The same holds when several people share the name and exactly one of them has the DOB or the email.
  *  (b2) only when the caller asks (`nameOnlyTier`: files that follow a Person import and cannot create people):
  *      exactly one person with this exact first+last name, no conflicting DOB, but neither DOB nor email to
  *      back it up → "name_only": a suggestion that staff confirm one by one or with a separate bulk action
@@ -77,8 +78,14 @@ export async function matchPerson(tx: Tx, orgId: string, idSource: string, i: Id
   // in the first real export most children carry a parent's email and half the rows have no birth date.
   const isName = (p: (typeof rows)[number]) => !!first && !!last && p.firstName.toLowerCase() === first && p.lastName.toLowerCase() === last;
   const sameName = rows.filter(isName);
-  if (sameName.length === 1) {
-    const p = sameName[0];
+  // Several people share the name (a parent and a junior, two unrelated members): the row still points at one of
+  // them when exactly one has its birth date or its email and no conflicting birth date. When the email fits two
+  // of them it stays ambiguous.
+  const backs = (p: (typeof rows)[number]) => ((!!i.dob && p.dob === i.dob) || (!!email && p.email?.toLowerCase() === email)) && !(!!i.dob && !!p.dob && p.dob !== i.dob);
+  const backedSameName = sameName.filter(backs);
+  const pick = sameName.length === 1 ? sameName[0] : backedSameName.length === 1 ? backedSameName[0] : null;
+  if (pick) {
+    const p = pick;
     const at = rows.indexOf(p);
     const dobEq = !!i.dob && p.dob === i.dob;
     const dobConflict = !!i.dob && !!p.dob && p.dob !== i.dob;

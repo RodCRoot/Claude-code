@@ -534,4 +534,14 @@ describe("what the full-history real exports showed", () => {
     }
     expect(row(zpBillGrid, { ...base, "Paid On Time": null }).data.paidOnTime).toBeNull();
   });
+  it("picks between two people with one name when exactly one has the birth date", async () => {
+    const H = ["Bill #", "First Name", "Last Name", "Birth Date", "Description", "Due Date", "Amount Due", "Status"];
+    const r = await uploadAndValidate(rod, "zenplanner.bill_grid", "bills-same-name.csv", csv(H, [
+      ["B-701", "Rowan", "Invented", "Feb 2, 2012", "Drop-in", "Nov 7, 2026", "$10.00", "PAID"],
+      ["B-702", "Rowan", "Invented", null, "Drop-in", "Nov 7, 2026", "$10.00", "PAID"],
+    ]));
+    const rows = await rowsOf(r.batchId);
+    expect(rows.find((x) => x.rowNumber === 2)).toMatchObject({ matchConfidence: "strong", matchPersonId: ids.rowan2 });
+    expect(rows.find((x) => x.rowNumber === 3)).toMatchObject({ matchConfidence: "ambiguous", matchPersonId: null });
+  });
 });
