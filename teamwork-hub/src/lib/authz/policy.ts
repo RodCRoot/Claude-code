@@ -1,5 +1,6 @@
 import { and, eq, inArray, isNull, lte, or, gte, sql } from "drizzle-orm";
 import type { Tx } from "@/db";
+import { todayLocal } from "@/lib/time";
 import {
   athletes,
   coachAssignments,
@@ -185,7 +186,9 @@ export function staffHasHealthAccess(v: Viewer): boolean {
   return isStaff(v) && STAFF_ATHLETE_CAPS[v.role as keyof typeof STAFF_ATHLETE_CAPS].includes("health.read");
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+// Facility-local date: the UTC date is already tomorrow during a US evening, which would end an assignment
+// (or start one, or age a child up) about five hours early.
+const today = () => todayLocal();
 
 /** Athlete ids a coach is assigned to, directly or through a group, on the current date. */
 export async function coachAthleteIds(tx: Tx, v: Viewer): Promise<string[]> {

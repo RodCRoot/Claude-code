@@ -16,6 +16,7 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Tx } from "@/db";
+import { todayLocal } from "@/lib/time";
 import { alumni, athletes, newsNegatives, newsWatchAthletes, newsWatchEvents, people, users, type NewsWatchAction } from "@/db/schema";
 import { UserError } from "@/lib/actions";
 import { accessibleAthleteIds, assertCan, athleteScopeFilter, AuthzError, can, isStaff, requireOnAthlete, type Viewer } from "@/lib/authz/policy";
@@ -179,7 +180,7 @@ export async function athleteWatchList(tx: Tx, v: Viewer, opts: { today?: string
   assertCan(v, "wins.review");
   const scope = await accessibleAthleteIds(tx, v, "profile.read");
   const org = await newsOrg(tx, v.orgId);
-  const today = opts.today ?? new Date().toISOString().slice(0, 10);
+  const today = opts.today ?? todayLocal();
   const rows = await tx
     .select({ id: athletes.id, personId: people.id, first: people.firstName, preferred: people.preferredName, last: people.lastName, dob: people.dateOfBirth, aSchool: athletes.school, aSport: athletes.sport, w: newsWatchAthletes, mode: sql<string | null>`(select mode from community_display_prefs dp where dp.athlete_id = ${athletes.id} and dp.org_id = ${v.orgId})` })
     .from(athletes)
