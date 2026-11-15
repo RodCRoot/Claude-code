@@ -90,6 +90,7 @@ Payload `{ orgId, formRequestId, athleteId, subjectPersonId, templateName, versi
 Publishing with **Require re-signing**: open requests on older versions → `superseded` (linked via `superseded_by_id`) and new requests are issued on the new version. Completed requests always remain the record of exactly what was signed and stay valid until their renewal date (eligibility counts any unexpired completion). To force everyone onto a new version, issue it to "everyone missing" after expiry, or shorten renewal.
 
 ## Production review items
+- Approved-language drafts for the waiver, media release, user agreement, and membership contract are in `docs/member-agreements/` (v2026.11, pending attorney review). Use them to replace the SAMPLE template text.
 - Have counsel replace SAMPLE consent text (`consent.ts`), the identity notice (`IDENTITY_NOTICE`) and form text; or connect a provider.
 - Identity step-up proves control of the email on file, not legal identity: decide whether that (or MFA / staff ID checks) is sufficient per form kind, and how email addresses on file are verified and changed (a compromised or wrong address defeats it).
 - Configure an email provider (`EMAIL_PROVIDER`, `EMAIL_API_KEY`, `EMAIL_FROM`, `DELIVERY_ENABLED=true`) before families must self-sign waivers/agreements; until then only staff in-person signing works for those kinds.
