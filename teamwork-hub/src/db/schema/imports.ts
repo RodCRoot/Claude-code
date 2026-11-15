@@ -46,7 +46,7 @@ export const importRows = pgTable(
     warnings: jsonb("warnings").$type<string[]>().notNull().default([]),
     sourceRecordId: text("source_record_id"),
     matchPersonId: uuid("match_person_id").references(() => people.id),
-    matchConfidence: text("match_confidence").$type<"exact_source_id" | "strong" | "ambiguous" | "none">(),
+    matchConfidence: text("match_confidence").$type<"exact_source_id" | "strong" | "name_only" | "ambiguous" | "none">(),
     matchCandidates: jsonb("match_candidates").$type<{ personId: string; reason: string }[]>(),
     /** Staff decision for ambiguous rows. */
     resolution: text("resolution").$type<"link" | "create_new" | "skip">(),

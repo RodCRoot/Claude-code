@@ -6,7 +6,7 @@ import type { IdentityInput } from "./types";
 export type Candidate = { personId: string; reason: string };
 
 export type MatchResult = {
-  confidence: "exact_source_id" | "strong" | "ambiguous" | "none";
+  confidence: "exact_source_id" | "strong" | "name_only" | "ambiguous" | "none";
   personId: string | null;
   candidates: Candidate[];
 };
@@ -22,10 +22,13 @@ export function identityKey(i: IdentityInput): string {
  *  (a) external_ids exact source id → linked
  *  (b) exactly one person with this exact first+last name, AND the same DOB or the same email, AND no
  *      conflicting DOB → "strong" (still confirmed by staff)
+ *  (b2) only when the caller asks (`nameOnlyTier`: files that follow a Person import and cannot create people):
+ *      exactly one person with this exact first+last name, no conflicting DOB, but neither DOB nor email to
+ *      back it up → "name_only": a suggestion that staff confirm one by one or with a separate bulk action
  *  (c) anything else with candidates (name-only, shared surname+DOB, shared email) → ambiguous
  *  (d) no candidates → none (create new when the schema allows)
  */
-export async function matchPerson(tx: Tx, orgId: string, idSource: string, i: IdentityInput): Promise<MatchResult> {
+export async function matchPerson(tx: Tx, orgId: string, idSource: string, i: IdentityInput, opts: { nameOnlyTier?: boolean } = {}): Promise<MatchResult> {
   if (i.sourceId) {
     const [ext] = await tx
       .select({ localId: externalIds.localId })
@@ -82,7 +85,8 @@ export async function matchPerson(tx: Tx, orgId: string, idSource: string, i: Id
     // Email alone is enough for adults, or for anyone when nobody else shares the name (rows.length covers
     // every same-name person, so two people with one name and one email, such as a parent and a junior, stay ambiguous).
     const emailEq = !!email && p.email?.toLowerCase() === email;
-    if (!dobConflict && (dobEq || emailEq)) {
+    const backed = dobEq || emailEq;
+    if (!dobConflict && (backed || opts.nameOnlyTier)) {
       // A person already tied to a *different* record of the same source is not the same person.
       if (i.sourceId) {
         const other = await tx
@@ -102,7 +106,7 @@ export async function matchPerson(tx: Tx, orgId: string, idSource: string, i: Id
           return { confidence: "ambiguous", personId: null, candidates };
         }
       }
-      return { confidence: "strong", personId: p.id, candidates: [candidates[at], ...candidates.filter((_, k) => k !== at)] };
+      return { confidence: backed ? "strong" : "name_only", personId: p.id, candidates: [candidates[at], ...candidates.filter((_, k) => k !== at)] };
     }
   }
   return { confidence: "ambiguous", personId: null, candidates };

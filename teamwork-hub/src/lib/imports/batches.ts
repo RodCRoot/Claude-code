@@ -62,6 +62,7 @@ import { peopleByAddress } from "@/lib/messaging/inbound";
 import { autoMap, fieldMapping, mappingOptions, metricHeaders, missingRequired, normalizeRow, OPTION_PREFIX } from "./mapping";
 import { parseDate } from "./normalize";
 import { ParseError, parseUpload, type ParsedFile } from "./parse";
+import { RowCache, rowRejectionReason } from "./row-errors";
 import { getSchema } from "./schemas";
 import type { IdentityInput, MetricCell, RowAction } from "./types";
 
@@ -280,6 +281,9 @@ export async function validateBatch(tx: Tx, v: Viewer, batchId: string) {
     today: todayLocal(tz),
   };
 
+  // Membership, Bill and Attendance grids follow a Person import from the same Zen Planner account and cannot
+  // create people, so a name that exactly one person carries is offered as a suggestion (never linked silently).
+  const nameOnlyTier = schema.id in ZP_GRID_COMMITTERS && !schema.allowCreatePerson;
   const planned: Planned[] = [];
   const seen = new Map<string, number>();
   const matches = new Map<string, Awaited<ReturnType<typeof matchPerson>>>();
@@ -354,7 +358,7 @@ export async function validateBatch(tx: Tx, v: Viewer, batchId: string) {
 
     let m = matches.get(key);
     if (!m) {
-      m = await matchPerson(tx, v.orgId, schema.idSource, identity);
+      m = await matchPerson(tx, v.orgId, schema.idSource, identity, { nameOnlyTier });
       matches.set(key, m);
     }
     p.matchConfidence = m.confidence;
@@ -383,6 +387,11 @@ export async function validateBatch(tx: Tx, v: Viewer, batchId: string) {
       p.status = "needs_review";
       p.matchPersonId = m.personId;
       n._action = "link";
+    } else if (m.confidence === "name_only") {
+      p.status = "needs_review";
+      p.matchPersonId = m.personId;
+      n._action = "link";
+      p.warnings.push("Matched by name only: exactly one person in Teamwork has this name, with no birth date or email to confirm it.");
     } else if (m.confidence === "ambiguous") {
       p.status = "needs_review";
       n._action = null;
@@ -583,6 +592,25 @@ export async function confirmStrongMatches(tx: Tx, v: Viewer, batchId: string) {
   return res.length;
 }
 
+/**
+ * Confirm every name-only suggestion at once: rows whose exact first + last name belongs to exactly one person
+ * in Teamwork, with nothing in the file to back it up or contradict it. A separate, deliberate step from the
+ * strong matches because a name alone is weaker evidence.
+ */
+export async function confirmNameOnlyMatches(tx: Tx, v: Viewer, batchId: string) {
+  const b = await getBatch(tx, v, batchId, true);
+  if (b.status !== "validated") throw new UserError("Validate the import first.");
+  const res = await tx
+    .update(importRows)
+    .set({ status: "ready", resolution: "link", resolvedBy: v.userId })
+    .where(and(eq(importRows.batchId, b.id), eq(importRows.status, "needs_review"), eq(importRows.matchConfidence, "name_only"), sql`${importRows.matchPersonId} is not null`))
+    .returning({ id: importRows.id, key: sql<string>`${importRows.normalized}->>'_identityKey'` });
+  await refreshStats(tx, b);
+  const peopleCount = new Set(res.map((r) => r.key)).size;
+  await audit(tx, actor(v), "import.confirm_name_only", "import_batch", b.id, { summary: `Confirmed ${res.length} name-only match row(s) for ${peopleCount} ${peopleCount === 1 ? "person" : "people"}` });
+  return peopleCount;
+}
+
 export async function skipUnresolved(tx: Tx, v: Viewer, batchId: string) {
   const b = await getBatch(tx, v, batchId, true);
   if (b.status !== "validated") throw new UserError("Validate the import first.");
@@ -635,6 +663,7 @@ export async function commitBatch(tx: Tx, v: Viewer, batchId: string) {
     rows.sort((a, z) => late(a) - late(z) || a.rowNumber - z.rowNumber);
   }
   const parsed = schema.id === "zenplanner.documents_index" ? await loadBatchFile(tx, b) : null;
+  const cache = new RowCache();
   const c = {
     tx,
     viewer: v,
@@ -643,11 +672,15 @@ export async function commitBatch(tx: Tx, v: Viewer, batchId: string) {
     schema,
     tz: await orgTimezone(tx, v.orgId),
     attachments: parsed?.attachments ?? new Map<string, Uint8Array>(),
-    cache: new Map<string, string>(),
+    cache,
     extra: { ...prepareExtra(schema.id, rows), ...prepareGridExtra(schema.id, rows) },
   };
   const committer = COMMITTERS[schema.id] ?? ZP_GRID_COMMITTERS[schema.id];
+  // Zen Planner grids: each row commits inside its own savepoint, so a row the database refuses (a check,
+  // a missing value, an overlap) is rejected with its reason and the rest of the file still commits.
+  const rowSavepoints = schema.id in ZP_GRID_COMMITTERS;
   const counts: Record<string, number> = { create: 0, link: 0, update: 0, skip: 0, reject: 0 };
+  const skippedIds: string[] = [];
   for (const row of rows) {
     const n = (row.normalized ?? {}) as Record<string, unknown>;
     if (row.status === "invalid") {
@@ -660,11 +693,32 @@ export async function commitBatch(tx: Tx, v: Viewer, batchId: string) {
     }
     if (n._action === "skip" || !n._action) {
       counts.skip++;
-      await tx.update(importRows).set({ status: "skipped" }).where(eq(importRows.id, row.id));
+      skippedIds.push(row.id);
       continue;
     }
     const out: RowOutcome = { action: n._action as RowAction, created: [], updates: [], warnings: [] };
-    await committer(c, row, out);
+    if (rowSavepoints) {
+      cache.beginRow();
+      try {
+        await tx.transaction(async () => {
+          await committer(c, row, out);
+        });
+        cache.keepRow();
+      } catch (e) {
+        const reason = rowRejectionReason(e);
+        if (reason === null) throw e;
+        // Everything the row wrote is gone with its savepoint; forget the ids it cached and record why.
+        cache.undoRow();
+        counts.reject++;
+        await tx
+          .update(importRows)
+          .set({ status: "invalid", errors: [...row.errors, `Rejected at commit: ${reason}`], normalized: { ...n, _result: "reject" } })
+          .where(eq(importRows.id, row.id));
+        continue;
+      }
+    } else {
+      await committer(c, row, out);
+    }
     counts[out.action]++;
     await tx
       .update(importRows)
@@ -675,6 +729,9 @@ export async function commitBatch(tx: Tx, v: Viewer, batchId: string) {
         normalized: { ...n, _result: out.action, _updates: out.updates },
       })
       .where(eq(importRows.id, row.id));
+  }
+  for (let i = 0; i < skippedIds.length; i += 2000) {
+    await tx.update(importRows).set({ status: "skipped" }).where(inArray(importRows.id, skippedIds.slice(i, i + 2000)));
   }
   const stats = { ...b.stats, ...(await computeStats(tx, b.id)), committed_create: counts.create, committed_link: counts.link, committed_update: counts.update, committed_skip: counts.skip, committed_reject: counts.reject };
   await tx.update(importBatches).set({ status: "committed", committedAt: new Date(), committedBy: v.userId, stats }).where(eq(importBatches.id, b.id));
@@ -896,6 +953,74 @@ export async function reviewGroups(tx: Tx, v: Viewer, batchId: string) {
     else groups.set(key, { key, rows: [r], identity: n._identity as IdentityInput, confidence: r.matchConfidence, suggested: r.matchPersonId, candidates: r.matchCandidates ?? [] });
   }
   return [...groups.values()];
+}
+
+export type ReviewConfidence = "strong" | "name_only" | "ambiguous" | "none";
+export type ReviewGroup = {
+  key: string;
+  rowCount: number;
+  firstRow: number;
+  identity: IdentityInput;
+  confidence: ImportRow["matchConfidence"];
+  suggested: string | null;
+  candidates: { personId: string; reason: string }[];
+};
+
+/**
+ * One page of the identity review: one entry per source person (however many rows they have), counted and
+ * filtered in SQL so a 20,000-row file with hundreds of people stays quick. `q` filters by name or email;
+ * `confidence` by how the person matched. The totals by confidence ignore the filters (they label the tabs).
+ */
+export async function reviewGroupPage(
+  tx: Tx,
+  v: Viewer,
+  batchId: string,
+  opts: { page?: number; pageSize?: number; q?: string; confidence?: ReviewConfidence | "" } = {},
+) {
+  const b = await getBatch(tx, v, batchId);
+  const pageSize = Math.min(100, Math.max(1, Math.trunc(opts.pageSize ?? 25)));
+  const q = (opts.q ?? "").trim().toLowerCase().slice(0, 80);
+  const confidence = (["strong", "name_only", "ambiguous", "none"] as const).find((c) => c === opts.confidence) ?? null;
+  const base = sql`
+    select normalized->>'_identityKey' as key,
+           count(*)::int as n,
+           min(row_number)::int as first_row,
+           coalesce(max(match_confidence), 'none') as confidence,
+           lower(coalesce(max(normalized->'_identity'->>'lastName'), '')) as last,
+           lower(coalesce(max(normalized->'_identity'->>'firstName'), '')) as first,
+           lower(coalesce(max(normalized->'_identity'->>'email'), '')) as email
+    from import_rows
+    where batch_id = ${b.id} and status = 'needs_review'
+    group by 1`;
+  const totals = await tx.execute(sql`select confidence, count(*)::int as people, coalesce(sum(n), 0)::int as rows from (${base}) g group by 1`);
+  const byConfidence: Record<ReviewConfidence, number> = { strong: 0, name_only: 0, ambiguous: 0, none: 0 };
+  let total = 0;
+  let totalRows = 0;
+  for (const r of totals.rows as { confidence: ReviewConfidence; people: number; rows: number }[]) {
+    if (r.confidence in byConfidence) byConfidence[r.confidence] += r.people;
+    total += r.people;
+    totalRows += r.rows;
+  }
+  const like = `%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+  const filter = sql`where true ${confidence ? sql`and confidence = ${confidence}` : sql``} ${q ? sql`and ((first || ' ' || last) like ${like} or (last || ', ' || first) like ${like} or email like ${like})` : sql``}`;
+  const [{ matching }] = (await tx.execute(sql`select count(*)::int as matching from (${base}) g ${filter}`)).rows as { matching: number }[];
+  const pages = Math.max(1, Math.ceil(matching / pageSize));
+  const page = Math.min(pages, Math.max(1, Math.trunc(opts.page ?? 1)));
+  const keys = (await tx.execute(sql`select key, n, first_row from (${base}) g ${filter} order by last, first, key limit ${pageSize} offset ${(page - 1) * pageSize}`)).rows as { key: string; n: number; first_row: number }[];
+  const firstRows = keys.length
+    ? await tx
+        .select()
+        .from(importRows)
+        .where(and(eq(importRows.batchId, b.id), eq(importRows.status, "needs_review"), inArray(importRows.rowNumber, keys.map((k) => k.first_row))))
+    : [];
+  const groups: ReviewGroup[] = [];
+  for (const k of keys) {
+    const r = firstRows.find((x) => x.rowNumber === k.first_row && String((x.normalized as Record<string, unknown>)._identityKey) === k.key);
+    if (!r) continue;
+    const n = r.normalized as Record<string, unknown>;
+    groups.push({ key: k.key, rowCount: k.n, firstRow: k.first_row, identity: n._identity as IdentityInput, confidence: r.matchConfidence, suggested: r.matchPersonId, candidates: r.matchCandidates ?? [] });
+  }
+  return { groups, total, totalRows, matching, byConfidence, page, pages, pageSize, q, confidence };
 }
 
 export { OPTION_PREFIX };
