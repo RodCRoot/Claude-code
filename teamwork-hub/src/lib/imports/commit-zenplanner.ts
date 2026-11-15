@@ -23,6 +23,7 @@ import { grantCredits } from "@/lib/credits";
 import { ensureStages } from "@/lib/crm/stages";
 import { cached, commitAttendance, ensurePerson, fillPerson, findExternal, linkExternal, linkGuardian, type CommitCtx, type Committer, type RowOutcome, type RowRecord } from "./commit";
 import { ageOn } from "./normalize";
+import { todayLocal } from "@/lib/time";
 
 /**
  * Committers for the exact Zen Planner grid presets (schemas/zenplanner-grid.ts).
@@ -150,7 +151,8 @@ export const commitPersonGrid: Committer = async (c, row, out) => {
   const familyId = (n.familyId as string | null) ?? null;
   const parent = n.parent as Parent | null;
   const dob = (n.dob as string | null) ?? null;
-  const minor = dob ? ageOn(dob, new Date().toISOString().slice(0, 10)) < 18 : !!parent;
+  // Facility-local today: the UTC date is already tomorrow during a US evening.
+  const minor = dob ? ageOn(dob, todayLocal(c.tz)) < 18 : !!parent;
   const hhName = (n.familyName as string | null) ?? `${String(n.lastName ?? "Imported")} Household`;
   const action = out.action;
   const guardianId = await resolveParent(c, n, out);

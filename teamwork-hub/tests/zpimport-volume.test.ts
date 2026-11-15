@@ -49,9 +49,10 @@ beforeAll(async () => {
 const report = () => process.stdout.write(`\n[zp volume] ${ROWS} rows, ${PEOPLE} people, ms: ${JSON.stringify(timings)}\n`);
 afterAll(closeTestDb);
 
-describe("20,000-row files", () => {
+// ZP_VOLUME=0 skips these (about a minute and a half) when iterating on something else.
+describe.skipIf(process.env.ZP_VOLUME === "0")("20,000-row files", () => {
   it("Attendance: validates, reviews as 400 people and commits", async () => {
-    // 50 visits per person: 46 attended, 3 reserved only (blank Att.), 1 with an unreadable Att. value.
+    // 50 visits per person: 47 attended, 2 reserved only (blank Att.), 1 with an unreadable Att. value.
     const data: string[][] = [];
     for (let i = 0; i < ROWS; i++) {
       const p = who(i % PEOPLE);
