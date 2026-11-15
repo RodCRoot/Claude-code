@@ -398,16 +398,25 @@ export const commitMembershipGrid: Committer = async (c, row, out) => {
 export const commitBillGrid: Committer = async (c, row, out) => {
   const n = row.normalized as Record<string, unknown>;
   const { personId } = await ensurePerson(c, row, out);
-  const [a] = await c.tx.select({ id: athletes.id }).from(athletes).where(and(eq(athletes.personId, personId), eq(athletes.orgId, c.orgId)));
+  // One person usually has many bills in a file: look their athlete record and plan up once.
+  const none = "none";
+  const athleteHit = await cached(c, `bill-athlete:${personId}`, async () => {
+    const [x] = await c.tx.select({ id: athletes.id }).from(athletes).where(and(eq(athletes.personId, personId), eq(athletes.orgId, c.orgId)));
+    return x?.id ?? none;
+  });
+  const a = athleteHit === none ? null : { id: athleteHit };
   let membershipId: string | null = null;
   const desc = (n.description as string | null) ?? null;
   if (a && desc) {
-    const ms = await c.tx
-      .select({ id: memberships.id })
-      .from(zpMembershipDetails)
-      .innerJoin(memberships, eq(memberships.id, zpMembershipDetails.membershipId))
-      .where(and(eq(zpMembershipDetails.orgId, c.orgId), eq(memberships.athleteId, a.id), sql`lower(${zpMembershipDetails.planName}) = ${desc.toLowerCase()}`));
-    if (ms.length === 1) membershipId = ms[0].id;
+    const hit = await cached(c, `bill-membership:${a.id}:${desc.toLowerCase()}`, async () => {
+      const ms = await c.tx
+        .select({ id: memberships.id })
+        .from(zpMembershipDetails)
+        .innerJoin(memberships, eq(memberships.id, zpMembershipDetails.membershipId))
+        .where(and(eq(zpMembershipDetails.orgId, c.orgId), eq(memberships.athleteId, a.id), sql`lower(${zpMembershipDetails.planName}) = ${desc.toLowerCase()}`));
+      return ms.length === 1 ? ms[0].id : none;
+    });
+    membershipId = hit === none ? null : hit;
   }
   const ins = await c.tx
     .insert(zpBills)

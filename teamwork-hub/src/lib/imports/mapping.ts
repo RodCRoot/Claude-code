@@ -57,6 +57,7 @@ export function metricHeaders(schema: ImportSchemaDef, headers: string[], mappin
 export function missingRequired(schema: ImportSchemaDef, mapping: Record<string, string>): string[] {
   const m = fieldMapping(mapping);
   const missing = schema.fields.filter((f) => f.required && !m[f.key]).map((f) => f.label);
+  for (const g of schema.requireOneOf ?? []) if (!g.keys.some((k) => m[k])) missing.push(g.label);
   // Person-bearing schemas need some way to identify the person.
   const hasPerson = schema.fields.some((f) => f.key === "full_name");
   if (hasPerson && !m.source_person_id && !m.full_name && !(m.first_name && m.last_name)) {

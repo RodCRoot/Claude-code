@@ -33,7 +33,8 @@ export function identityFrom(
     return null;
   }
   const dob = asText(f.dob);
-  const today = new Date().toISOString().slice(0, 10);
+  // Facility-local today: the UTC date is already tomorrow during a US evening.
+  const today = ctx.today ?? new Date().toISOString().slice(0, 10);
   return {
     sourceEntityType: opts.sourceEntityType,
     sourceId,

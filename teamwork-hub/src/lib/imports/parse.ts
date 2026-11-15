@@ -31,7 +31,7 @@ export function parseCsvText(text: string): { headers: string[]; rows: Record<st
   if (res.errors.length && !res.data.length) throw new ParseError(`CSV could not be read: ${res.errors[0].message}`);
   const [head, ...body] = res.data;
   if (!head || head.length === 0) throw new ParseError("The file has no header row.");
-  const headers = head.map((h, i) => (h ?? "").trim() || `column_${i + 1}`);
+  const headers = head.map((h, i) => (h ?? "").replaceAll("\u0000", "").trim() || `column_${i + 1}`);
   const seen = new Map<string, number>();
   const uniq = headers.map((h) => {
     const n = seen.get(h) ?? 0;
@@ -43,7 +43,8 @@ export function parseCsvText(text: string): { headers: string[]; rows: Record<st
     const r: Record<string, string | null> = {};
     uniq.forEach((h, i) => {
       const c = cells[i];
-      r[h] = c === undefined || c === "" ? null : c;
+      // NUL bytes cannot be stored (PostgreSQL text and jsonb reject them): one bad cell must not fail the file.
+      r[h] = c === undefined || c === "" ? null : c.includes("\u0000") ? c.replaceAll("\u0000", "") || null : c;
     });
     return r;
   });

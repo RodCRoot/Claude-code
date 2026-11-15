@@ -22,29 +22,42 @@ export function cleanCell(v: unknown): string | null {
 const pad = (n: number | string) => String(n).padStart(2, "0");
 
 function validYmd(y: number, m: number, d: number): string | null {
-  if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+  if (y < 1000 || y > 9999 || m < 1 || m > 12 || d < 1 || d > 31) return null;
   const dt = new Date(Date.UTC(y, m - 1, d));
   if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
   return `${y}-${pad(m)}-${pad(d)}`;
 }
 
 const MONTHS: Record<string, number> = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12 };
+const MONTH_NAMES = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
 
-/**
- * "2026-07-04", "7/4/2026", "07/04/26", "7-4-2026", ISO timestamps, and month names as Zen Planner's grid
- * exports write them ("Nov 14, 2026", "November 14 2026") → YYYY-MM-DD (US month-first).
- */
-export function parseDate(s: string): string | null {
-  const t = s.trim();
-  const named = /^([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})$/.exec(t);
-  if (named) {
-    const word = named[1].toLowerCase();
-    const mon = MONTHS[word] ?? MONTHS[word.slice(0, 3)];
-    const full = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
-    if (!mon || (word.length > 4 && word !== full[mon - 1])) return null;
-    return validYmd(+named[3], mon, +named[2]);
+function monthOf(wordRaw: string): number | null {
+  const word = wordRaw.toLowerCase();
+  const mon = MONTHS[word] ?? MONTHS[word.slice(0, 3)];
+  if (!mon || (word.length > 4 && word !== MONTH_NAMES[mon - 1])) return null;
+  return mon;
+}
+
+const WEEKDAY_PREFIX = /^(?:mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)(?:[a-z]*)\.?,?\s+/i;
+/** One clock time: "4:30 PM", "16:30:00", "4pm". */
+const TIME_ATOM = String.raw`\d{1,2}(?::\d{2}){1,2}\s*(?:[ap]\.?m\.?)?|\d{1,2}\s*[ap]\.?m\.?`;
+/** A clock time (or a range of two) at the end of a cell, optionally after "at" and before a zone word. */
+const TRAILING_TIME = new RegExp(String.raw`^(.*?\d),?(?:\s+at)?[\sT]+((?:${TIME_ATOM})(?:\s*(?:-|–|—|to)\s*(?:${TIME_ATOM}))?)(?:\s+[A-Za-z]{2,5})?$`, "i");
+
+function dateOnly(t: string): string | null {
+  // "Nov 14, 2026", "November 14 2026", "Nov. 14th, 2026"
+  let m = /^([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/.exec(t);
+  if (m) {
+    const mon = monthOf(m[1]);
+    return mon ? validYmd(+m[3], mon, +m[2]) : null;
   }
-  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s].*)?$/.exec(t);
+  // "14 Nov 2026", "14-Nov-2026"
+  m = /^(\d{1,2})(?:st|nd|rd|th)?[\s-]+([A-Za-z]{3,9})\.?,?[\s-]+(\d{4})$/.exec(t);
+  if (m) {
+    const mon = monthOf(m[2]);
+    return mon ? validYmd(+m[3], mon, +m[1]) : null;
+  }
+  m = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s].*)?$/.exec(t);
   if (m) return validYmd(+m[1], +m[2], +m[3]);
   m = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})(?:\s.*)?$/.exec(t);
   if (m) {
@@ -54,19 +67,65 @@ export function parseDate(s: string): string | null {
   return null;
 }
 
-/** "13:05", "1:05 PM", "1:05:30 pm" → "HH:MM:SS". */
+/**
+ * Split one cell into its calendar date and, when it carries one, its clock time. Zen Planner's grids write
+ * "Nov 14, 2026", "Nov 14, 2026 4:30 PM", "Sat, Nov 14, 2026 at 4:30 PM", and a class time may be a range
+ * ("4:30 PM - 5:30 PM"): `time` is the start, `endTime` the end of the range. US month-first for numeric dates.
+ */
+export function parseDateAndTime(s: string): { date: string; time: string | null; endTime: string | null } | null {
+  const t = s.trim().replace(/\s+/g, " ").replace(WEEKDAY_PREFIX, "");
+  const m = TRAILING_TIME.exec(t);
+  if (m) {
+    const d = dateOnly(m[1].trim());
+    const r = parseTimeRange(m[2]);
+    if (d && r) return { date: d, time: r.start, endTime: r.end };
+  }
+  const whole = dateOnly(t);
+  return whole ? { date: whole, time: null, endTime: null } : null;
+}
+
+/**
+ * "2026-07-04", "7/4/2026", "07/04/26", "7-4-2026", ISO timestamps, and month names as Zen Planner's grid
+ * exports write them ("Nov 14, 2026", "November 14 2026", "Sat, Nov 14, 2026 4:30 PM") → YYYY-MM-DD (US month-first).
+ */
+export function parseDate(s: string): string | null {
+  return parseDateAndTime(s)?.date ?? null;
+}
+
+/** "13:05", "1:05 PM", "1:05:30 pm", "4pm", "4:30 PM EST" → "HH:MM:SS". */
 export function parseTime(s: string): string | null {
-  const m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap]\.?m\.?)?$/i.exec(s.trim());
+  const m = /^(\d{1,2})(?::(\d{2}))?(?::(\d{2}))?\s*([ap]\.?m\.?)?(?:\s+[A-Za-z]{2,5})?$/i.exec(s.trim());
   if (!m) return null;
   let h = +m[1];
   const ampm = m[4]?.toLowerCase().replaceAll(".", "");
+  // A bare number ("4") is not a time.
+  if (!ampm && m[2] === undefined) return null;
   if (ampm) {
     if (h < 1 || h > 12) return null;
     if (ampm === "pm" && h !== 12) h += 12;
     if (ampm === "am" && h === 12) h = 0;
   }
-  if (h > 23 || +m[2] > 59 || (m[3] && +m[3] > 59)) return null;
-  return `${pad(h)}:${m[2]}:${m[3] ?? "00"}`;
+  if (h > 23 || (m[2] && +m[2] > 59) || (m[3] && +m[3] > 59)) return null;
+  return `${pad(h)}:${m[2] ?? "00"}:${m[3] ?? "00"}`;
+}
+
+/** "4:30 PM", or a range "4:30 PM - 5:30 PM" / "4:30 - 5:30 PM" (a start with no AM/PM takes the reading that puts it before the end). */
+export function parseTimeRange(s: string): { start: string; end: string | null } | null {
+  const t = s.trim();
+  const one = parseTime(t);
+  if (one) return { start: one, end: null };
+  const parts = t.split(/\s*(?:–|—|\bto\b|-)\s*/i).filter(Boolean);
+  if (parts.length !== 2) return null;
+  const end = parseTime(parts[1]);
+  if (!end) return null;
+  const hasSuffix = (x: string) => /[ap]\.?m\.?/i.test(x);
+  let start = parseTime(parts[0]);
+  if (hasSuffix(parts[1]) && !hasSuffix(parts[0])) {
+    const candidates = [parseTime(`${parts[0]} AM`), parseTime(`${parts[0]} PM`)].filter((x): x is string => !!x && x <= end);
+    // The latest reading that still starts before the end: "4:30 - 5:30 PM" is 16:30, "11:30 - 12:30 PM" is 11:30.
+    start = candidates.sort().pop() ?? start;
+  }
+  return start ? { start, end } : null;
 }
 
 function formatOffset(o: string): string {
@@ -122,9 +181,13 @@ export function parseDateTime(s: string, tz: string): { value: ParsedDateTime | 
       time = parseTime(m[2]);
       offset = m[3] ? formatOffset(m[3]) : null;
     } else {
-      const dOnly = parseDate(raw);
-      if (dOnly && !/[T\s]\d/.test(raw)) {
-        const r = zonedLocalToInstant(dOnly, "00:00:00", tz);
+      // Month names, weekday prefixes, "at": "Sat, Nov 14, 2026 at 4:30 PM".
+      const dt = parseDateAndTime(raw);
+      if (dt?.time && !/^\d{4}-/.test(raw)) {
+        ymd = dt.date;
+        time = dt.time;
+      } else if (dt && !dt.time && !/[T\s]\d{1,2}:/.test(raw)) {
+        const r = zonedLocalToInstant(dt.date, "00:00:00", tz);
         return { value: { iso: r.date.toISOString(), raw, offset: null, assumedTz: tz }, warning: `No time in "${raw}"; start of day in ${tz} assumed.` };
       }
     }
@@ -160,6 +223,33 @@ export function parseNumber(s: string): ParsedNumber | undefined {
   if (!/^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(cleaned)) return undefined;
   const value = Number(cleaned);
   return Number.isFinite(value) ? { value, raw } : undefined;
+}
+
+/**
+ * Money as exports write it → integer minor units (cents). Accepts "$1,234.56", "1234.5", "(45.00)", "-45.00",
+ * "-$45.00", "$-45.00", "($1,234.56)", "45.00-", a Unicode minus, "USD 45.00" and stray spaces. Returns undefined
+ * when the text is not an amount (callers leave the value empty and warn; an unreadable amount is never 0).
+ */
+export function parseMoneyMinor(s: string): number | undefined {
+  let t = s.trim().replace(/[−–—]/g, "-").replace(/\s+/g, "");
+  if (!t) return undefined;
+  let neg = false;
+  if (/^\(.*\)$/.test(t)) {
+    neg = true;
+    t = t.slice(1, -1);
+  }
+  t = t.replace(/^(usd|us\$)/i, "").replace(/usd$/i, "");
+  if (t.endsWith("-")) {
+    neg = !neg;
+    t = t.slice(0, -1);
+  }
+  const m = /^([+-]?)\$?([+-]?)(\d{1,3}(?:,\d{3})+|\d*)(?:\.(\d*))?$/.exec(t);
+  if (!m || (m[1] && m[2]) || (m[3] === "" && !m[4])) return undefined;
+  if (m[1] === "-" || m[2] === "-") neg = !neg;
+  const whole = m[3].replaceAll(",", "") || "0";
+  if (whole.length > 10) return undefined; // beyond any real bill, and keeps the bigint columns safe
+  const cents = Number(whole) * 100 + Math.round(Number(`0.${m[4] || "0"}`) * 100);
+  return neg && cents !== 0 ? -cents : cents;
 }
 
 export function decimalsOf(raw: string): number {
