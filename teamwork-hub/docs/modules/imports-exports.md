@@ -56,6 +56,17 @@ Re-import of the same or an overlapping file: rows whose source record id is alr
 
 The older `zenplanner.members / family_links / memberships / attendance` schemas stay (existing data and saved mappings keep working); the presets below are separate schemas offered first in the upload list.
 
+### First real export (2026-11-14)
+
+Person and Membership grids were exported from the owner's account (students and alumni only; prospects and the ~200 parent-only records with no status left out) and stored in Rod's private Drive folder, not in the repo. What the real files showed, now handled:
+- Dates are written with month names (`Nov 14, 2026`); `parseDate` accepts them.
+- The Membership grid's plan column is `Membership Label`; added as an alias of Membership.
+- `Mbr. Status` values are `CURRENT`, `NOT STARTED`, `HOLD`, `CANCELED`, `CANCEL PENDING`, `COMPLETED`. `NOT STARTED` → pending and `CANCEL PENDING` → active (the Cancel Date records the end) were added; before, those rows were rejected.
+- Person `Status` values are `Student`, `Alumni`, `Prospect` and blank (parent-only records). Already mapped.
+- The Membership grid has no Family ID column, and the Person grid did not return a Group column with `_c=tagId`.
+- The Membership grid filters to `status is CURRENT` unless criteria are passed: use `&_f1=status&_o1=is not empty&_v1=` for the full history.
+- A few Person rows have an unquoted comma inside Address, which shifts later columns; the export step re-joins them into Address.
+
 ### Header matching
 
 Headers are compared without case or punctuation (`normHeader` in `mapping.ts`: "Att." = "att", "Shared?" = "shared", "Mbr. Begin Date" = "mbr begin date"), and every field has a short alias list. A header the preset does not recognize is listed on the mapping step ("Not recognized (will not be imported): ...") and left out; it never fails the import. Preset columns missing from the file are listed too and left empty. Staff can still remap any field by hand.

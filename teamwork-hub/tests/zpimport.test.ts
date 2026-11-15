@@ -33,6 +33,7 @@ import {
 import type { Viewer } from "@/lib/authz/policy";
 import { batchRows, confirmStrongMatches, resolveIdentity, revertBatch, reviewGroups } from "@/lib/imports/batches";
 import { autoMap } from "@/lib/imports/mapping";
+import { parseDate } from "@/lib/imports/normalize";
 import { getSchema } from "@/lib/imports/schemas";
 import { unmatchedHeaders, zpAttendanceGrid, zpMembershipGrid, zpPersonGrid } from "@/lib/imports/schemas/zenplanner-grid";
 import { CATALOG_CATEGORY, CATALOG_LABEL, loadTeamworkCatalog, matchCatalogPlan, TEAMWORK_CATALOG } from "@/lib/zenplanner/catalog";
@@ -554,5 +555,47 @@ describe("revert", () => {
     expect((await db().select().from(people).where(eq(people.id, existingQuill))).length).toBe(1);
     const orbit = await personByName("Orbit", "Fictional");
     if (orbit) expect(await count(guardianships, eq(guardianships.guardianPersonId, existingQuill))).toBeLessThanOrEqual(2);
+  });
+});
+
+// Formats taken from the first real Zen Planner grid export (2026-11-14). People below are fictional.
+describe("real export formats (2026-11-14)", () => {
+  it("parses Zen Planner's month-name dates", () => {
+    expect(parseDate("Nov 14, 2026")).toBe("2026-11-14");
+    expect(parseDate("Jan 29, 2025")).toBe("2025-01-29");
+    expect(parseDate("November 4 2026")).toBe("2026-11-04");
+    expect(parseDate("Sept 3, 2025")).toBe("2025-09-03");
+    expect(parseDate("Nov 31, 2026")).toBeNull();
+    expect(parseDate("Novel 3, 2026")).toBeNull();
+    expect(parseDate("Foo 1, 2026")).toBeNull();
+    expect(parseDate("7/4/2026")).toBe("2026-07-04");
+  });
+
+  it("maps the real Membership and Person grid headers", () => {
+    const m = autoMap(zpMembershipGrid, ["First Name", "Last Name", "Birth Date", "Email", "Membership Label", "Membership Category", "Mbr. Status", "Personal Status", "Mbr. Begin Date", "Mbr. End Date", "Canceled By"]);
+    expect(m).toMatchObject({ plan: "Membership Label", status: "Mbr. Status", start_date: "Mbr. Begin Date", end_date: "Mbr. End Date", cancel_by: "Canceled By", membership_category: "Membership Category" });
+    const p = autoMap(zpPersonGrid, ["First Name", "Last Name", "Status", "Parent First Name", "Parent Last Name", "Parent Email", "Family ID"]);
+    expect(p).toMatchObject({ status: "Status", parent_first: "Parent First Name", family_id: "Family ID" });
+  });
+
+  it("accepts every Mbr. Status value the real export uses, with month-name dates", async () => {
+    const csv = [
+      "First Name,Last Name,Birth Date,Membership Label,Mbr. Status,Mbr. Begin Date,Mbr. End Date,Months,Payment Amount,Att. Limit,Att. Limit Type",
+      'Vega,Imaginary,"Mar 2, 2011",Real Format 2x,CURRENT,"Nov 1, 2026","Oct 31, 2027",12,$178.99,2,Weekly',
+      'Lyra,Imaginary,"Apr 5, 2012",Real Format 2x,NOT STARTED,"Dec 1, 2026","Nov 30, 2027",12,$178.99,2,Weekly',
+      'Cass,Imaginary,"May 6, 2010",Real Format 2x,CANCEL PENDING,"Jan 1, 2026","Dec 31, 2026",12,$178.99,2,Weekly',
+      'Dax,Imaginary,"Jun 7, 2009",Real Format 2x,COMPLETED,"Jan 1, 2024","Dec 31, 2024",12,$178.99,2,Weekly',
+      'Esme,Imaginary,"Jul 8, 2008",Real Format 2x,CANCELED,"Jan 1, 2025","Jun 30, 2025",6,$197.99,2,Weekly',
+      'Faye,Imaginary,"Aug 9, 2011",Real Format 2x,HOLD,"Jan 1, 2026","Dec 31, 2026",12,$178.99,2,Weekly',
+    ].join("\n");
+    const { batchId, stats } = await uploadAndValidate(rod, "zenplanner.membership_grid", "real-format-membership.csv", new TextEncoder().encode(csv));
+    expect(stats.rows).toBe(6);
+    expect(stats.status_invalid ?? 0).toBe(0);
+    const rows = await tx((t) => batchRows(t, rod, batchId));
+    const byName = (first: string) => rows.find((r) => JSON.stringify(r.normalized).includes(first))!;
+    expect(rows.flatMap((r) => r.errors ?? [])).toEqual([]);
+    expect(JSON.stringify(byName("Lyra").normalized)).toMatch(/"pending"/);
+    expect(JSON.stringify(byName("Cass").normalized)).toMatch(/"active"/);
+    expect(JSON.stringify(byName("Vega").normalized)).toMatch(/2026-11-01/);
   });
 });

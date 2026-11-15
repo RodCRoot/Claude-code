@@ -293,6 +293,10 @@ const ZP_MEMBERSHIP_STATUS: Record<string, string> = {
   "past due": "past_due",
   pending: "pending",
   future: "pending",
+  // Values seen in the real Membership grid export (2026-11-14): a membership that has not started yet, and one
+  // with a cancellation scheduled (it stays active until its Cancel Date).
+  "not started": "pending",
+  "cancel pending": "active",
   trial: "trialing",
 };
 
@@ -330,7 +334,7 @@ export const zpMembershipGrid: ImportSchemaDef = {
     ...NAME_FIELDS,
     { key: "dob", label: "Birth Date", type: "date", aliases: ["birth date", "birthdate", "dob"] },
     { key: "email", label: "Email", type: "email", aliases: ["email", "email address"] },
-    { key: "plan", label: "Membership", type: "text", required: true, aliases: ["membership", "membership name", "mbr name", "membership option", "membership template", "plan", "plan name"] },
+    { key: "plan", label: "Membership", type: "text", required: true, aliases: ["membership", "membership label", "membership name", "mbr name", "membership option", "membership template", "plan", "plan name"] },
     { key: "status", label: "Status", type: "text", aliases: ["status", "mbr status", "membership status"], hint: "When the column is missing the status is worked out from the cancel, end and hold dates." },
     { key: "start_date", label: "Mbr. Begin Date", type: "date", required: true, aliases: ["mbr begin date", "membership begin date", "begin date", "mbr begin", "start date"] },
     { key: "end_date", label: "Mbr. End Date", type: "date", aliases: ["mbr end date", "membership end date", "end date", "mbr end", "expiration date"] },
@@ -368,7 +372,7 @@ export const zpMembershipGrid: ImportSchemaDef = {
     const holdEnd = asText(f.hold_end);
     const st = asText(f.status);
     let status = st ? ZP_MEMBERSHIP_STATUS[st.trim().toLowerCase()] : undefined;
-    if (st && !status) r.errors.push(`Membership status "${st}" not recognized (expected Active, On Hold, Cancelled, Expired, Past Due, Pending, Trial).`);
+    if (st && !status) r.errors.push(`Membership status "${st}" not recognized (expected Active/Current, On Hold, Cancelled, Cancel Pending, Expired/Completed, Past Due, Pending/Not Started, Trial).`);
     if (!st) {
       if (cancelDate && cancelDate <= today) status = "cancelled";
       else if (endDate && endDate < today) status = "expired";

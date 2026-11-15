@@ -28,9 +28,22 @@ function validYmd(y: number, m: number, d: number): string | null {
   return `${y}-${pad(m)}-${pad(d)}`;
 }
 
-/** "2026-07-04", "7/4/2026", "07/04/26", "7-4-2026", ISO timestamps → YYYY-MM-DD (US month-first). */
+const MONTHS: Record<string, number> = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12 };
+
+/**
+ * "2026-07-04", "7/4/2026", "07/04/26", "7-4-2026", ISO timestamps, and month names as Zen Planner's grid
+ * exports write them ("Nov 14, 2026", "November 14 2026") → YYYY-MM-DD (US month-first).
+ */
 export function parseDate(s: string): string | null {
   const t = s.trim();
+  const named = /^([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})$/.exec(t);
+  if (named) {
+    const word = named[1].toLowerCase();
+    const mon = MONTHS[word] ?? MONTHS[word.slice(0, 3)];
+    const full = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+    if (!mon || (word.length > 4 && word !== full[mon - 1])) return null;
+    return validYmd(+named[3], mon, +named[2]);
+  }
   let m = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s].*)?$/.exec(t);
   if (m) return validYmd(+m[1], +m[2], +m[3]);
   m = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})(?:\s.*)?$/.exec(t);

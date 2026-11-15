@@ -15,7 +15,7 @@ pnpm build && PORT=3000 pnpm start &            # then: PW_CHROMIUM=<chromium pa
 - `docs/VALIDATION.md`: scenario-to-test map; the "Gaps" section lists what still has no automated coverage.
 
 ## Prioritized backlog
-0. **Start at `/settings/go-live`** (owner login): it lists what blocks real families using the hub. Then run the real Zen Planner export through `/imports/zenplanner` on a private database only (never commit it).
+0. **Start at `/settings/go-live`** (owner login): it lists what blocks real families using the hub. Then run the real Zen Planner export through `/imports/zenplanner` on a private database only (never commit it). The Person and Membership grid exports (students and alumni, 2026-11-14) are in Rod's private Drive folder "Zen Planner export for Teamwork Hub (private)" > "1 - Data exports (CSV)". Download them there; never copy them into the repo. Bill and Attendance grids are not exported yet.
 1. **Account research (blocked on access):** Zen Planner Studio, Hawkin Cloud, TeamBuildr read-only exploration → verify import mappings, save presets. See BLOCKERS.md and the inspection checklist in `docs/HAWKIN-CONNECTORS.md`.
 2. **Sandbox verification (needs keys):** Stripe test mode (checkout, subscriptions anchor/first charge, refunds/disputes/payouts fields), PayPal sandbox (orders, subscriptions approval link, webhook verification), Venmo on a real phone. Mark `verified_sandbox` only after a real round trip.
 3. **Google Calendar (needs console setup):** create OAuth client per `docs/modules/scheduling.md`, set env, connect one coach, verify push + free/busy.
