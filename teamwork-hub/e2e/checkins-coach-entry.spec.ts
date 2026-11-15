@@ -113,6 +113,8 @@ test("coach enters the ready check from the roster; it is labelled as entered by
   await expect(ops.getByRole("link", { name: /Enter/ })).toHaveCount(0);
   await expect(page.locator("#readiness")).not.toContainText("4/5");
   await page.goto(`/check-ins/${f.runningBooking}/coach`);
+  // Wait for the redirect to finish: otherwise the next sign-in races it ("navigation interrupted by /denied").
+  await page.waitForURL(/\/denied$/);
   await expect(page.getByRole("heading", { level: 1, name: "Check-in for Leo Rivera" })).toHaveCount(0);
 
   // The parent sees that the coach entered it.

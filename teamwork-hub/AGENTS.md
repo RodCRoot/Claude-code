@@ -13,6 +13,7 @@ Package manager: **pnpm** (npm 10 crashes on vitest's peer graph). Run `pnpm ins
 ## Commands
 - `bash scripts/setup-dev.sh` — new machine: PostgreSQL role `teamwork`, databases `teamwork_hub` and `teamwork_hub_test` (with `btree_gist`), `.env`, install, seed. Safe to rerun.
 - Browser tests need a production build: `pnpm build && PORT=3000 pnpm start`, then `PW_CHROMIUM=<chromium path> npx playwright test --workers=1 --trace off` (cloud sessions: `/opt/pw-browsers/chromium`). The demo role switcher `/dev/switch` only exists under `pnpm dev`; e2e signs in through `/login`.
+- Browser tests on another weekday or time of day: `bash scripts/e2e-at.sh "2026-11-17 20:30" [playwright args]` (facility-local time; needs root and `apt-get install faketime`). It runs its own PostgreSQL cluster, the seed, the server and the test runner under libfaketime with one shared offset; the app has no clock override. The seed is relative to "today", so a test that only fails on some weekdays or in the evening (when the UTC date is already tomorrow) shows up here. Chromium's own clock stays real.
 - Stop a running server by process name `next-server` (read `/proc/<pid>/comm`); matching on the command line kills your own shell.
 - `pnpm db:fresh` — reset + migrate + seed the dev DB (APP_MODE=demo only)
 - `pnpm dev` — http://localhost:3000 ; demo logins at `/dev/switch` (password `teamwork-demo-1`)
