@@ -33,7 +33,7 @@ mkdir -p "$OUT"
 OUT="$(cd "$OUT" && pwd)"
 
 [ -f "$LIB" ] || { echo "libfaketime not found at $LIB (apt-get install faketime)"; exit 2; }
-[ -d .next ] || { echo "no production build here: run pnpm build first"; exit 2; }
+[ -d "${APP_DIR:-.}/.next" ] || { echo "no production build in ${APP_DIR:-this directory}: run pnpm build first"; exit 2; }
 
 target=$(TZ="$TZ_FACILITY" date -d "$WHEN" +%s)
 offset=$(( target - $(date +%s) ))
@@ -42,11 +42,23 @@ FAKE="${sign}${offset#-}s"
 fake_env=(LD_PRELOAD="$LIB" FAKETIME="$FAKE" DONT_FAKE_MONOTONIC=1)
 echo "e2e-at: $WHEN $TZ_FACILITY  (FAKETIME=$FAKE)  results in $OUT"
 
-stop_server() {
-  # By listening port, and only a process whose name is next-server.
-  for pid in $(ss -ltnpH "sport = :$PORT" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u); do
-    if [ "$(cat "/proc/$pid/comm" 2>/dev/null)" = "next-server" ]; then kill "$pid" 2>/dev/null || true; fi
+# The server is found by process name (next-server, read from /proc/<pid>/comm) and the PORT it was started
+# with, never by matching a command line.
+server_pids() {
+  local d c
+  for d in /proc/[0-9]*; do
+    c="$(cat "$d/comm" 2>/dev/null || true)"
+    case "$c" in
+      next-server*) { tr "\\0" "\\n" < "$d/environ" | grep -qx "PORT=$PORT"; } 2>/dev/null && echo "${d#/proc/}" ;;
+    esac
   done
+  return 0
+}
+stop_server() {
+  local pid
+  for pid in $(server_pids); do kill "$pid" 2>/dev/null || true; done
+  for _ in $(seq 1 40); do [ -z "$(server_pids)" ] && return 0; sleep 0.5; done
+  echo "e2e-at: a next-server on port $PORT would not stop"; return 1
 }
 pg() { su postgres -c "env ${fake_env[*]} $PG_BIN/pg_ctl -D $FAKE_PG_DIR $*"; }
 
@@ -64,12 +76,22 @@ echo "e2e-at: database clock is $(psql_fake -c "select to_char(now() at time zon
 
 export DATABASE_URL="postgres://teamwork:teamwork@127.0.0.1:$FAKE_PG_PORT/$DB_NAME"
 export APP_URL="http://localhost:$PORT" APP_MODE=demo
+# The seed and the server must share one object store even when the server runs from APP_DIR.
+export STORAGE_BACKEND=local STORAGE_DIR="${STORAGE_DIR:-$PWD/.storage}"
 env "${fake_env[@]}" pnpm db:fresh > "$OUT/seed.log" 2>&1 || { tail -20 "$OUT/seed.log"; exit 3; }
 
-env "${fake_env[@]}" PORT="$PORT" pnpm start > "$OUT/server.log" 2>&1 &
+# APP_DIR: a directory holding a copy of the production build (.next) to serve, so the working tree can be
+# rebuilt while a long sweep is running. Defaults to this directory.
+(cd "${APP_DIR:-.}" && exec env "${fake_env[@]}" PORT="$PORT" pnpm start) > "$OUT/server.log" 2>&1 &
 trap 'stop_server; su postgres -c "$PG_BIN/pg_ctl -D $FAKE_PG_DIR stop -m fast" >/dev/null 2>&1 || true' EXIT
 for _ in $(seq 1 60); do curl -fsS -o /dev/null "http://localhost:$PORT/login" 2>/dev/null && break; sleep 1; done
 curl -fsS -o /dev/null "http://localhost:$PORT/login" || { echo "server did not start"; tail -20 "$OUT/server.log"; exit 4; }
+# The server answering on the port must be the one just started, with this run's clock (not a leftover).
+for pid in $(server_pids); do
+  tr '\0' '\n' < "/proc/$pid/environ" | grep -qx "FAKETIME=$FAKE" || { echo "e2e-at: the server on port $PORT is not running with FAKETIME=$FAKE"; exit 5; }
+done
+[ -n "$(server_pids)" ] || { echo "e2e-at: no next-server found for port $PORT"; exit 5; }
+grep -q "EADDRINUSE" "$OUT/server.log" && { echo "e2e-at: port $PORT was already in use"; exit 5; }
 
 printf '#!/bin/bash\nunset LD_PRELOAD FAKETIME DONT_FAKE_MONOTONIC\nexec %q "$@"\n' "${PW_CHROMIUM:-/opt/pw-browsers/chromium}" > "$OUT/chromium-realtime.sh"
 chmod +x "$OUT/chromium-realtime.sh"

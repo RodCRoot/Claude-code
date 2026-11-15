@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { importBatches, importRows, people } from "@/db/schema";
 import { requireCap } from "@/lib/auth/viewer";
 import { UserError } from "@/lib/actions";
-import { getBatch, listPresets, loadBatchFile, reviewGroups } from "@/lib/imports/batches";
+import { getBatch, listPresets, loadBatchFile, reviewGroupPage, type ReviewConfidence } from "@/lib/imports/batches";
 import { describePeople } from "@/lib/imports/identity";
 import { fieldMapping, mappingOptions, metricHeaders, missingRequired } from "@/lib/imports/mapping";
 import { reconcile } from "@/lib/imports/reconcile";
@@ -43,6 +43,9 @@ function summarize(n: Record<string, unknown> | null): string {
   return parts.join(" · ").slice(0, 220);
 }
 
+const REVIEW_PAGE_SIZE = 25;
+const CONFIDENCE_LABEL: Record<ReviewConfidence, string> = { strong: "Strong match", name_only: "Name only", ambiguous: "Several candidates", none: "No match" };
+
 const ACTION_LABEL: Record<string, string> = { create: "Create", link: "Link", update: "Update", skip: "Skip", reject: "Reject" };
 
 export default async function ImportBatchPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
@@ -75,12 +78,32 @@ export default async function ImportBatchPage({ params, searchParams }: { params
   const firstRow = parsed?.rows[0] ?? {};
 
   const validated = ["validated", "committed", "reverted"].includes(batch.status);
-  const groups = batch.status === "validated" ? await reviewGroups(db, v, batch.id) : [];
+  // The field that carries the record's own number, when this preset has one and the file mapped it.
+  const idField = schema.fields.find((f) => (f.key === "bill_id" || f.key === "membership_id") && mapping[f.key]) ?? null;
+  // Step 5 is paged, searchable and filterable (rq / rc / rp), so several hundred people stay workable.
+  const one = (x: string | string[] | undefined) => (typeof x === "string" ? x : "");
+  const review =
+    batch.status === "validated"
+      ? await reviewGroupPage(db, v, batch.id, { q: one(sp.rq), confidence: one(sp.rc) as ReviewConfidence | "", page: Number(one(sp.rp)) || 1, pageSize: REVIEW_PAGE_SIZE })
+      : null;
+  const groups = review?.groups ?? [];
   const candidateIds = [...new Set(groups.flatMap((g) => [...g.candidates.map((c) => c.personId), ...(g.suggested ? [g.suggested] : [])]))];
   const candidateInfo = await describePeople(db, v.orgId, candidateIds);
+  // One shared list for every "link to someone else" type-ahead on the page (not one copy per person).
   const allPeople = groups.length
-    ? await db.select({ id: people.id, first: people.firstName, last: people.lastName, dob: people.dateOfBirth }).from(people).where(eq(people.orgId, v.orgId)).orderBy(asc(people.lastName), asc(people.firstName)).limit(2000)
+    ? await db.select({ id: people.id, first: people.firstName, last: people.lastName, dob: people.dateOfBirth }).from(people).where(eq(people.orgId, v.orgId)).orderBy(asc(people.lastName), asc(people.firstName)).limit(5000)
     : [];
+  const reviewHref = (over: { rq?: string; rc?: string; rp?: number }) => {
+    const q = new URLSearchParams();
+    const rq = over.rq ?? review?.q ?? "";
+    const rc = over.rc ?? review?.confidence ?? "";
+    const rp = over.rp ?? 1;
+    if (rq) q.set("rq", rq);
+    if (rc) q.set("rc", rc);
+    if (rp > 1) q.set("rp", String(rp));
+    const qs = q.toString();
+    return `/imports/${batch.id}${qs ? `?${qs}` : ""}#review`;
+  };
   const sampleRows = validated
     ? await db
         .select()
@@ -98,7 +121,12 @@ export default async function ImportBatchPage({ params, searchParams }: { params
         .limit(15)
     : [];
   const warnRows = validated
-    ? (await db.select().from(importRows).where(eq(importRows.batchId, batch.id)).orderBy(asc(importRows.rowNumber)).limit(2000)).filter((r) => r.warnings.length && r.status !== "invalid").slice(0, 15)
+    ? await db
+        .select()
+        .from(importRows)
+        .where(and(eq(importRows.batchId, batch.id), sql`${importRows.status} <> 'invalid'`, sql`jsonb_array_length(${importRows.warnings}) > 0`))
+        .orderBy(asc(importRows.rowNumber))
+        .limit(15)
     : [];
   const rec = batch.status === "committed" || batch.status === "reverted" ? await reconcile(db, v, batch.id) : null;
   const dupUploads = Number(sp.duplicate ?? stats.duplicateUploads ?? 0);
@@ -328,61 +356,126 @@ export default async function ImportBatchPage({ params, searchParams }: { params
               <Stat label="Rejected" value={stats.status_invalid ?? 0} tone={(stats.status_invalid ?? 0) > 0 ? "bad" : undefined} />
             </div>
           ) : null}
+          {validated && idField && (stats.status_duplicate ?? 0) >= Math.max(3, Math.ceil((stats.fileRows ?? 0) * 0.05)) ? (
+            <Callout tone="warn" title="Many rows share one ID" className="mt-4">
+              {stats.status_duplicate} rows have the same {idField.label} as an earlier row and will be skipped as duplicates. If the column mapped to {idField.label} (&ldquo;{mapping[idField.key]}&rdquo;) is not one number per record (for example it
+              is the person&apos;s number), set that field to &ldquo;not mapped&rdquo; in Steps 2–3 and validate again.
+            </Callout>
+          ) : null}
         </CardBody>
       </Card>
 
       {/* ---------------- Step 5: identity review ---------------- */}
-      {batch.status === "validated" ? (
+      {batch.status === "validated" && review ? (
         <Card className="mb-6" id="review">
           <CardHeader
             kicker="Step 5"
-            title={`Identity review${groups.length ? ` — ${groups.length} ${groups.length === 1 ? "person" : "people"}` : ""}`}
-            action={groups.length ? <Badge variant="yellow">{stats.needs_review ?? 0} rows waiting</Badge> : <Badge variant="green">nothing to review</Badge>}
+            title={`Identity review${review.total ? ` — ${review.total} ${review.total === 1 ? "person" : "people"}` : ""}`}
+            action={review.total ? <Badge variant="yellow">{stats.needs_review ?? review.totalRows} rows waiting</Badge> : <Badge variant="green">nothing to review</Badge>}
           />
           <CardBody>
             <p className="mb-3 text-sm text-ink-3">
-              Teamwork never matches by name alone and never merges records silently. Strong matches (exact name + date of birth, or exact name + email for adults, with a single candidate) are suggested but still need your confirmation.
+              One decision per person, however many rows they have. Teamwork never merges records silently. Strong matches (exact name plus the same date of birth or email, one person with that name) and name-only matches (exactly one
+              person in Teamwork has that name, with nothing in the file to confirm or contradict it) are suggestions: confirm them one at a time, or all at once with the buttons below.
             </p>
             {/* Always rendered so their confirmation message stays visible after the list empties. */}
             <div className="mb-4 flex flex-wrap gap-2">
               <ActionForm action={bulkReviewAction}>
                 <input type="hidden" name="batchId" value={batch.id} />
                 <input type="hidden" name="intent" value="confirm_strong" />
-                {groups.some((g) => g.confidence === "strong") ? (
+                {review.byConfidence.strong ? (
                   <SubmitButton variant="secondary" size="sm">
-                    Confirm all strong matches ({groups.filter((g) => g.confidence === "strong").length})
+                    Confirm all strong matches ({review.byConfidence.strong})
+                  </SubmitButton>
+                ) : null}
+              </ActionForm>
+              <ActionForm action={bulkReviewAction}>
+                <input type="hidden" name="batchId" value={batch.id} />
+                <input type="hidden" name="intent" value="confirm_name_only" />
+                {review.byConfidence.name_only ? (
+                  <SubmitButton
+                    variant="outline"
+                    size="sm"
+                    confirm={`Link ${review.byConfidence.name_only} ${review.byConfidence.name_only === 1 ? "person" : "people"} by name alone? Each is the only person in Teamwork with that exact name. Look through the Name only list first if two people could share a name.`}
+                  >
+                    Confirm all name-only matches ({review.byConfidence.name_only})
                   </SubmitButton>
                 ) : null}
               </ActionForm>
               <ActionForm action={bulkReviewAction}>
                 <input type="hidden" name="batchId" value={batch.id} />
                 <input type="hidden" name="intent" value="skip" />
-                {groups.length ? (
+                {review.total ? (
                   <SubmitButton variant="outline" size="sm" confirm="Skip every row that still needs review? They will not be imported.">
                     Skip all unresolved
                   </SubmitButton>
                 ) : null}
               </ActionForm>
             </div>
+            {review.total ? (
+              <>
+                <nav aria-label="Filter people to review" className="mb-3 flex flex-wrap gap-2 text-sm">
+                  <Link href={reviewHref({ rc: "" })} aria-current={!review.confidence ? "true" : undefined} className={buttonClass(!review.confidence ? "secondary" : "outline", "sm")}>
+                    All ({review.total})
+                  </Link>
+                  {(Object.keys(CONFIDENCE_LABEL) as ReviewConfidence[])
+                    .filter((k) => review.byConfidence[k] > 0)
+                    .map((k) => (
+                      <Link key={k} href={reviewHref({ rc: k })} aria-current={review.confidence === k ? "true" : undefined} className={buttonClass(review.confidence === k ? "secondary" : "outline", "sm")}>
+                        {CONFIDENCE_LABEL[k]} ({review.byConfidence[k]})
+                      </Link>
+                    ))}
+                </nav>
+                <form method="get" action={`/imports/${batch.id}`} role="search" aria-label="Find a person to review" className="mb-4 flex flex-wrap items-end gap-2">
+                  {review.confidence ? <input type="hidden" name="rc" value={review.confidence} /> : null}
+                  <Field label="Find a person in this list" htmlFor="rq" className="min-w-56 flex-1">
+                    <Input id="rq" name="rq" type="search" defaultValue={review.q} placeholder="Name or email" maxLength={80} />
+                  </Field>
+                  <button type="submit" className={buttonClass("outline", "md")}>
+                    Search
+                  </button>
+                  {review.q ? (
+                    <Link href={reviewHref({ rq: "" })} className={buttonClass("outline", "md")}>
+                      Clear search
+                    </Link>
+                  ) : null}
+                </form>
+                <p className="mb-3 text-sm text-ink-3" role="status" data-testid="review-count">
+                  {review.matching === 0
+                    ? "Nobody in this list matches."
+                    : `Showing ${(review.page - 1) * review.pageSize + 1} to ${(review.page - 1) * review.pageSize + groups.length} of ${review.matching} ${review.matching === 1 ? "person" : "people"}${review.matching !== review.total ? ` (filtered from ${review.total})` : ""}.`}
+                </p>
+              </>
+            ) : null}
+            <datalist id="review-people">
+              {allPeople.map((p) => (
+                <option key={p.id} value={`${p.last}, ${p.first}${p.dob ? ` (${p.dob})` : ""} · ${p.id.slice(0, 8)}`} />
+              ))}
+            </datalist>
             <ul className="space-y-4">
-              {groups.slice(0, 50).map((g) => (
+              {groups.map((g, gi) => (
                 <li key={g.key} className="rounded-lg border border-edge p-3">
                   <ActionForm action={resolveAction}>
                     <input type="hidden" name="batchId" value={batch.id} />
                     <input type="hidden" name="key" value={g.key} />
+                    <input type="hidden" name="rq" value={review.q} />
+                    <input type="hidden" name="rc" value={review.confidence ?? ""} />
+                    <input type="hidden" name="rp" value={review.page} />
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                       <div>
                         <span className="font-semibold">
                           {g.identity.firstName} {g.identity.lastName}
                         </span>{" "}
                         <span className="text-xs text-ink-3">
-                          {[g.identity.dob && `DOB ${g.identity.dob}`, g.identity.email, g.identity.sourceId && `source id ${g.identity.sourceId}`].filter(Boolean).join(" · ")} · {g.rows.length} row(s)
+                          {[g.identity.dob && `DOB ${g.identity.dob}`, g.identity.email, g.identity.sourceId && `source id ${g.identity.sourceId}`].filter(Boolean).join(" · ")} · {g.rowCount} row(s)
                         </span>
                       </div>
-                      <StatusBadge status={g.confidence === "strong" ? "strong match" : g.confidence === "ambiguous" ? "needs_review" : "no match"} />
+                      <StatusBadge status={g.confidence === "strong" ? "strong match" : g.confidence === "name_only" ? "name only" : g.confidence === "ambiguous" ? "needs_review" : "no match"} />
                     </div>
                     <fieldset className="mt-2 space-y-1">
-                      <legend className="sr-only">Choose who this is</legend>
+                      <legend className="sr-only">
+                        Choose who {g.identity.firstName} {g.identity.lastName} is
+                      </legend>
                       {g.candidates.map((c) => {
                         const info = candidateInfo.get(c.personId);
                         return (
@@ -408,16 +501,8 @@ export default async function ImportBatchPage({ params, searchParams }: { params
                       </label>
                     </fieldset>
                     <div className="mt-2 flex flex-wrap items-end gap-2">
-                      <Field label="…or link to someone else" htmlFor={`manual-${g.key}`} className="min-w-56 flex-1">
-                        <Select id={`manual-${g.key}`} name="manualPersonId" defaultValue="">
-                          <option value="">—</option>
-                          {allPeople.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.last}, {p.first}
-                              {p.dob ? ` (${p.dob})` : ""}
-                            </option>
-                          ))}
-                        </Select>
+                      <Field label={`…or link ${g.identity.firstName ?? ""} ${g.identity.lastName ?? ""} to someone else`} htmlFor={`manual-${gi}`} className="min-w-56 flex-1" hint="Type a name and pick the person from the suggestions.">
+                        <Input id={`manual-${gi}`} name="manualPerson" list="review-people" autoComplete="off" placeholder="Last name, first name" />
                       </Field>
                       <SubmitButton size="sm">Save decision</SubmitButton>
                     </div>
@@ -425,7 +510,23 @@ export default async function ImportBatchPage({ params, searchParams }: { params
                 </li>
               ))}
             </ul>
-            {groups.length > 50 ? <p className="mt-3 text-sm text-ink-3">Showing 50 of {groups.length}; resolve these to see the rest.</p> : null}
+            {review.pages > 1 ? (
+              <nav aria-label="Pages of people to review" className="mt-4 flex flex-wrap items-center gap-2 text-sm">
+                {review.page > 1 ? (
+                  <Link href={reviewHref({ rp: review.page - 1 })} className={buttonClass("outline", "sm")}>
+                    Previous
+                  </Link>
+                ) : null}
+                <span className="text-ink-3">
+                  Page {review.page} of {review.pages}
+                </span>
+                {review.page < review.pages ? (
+                  <Link href={reviewHref({ rp: review.page + 1 })} className={buttonClass("outline", "sm")}>
+                    Next
+                  </Link>
+                ) : null}
+              </nav>
+            ) : null}
           </CardBody>
         </Card>
       ) : null}
@@ -556,8 +657,9 @@ export default async function ImportBatchPage({ params, searchParams }: { params
               {batch.committedAt ? ` · committed ${fmt(batch.committedAt)}` : ""}
               {batch.revertedAt ? ` · reverted ${fmt(batch.revertedAt)}` : ""}
             </p>
+            {/* min-w-0: a grid column otherwise grows to its table's minimum width and the page scrolls sideways on a phone. */}
             <div className="grid gap-4 lg:grid-cols-2">
-              <div>
+              <div className="min-w-0">
                 <h3 className="text-sm font-semibold">Records created</h3>
                 <ul className="mt-1 text-sm">
                   {Object.entries(rec.createdByType).map(([t, n]) => (
@@ -581,7 +683,7 @@ export default async function ImportBatchPage({ params, searchParams }: { params
                   </li>
                 </ul>
               </div>
-              <div>
+              <div className="min-w-0">
                 <h3 className="text-sm font-semibold">Per person × item</h3>
                 <Table caption="Per athlete and test type">
                   <thead>

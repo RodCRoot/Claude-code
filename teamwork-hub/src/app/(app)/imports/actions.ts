@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
+import { people } from "@/db/schema";
 import { requireViewer } from "@/lib/auth/viewer";
 import { assertCan } from "@/lib/authz/policy";
 import { formToObject, safeAction, UserError, type ActionState } from "@/lib/actions";
@@ -10,6 +12,7 @@ import {
   applyPreset,
   commitBatch,
   confirmCoverage,
+  confirmNameOnlyMatches,
   confirmStrongMatches,
   getBatch,
   loadBatchFile,
@@ -43,11 +46,32 @@ const done = (batchId: string, message: string): ActionState => {
   return { ok: true, message };
 };
 
-/** For actions whose form disappears afterwards: show the result as a page-level message. */
-function flash(batchId: string, message: string): never {
+/**
+ * For actions whose form disappears afterwards: show the result as a page-level message. The review step's
+ * search, filter and page (rq / rc / rp) are carried over so staff stay where they were in a long list.
+ */
+function flash(batchId: string, message: string, fd?: FormData): never {
   revalidatePath(`/imports/${batchId}`);
   revalidatePath("/imports");
-  redirect(`/imports/${batchId}?flash=${encodeURIComponent(message)}`);
+  const keep = new URLSearchParams({ flash: message });
+  if (fd) for (const k of ["rq", "rc", "rp"]) if (str(fd, k)) keep.set(k, str(fd, k).slice(0, 80));
+  redirect(`/imports/${batchId}?${keep.toString()}${fd && [...keep.keys()].length > 1 ? "#review" : ""}`);
+}
+
+/**
+ * "Link to someone else" is a type-ahead whose options end in the first 8 characters of the person's id
+ * ("Madeup, Niko (2011-04-02) · 3f9a2c1b"). Resolve it inside this organization; anything else is refused.
+ */
+async function personFromPick(orgId: string, text: string): Promise<string> {
+  const m = /([0-9a-f]{8})\s*$/i.exec(text);
+  if (!m) throw new UserError("Pick the person from the suggestions that appear as you type their name.", { manualPerson: "Pick from the list" });
+  const rows = await db
+    .select({ id: people.id })
+    .from(people)
+    .where(and(eq(people.orgId, orgId), sql`${people.id}::text like ${m[1].toLowerCase() + "%"}`))
+    .limit(2);
+  if (rows.length !== 1) throw new UserError("That person was not found. Pick them from the suggestions again.", { manualPerson: "Not found" });
+  return rows[0].id;
 }
 
 export const saveMappingAction = safeAction(async (_p: ActionState, fd: FormData) => {
@@ -97,21 +121,27 @@ export const resolveAction = safeAction(async (_p: ActionState, fd: FormData) =>
   const v = await importer();
   const batchId = str(fd, "batchId");
   const key = str(fd, "key");
-  // An explicit pick from the "someone else" list wins over the pre-selected suggestion.
-  const choice = str(fd, "manualPersonId") || str(fd, "choice");
+  // An explicit pick from the "someone else" type-ahead wins over the pre-selected suggestion.
+  const manual = str(fd, "manualPerson");
+  const choice = manual ? await personFromPick(v.orgId, manual) : str(fd, "choice");
   if (!choice) throw new UserError("Choose a candidate, create new, or skip.");
   const decision =
     choice === "__create" ? ({ resolution: "create_new" } as const) : choice === "__skip" ? ({ resolution: "skip" } as const) : ({ resolution: "link", personId: choice } as const);
   const n = await db.transaction((tx) => resolveIdentity(tx, v, batchId, key, decision));
-  return flash(batchId, `Resolved ${n} row(s).`);
+  return flash(batchId, `Resolved ${n} row(s).`, fd);
 });
 
 export const bulkReviewAction = safeAction(async (_p: ActionState, fd: FormData) => {
   const v = await importer();
   const batchId = str(fd, "batchId");
-  if (str(fd, "intent") === "confirm_strong") {
+  const intent = str(fd, "intent");
+  if (intent === "confirm_strong") {
     const n = await db.transaction((tx) => confirmStrongMatches(tx, v, batchId));
     return flash(batchId, `Confirmed ${n} strong match row(s).`);
+  }
+  if (intent === "confirm_name_only") {
+    const n = await db.transaction((tx) => confirmNameOnlyMatches(tx, v, batchId));
+    return flash(batchId, `Confirmed the name-only match for ${n} ${n === 1 ? "person" : "people"}.`);
   }
   const n = await db.transaction((tx) => skipUnresolved(tx, v, batchId));
   return flash(batchId, `Skipped ${n} unresolved row(s).`);
