@@ -104,6 +104,10 @@ Still open:
 - **3,135 old paid bills name nobody** and are not imported. Revenue history before 2023 is therefore incomplete in the hub; Zen Planner remains the record for it.
 - The membership grid has no discount column. The 32 discounts are a separate list (`ref-discounts.txt` in "2 - Reference lists").
 
+#### Renewal settings in the real Membership file (private dry run, 2026-11-16)
+
+Of the 355 memberships that are current, not started or on hold, 316 have Auto Renew on, and every one of those has the Renewal Type `RENEW by copying the current settings`. 131 of them have a term longer than one month (mostly 12, 6 and 3 months), so Zen Planner would renew them into another fixed term; the member agreement says they roll to month-to-month at the committed rate. All 131 carry the `renews_into_fixed_term` flag and appear on the discount review's "Set to renew into another fixed term" card. The hub's own renewals already follow the agreement.
+
 ### Bill and Attendance grids: made ready before the real files arrive (2026-11-15)
 
 Neither grid has been exported yet. Using what the Person and Membership files showed, both presets were gone through field by field. Tests use fictional people only (`tests/zpimport-hardening.test.ts`, `tests/zpimport-volume.test.ts`); nobody has seen a real Bill or Attendance file, so every item below is a guess at the format that is now tolerated, not a confirmed format.
