@@ -180,3 +180,5 @@ Import hardening from a build agent: each row of a Zen Planner grid commits in i
 Weekday sweep: `scripts/e2e-at.sh "<date time>"` runs the whole Playwright suite with the server clock set to a chosen moment (libfaketime, its own PostgreSQL cluster; nothing in `src/` reads a test clock). Ten runs, Monday to Friday at 10:00 and 20:30 facility time, found no weekday- or time-dependent test. Two failures were unrelated: a sign-in racing a `/denied` redirect (fixed in three specs) and a spec that used Bar Code as its unknown column. One app bug was found by reading: coach assignment dates, the under-13 at-home logging check and the news watch list used the UTC date and were a day ahead during a US evening; they now use the facility date. Month ends were not run.
 
 Not done: the Attendance grid has not been exported yet (nine yearly files are expected, with Bar Code). Re-importing a bill does not refresh its paid amount. An import commit still runs inside one web request.
+
+Verified on the merged branch (2026-11-16): typecheck and lint clean, no schema drift, `npx vitest run` 1373/1373 (91 files), full Playwright 652 passed, 2 skipped, 0 failed (31 minutes).
