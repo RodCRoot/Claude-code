@@ -109,10 +109,10 @@ test("owner imports a fictional Person and Membership export with the exact pres
   await expect(renewals).toContainText(`Nova ${last}`);
   await expect(renewals).toContainText("12 Months");
   await expect(renewals).not.toContainText(`Orbit ${last}`);
-  await expect(renewals).toContainText("rolls to month-to-month at the committed rate");
+  await expect(page.getByText(/rolls to month-to-month at the committed rate/)).toBeVisible();
   await noSideScroll(page);
   if (process.env.SCREENSHOT_DIR) {
-    await renewals.evaluate((el) => el.scrollIntoView({ behavior: "instant", block: "start" }));
+    await page.locator("#renewals").evaluate((el) => el.scrollIntoView({ behavior: "instant", block: "start" }));
     await page.screenshot({ path: `${process.env.SCREENSHOT_DIR}/discount-review-renewals-${test.info().project.name}.png` });
   }
   const dl = page.getByRole("link", { name: "Download CSV" });
