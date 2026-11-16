@@ -171,3 +171,12 @@ Verified: `pnpm test` 1339/1339 (89 files); typecheck and lint clean. Full Playw
 
 Pattern worth knowing: three tests so far have failed only on a weekend because the seed is relative to today. Running the suite on each weekday would find the rest.
 
+
+## Checkpoint 14 — Full-history Zen Planner export, import hardening, weekday sweep (2026-11-16)
+Rod's Zen Planner session exported the unfiltered People, Membership and Bill grids (`zp-01`, `zp-02`, `zp-03` in the private Drive folder). They were dry-run on a throwaway local database; totals are in `docs/modules/imports-exports.md`. People 1,696 of 1,698; memberships 15,797 of 15,812; bills 15,422 of 18,709 (151 need a person chosen by staff, 3,135 old paid bills name nobody). What changed because of the real files: Bar Code is the person key on the Person and Membership grids; rows split by a malformed address are put back in line; Paid On Time reads On-Time, Early, Late; `Create Date` is the bill date; an email or birth date picks between people who share a name.
+
+Import hardening from a build agent: each row of a Zen Planner grid commits in its own savepoint, so a row the database refuses is rejected with its reason and the rest commit (other sources stay all-or-nothing); the review step is one decision per person, paged, searchable and filterable, with a bulk "confirm all name-only matches" action; 20,000-row files validate in under 20 seconds and commit in under 45.
+
+Weekday sweep: `scripts/e2e-at.sh "<date time>"` runs the whole Playwright suite with the server clock set to a chosen moment (libfaketime, its own PostgreSQL cluster; nothing in `src/` reads a test clock). Ten runs, Monday to Friday at 10:00 and 20:30 facility time, found no weekday- or time-dependent test. Two failures were unrelated: a sign-in racing a `/denied` redirect (fixed in three specs) and a spec that used Bar Code as its unknown column. One app bug was found by reading: coach assignment dates, the under-13 at-home logging check and the news watch list used the UTC date and were a day ahead during a US evening; they now use the facility date. Month ends were not run.
+
+Not done: the Attendance grid has not been exported yet (nine yearly files are expected, with Bar Code). Re-importing a bill does not refresh its paid amount. An import commit still runs inside one web request.
