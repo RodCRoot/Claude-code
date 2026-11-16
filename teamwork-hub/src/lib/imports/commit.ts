@@ -41,7 +41,8 @@ import { slug, syntheticId } from "./normalize";
 import type { IdentityInput, ImportSchemaDef, MetricCell, RowAction } from "./types";
 
 export type Created = { type: string; id: string };
-export type UpdateRecord = { type: string; id: string; before: Record<string, unknown> };
+/** `after`, when recorded, lets a revert leave alone any field that something else has changed since. */
+export type UpdateRecord = { type: string; id: string; before: Record<string, unknown>; after?: Record<string, unknown> };
 
 export type RowRecord = typeof importRows.$inferSelect;
 

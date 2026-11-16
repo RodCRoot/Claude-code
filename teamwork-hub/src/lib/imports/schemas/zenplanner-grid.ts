@@ -489,14 +489,14 @@ export const zpBillGrid: ImportSchemaDef = {
   allowCreatePerson: false,
   limitations:
     GRID_LIMITS +
-    " Bills are history: they are kept in their own table, never become Teamwork invoices, and no family is ever asked to pay them here. Autopay Account and approval columns are not imported (payment account details stay in Zen Planner). A bill with no Due Date is filed under its Bill Date or Payment Date and says so; a bill with no date at all is rejected. Amounts that cannot be read are left empty (never 0) and flagged. Re-importing a bill that is already in the history skips it: a later change to its paid amount in Zen Planner is not picked up.",
+    " Bills are history: they are kept in their own table, never become Teamwork invoices, and no family is ever asked to pay them here. Autopay Account and approval columns are not imported (payment account details stay in Zen Planner). A bill with no Due Date is filed under its Bill Date or Payment Date and says so; a bill with no date at all is rejected. Amounts that cannot be read are left empty (never 0) and flagged. Re-importing a bill that is already in the history refreshes its Due Date, Payment Date, amounts, Paid On Time and Status from the new file (shown as an update); its person and description are not changed, and a bill is never removed because it is missing from a later file.",
   exportHelp: {
     grid: "Bills (Bill report grid)",
     path: `${EXPORT_BASE}bill/index.cfm`,
     steps: [
       "In Zen Planner Studio open the Bill report grid (bill/index.cfm).",
       "Choose columns and add every column in the list below. Set the due-date range you want as history.",
-      "If the grid offers a Number (bill number), Birth Date or Email column, add them too: the number keeps a re-import from duplicating bills, and a birth date or email lets a bill be matched to the right person without a decision for each name.",
+      "If the grid offers a Number (bill number), Birth Date or Email column, add them too: the number lets a later export refresh the same bill (paid amount, status, payment date) instead of duplicating it, and a birth date or email lets a bill be matched to the right person without a decision for each name.",
       "Export as CSV (bill/index.cfm?export=CSV&_c=<the chosen column names>). Do not add the Autopay Account columns.",
       "Import the Person grid first, then upload this file and choose this preset.",
     ],
@@ -561,6 +561,7 @@ export const zpBillGrid: ImportSchemaDef = {
     r.data = {
       description,
       dueDate: due,
+      paidDate: paidDate && !implausibleDate(paidDate, today, 10) ? paidDate : null,
       amountDueMinor: amountDue,
       amountPaidMinor: amountPaid,
       amountUnpaidMinor: amountUnpaid,
