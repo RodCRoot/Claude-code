@@ -18,7 +18,7 @@ const GRID_LIMITS =
 
 const EXPORT_BASE = "studio.zenplanner.com/zenplanner/studio/";
 
-const PERSON_ID: FieldDef = { key: "source_person_id", label: "Person ID", type: "text", aliases: ["person id", "personid", "member id", "zp id", "id", "bar code", "barcode"], hint: "The real Person and Membership grids have no Person ID column; their Bar Code column is the person's number in Zen Planner and is used as the key. Without a key, people are matched by exact name plus birth date or email and always confirmed by staff." };
+const PERSON_ID: FieldDef = { key: "source_person_id", label: "Person ID", type: "text", aliases: ["person id", "personid", "member id", "zp id", "id", "bar code", "barcode"], hint: "The real Person and Membership grids have no Person ID column; their Bar Code column (Barcode on the Attendance grid) is the person's number in Zen Planner and is used as the key. Without a key, people are matched by exact name plus birth date or email and always confirmed by staff." };
 const NAME_FIELDS: FieldDef[] = [
   { key: "first_name", label: "First Name", type: "text", aliases: ["first name", "firstname", "first"] },
   { key: "last_name", label: "Last Name", type: "text", aliases: ["last name", "lastname", "last"] },
@@ -619,26 +619,27 @@ export const zpAttendanceGrid: ImportSchemaDef = {
   allowCreatePerson: false,
   limitations:
     GRID_LIMITS +
-    " Imported sessions are private historical records under an inactive 'Imported (Zen Planner)' service: they consume no credits, notify nobody, and are not bookable. Location is linked when its name matches a hub location exactly; Session Type, Program and Staff Member are kept as text on the session. Rows without a time (or with a time that cannot be read) are placed at the start of the day. A blank Att. cell is read as not a visit and skipped; an Att. value that is neither yes nor no is rejected for that row only. When the export has a Status column instead of Att., only Attended / Present / Checked In / Completed / Late count as a visit.",
+    " Imported sessions are private historical records under an inactive 'Imported (Zen Planner)' service: they consume no credits, notify nobody, and are not bookable. Location is linked when its name matches a hub location exactly; Session Type, Program and Staff Member are kept as text on the session. Rows without a time (or with a time that cannot be read) are placed at the start of the day. A blank Att. cell is read as not a visit and skipped; an Att. value that is neither yes nor no is rejected for that row only. When the export has a Status column instead of Att., only Attended / Present / Checked In / Completed / Late count as a visit. The real grid's Barcode column is the person key: a visit is attached to the person imported with that Bar Code and the Person name is not compared; a row whose Barcode belongs to nobody waits for a staff decision (link or skip) on its own. Membership, Membership Label and Phone are not imported.",
   exportHelp: {
     grid: "Attendance (Attendance report grid)",
     path: `${EXPORT_BASE}attendance/index.cfm`,
     steps: [
       "In Zen Planner Studio open the Attendance report grid (attendance/index.cfm).",
       "Choose columns and add every column in the list below. Att. must be included: it is the only column that says a visit happened.",
-      "If the grid offers Birth Date or Email columns, add them too: they let a visit be matched to the right person without a decision for each name.",
-      "Set the date range, then export as CSV (attendance/index.cfm?export=CSV&_c=<the chosen column names>).",
-      "Import the Person grid first, then upload this file and choose this preset.",
+      "Keep the Barcode column: it is the person's number (Bar Code on the Person grid) and ties every visit to its person exactly, whatever the Person name says.",
+      "Set the date range (one file per year is fine; overlapping or repeated files never duplicate a visit), then export as CSV (attendance/index.cfm?export=CSV&_c=<the chosen column names>).",
+      "Import the Person grid (with Bar Code) first, then upload this file and choose this preset.",
     ],
-    columns: ["First Name", "Last Name", "Date", "Time", "Att.", "Rsvp", "Canceled", "Session Type", "Program", "Location", "Staff Member"],
+    columns: ["Barcode", "Person", "Date", "Time", "Att.", "Rsvp", "Canceled", "Session Type", "Program", "Location", "Staff Member"],
   },
   requireOneOf: [{ keys: ["att", "att_status"], label: "Att. (or a Status column that says who attended)" }],
   fields: [
     { key: "attendance_id", label: "Attendance ID", type: "text", aliases: ["attendance id", "attendanceid", "att id", "record id", "number", "no"], hint: "Optional. Kept as part of the row's identity; safe to map even if the column is the person's number." },
     PERSON_ID,
     ...NAME_FIELDS,
-    { key: "dob", label: "Birth Date", type: "date", aliases: ["birth date", "birthdate", "dob"] },
-    { key: "email", label: "Email", type: "email", aliases: ["email", "email address"] },
+    // Read as text and checked in the normalizer: a mistyped email or birth date on someone's record must not reject every visit they made.
+    { key: "dob", label: "Birth Date", type: "text", aliases: ["birth date", "birthdate", "dob"], hint: "Only used to match a visit to a person when the row has no Barcode. An unreadable value is ignored with a warning." },
+    { key: "email", label: "Email", type: "text", aliases: ["email", "email address"], hint: "Only used to match a visit to a person when the row has no Barcode. An unreadable value is ignored with a warning." },
     { key: "date", label: "Date", type: "text", required: true, aliases: ["date", "attendance date", "att date", "class date", "session date", "date time", "datetime", "date/time", "start", "start date"], hint: "A date, or a date with a time (Nov 14, 2026 4:30 PM)." },
     { key: "time", label: "Time", type: "text", aliases: ["time", "start time", "class time", "session time"], hint: "Optional when the Date column carries the time. A range (4:30 PM - 5:30 PM) sets the session length." },
     { key: "att", label: "Att.", type: "text", aliases: ["att", "attended", "attendance", "att?", "attended?"], hint: "Only Yes (or ON) counts as a visit. Blank is read as not a visit." },
@@ -651,9 +652,17 @@ export const zpAttendanceGrid: ImportSchemaDef = {
     { key: "staff", label: "Staff Member", type: "text", aliases: ["staff member", "staff", "instructor", "coach"] },
     { key: "class_name", label: "Class", type: "text", aliases: ["class", "class name", "session", "session name", "event", "appointment"] },
   ],
-  normalize(f, _raw, ctx) {
+  normalize(fields, _raw, ctx) {
     const r = emptyRow();
     const today = ctx.today ?? new Date().toISOString().slice(0, 10);
+    // Email and Birth Date only help find the person when there is no Barcode; a bad value is dropped, never fatal.
+    const emailText = asText(fields.email)?.toLowerCase() ?? null;
+    const emailOk = emailText !== null && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailText);
+    if (emailText !== null && !emailOk) r.warnings.push(`Email "${emailText}" is not an email address; ignored.`);
+    const dobText = asText(fields.dob);
+    const dob = dobText ? parseDate(dobText) : null;
+    if (dobText && !dob) r.warnings.push(`Birth Date "${dobText}" is not a date; ignored.`);
+    const f: Record<string, FieldValue> = { ...fields, email: emailOk ? emailText : null, dob };
     r.identity = identityFrom(f, ctx, { sourceEntityType: "member", needsAthlete: true }, r.errors);
 
     // Date, with the time taken from the Time column or from the Date cell itself ("Nov 14, 2026 4:30 PM").
@@ -696,8 +705,10 @@ export const zpAttendanceGrid: ImportSchemaDef = {
     } else if (att === false) {
       skipReason = canceled ? "Canceled, Att. is not Yes: not a visit" : rsvp ? "Rsvp only, Att. is not Yes: not a visit" : "Att. is not Yes: not a visit";
     } else if (statusText !== null) {
-      // No Att. value on this row: the Status word decides.
-      if (!statusWord) r.errors.push(`Status "${statusText}" is not a word this import knows (Attended, Present, Checked In, Reserved, No Show, Canceled ...) and Att. is blank.`);
+      // No Att. value on this row: the Status word decides. When the file has an Att. column, a Status word this
+      // import does not know (the grid may carry the person's or the membership's status) cannot make a visit.
+      if (!statusWord && ctx.mapped?.includes("att")) skipReason = canceled ? "Canceled, Att. is blank: not a visit" : rsvp ? "Rsvp only, Att. is blank: not a visit" : "Att. is blank: not a visit";
+      else if (!statusWord) r.errors.push(`Status "${statusText}" is not a word this import knows (Attended, Present, Checked In, Reserved, No Show, Canceled ...) and Att. is blank.`);
       else if (statusWord.visit) status = "attended";
       else skipReason = `${statusWord.why}: not a visit`;
     } else {

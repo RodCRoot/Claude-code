@@ -90,6 +90,8 @@ export type NormalizeCtx = {
   vocab?: Partial<Record<string, string[]>>;
   /** Facility-local today (YYYY-MM-DD); defaults to the real date. */
   today?: string;
+  /** Field keys the batch maps to a column of the file (so a normalizer can tell "column absent" from "cell blank"). */
+  mapped?: string[];
 };
 
 export type ImportSchemaDef = {

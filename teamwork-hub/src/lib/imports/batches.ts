@@ -279,6 +279,7 @@ export async function validateBatch(tx: Tx, v: Viewer, batchId: string) {
     options: mappingOptions(b.mapping),
     vocab: schema.source === "zenplanner" ? await vocabOverrides(tx, v.orgId) : undefined,
     today: todayLocal(tz),
+    mapped: Object.keys(fieldMapping(b.mapping)),
   };
 
   // Membership, Bill and Attendance grids follow a Person import from the same Zen Planner account and cannot
