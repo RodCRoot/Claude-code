@@ -25,8 +25,8 @@ These are the decisions whose answer changes what gets built or how the migratio
    Consequence: three of those items are not done (device check, confirmed import mappings, comparison period). Until they are, TeamBuildr stays. Nice-to-have items (calendar-wide drag, native app, full report catalogue, VBT UI) do not gate retirement.
 
 5. **Family discount and the other policy confirmations.**
-   Decision: the 13 membership and payroll policy questions listed under "Open decisions for Rod (Teamwork membership policy, wave 4)" below, starting with the family discount percentage (10% is in use and flagged; one source says 15%).
-   Recommended default (what the code does): every value is a Settings entry with a "Needs confirmation" badge until confirmed; the seeded plans are labelled samples; the discount is applied by `syncFamilyDiscount` at the saved percentage.
+   Decision: the membership and payroll policy questions listed under "Open decisions for Rod (Teamwork membership policy, wave 4)" below. The family rate itself was decided on 2026-11-16 (see "Decisions Rod has made"); its cap, timing and whether imported memberships count are still open.
+   Recommended default (what the code does): every value is a Settings entry with a "Needs confirmation" badge until confirmed; the seeded plans are labelled samples; the family rate is applied by `syncFamilyDiscount` from the household head count.
    Consequence: no member can be cut over at a real price until these are answered, because the renewal job would invoice sample amounts. Answers are Settings changes, not code, so they do not block anything else.
 
 ## Implementation decisions
@@ -62,7 +62,7 @@ Reversible implementation choices made autonomously during the build. Newest las
 
 ## Open decisions for Rod (Teamwork membership policy, wave 4)
 Defaults come from Rod's documented procedures; every value is editable in Settings → Membership policy, and unconfirmed ones show "Needs confirmation".
-1. Family discount: 10% or 15%? (Sources disagree; 10% is in use and flagged.) Reference plan prices also differ between sources; the seeded "Sample —" plans are labelled to confirm.
+1. ~~Family discount: 10% or 15%?~~ **Decided 2026-11-16:** 5% per active household member (2 → 10%, 3 → 15%, 4 → 20%); see "Decisions Rod has made". Still open here: reference plan prices differ between sources; the seeded "Sample —" plans are labelled to confirm.
 2. Does the partial first month (stub) count toward a 6- or 12-month commitment? Currently no: the term starts on the 1st after the stub.
 3. Should a hold extend the commitment end date? Currently no.
 4. In Season "commitment carries over": read as In Season months counting toward the commitment, end date unchanged.
@@ -107,6 +107,13 @@ Each one is a setting or a small change, not a rebuild. The current behaviour is
 - **Pre and post session check-ins (2026-11-12):** short questionnaires tracked over time: liked, did not like, anything that hurt, notes, intensity and soreness, not only a 1 to 5 rating.
 - **Parent screens (2026-11-11, revised 2026-11-13):** Rod first asked for a close match to Zen Planner, then said "the parent side doesn't have to match zenplanner". The current layout (built in Zen Planner's general shape) stays; no further parity work or parent screenshots are needed. `docs/modules/zp-parity.md` is kept as a record only.
 
+- **Family rate (2026-11-16, relayed through Rod's Zen Planner session).** Replaces the flat 10% per payer account. Built the same day; details in `docs/modules/billing.md`, "Family rate (household tier)".
+  - *Household, not payer.* Eligibility is counted over the household (the hub's `household_members` graph, which imports build from the Zen Planner Family ID). Two brothers get the rate even when separated parents pay on different accounts. An athlete in no household counts as a household of one.
+  - *Tiered by active head count.* Rate = 5% × the number of active members in the household, nothing below 2: 2 → 10% each, 3 → 15% each, 4 → 20% each. Every active member gets the same rate.
+  - *Active* means a current membership. A member on hold neither counts toward the tier nor receives the discount while held; cancelled and expired do not count.
+  - *Recalculated* for the whole household on every membership event, every active member repriced.
+  - Choices made while building it, each changeable: **not-started (pending) memberships count** (the owner's exports counted current and not-started as active); **past due counts** (the family is still enrolled; a late bill should not raise the siblings' price); **an athlete in two households** (separated co-parents) gets the larger household's rate and the two households are not merged; **a membership that already carries another discount is left alone** (no stacking) but its athlete still counts; a parent with an athlete record and an active membership counts like any other household member.
+
 ## Open decisions for Rod (owner tools wave)
 1. Check-ins: likes, dislikes and rating reach the coach with the athlete's name only if the athlete ticks "show my coach" (the old form's promise). Make named the default?
 2. Check-ins: should a coach be able to fill one in on behalf of a young athlete? **Built (2026-11-14):** a coach with access to the athlete can, at any age, labelled "entered by coach"; see `docs/modules/checkins.md`, "Coach entry". Still open: limit it to younger athletes?
@@ -119,11 +126,12 @@ Each one is a setting or a small change, not a rebuild. The current behaviour is
 
 ## Open decisions for Rod (agreement rules audit, 2026-11-16)
 
-What the hub does today, found by reading the code and proven by tests (`tests/billing-agreement-rules.test.ts`). Nothing was changed about pricing.
-1. **Family discount: who counts as siblings?** Today it is "two or more athletes with a live membership billed to the same payer account". The household graph is not consulted. Siblings in one household who are billed to two accounts (for example separated co-parents who each pay for one child) get nothing automatically; staff would have to put both on one payer account or apply a discount by hand. Should eligibility follow the household instead, or stay with the payer account?
-2. **Family discount during the move from Zen Planner.** A sibling whose membership is still billed by Zen Planner has no payer account in the hub and does not count toward the two. So the first child moved to hub billing pays full price until the second is moved, even if both got 10% in Zen Planner. Should an imported, still-current Zen Planner membership in the same family count?
-3. **Family discount and holds.** A membership on hold still counts as enrolled, so the sibling keeps the discount while one child is on hold. Intended?
-4. **Family discount timing.** It is applied the moment the second membership is created (even if it starts later) and removed the day a cancellation takes effect; the invoice already issued for the current period is not re-priced either way. Intended?
+Found by reading the code and proven by tests (`tests/billing-agreement-rules.test.ts`). Items 1 and 3 were answered the same day by the owner's family rate rule (household, not payer; a member on hold does not count) and are built; what remains of the family rate is items 2, 4 and 4a.
+1. ~~Family discount: who counts as siblings?~~ **Decided 2026-11-16:** the household, not the payer account. See "Decisions Rod has made".
+2. **Family rate during the move from Zen Planner (open).** A household member whose membership is still billed by Zen Planner does **not** count toward the head count, and an imported membership is never re-priced or billed by the hub. So the first child moved to hub billing pays full price until the second is moved, even if both had a family rate in Zen Planner. The audit did not find it safe to count them (the hub cannot see whether Zen Planner is really charging that membership this month), so they stay out until Rod decides. Should an imported, still-current Zen Planner membership in the same household count?
+3. ~~Family discount and holds.~~ **Decided 2026-11-16:** a member on hold neither counts nor receives the rate while held.
+4. **Family rate timing (open; the owner has not decided between "next bill" and "immediately with proration").** What the hub does today, unchanged in kind from before: the rate on the membership changes when the event happens, a bill is priced when it is issued, and a bill already issued is never re-priced or prorated. So every change shows on the next bill issued. Gaining a member: the tier rises as soon as the new membership is created (even one that starts later); the new member's first bill, partial first month included, is at the new tier. Losing a member: the tier drops the day a cancellation takes effect, a hold starts or an In Season term expires. One detail to confirm: on the day the daily job itself applies the change, a hold starting or ending is applied before that day's bills (siblings are billed at the new tier that day), while a scheduled cancellation or expiry is applied after them (a sibling billed that same day gets the old tier once more). Intended? If "immediately with proration" is wanted, it needs credits or top-up charges on issued bills, which is not built.
+4a. **Family rate cap (open).** No ceiling was stated, so the hub caps the rate at 25% (5 members) and raises a staff task for any household that would go past it instead of capping silently. Is 25% right, should it be higher, or is there no ceiling? It is one number in Settings → Membership policy, flagged "Needs confirmation".
 5. **Zen Planner fixed terms set to renew into another fixed term.** The member agreement rolls a 6-month (or other fixed) term to month-to-month at the committed rate, and the hub does exactly that for memberships it bills. Zen Planner has current six-month memberships set to renew into a new six-month term (32 by the owner's count). The hub flags and lists them (Imports → Zen Planner → Discount review → "Set to renew into another fixed term") but cannot change Zen Planner: someone has to change the Renewal Type there, member by member, before each term ends.
 6. **A bill that disappears from a later Zen Planner Bill export** (deleted or voided there) stays in the hub's imported history. Should a full re-export be able to mark missing bills as removed?
 
@@ -134,7 +142,7 @@ Built from `docs/ZENPLANNER-MAP.md`. Defaults in use, each changeable without co
 - **Health columns** (Special Needs, Medications, Allergies) are visible to owner, admin, the assigned coach and guardians with health access; operations sees only that something is on file.
 - **Imported guardians** get no health access and are not emergency contacts until staff change it per family.
 - **Plan catalog:** 20 draft plans at the Zen Planner prices, named by us, unpublished. To confirm per plan: the name, the weekly limit for In Season (1x assumed) and Linton (unset), monthly billing for Bootcamp and Fitness Together Unlimited, and what sits between the $10 and $60 Fitness Together options.
-- **Discount review** groups by the saved family percent (10%, still unconfirmed; the 10 vs 15 question above decides it). For each non-standard rate the owner decides: keep, convert to the family discount, or end.
+- **Discount review** groups by the family rate rule (household tier since 2026-11-16: 5% per active member of the Family ID, capped at 25%) and lists members who are not on their household's rate. For each non-standard rate the owner decides: keep, convert to the family rate, or end.
 - **Short-run programs** (challenges, Summer 8-week, Vertical Jump, All-Girl Speed & Strength) are not memberships here; they belong in Events.
 
 ## Tightening pass (2026-11-14)

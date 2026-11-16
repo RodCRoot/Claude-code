@@ -116,9 +116,9 @@ export default async function DiscountReviewPage({ searchParams }: { searchParam
             <Stat label="In Season rate" value={r.groups.in_season_rate.length} hint={`${formatMoney(r.totals.in_season_rate)} per period`} />
             <Stat label="Other" value={r.groups.other.length} hint={`${formatMoney(r.totals.other)} per period`} tone={r.groups.other.length ? "warn" : undefined} />
           </div>
-          <Callout tone={r.familyCapConfirmed ? "info" : "warn"} title="Family rate: by household head count" className="mb-5">
+          <Callout tone={r.familyCapConfirmed ? "info" : "warn"} title={r.familyCapConfirmed ? "Family rate: by household head count" : `Family rate: by household head count. The ${r.familyCapPercent}% cap still needs confirmation`} className="mb-5">
             {r.familyRule}. A household here is a Zen Planner Family ID; members on hold do not count and get no rate while held.
-            {r.familyCapConfirmed ? " " : ` The ${r.familyCapPercent}% cap is a placeholder that still needs the owner's confirmation. `}
+            {r.familyCapConfirmed ? " " : " The owner has not stated a ceiling, so the cap is a placeholder. "}
             Change the percent per member or the cap in{" "}
             <Link className="underline" href="/settings">
               Settings

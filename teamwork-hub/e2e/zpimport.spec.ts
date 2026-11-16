@@ -100,10 +100,21 @@ test("owner imports a fictional Person and Membership export with the exact pres
   await expect(family10).toContainText("$178.99");
   await expect(family10).toContainText("$161.09");
   await expect(family10).toContainText("$17.90");
-  const siblings = page.getByRole("region", { name: "Siblings without the family discount" });
+  const siblings = page.getByRole("region", { name: "Not on the household family rate" });
   await expect(siblings).toContainText(`Orbit ${last}`);
   await expect(siblings).toContainText(family);
+  // The household tier: two active members share the Family ID, so the expected rate is 10% each.
+  await expect(siblings).toContainText("(2 active)");
+  await expect(siblings.getByRole("columnheader", { name: "Household rate" })).toBeVisible();
+  await expect(siblings.getByRole("row", { name: new RegExp(`Orbit ${last}`) })).toContainText("10%");
+  await expect(siblings.getByRole("row", { name: new RegExp(`Orbit ${last}`) })).toContainText("$17.90 less");
+  await expect(page.getByText("5% per active household member (2 members 10% each, 3 members 15% each, 4 members 20% each), capped at 25%").first()).toBeVisible();
   await expect(page.getByText(/still needs confirmation/)).toBeVisible();
+  if (process.env.SCREENSHOT_DIR) {
+    await page.screenshot({ path: `${process.env.SCREENSHOT_DIR}/discount-review-family-rate-${test.info().project.name}.png` });
+    await page.locator("#siblings").evaluate((el) => el.scrollIntoView({ behavior: "instant", block: "start" }));
+    await page.screenshot({ path: `${process.env.SCREENSHOT_DIR}/discount-review-household-rate-${test.info().project.name}.png` });
+  }
   // Fixed terms that Zen Planner will renew into another fixed term: listed and counted, nothing changed.
   const renewals = page.getByRole("region", { name: "Set to renew into another fixed term" });
   await expect(renewals).toContainText(`Nova ${last}`);
@@ -121,7 +132,7 @@ test("owner imports a fictional Person and Membership export with the exact pres
   expect(csv.status()).toBe(200);
   expect(csv.headers()["content-type"]).toContain("text/csv");
   const csvText = await csv.text();
-  expect(csvText).toContain(`Siblings without the family discount,List price,Orbit ${last},${family}`);
+  expect(csvText).toContain(`Not on the household family rate,List price,Orbit ${last},${family}`);
   expect(csvText).toContain(`Set to renew into another fixed term,,Nova ${last},,Sports Performance 2x per Week 12 Month,active`);
 
   // Reconciliation page loads with the hub's figures and the entry form.
