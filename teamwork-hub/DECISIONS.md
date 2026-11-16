@@ -117,6 +117,16 @@ Each one is a setting or a small change, not a rebuild. The current behaviour is
 7. Bank pay: offer a monthly discount for paying by bank account? (Card surcharges are not built; ask the accountant.)
 8. Membership agreement and waiver wording: everything in the app is sample text until the real documents are supplied.
 
+## Open decisions for Rod (agreement rules audit, 2026-11-16)
+
+What the hub does today, found by reading the code and proven by tests (`tests/billing-agreement-rules.test.ts`). Nothing was changed about pricing.
+1. **Family discount: who counts as siblings?** Today it is "two or more athletes with a live membership billed to the same payer account". The household graph is not consulted. Siblings in one household who are billed to two accounts (for example separated co-parents who each pay for one child) get nothing automatically; staff would have to put both on one payer account or apply a discount by hand. Should eligibility follow the household instead, or stay with the payer account?
+2. **Family discount during the move from Zen Planner.** A sibling whose membership is still billed by Zen Planner has no payer account in the hub and does not count toward the two. So the first child moved to hub billing pays full price until the second is moved, even if both got 10% in Zen Planner. Should an imported, still-current Zen Planner membership in the same family count?
+3. **Family discount and holds.** A membership on hold still counts as enrolled, so the sibling keeps the discount while one child is on hold. Intended?
+4. **Family discount timing.** It is applied the moment the second membership is created (even if it starts later) and removed the day a cancellation takes effect; the invoice already issued for the current period is not re-priced either way. Intended?
+5. **Zen Planner fixed terms set to renew into another fixed term.** The member agreement rolls a 6-month (or other fixed) term to month-to-month at the committed rate, and the hub does exactly that for memberships it bills. Zen Planner has current six-month memberships set to renew into a new six-month term (32 by the owner's count). The hub flags and lists them (Imports → Zen Planner → Discount review → "Set to renew into another fixed term") but cannot change Zen Planner: someone has to change the Renewal Type there, member by member, before each term ends.
+6. **A bill that disappears from a later Zen Planner Bill export** (deleted or voided there) stays in the hub's imported history. Should a full re-export be able to mark missing bills as removed?
+
 ## Zen Planner import, catalog and discounts (2026-11-13)
 
 Built from `docs/ZENPLANNER-MAP.md`. Defaults in use, each changeable without code:

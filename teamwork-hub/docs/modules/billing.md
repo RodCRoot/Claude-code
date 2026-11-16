@@ -152,6 +152,11 @@ Tests: `tests/billing-membership-policy.test.ts`.
 - **Commitments.** `commitment_starts_on` = first full period (the 1st after a stub); `commitment_ends_on` =
   start + months − 1 day. After it, the membership keeps its version (committed rate), the renewal job records
   `commitment_ended` once, and cancellation only needs notice. Nothing ever creates a new commitment.
+  This is the member agreement's rule (a fixed term rolls to month-to-month at the committed rate; it never
+  renews into another fixed term). Proven for 6- and 12-month terms billed well past the term end in
+  `tests/billing-agreement-rules.test.ts` and `tests/billing-membership-policy.test.ts`. Imported Zen Planner
+  memberships are not billed here; the ones Zen Planner is set to renew into another term are listed in the
+  import's discount review (`docs/modules/imports-exports.md`).
 - **Holds.** Firm restart date required; start may be backdated only to `requestedOn` (date the family sent
   it; channel recorded). Cap `holdMaxMonthsPerMembershipYear` × 31 days per membership year (anniversary of
   start); override needs a reason. A hold is never a cancellation. Already billed: if the invoice for the
@@ -171,7 +176,14 @@ Tests: `tests/billing-membership-policy.test.ts`.
 - **Family discount.** `syncFamilyDiscount` runs on create, immediate cancel and when the renewal job ends a
   membership: 2+ athletes with live memberships on one payer account → "Family discount N%" on each
   Teamwork-billed membership; below 2 → removed. Other discounts are never replaced; provider-billed ones get a
-  task. Events + audit for every change.
+  task. Events + audit for every change. Both directions are tested (`tests/billing-agreement-rules.test.ts`:
+  second sibling enrols, sibling leaves at once, sibling returns, with the next invoice following each change;
+  `tests/billing-membership-policy.test.ts`: sibling leaves through a scheduled cancellation).
+  **What decides eligibility is the payer account, not the household graph**: two siblings in one household who
+  are billed to two different payer accounts get no discount automatically (tested), and a sibling whose
+  membership is still billed by Zen Planner (imported, no payer account) does not count toward the two. A plan
+  change, a hold and an In Season term do not re-run the check; a held membership still counts as enrolled.
+  These are open decisions for Rod in `DECISIONS.md`.
 - **Restart nudges.** Each hold / in-season term enqueues `automation.evaluate` (trigger
   `membership_restart_upcoming`, deduped `restart_nudge:<holdId>`, run at restart − `restartNudgeDaysBefore`,
   09:00 local) plus a deduped staff task. Families are messaged only if an enabled automation rule exists;

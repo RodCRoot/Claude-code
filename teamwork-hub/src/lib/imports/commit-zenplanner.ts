@@ -19,6 +19,7 @@ import {
   zpPersonDetails,
   zpPersonHealth,
 } from "@/db/schema";
+import { audit } from "@/lib/audit";
 import { grantCredits } from "@/lib/credits";
 import { ensureStages } from "@/lib/crm/stages";
 import { cached, commitAttendance, ensurePerson, fillPerson, findExternal, linkExternal, linkGuardian, type CommitCtx, type Committer, type RowOutcome, type RowRecord } from "./commit";
@@ -396,9 +397,80 @@ export const commitMembershipGrid: Committer = async (c, row, out) => {
   out.action = "create";
 };
 
+/**
+ * What a later export may change on a bill that is already in the history: the file's field key, the normalized
+ * value and the zp_bills column. The person, the description and the membership link are never touched.
+ */
+const BILL_REFRESH: { field: string | null; from: string; col: "dueDate" | "paidDate" | "amountDueMinor" | "amountPaidMinor" | "amountUnpaidMinor" | "discountTotalMinor" | "paidOnTime" | "zpStatus" }[] = [
+  { field: null, from: "dueDate", col: "dueDate" },
+  { field: "paid_date", from: "paidDate", col: "paidDate" },
+  { field: "amount_due", from: "amountDueMinor", col: "amountDueMinor" },
+  { field: "amount_paid", from: "amountPaidMinor", col: "amountPaidMinor" },
+  { field: "amount_unpaid", from: "amountUnpaidMinor", col: "amountUnpaidMinor" },
+  { field: "discount_total", from: "discountTotalMinor", col: "discountTotalMinor" },
+  { field: "paid_on_time", from: "paidOnTime", col: "paidOnTime" },
+  { field: "status", from: "zpStatus", col: "zpStatus" },
+];
+
+export type BillPatch = Partial<Record<(typeof BILL_REFRESH)[number]["col"], string | number | boolean | null>>;
+
+/**
+ * The fields of an already imported bill that the new row would change. A column the new file does not have
+ * changes nothing; an empty value replaces a stored one only when the cell really is blank (a payment taken back),
+ * never when the cell could not be read.
+ */
+export function billRefreshPatch(existing: typeof zpBills.$inferSelect, n: Record<string, unknown>, mapped: string[], blank: (field: string) => boolean): BillPatch {
+  const patch: BillPatch = {};
+  for (const f of BILL_REFRESH) {
+    const next = (n[f.from] ?? null) as string | number | boolean | null;
+    if (f.field === null) {
+      if (next !== null && next !== existing[f.col]) patch[f.col] = next;
+      continue;
+    }
+    if (!mapped.includes(f.field)) continue;
+    if (next === null && !blank(f.field)) continue;
+    if (next !== (existing[f.col] ?? null)) patch[f.col] = next;
+  }
+  return patch;
+}
+
+/** Re-import of a bill that is already there: refresh its payment state in place. History only, as before. */
+async function refreshBill(c: CommitCtx, row: RowRecord, out: RowOutcome) {
+  const n = row.normalized as Record<string, unknown>;
+  const [bill] = await c.tx
+    .select()
+    .from(zpBills)
+    .where(and(eq(zpBills.id, String(n._existingLocalId)), eq(zpBills.orgId, c.orgId)))
+    .for("update");
+  const planned = (n._billPatch ?? {}) as BillPatch;
+  const before: Record<string, unknown> = {};
+  const after: Record<string, unknown> = {};
+  if (bill) {
+    for (const [col, value] of Object.entries(planned) as [keyof BillPatch, BillPatch[keyof BillPatch]][]) {
+      if ((bill[col] ?? null) === (value ?? null)) continue;
+      before[col] = bill[col] ?? null;
+      after[col] = value ?? null;
+    }
+  }
+  if (!bill || !Object.keys(after).length) {
+    out.action = "skip";
+    out.warnings.push(bill ? "This bill already has these values; nothing to update." : "This bill is no longer in the imported history; not updated.");
+    return;
+  }
+  await c.tx.update(zpBills).set(after).where(eq(zpBills.id, bill.id));
+  out.updates.push({ type: "zp_bill", id: bill.id, before, after });
+  await audit(c.tx, { orgId: c.orgId, actorUserId: c.viewer.userId, actorRole: c.viewer.role }, "import.zp_bill.update", "zp_bill", bill.id, {
+    summary: `Imported bill ${bill.sourceRecordId.startsWith("syn:") ? "" : `${bill.sourceRecordId} `}refreshed from a later Zen Planner export (import batch ${c.batchId}): ${Object.keys(after).join(", ")}`,
+    before,
+    after,
+  });
+  out.action = "update";
+}
+
 /** Bills are history only: a row in zp_bills. Never an invoice, never payable. */
 export const commitBillGrid: Committer = async (c, row, out) => {
   const n = row.normalized as Record<string, unknown>;
+  if (n._action === "update" && n._existingLocalId) return refreshBill(c, row, out);
   const { personId } = await ensurePerson(c, row, out);
   // One person usually has many bills in a file: look their athlete record and plan up once.
   const none = "none";
@@ -431,6 +503,7 @@ export const commitBillGrid: Committer = async (c, row, out) => {
       sourceRecordId: row.sourceRecordId!,
       description: desc,
       dueDate: String(n.dueDate),
+      paidDate: (n.paidDate as string | null) ?? null,
       amountDueMinor: (n.amountDueMinor as number | null) ?? null,
       amountPaidMinor: (n.amountPaidMinor as number | null) ?? null,
       amountUnpaidMinor: (n.amountUnpaidMinor as number | null) ?? null,

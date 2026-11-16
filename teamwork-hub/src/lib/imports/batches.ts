@@ -54,13 +54,13 @@ import { objectStore, saveObject, sha256Bytes } from "@/lib/storage";
 import { DEFAULT_TZ } from "@/lib/time";
 import { advanceHawkinCheckpoint } from "@/lib/integrations/hawkin/checkpoint";
 import { COMMITTERS, findExternal, prepareExtra, type Created, type RowOutcome, type UpdateRecord } from "./commit";
-import { parentKey, prepareGridExtra, ZP_GRID_COMMITTERS } from "./commit-zenplanner";
+import { billRefreshPatch, parentKey, prepareGridExtra, ZP_GRID_COMMITTERS } from "./commit-zenplanner";
 import { vocabOverrides } from "@/lib/zenplanner/vocab";
 import { todayLocal } from "@/lib/time";
 import { identityKey, matchPerson } from "./identity";
 import { peopleByAddress } from "@/lib/messaging/inbound";
 import { autoMap, fieldMapping, mappingOptions, metricHeaders, missingRequired, normalizeRow, OPTION_PREFIX } from "./mapping";
-import { parseDate } from "./normalize";
+import { cleanCell, parseDate } from "./normalize";
 import { ParseError, parseUpload, type ParsedFile } from "./parse";
 import { RowCache, rowRejectionReason } from "./row-errors";
 import { getSchema } from "./schemas";
@@ -242,7 +242,23 @@ type Planned = {
   matchCandidates: ImportRow["matchCandidates"];
 };
 
-async function planExisting(tx: Tx, orgId: string, schemaId: string, localId: string, n: Record<string, unknown>): Promise<RowAction> {
+async function planExisting(
+  tx: Tx,
+  orgId: string,
+  schemaId: string,
+  localId: string,
+  n: Record<string, unknown>,
+  file: { mapped: string[]; blank: (field: string) => boolean },
+): Promise<RowAction> {
+  if (schemaId === "zenplanner.bill_grid") {
+    // A bill already in the history: a later export refreshes its payment state (paid, unpaid, status, dates).
+    const [bill] = await tx.select().from(zpBills).where(and(eq(zpBills.id, localId), eq(zpBills.orgId, orgId)));
+    if (!bill) return "skip";
+    const patch = billRefreshPatch(bill, n, file.mapped, file.blank);
+    if (!Object.keys(patch).length) return "skip";
+    n._billPatch = patch;
+    return "update";
+  }
   if (schemaId === "zenplanner.members" || schemaId === "generic.people" || schemaId === "zenplanner.person_grid") {
     const [p] = await tx.select().from(people).where(and(eq(people.id, localId), eq(people.orgId, orgId)));
     if (!p) return "skip";
@@ -273,12 +289,14 @@ export async function validateBatch(tx: Tx, v: Viewer, batchId: string) {
   const parsed = await loadBatchFile(tx, b);
   const tz = await orgTimezone(tx, v.orgId);
   const { metrics } = metricHeaders(schema, parsed.headers, b.mapping);
+  const fieldMap = fieldMapping(b.mapping);
   const ctx = {
     orgId: v.orgId,
     tz,
     options: mappingOptions(b.mapping),
     vocab: schema.source === "zenplanner" ? await vocabOverrides(tx, v.orgId) : undefined,
     today: todayLocal(tz),
+    mapped: Object.keys(fieldMap),
   };
 
   // Membership, Bill and Attendance grids follow a Person import from the same Zen Planner account and cannot
@@ -365,7 +383,10 @@ export async function validateBatch(tx: Tx, v: Viewer, batchId: string) {
     p.matchCandidates = m.candidates;
 
     if (existingLocal) {
-      const action = await planExisting(tx, v.orgId, schema.id, existingLocal, n);
+      const action = await planExisting(tx, v.orgId, schema.id, existingLocal, n, {
+        mapped: ctx.mapped,
+        blank: (field) => !fieldMap[field] || cleanCell(raw[fieldMap[field]]) === null,
+      });
       n._action = action;
       n._existingLocalId = existingLocal;
       p.matchPersonId = m.personId;
@@ -796,6 +817,7 @@ const RESTORABLE: Record<string, { table: Parameters<Tx["update"]>[0]; idCol: Pa
   metric_value: { table: metricValues, idCol: metricValues.id },
   trial: { table: trials, idCol: trials.id },
   questionnaire_response: { table: questionnaireResponses, idCol: questionnaireResponses.id },
+  zp_bill: { table: zpBills, idCol: zpBills.id },
 };
 
 async function tryDelete(tx: Tx, type: string, ref: TableRef | "household_member" | "person_tag", ids: string[]): Promise<{ deleted: number; kept: string[] }> {
@@ -882,7 +904,17 @@ export async function revertBatch(tx: Tx, v: Viewer, batchId: string) {
   for (const u of updates.reverse()) {
     if (byType.get(u.type)?.has(u.id)) continue;
     const t = RESTORABLE[u.type];
-    if (t) await tx.update(t.table).set(u.before as never).where(eq(t.idCol, u.id));
+    if (!t) continue;
+    let before = u.before;
+    if (u.after) {
+      // Put back only the fields that still hold what this batch wrote: a later import (or anything else) that
+      // changed a field since then keeps its value.
+      const [cur] = (await tx.select().from(t.table as never).where(eq(t.idCol, u.id))) as Record<string, unknown>[];
+      if (!cur) continue;
+      before = Object.fromEntries(Object.entries(u.before).filter(([k]) => (cur[k] ?? null) === (u.after![k] ?? null)));
+      if (!Object.keys(before).length) continue;
+    }
+    await tx.update(t.table).set(before as never).where(eq(t.idCol, u.id));
   }
   let deleted = 0;
   const kept: Created[] = [];

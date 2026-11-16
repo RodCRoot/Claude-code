@@ -117,6 +117,8 @@ export const zpBills = pgTable(
     sourceRecordId: text("source_record_id").notNull(),
     description: text("description"),
     dueDate: date("due_date").notNull(),
+    /** Payment Date as exported; null when the bill is unpaid or the export has no such column. */
+    paidDate: date("paid_date"),
     amountDueMinor: minor("amount_due_minor"),
     amountPaidMinor: minor("amount_paid_minor"),
     amountUnpaidMinor: minor("amount_unpaid_minor"),

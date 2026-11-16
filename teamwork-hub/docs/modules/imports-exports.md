@@ -132,7 +132,7 @@ The rule for both: **nothing in a row can reject the file or stop a commit.** A 
 
 Mapping: the Bill preset needs one of Due Date / Bill Date / Payment Date mapped, and the Attendance preset needs Att. or Status mapped (`requireOneOf` on the schema); a file with neither is stopped at the mapping step with that reason.
 
-**Bills stay history only.** `commitBillGrid` writes `zp_bills` and nothing else: no invoice, no membership, no job, no athlete record for a payer (tested). Re-importing a bill that is already there skips it; a later change to its paid amount in Zen Planner is not picked up.
+**Bills stay history only.** `commitBillGrid` writes `zp_bills` and nothing else: no invoice, no membership, no job, no athlete record for a payer (tested). Re-importing a bill that is already there refreshes it in place (see "Re-importing the Bill grid" below); it still writes nothing but `zp_bills` and the audit trail.
 
 **Database rules a row can hit.** Checked for `zp_bills`, `bookings`, `schedule_sessions`, `external_ids`, `athletes`, `memberships`, `credit_buckets`: required due date and person (now caught at validation), amounts beyond a `bigint` (an amount with more than 10 digits before the point is unreadable), unique bill and booking keys (already skip, never fail), session end after start, NUL bytes. Whatever is not foreseen is caught by the row savepoint below.
 
@@ -146,6 +146,31 @@ Mapping: the Bill preset needs one of Due Date / Bill Date / Payment Date mapped
 | Commit (18,800 visits / 19,905 bills, every row in its own savepoint) | 28 to 42 s | 24 to 35 s |
 
 The commit still runs inside one web request. If the real host has a request limit under about a minute, split the export by date range.
+
+### Attendance grid: the confirmed real format (2026-11-16)
+
+The format is now confirmed, though no real file has been run yet (nine yearly files of 400 to 16,600 rows are expected): 51 columns, CRLF, every field quoted, month-name dates, addresses that may contain unescaped quotes. The columns that matter: `Barcode` (numeric, the person's number: the same value as `Bar Code` on the Person and Membership grids, which the Person import stores as the person's external id), `Person` (a display name such as "First Last", not an id), `Membership`, `Membership Label` (sometimes empty), `Email`, `Phone`. Tests: `tests/zpimport-attendance-barcode.test.ts` (fictional people; the file is built CRLF and fully quoted).
+
+- **Barcode is the person key.** It auto-maps to the person key (`Barcode` and `Bar Code` are the same alias). A visit whose Barcode was imported with the Person grid is matched with confidence `exact_source_id`: no name comparison, no review step. Tested with a Person file that says "Tessa Madeup" and an attendance file that says "Tess Maddup" for the same Barcode, and with two people who share one name and differ only by Barcode.
+- **Person is the fallback.** It maps to the full name ("First Last": everything before the last space is the first name; "Last, First" is also read). It is only used when a row has no Barcode, and then the usual rules apply (exact name plus email or birth date is a suggestion staff confirm).
+- **A Barcode that matches nobody** (a person deleted in Zen Planner, or missing from the Person export) leaves only those rows in review with "No matching person in Teamwork". Staff link them to a person or skip them; every other row commits. If the name on such a row belongs to a person already tied to a different Barcode, that person is listed as a candidate but never proposed. Once the person is imported with that Bar Code, uploading the same file again imports just those visits (tested).
+- **Overlapping or repeated yearly files create nothing twice.** A visit's identity is Barcode + date + time + class (or Program, or Session Type) + location, so the spelling of the Person name and the order of rows do not matter. A visit already imported is skipped, and the session it belongs to is found again rather than created (tested: an overlapping file adds only its new visits; the same file a second time creates no visit, session or athlete record). The identity depends on which columns are mapped: keep the same mapping for all nine files.
+- **A bad Email or Birth Date cell no longer rejects the visit.** Both are read as text on this grid; a value that is not an email or a date is ignored with a warning. Before, a person whose record carried a mistyped email would have had every visit rejected.
+- **A Status column that is not about the visit.** When the file has an Att. column, a blank Att. with a Status word the import does not know (for example the person's `Student`) is "not a visit" and skipped; it used to reject the row. Without an Att. column an unknown Status word still rejects the row, because nothing else says whether a visit happened.
+- **Not imported:** Membership, Membership Label and Phone (they stay in the stored raw row). Of the 51 columns only the ones listed on the mapping step are read; check that step on the first real file, since the other column names have not been seen.
+- **Open:** whether Date and Time are one column or two, and how Att. is written, are still the guesses listed in the table above. A Barcode written differently in the two grids (leading zeros, a trailing `.0` from a spreadsheet) would not match; nothing suggests that happens, but it would show as every row waiting in review.
+
+### Re-importing the Bill grid refreshes bills already in the history (2026-11-16)
+
+Before, a bill whose `Bill #` was already imported was skipped, so Amount Paid, Amount Unpaid, Status and the payment date went stale. Now (`billRefreshPatch` / `refreshBill` in `commit-zenplanner.ts`, tests in `tests/zpimport-bill-refresh.test.ts`):
+
+- **What is refreshed:** Due Date, Payment Date (new column `zp_bills.paid_date`, migration `0035_attend`; before, the Payment Date was only a stand-in for a missing Due Date), Amount Due, Amount Paid, Amount Unpaid, Discount Total, Paid On Time, Status. **Not touched:** the person, the description, the membership link, the batch that first imported the bill.
+- **Preview:** at validation the row's action is `update` when at least one of those fields differs, `skip` when nothing differs. The preview counts (`action_update`), the commit counts (`update`, `committed_update`) and the row's result all say update. A bill already in the history is not sent back to identity review: it stays with the person it was given the first time, so the 151 name decisions are not asked again.
+- **Blank and missing columns:** a column the new file does not have changes nothing. A blank cell in a column the file does have clears the stored value (a payment taken back in Zen Planner: Payment Date blank, Amount Paid $0.00). A cell that cannot be read (`ERROR`) never replaces a stored value.
+- **Audit:** every refreshed bill writes one `import.zp_bill.update` audit event with the before and after values of the fields that changed, beside the batch's own `import.commit` event.
+- **Revert:** reverting the batch that refreshed a bill puts back the earlier values (the row records before and after per field) and deletes only the bills that batch created. If a still later import changed a field again, that field keeps the later value; the fields that still hold what the reverted batch wrote go back. Reverting the batch that first created a bill deletes the bill, whatever later batches did to it. Revert cannot bring back a bill deleted that way: re-import the file.
+- **History only, unchanged:** no invoice, membership, job or charge is created on create or on update (tested on both paths).
+- Without a `Bill #` column the bill's identity is person + due date + description + amount due, so a re-import still finds the same bill and refreshes its payment fields, but a changed due date or amount makes a new bill.
 
 ### Commit: one bad row no longer stops the file
 
@@ -202,7 +227,7 @@ No Task preset: the Task grid (10 fields) is short-lived staff work and is bette
 - Status missing → worked out from the dates, with a warning. Plan names containing "In Season" → `kind = in_season`.
 - Not imported: Installment Plan, # of Installments, Signup Fee, Acct Name.
 
-**Bill** (`commitBillGrid`): one row in `zp_bills` (due date, amounts, discount total, paid on time, status). **Never an invoice**: nothing payable, nothing shown to families. Autopay Account columns are never mapped. Two screens read `zp_bills`, both read-only. The **membership audit** uses the imported bills of a Zen Planner-billed membership (matched by `membership_id`) instead of its estimate: the exception shows the billed and paid amounts labelled "from imported bill history", and falls back to the labelled estimate when the membership has no imported bills or for bill dates after its last imported bill. The **scoreboard money view** shows them as a separate table, "Billed in Zen Planner, imported" (definition `mv_zp_imported`), never added to Collected, Billed or Outstanding. A bill that could not be matched to one membership (plan name not unique for the athlete) is in the scoreboard table but not in the audit.
+**Bill** (`commitBillGrid`): one row in `zp_bills` (due date, payment date, amounts, discount total, paid on time, status); a bill already there is refreshed, not duplicated. **Never an invoice**: nothing payable, nothing shown to families. Autopay Account columns are never mapped. Two screens read `zp_bills`, both read-only. The **membership audit** uses the imported bills of a Zen Planner-billed membership (matched by `membership_id`) instead of its estimate: the exception shows the billed and paid amounts labelled "from imported bill history", and falls back to the labelled estimate when the membership has no imported bills or for bill dates after its last imported bill. The **scoreboard money view** shows them as a separate table, "Billed in Zen Planner, imported" (definition `mv_zp_imported`), never added to Collected, Billed or Outstanding. A bill that could not be matched to one membership (plan name not unique for the athlete) is in the scoreboard table but not in the audit.
 
 **Attendance**: a row is a visit **only when `Att.` = Yes** (or ON, TRUE, Y, 1). Rsvp and Canceled are separate columns and never make a visit; those rows are skipped with the reason, and so is a row whose Att. is blank. When the file has a Status column and no Att. value, the Status word decides. Session Type, Program and Staff Member are kept as text on the imported session; Location links to a hub location on an exact name match.
 
@@ -261,6 +286,13 @@ Read-only, `imports.manage`. Lists every current imported membership whose Payme
 
 List price is not a grid column, so it is worked out and the basis is shown: `catalog` when the plan matches the ladder by name, Att. Limit and Months (`matchCatalogPlan`, a heuristic); otherwise the highest Payment Amount on that plan in the import. With the second basis, a plan on which everyone is discounted looks like list price. The optional `Discount` column is mapped if the export has it (not in the map's field list).
 
+**Fixed terms set to renew into another fixed term (2026-11-16).** The member agreement says a 6-month or other fixed-term commitment rolls to month-to-month at the committed rate when the term ends; it does not renew into another fixed term. The hub does that for the memberships it bills itself (see `docs/modules/billing.md` → Commitments). Imported memberships are billed by Zen Planner, so the hub only points at the ones set up the other way:
+- `zpRenewalOutcome` (`src/lib/zenplanner/renewal.ts`) reads the Membership grid's Months, Auto Renew and Renewal Type. Months above 1, Auto Renew on and a Renewal Type that is not month-to-month (`Month to Month`, `Month-to-Month`, `Monthly`, `M2M`, any letter case) is "renews into a fixed term". Auto Renew on with no Renewal Type in the export is "cannot tell" and is counted separately.
+- At import such a row gets the flag `renews_into_fixed_term` in `zp_membership_details.flags` and a warning on the row. Nothing else about the membership changes.
+- The discount review has a card **Set to renew into another fixed term** with the count and one line per current membership (member, plan, status, term, term end, Renewal Type), and the CSV has a section of the same name. It is worked out from the stored columns, so memberships imported before this change are listed too without re-importing. Cancelled and expired memberships are left out.
+- No charge, invoice, schedule or job is created for an imported membership, on import or when its term ends (tested: the renewal job run after the term end bills none of them and leaves their dates alone). The fix is made in Zen Planner by changing the Renewal Type.
+- The wording of Zen Planner's Renewal Type values has only been seen as `Month to Month` in one fixture; the 32 known six-month memberships have not been run through this. If Zen Planner writes month-to-month some other way, those rows would be listed wrongly: check the Renewal Type column of the card against Zen Planner on the first real run.
+
 ### Webhook receiver (`/api/webhooks/zenplanner/{people|class-sessions|attendance}`, `webhooks.ts`)
 
 For the transition only. **Off by default** (404, nothing stored) until an owner or admin turns it on in Settings → Integrations, which also requires the `ZENPLANNER_WEBHOOK_SECRET` server variable. The card shows the three URLs to paste into Zen Planner, last received time and counts per feed, and recent stored payloads.
@@ -278,7 +310,7 @@ Type in Zen Planner's dashboard figures (active members, memberships, on hold, p
 
 ### Tables (migration `0033_zpimport`)
 
-`zp_person_details`, `zp_person_health` (health), `zp_membership_details`, `zp_bills`, `zp_webhook_events`, `zp_reconciliations`. No hand-written SQL.
+`zp_person_details`, `zp_person_health` (health), `zp_membership_details`, `zp_bills`, `zp_webhook_events`, `zp_reconciliations`. No hand-written SQL. Migration `0035_attend` adds `zp_bills.paid_date` (nullable date, no hand-written SQL).
 
 ### GoHighLevel contacts
 
@@ -372,6 +404,6 @@ Evidence levels: **verified in docs** = stated on the vendor's official page; **
 - XLSX is not read directly (save as CSV).
 - Very large files commit in one transaction (20,000-row Bill and Attendance files measured at 24 to 42 s on the build machine); split bigger exports by date, or any export if the host limits a request to under a minute.
 - The Bill and Attendance grids have still not been exported: every format in "Bill and Attendance grids: made ready before the real files arrive" is a tolerated guess. Check the first real file's mapping step (which columns were recognized), the rejected rows and the warnings before committing.
-- A bill already imported is skipped on re-import; a later change to its paid amount in Zen Planner is not picked up.
-- The Payment Date of a bill is used only as a stand-in when the Due Date is blank; it is not stored on its own.
+- A bill is never removed because a later Bill export no longer contains it (deleted or voided in Zen Planner): compare counts on the reconciliation page.
+- A re-imported bill keeps its person, description and membership link; only its dates, amounts, Paid On Time and Status are refreshed.
 - Row savepoints cover the Zen Planner grid presets only; other schemas still commit all or nothing.

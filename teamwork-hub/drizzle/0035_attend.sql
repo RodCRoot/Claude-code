@@ -1,0 +1,1 @@
+ALTER TABLE "zp_bills" ADD COLUMN "paid_date" date;
