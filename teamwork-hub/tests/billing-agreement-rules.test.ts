@@ -2,7 +2,8 @@
  * Two rules of Teamwork's member agreement, proven for memberships the hub bills itself:
  *  1. A fixed-term commitment (6 months, 12 months) rolls to month-to-month at the committed rate when the
  *     term ends. It never renews into another fixed term.
- *  2. The family discount is applied to every athlete when a second sibling enrols and removed when one leaves.
+ *  2. The family rate is applied to every active member of a household when a second one enrols and removed
+ *     when one leaves (the household tier itself is proven in `billing-family-rate.test.ts`).
  * Plus what the hub can only point at for memberships Zen Planner bills: a fixed term set to renew into another
  * fixed term. All people and data are synthetic.
  */
@@ -98,6 +99,12 @@ describe("family discount: applied when a second sibling enrols, removed when on
     const v = await rod();
     const [fam] = await db().insert(payerAccounts).values({ orgId: ctx.orgId, name: "Synthetic Madeup family" }).returning();
     await db().insert(payerBeneficiaries).values([{ payerAccountId: fam.id, athleteId: ctx.athletes.ethan }, { payerAccountId: fam.id, athleteId: ctx.athletes.liam }]);
+    // The family rate follows the household, so the two are put in one.
+    const [hh] = await db().insert(households).values({ orgId: ctx.orgId, name: "Synthetic Madeup household" }).returning();
+    await db().insert(householdMembers).values([
+      { householdId: hh.id, personId: await personOf("ethan"), role: "child" },
+      { householdId: hh.id, personId: await personOf("liam"), role: "child" },
+    ]);
 
     // One athlete enrolled: no discount.
     const first = await start("ethan", B.ref_perf_1x_m2m, "2026-11-01", { payer: fam.id, today: T });
@@ -132,7 +139,7 @@ describe("family discount: applied when a second sibling enrols, removed when on
     expect(dec.totalMinor).toBe(12900 - 1290);
   });
 
-  it("eligibility follows the billing account, not the household: siblings billed to two accounts get nothing automatically", async () => {
+  it("eligibility follows the household, not the billing account: siblings billed to two accounts both get the family rate", async () => {
     // Two athletes in one household, each billed to a different account (for example separated co-parents).
     const [h] = await db().insert(households).values({ orgId: ctx.orgId, name: "Synthetic Pretend household" }).returning();
     await db().insert(householdMembers).values([
@@ -142,8 +149,8 @@ describe("family discount: applied when a second sibling enrols, removed when on
     const a = await start("owen", B.ref_perf_1x_m2m, "2027-01-01", { today: T });
     const b = await start("ella", B.ref_perf_1x_m2m, "2027-01-01", { today: T });
     expect(a.membership.payerAccountId).not.toBe(b.membership.payerAccountId);
-    expect(await discountOf(a.membership.id)).toBeNull();
-    expect(await discountOf(b.membership.id)).toBeNull();
+    expect(await discountOf(a.membership.id)).toBe("Family discount 10%");
+    expect(await discountOf(b.membership.id)).toBe("Family discount 10%");
   });
 });
 

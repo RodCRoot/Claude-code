@@ -2,7 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Tx } from "@/db";
 import { athletes, memberships, people, productVersions, zpMembershipDetails, zpPersonDetails } from "@/db/schema";
 import { assertCan, type Viewer } from "@/lib/authz/policy";
-import { membershipPolicy } from "@/lib/membership-policy";
+import { FAMILY_RATE_MIN_MEMBERS, familyRatePercent, familyRateSummary, membershipPolicy } from "@/lib/membership-policy";
 import { catalogListPrices, matchCatalogPlan } from "./catalog";
 import { zpRenewalOutcome } from "./renewal";
 
@@ -33,16 +33,30 @@ export type DiscountRow = {
   discountName: string | null;
   pattern: DiscountPattern;
   note: string;
+  /** Active members (current, not on hold) sharing this member's Family ID in the import, this one included. */
+  activeInFamily: number;
+  /** The hub's household rate for that head count (0 below 2, or while this member is on hold). */
+  expectedFamilyPercent: number;
+  /** The family tier the Payment Amount equals, when it equals one. */
+  paidFamilyPercent: number | null;
 };
 
-export type SiblingRow = { familyId: string; membersInFamily: number; name: string; plan: string; paymentMinor: number | null; listPriceMinor: number | null; pattern: DiscountPattern; wouldSaveMinor: number | null };
+/**
+ * A member of a Family ID with 2+ active members who is not paying that household's rate.
+ * `wouldSaveMinor`: per period, what moving to the household rate changes (list price less the rate, against
+ * what they pay now); negative when they pay less today. Null when the amounts cannot be compared.
+ */
+export type SiblingRow = { familyId: string; membersInFamily: number; expectedPercent: number; paidPercent: number | null; name: string; plan: string; paymentMinor: number | null; listPriceMinor: number | null; pattern: DiscountPattern; wouldSaveMinor: number | null };
 
 /** A current fixed-term membership that Zen Planner will renew into another fixed term instead of month-to-month. */
 export type FixedTermRenewalRow = { membershipId: string; name: string; plan: string; status: string; months: number; renewalType: string; endDate: string | null; paymentMinor: number | null };
 
 export type DiscountReview = {
-  familyPercent: number;
-  familyPercentConfirmed: boolean;
+  /** Household rule from Settings: percent per active household member and the cap. */
+  familyStepPercent: number;
+  familyCapPercent: number;
+  familyRule: string;
+  familyCapConfirmed: boolean;
   inSeasonRateMinor: number;
   reviewed: number;
   endedExcluded: number;
@@ -58,16 +72,39 @@ export type DiscountReview = {
 };
 
 const CURRENT = ["active", "trialing", "past_due", "on_hold", "pending"];
+/** Counted toward the household head count, as for hub-billed memberships: current and not on hold. */
+const COUNTED = ["active", "trialing", "past_due", "pending"];
 
-export function classifyDiscount(input: { listPriceMinor: number | null; paymentMinor: number | null; discountName: string | null; familyPercent: number; inSeasonRateMinor: number; planIsInSeason: boolean }): { pattern: DiscountPattern; note: string } {
+/**
+ * `familyPercent` is the rate expected for this member's household (0 = none). `familyTiers` are the other
+ * rates the rule can produce (10, 15, 20, ...): a Payment Amount that equals one of them is still a family
+ * rate, just not this household's.
+ */
+export function classifyDiscount(input: {
+  listPriceMinor: number | null;
+  paymentMinor: number | null;
+  discountName: string | null;
+  familyPercent: number;
+  familyTiers?: number[];
+  inSeasonRateMinor: number;
+  planIsInSeason: boolean;
+}): { pattern: DiscountPattern; note: string; paidFamilyPercent: number | null } {
+  const r = classify(input);
+  return { paidFamilyPercent: null, ...r };
+}
+
+function classify(input: Parameters<typeof classifyDiscount>[0]): { pattern: DiscountPattern; note: string; paidFamilyPercent?: number } {
   const { listPriceMinor: list, paymentMinor: pay, discountName, familyPercent, inSeasonRateMinor, planIsInSeason } = input;
   if (pay == null) return { pattern: "unknown", note: "No Payment Amount in the export." };
   if (list == null) return discountName ? { pattern: "other", note: `Carries the discount "${discountName}"; no list price to compare.` } : { pattern: "unknown", note: "No list price to compare against." };
-  const familyPrice = Math.round(list * (1 - familyPercent / 100));
-  if (pay !== list && Math.abs(pay - familyPrice) <= 1) return { pattern: "family", note: `Matches the family discount at ${familyPercent}%.` };
+  for (const pct of [familyPercent, ...(input.familyTiers ?? [])]) {
+    if (pct <= 0 || pay === list || Math.abs(pay - Math.round(list * (1 - pct / 100))) > 1) continue;
+    if (pct === familyPercent) return { pattern: "family", note: `Matches the family discount at ${pct}%.`, paidFamilyPercent: pct };
+    return { pattern: "family", note: familyPercent > 0 ? `Pays a ${pct}% family rate; this household's rate is ${familyPercent}%.` : `Pays a ${pct}% family rate, but this household does not qualify for one right now.`, paidFamilyPercent: pct };
+  }
   if (!planIsInSeason && pay === inSeasonRateMinor && pay !== list) return { pattern: "in_season_rate", note: "Paying the In Season rate on a plan that is not an In Season plan." };
   if (pay === list) return discountName ? { pattern: "other", note: `Carries the discount "${discountName}" but pays the list price.` } : { pattern: "full_price", note: "" };
-  if (discountName && /family|sibling/i.test(discountName)) return { pattern: "other", note: `Discount "${discountName}" does not equal ${familyPercent}% of the list price.` };
+  if (discountName && /family|sibling/i.test(discountName)) return { pattern: "other", note: familyPercent > 0 ? `Discount "${discountName}" does not equal this household's ${familyPercent}% off the list price.` : `Discount "${discountName}" does not equal a family rate off the list price.` };
   if (pay > list) return { pattern: "other", note: "Pays more than the list price." };
   return { pattern: "other", note: discountName ? `Discount "${discountName}".` : "Differs from the list price with no named discount in the export." };
 }
@@ -93,8 +130,10 @@ export async function discountReview(tx: Tx, v: Viewer, opts: { batchId?: string
   const famByPerson = new Map(fam.map((f) => [f.personId, f.familyId]));
 
   const review: DiscountReview = {
-    familyPercent: policy.familyDiscountPercent,
-    familyPercentConfirmed: !policy.unconfirmed.includes("familyDiscountPercent"),
+    familyStepPercent: policy.familyDiscountStepPercent,
+    familyCapPercent: policy.familyDiscountCapPercent,
+    familyRule: familyRateSummary(policy),
+    familyCapConfirmed: !policy.unconfirmed.includes("familyDiscountCapPercent"),
     inSeasonRateMinor,
     reviewed: 0,
     endedExcluded: 0,
@@ -108,8 +147,21 @@ export async function discountReview(tx: Tx, v: Viewer, opts: { batchId?: string
       "Read-only. Nothing on this page changes a membership or a price.",
       "List price is worked out, not exported: 'catalog' means the plan matched Teamwork's ladder by name, Att. Limit and Months; 'highest' means the highest Payment Amount on that plan in the import was used instead.",
       "The difference is per billing period (monthly, except weekly plans).",
+      "Household = the Zen Planner Family ID. A household's expected family rate counts its active members in this import (current and not on hold). This is a comparison only: imported memberships do not count toward the family rate the hub applies to memberships it bills.",
     ],
   };
+  // Head count per Family ID: distinct athletes with a current membership that is not on hold.
+  const familyOf = (r: (typeof rows)[number]) => r.d.familyId ?? famByPerson.get(r.personId) ?? null;
+  const activeByFamily = new Map<string, Set<string>>();
+  for (const r of rows) {
+    const f = familyOf(r);
+    if (f && COUNTED.includes(r.m.status)) activeByFamily.set(f, (activeByFamily.get(f) ?? new Set()).add(r.m.athleteId));
+  }
+  const familyTiers: number[] = [];
+  for (let n = FAMILY_RATE_MIN_MEMBERS; n <= 20; n++) {
+    const t = familyRatePercent(policy, n).percent;
+    if (t > 0 && !familyTiers.includes(t)) familyTiers.push(t);
+  }
   const all: DiscountRow[] = [];
   for (const r of rows) {
     if (!CURRENT.includes(r.m.status)) {
@@ -133,12 +185,18 @@ export async function discountReview(tx: Tx, v: Viewer, opts: { batchId?: string
       list = r.versionPrice;
       basis = "highest";
     }
-    const { pattern, note } = classifyDiscount({ listPriceMinor: list, paymentMinor: r.d.paymentAmountMinor, discountName: r.d.discountName, familyPercent: policy.familyDiscountPercent, inSeasonRateMinor, planIsInSeason: cat?.key === "in_season" || /in[\s-]?season/i.test(r.d.planName) });
+    const familyId = familyOf(r);
+    const activeInFamily = familyId ? (activeByFamily.get(familyId)?.size ?? 0) : COUNTED.includes(r.m.status) ? 1 : 0;
+    const expectedFamilyPercent = COUNTED.includes(r.m.status) ? familyRatePercent(policy, activeInFamily).percent : 0;
+    const { pattern, note, paidFamilyPercent } = classifyDiscount({ listPriceMinor: list, paymentMinor: r.d.paymentAmountMinor, discountName: r.d.discountName, familyPercent: expectedFamilyPercent, familyTiers, inSeasonRateMinor, planIsInSeason: cat?.key === "in_season" || /in[\s-]?season/i.test(r.d.planName) });
     const row: DiscountRow = {
       membershipId: r.m.id,
       athleteId: r.m.athleteId,
       name: `${r.first} ${r.last}`,
-      familyId: r.d.familyId ?? famByPerson.get(r.personId) ?? null,
+      familyId,
+      activeInFamily,
+      expectedFamilyPercent,
+      paidFamilyPercent,
       plan: r.d.planName,
       status: r.m.status,
       listPriceMinor: list,
@@ -159,29 +217,28 @@ export async function discountReview(tx: Tx, v: Viewer, opts: { batchId?: string
   }
   for (const g of Object.values(review.groups)) g.sort((a, b) => (b.differenceMinor ?? 0) - (a.differenceMinor ?? 0) || a.name.localeCompare(b.name));
 
-  // Siblings: 2+ athletes with a current membership on one Family ID, where someone is not on the family discount.
-  const byFamily = new Map<string, DiscountRow[]>();
-  for (const r of all) if (r.familyId) byFamily.set(r.familyId, [...(byFamily.get(r.familyId) ?? []), r]);
-  for (const [familyId, members] of byFamily) {
-    const athletesInFamily = new Set(members.map((m) => m.athleteId)).size;
-    if (athletesInFamily < 2) continue;
-    for (const m of members) {
-      if (m.pattern === "family") continue;
-      review.siblingsWithoutFamilyDiscount.push({
-        familyId,
-        membersInFamily: athletesInFamily,
-        name: m.name,
-        plan: m.plan,
-        paymentMinor: m.paymentMinor,
-        listPriceMinor: m.listPriceMinor,
-        pattern: m.pattern,
-        wouldSaveMinor: m.pattern === "full_price" && m.listPriceMinor != null ? m.listPriceMinor - Math.round(m.listPriceMinor * (1 - policy.familyDiscountPercent / 100)) : null,
-      });
-    }
+  // Households (Family IDs) with 2+ active members where an active member is not paying the household's rate:
+  // either no family rate at all, or a family rate for a different head count.
+  for (const m of all) {
+    if (!m.familyId || m.expectedFamilyPercent <= 0) continue;
+    if (m.pattern === "family" && m.paidFamilyPercent === m.expectedFamilyPercent) continue;
+    const comparable = (m.pattern === "full_price" || m.pattern === "family") && m.listPriceMinor != null && m.paymentMinor != null;
+    review.siblingsWithoutFamilyDiscount.push({
+      familyId: m.familyId,
+      membersInFamily: m.activeInFamily,
+      expectedPercent: m.expectedFamilyPercent,
+      paidPercent: m.paidFamilyPercent,
+      name: m.name,
+      plan: m.plan,
+      paymentMinor: m.paymentMinor,
+      listPriceMinor: m.listPriceMinor,
+      pattern: m.pattern,
+      wouldSaveMinor: comparable ? m.paymentMinor! - Math.round(m.listPriceMinor! * (1 - m.expectedFamilyPercent / 100)) : null,
+    });
   }
   review.renewsIntoFixedTerm.sort((a, b) => (a.endDate ?? "9999").localeCompare(b.endDate ?? "9999") || a.name.localeCompare(b.name));
   review.siblingsWithoutFamilyDiscount.sort((a, b) => a.familyId.localeCompare(b.familyId) || a.name.localeCompare(b.name));
-  if (!review.familyPercentConfirmed) review.notes.push(`The family discount percent (${policy.familyDiscountPercent}%) is still marked "needs confirmation" in Settings; the family group uses it as it stands.`);
+  if (!review.familyCapConfirmed) review.notes.push(`The family rate cap (${policy.familyDiscountCapPercent}%) is still marked "needs confirmation" in Settings; households past it are shown at the cap.`);
   return review;
 }
 
@@ -211,7 +268,7 @@ export function discountReviewCsv(r: DiscountReview): string {
   }
   for (const s of r.siblingsWithoutFamilyDiscount) {
     lines.push(
-      ["Siblings without the family discount", PATTERN_LABEL[s.pattern], s.name, s.familyId, s.plan, "", money(s.listPriceMinor), "", money(s.paymentMinor), money(s.wouldSaveMinor), "", `${s.membersInFamily} athletes share this Family ID. Difference column = what ${r.familyPercent}% would take off.`]
+      ["Not on the household family rate", PATTERN_LABEL[s.pattern], s.name, s.familyId, s.plan, "", money(s.listPriceMinor), "", money(s.paymentMinor), money(s.wouldSaveMinor), "", `${s.membersInFamily} active members share this Family ID, so the household rate is ${s.expectedPercent}% each${s.paidPercent ? `; pays a ${s.paidPercent}% family rate now` : ""}. Difference column = Payment Amount less the list price at ${s.expectedPercent}% off.`]
         .map(esc)
         .join(","),
     );

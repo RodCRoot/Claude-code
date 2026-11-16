@@ -123,7 +123,7 @@ describe("merge fields come from the membership, product version and policy", ()
     expect(mv.end_of_term).toMatch(/After Oct 31, 2027 the membership continues month to month at the same price/);
     expect(mv.hold_rules).toMatch(/up to 2 months/);
     expect(mv.cancellation_notice).toBe("30 days written notice; a cancellation cannot take effect before the commitment ends on Oct 31, 2027");
-    expect(mv.family_discount).toMatch(/10% off each membership.*currently applied: 10%/);
+    expect(mv.family_discount).toMatch(/5% off each membership for every active member of the household.*2 members 10% each, 3 members 15% each.*to a most of 25%.*on hold.*currently applied: 10%/);
     expect(mv.payment_terms).toMatch(/3 days and 7 days.*once more after 5 days/);
     expect(mv.ach_authorization).toMatch(/^Not applicable/);
     // Family-facing text never uses em dashes.
@@ -194,7 +194,7 @@ describe("snapshot: what was signed never changes", () => {
     expect(sig.authMethod).toMatch(/step_up=email_otp/);
 
     // 1) Policy changes afterwards: the signed record is unchanged.
-    await setPolicy({ cancellationNoticeDays: 60, familyDiscountPercent: 15 });
+    await setPolicy({ cancellationNoticeDays: 60, familyDiscountCapPercent: 40 });
     expect((await reqRow(cur.formRequestId)).renderedBodyMarkdown).toBe(before);
     expect(before).toContain("Commitment end date: Oct 31, 2027");
     // 2) A new template version afterwards: unchanged.
@@ -222,7 +222,7 @@ describe("snapshot: what was signed never changes", () => {
     expect(text).toContain("Test 2x per Week (12 Months)");
     expect(text).toContain("Oct 31, 2027");
     expect(text).not.toContain("{{");
-    await setPolicy({ cancellationNoticeDays: 30, familyDiscountPercent: 10 });
+    await setPolicy({ cancellationNoticeDays: 30, familyDiscountCapPercent: 25 });
     await db().update(organizations).set({ settings: sql`${organizations.settings} - 'formsStepUp'` }).where(eq(organizations.id, ctx.orgId));
   });
 });

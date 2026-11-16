@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import type { Tx } from "@/db";
 import {
   athletes,
@@ -26,11 +26,14 @@ import { grantCredits } from "@/lib/credits";
 import { enqueue } from "@/lib/jobs";
 import { CAP_DAYS_PER_MONTH, effectiveNoticeDays, membershipPolicy, partialPeriodPriceMinor, type MembershipPolicy } from "@/lib/membership-policy";
 import { formatMoney, percentOf } from "@/lib/money";
-import { addDaysYmd, daysBetween, localToUtc, todayLocal } from "@/lib/time";
+import { addDaysYmd, daysBetween, localToUtc } from "@/lib/time";
 import { UserError } from "./errors";
 import { createInvoiceRecord, invoiceMoney } from "./invoices";
 import { billingTask } from "./tasks";
 import { actorOf, addIntervalYmd, addMonthsYmd } from "./util";
+import { familyRateIfEnrolled, syncFamilyDiscount } from "./family-rate";
+
+export { syncFamilyDiscount };
 
 export const LIVE_STATUSES: MembershipStatus[] = ["pending", "trialing", "active", "on_hold", "past_due"];
 export type InternalBillingProvider = "manual" | "none";
@@ -161,7 +164,7 @@ export type CreateMembershipInput = {
   /** Defaults to the policy anchor (the 1st). Recurring billing never anchors to the start day by default. */
   billingAnchorDay?: number | null;
   billingProvider?: InternalBillingProvider;
-  /** Legacy explicit request; the family discount is now applied automatically from policy. */
+  /** Legacy explicit request (refused unless the household qualifies); the family rate is applied automatically from policy. */
   applyFamilyDiscount?: boolean;
   /** Staff override of the first-period stub amount (requires a reason; audited). */
   stubOverride?: { amountMinor: number; reason: string } | null;
@@ -183,8 +186,8 @@ export async function previewMembershipStart(tx: Tx, v: Viewer, input: Pick<Crea
   const policy = await membershipPolicy(tx, v.orgId);
   const { version, product } = await loadVersion(tx, v.orgId, input.productVersionId);
   const anchor = input.billingAnchorDay ?? policy.billingAnchorDay;
-  const willHaveFamily = await familyAthleteCount(tx, v.orgId, input.payerAccountId, input.athleteId);
-  const discountPercent = willHaveFamily >= 2 && policy.familyDiscountPercent > 0 ? policy.familyDiscountPercent : 0;
+  // Family rate this athlete would get once enrolled (household head count, this athlete included).
+  const discountPercent = (await familyRateIfEnrolled(tx, v.orgId, input.athleteId, policy)).percent;
   const stub = version.trialDays === 0 && isStubStart(version, anchor, input.startDate) ? computeStub(version.priceMinor, input.startDate, anchor, policy.prorationMethod, input.stubOverride) : null;
   const firstRegular = stub ? stub.nextBillDate : version.trialDays > 0 ? addDaysYmd(input.startDate, version.trialDays) : input.startDate;
   return {
@@ -225,11 +228,7 @@ export async function createMembership(tx: Tx, v: Viewer, input: CreateMembershi
   }
 
   if (input.applyFamilyDiscount) {
-    const siblings = await tx
-      .select({ id: memberships.id })
-      .from(memberships)
-      .where(and(eq(memberships.payerAccountId, p.id), ne(memberships.athleteId, a.id), inArray(memberships.status, LIVE_STATUSES)));
-    if (!siblings.length) throw new UserError("Family discount needs another live membership on the same payer account.");
+    if ((await familyRateIfEnrolled(tx, v.orgId, a.id, policy)).percent <= 0) throw new UserError("Family discount needs another active member in the same household.");
   }
 
   const trial = version.trialDays > 0;
@@ -273,7 +272,7 @@ export async function createMembership(tx: Tx, v: Viewer, input: CreateMembershi
     after: m,
   });
 
-  await syncFamilyDiscount(tx, actorOf(v), v.orgId, p.id, { policy });
+  await syncFamilyDiscount(tx, actorOf(v), v.orgId, { policy });
   const [fresh] = await tx.select().from(memberships).where(eq(memberships.id, m.id));
 
   // Internally invoiced plans bill the first period now. A mid-month start bills its stub right away
@@ -624,6 +623,8 @@ export async function addHold(tx: Tx, v: Viewer, input: AddHoldInput) {
   });
   if (input.startDate <= input.today && endDate >= input.today && m.status !== "on_hold") {
     await tx.update(memberships).set({ status: "on_hold", updatedAt: new Date() }).where(eq(memberships.id, m.id));
+    // A member on hold stops counting toward the household's family rate and loses it while held.
+    await syncFamilyDiscount(tx, actorOf(v), v.orgId, { policy });
   }
   await audit(tx, actorOf(v), "billing.membership.hold", "membership", m.id, {
     summary: `Hold ${input.startDate} → restart ${restartDate}: ${input.reason}${h.overrideReason ? ` (hold cap overridden: ${h.overrideReason})` : ""}${makeup?.granted ? `; punch card ${makeup.granted} session(s)` : ""}`,
@@ -646,7 +647,10 @@ export async function removeHold(tx: Tx, v: Viewer, holdId: string, today: strin
   } else {
     await tx.delete(membershipHolds).where(eq(membershipHolds.id, h.id));
   }
-  if (m.status === "on_hold") await tx.update(memberships).set({ status: "active", updatedAt: new Date() }).where(eq(memberships.id, m.id));
+  if (m.status === "on_hold") {
+    await tx.update(memberships).set({ status: "active", updatedAt: new Date() }).where(eq(memberships.id, m.id));
+    await syncFamilyDiscount(tx, actorOf(v), v.orgId);
+  }
   await event(tx, m, "hold_removed", v.userId, { effectiveOn: today, details: { holdId } });
   await audit(tx, actorOf(v), "billing.membership.hold_remove", "membership", m.id, { summary: `Hold ${h.startDate}→${h.endDate} ended early/removed`, before: h });
 }
@@ -768,6 +772,8 @@ export async function startInSeason(
     .returning();
   if (input.startDate <= input.today && input.endDate >= input.today && m.status !== "on_hold") {
     await tx.update(memberships).set({ status: "on_hold", updatedAt: new Date() }).where(eq(memberships.id, m.id));
+    // The regular membership is on hold; the athlete still counts through the In Season membership.
+    await syncFamilyDiscount(tx, actorOf(v), v.orgId, { policy });
   }
   await event(tx, m, "in_season_started", v.userId, {
     effectiveOn: input.startDate,
@@ -781,84 +787,6 @@ export async function startInSeason(
   const who = await athleteFirstName(tx, m.athleteId);
   await scheduleRestartNudge(tx, v.orgId, { membershipId: m.id, holdId: h.id, restartDate: addDaysYmd(input.endDate, 1), label: `${who.first} ${who.last}`, kind: "in_season", policy, isDemo: m.isDemo });
   return { hold: h, inSeasonMembership: ins, firstInvoice, cap: capInfo };
-}
-
-// ---------------------------------------------------------------------------
-// Family discount
-// ---------------------------------------------------------------------------
-
-const FAMILY_DISCOUNT_PREFIXES = ["Family discount", "Sibling discount"];
-const isFamilyDiscount = (d: { name: string } | null) => !!d && FAMILY_DISCOUNT_PREFIXES.some((p) => d.name.startsWith(p));
-
-async function familyDiscountId(tx: Tx, orgId: string, percent: number) {
-  const name = `Family discount ${percent}%`;
-  const [d] = await tx.select().from(discounts).where(and(eq(discounts.orgId, orgId), eq(discounts.name, name), eq(discounts.kind, "percent"), eq(discounts.value, percent)));
-  if (d) return d.id;
-  const [nd] = await tx.insert(discounts).values({ orgId, name, kind: "percent", value: percent }).returning();
-  return nd.id;
-}
-
-/** Distinct athletes with a live membership on this payer account (optionally counting one more athlete). */
-async function familyAthleteCount(tx: Tx, orgId: string, payerAccountId: string, plusAthleteId?: string) {
-  const rows = await tx
-    .selectDistinct({ athleteId: memberships.athleteId })
-    .from(memberships)
-    .where(and(eq(memberships.orgId, orgId), eq(memberships.payerAccountId, payerAccountId), inArray(memberships.status, LIVE_STATUSES)));
-  const ids = new Set(rows.map((r) => r.athleteId));
-  if (plusAthleteId) ids.add(plusAthleteId);
-  return ids.size;
-}
-
-/**
- * Family discount: once 2+ athletes on a payer account have live memberships, every one of their
- * Teamwork-billed memberships gets the policy percentage; below 2 it is removed. Other (non-family)
- * discounts are never touched. Every change writes a membership event and an audit entry.
- * Provider-billed memberships are left alone (the provider amount is fixed) and get a staff task.
- */
-export async function syncFamilyDiscount(tx: Tx, actor: AuditActor, orgId: string, payerAccountId: string, opts: { policy?: MembershipPolicy } = {}) {
-  const policy = opts.policy ?? (await membershipPolicy(tx, orgId));
-  const live = await tx
-    .select({ m: memberships, d: discounts })
-    .from(memberships)
-    .leftJoin(discounts, eq(discounts.id, memberships.discountId))
-    .where(and(eq(memberships.orgId, orgId), eq(memberships.payerAccountId, payerAccountId), inArray(memberships.status, LIVE_STATUSES)))
-    .for("update", { of: memberships });
-  const athletesEnrolled = new Set(live.map((r) => r.m.athleteId)).size;
-  const qualifies = athletesEnrolled >= 2 && policy.familyDiscountPercent > 0;
-  const targetId = qualifies ? await familyDiscountId(tx, orgId, policy.familyDiscountPercent) : null;
-  const changes: { membershipId: string; action: "applied" | "removed" }[] = [];
-  for (const { m, d } of live) {
-    if (m.billingProvider === "external_zenplanner") continue;
-    if (d && !isFamilyDiscount(d)) continue; // another discount is in place: don't stack or replace
-    const want = qualifies ? targetId : null;
-    if ((m.discountId ?? null) === want) continue;
-    if (isProviderBilled(m)) {
-      await billingTask(tx, orgId, {
-        title: `Family discount change needs the ${m.billingProvider} subscription updated`,
-        description: `${athletesEnrolled} athlete(s) enrolled on this payer account; the family discount should be ${qualifies ? `${policy.familyDiscountPercent}%` : "removed"}.`,
-        relatedType: "membership",
-        relatedId: m.id,
-        dedupeKey: `family-discount:${m.id}:${want ?? "none"}`,
-      });
-      continue;
-    }
-    await tx.update(memberships).set({ discountId: want, updatedAt: new Date() }).where(eq(memberships.id, m.id));
-    const action = want ? "applied" : "removed";
-    changes.push({ membershipId: m.id, action });
-    await tx.insert(membershipEvents).values({
-      membershipId: m.id,
-      type: want ? "family_discount_applied" : "family_discount_removed",
-      effectiveOn: todayLocal(),
-      actorUserId: actor.actorUserId,
-      details: { percent: want ? policy.familyDiscountPercent : null, previous: d ? { name: d.name, value: d.value } : null, athletesEnrolled },
-    });
-    await audit(tx, { ...actor, orgId }, `billing.membership.family_discount_${action}`, "membership", m.id, {
-      summary: want ? `Family discount ${policy.familyDiscountPercent}% applied (${athletesEnrolled} athletes enrolled)` : `Family discount removed (${athletesEnrolled} athlete enrolled)`,
-      before: { discountId: m.discountId },
-      after: { discountId: want },
-    });
-  }
-  return { athletesEnrolled, qualifies, changes };
 }
 
 // ---------------------------------------------------------------------------
@@ -1000,7 +928,7 @@ export async function cancelMembership(
   await audit(tx, actorOf(v), "billing.membership.cancel", "membership", m.id, {
     summary: `Cancellation ${immediate ? "effective" : "scheduled"} ${cancelAt}${input.requestChannel ? ` (requested ${input.requestedOn} by ${input.requestChannel.replaceAll("_", " ")})` : ""}${input.overrideCancelAt ? " (terms overridden)" : ""}: ${input.reason}`,
   });
-  if (immediate && m.payerAccountId) await syncFamilyDiscount(tx, actorOf(v), v.orgId, m.payerAccountId);
+  if (immediate) await syncFamilyDiscount(tx, actorOf(v), v.orgId);
   return { cancelAt, earliest, immediate, preview };
 }
 

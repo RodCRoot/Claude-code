@@ -9,10 +9,13 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import {
+  athletes,
   auditEvents,
   bookings,
   creditBuckets,
   discounts,
+  householdMembers,
+  households,
   invoices,
   jobs,
   membershipEvents,
@@ -439,6 +442,10 @@ describe("family discount", () => {
     const v = await rod();
     const [fam] = await db().insert(payerAccounts).values({ orgId: ctx.orgId, name: "Synthetic Cole-Reyes family" }).returning();
     await db().insert(payerBeneficiaries).values([{ payerAccountId: fam.id, athleteId: ctx.athletes.ethan }, { payerAccountId: fam.id, athleteId: ctx.athletes.sofia }]);
+    // The family rate follows the household (owner's rule, 2026-11-16), so the two are put in one.
+    const [hh] = await db().insert(households).values({ orgId: ctx.orgId, name: "Synthetic Cole-Reyes household" }).returning();
+    const persons = await db().select({ id: athletes.id, personId: athletes.personId }).from(athletes).where(sql`${athletes.id} in (${ctx.athletes.ethan}, ${ctx.athletes.sofia})`);
+    await db().insert(householdMembers).values(persons.map((p) => ({ householdId: hh.id, personId: p.personId, role: "child" as const })));
     const discountOf = async (id: string) => {
       const [row] = await db().select({ d: discounts }).from(memberships).leftJoin(discounts, eq(discounts.id, memberships.discountId)).where(eq(memberships.id, id));
       return row.d ? `${row.d.name}` : null;
@@ -488,16 +495,23 @@ describe("Settings → Membership policy", () => {
   it("validates, confirms flagged values, audits, and is owner/admin only", async () => {
     const v = await rod();
     const current = await membershipPolicy(db(), ctx.orgId);
-    expect(current.unconfirmed).toContain("familyDiscountPercent");
-    expect(parseMembershipPolicy({ ...current, familyDiscountPercent: "150", cancellationNoticeDays: "x" }, current).errors).toMatchObject({ familyDiscountPercent: expect.any(String), cancellationNoticeDays: expect.any(String) });
-    const bad = await db().transaction((tx) => saveMembershipPolicy(tx, v, { ...current, familyDiscountPercent: 150 }));
+    // The 5% step is the owner's decision; the cap is a placeholder until an owner confirms it.
+    expect(current).toMatchObject({ familyDiscountStepPercent: 5, familyDiscountCapPercent: 25 });
+    expect(current.unconfirmed).toEqual(["familyDiscountCapPercent"]);
+    expect(parseMembershipPolicy({ ...current, familyDiscountCapPercent: "150", familyDiscountStepPercent: "-1", cancellationNoticeDays: "x" }, current).errors).toMatchObject({
+      familyDiscountCapPercent: expect.any(String),
+      familyDiscountStepPercent: expect.any(String),
+      cancellationNoticeDays: expect.any(String),
+    });
+    const bad = await db().transaction((tx) => saveMembershipPolicy(tx, v, { ...current, familyDiscountCapPercent: 150 }));
     expect(bad.ok).toBe(false);
-    const r = await db().transaction((tx) => saveMembershipPolicy(tx, v, { ...current, familyDiscountPercent: "15", confirm: ["familyDiscountPercent"] }));
+    const r = await db().transaction((tx) => saveMembershipPolicy(tx, v, { ...current, familyDiscountCapPercent: "30", confirm: ["familyDiscountCapPercent"] }));
     expect(r.ok).toBe(true);
     const saved = await membershipPolicy(db(), ctx.orgId);
-    expect(saved).toMatchObject({ familyDiscountPercent: 15, unconfirmed: [] });
+    expect(saved).toMatchObject({ familyDiscountStepPercent: 5, familyDiscountCapPercent: 30, unconfirmed: [] });
     const [o] = await db().select().from(organizations).where(eq(organizations.id, ctx.orgId));
-    expect((o.settings as Record<string, unknown>).membershipPolicy).toMatchObject({ familyDiscountPercent: 15 });
+    expect((o.settings as Record<string, unknown>).membershipPolicy).toMatchObject({ familyDiscountCapPercent: 30 });
+    expect((o.settings as Record<string, unknown>).membershipPolicy).not.toHaveProperty("familyDiscountPercent");
     expect(await db().select().from(auditEvents).where(and(eq(auditEvents.entityId, ctx.orgId), eq(auditEvents.action, "org.membership_policy_update")))).not.toHaveLength(0);
     for (const k of ["erin", "marcus", "alex"]) {
       const who = await viewerFor(ctx, k);

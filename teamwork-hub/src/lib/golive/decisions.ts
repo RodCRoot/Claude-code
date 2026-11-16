@@ -1,6 +1,6 @@
 import { autopaySettingsOf } from "@/lib/billing/autopay-settings";
 import { growthFromSettings } from "@/lib/growth/settings";
-import { policyFromSettings } from "@/lib/membership-policy";
+import { familyRateSummary, policyFromSettings } from "@/lib/membership-policy";
 import { newsSettingsOf } from "@/lib/newswatch/shared";
 import { policiesOf } from "@/lib/settings";
 
@@ -33,11 +33,11 @@ export const OPEN_DECISIONS: OpenDecision[] = [
   {
     id: "family_discount_percent",
     ref: "Membership policy 1",
-    question: "Is the family discount 10% or 15%?",
-    currentBehaviour: "Every active athlete on a billing account gets this percent off once two or more are enrolled.",
+    question: "What is the ceiling on the family rate, and when does a change take effect?",
+    currentBehaviour: "Owner's rule (2026-11-16): 5% per active household member, from 2 members up, the same rate for every active member; members on hold do not count. A cap (default 25%) was added because no ceiling was stated. A change shows on the next bill issued; bills already issued are not re-priced.",
     changeHref: "/settings",
     changeLabel: "Settings, Membership policy",
-    value: (s) => `${policyFromSettings(s).familyDiscountPercent}%`,
+    value: (s) => familyRateSummary(policyFromSettings(s)),
   },
   {
     id: "cancellation_notice_days",
