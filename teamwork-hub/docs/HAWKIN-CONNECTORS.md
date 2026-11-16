@@ -45,3 +45,12 @@ Read-only. The goal is to record facts, not to change anything.
 Never: enable connectors, create broad or long-lived tokens, install add-ins, change organization settings, or send athlete data to any third party. Record findings in `BLOCKERS.md` and update the evidence level of the affected `FEATURE_MATRIX.md` rows from publicly documented to account-verified.
 
 Restating plainly: Hawkin account sign-in has NOT been verified from this project, and nothing about Teamwork's connectors, licences, data volume or organization settings has been inspected. Every statement above is from public documentation or from this repository's code.
+
+## First live check (2026-11-16)
+
+Rod created an integration key and saved it through the cloud session's secure credential form (never in chat, never in the repo). Account-verified from that:
+- Region: Americas, `https://cloud.hawkindynamics.com`. `GET /api/token` with the key returns 200 and `access_token`, `token_type`, `expires_at`.
+- Data calls (`/api/v1/test_types`, `/api/v1/athletes`) could NOT be made from the cloud session. Its network proxy puts the saved key in the `Authorization` header of every request to that host, so the one-hour access token never reaches Hawkin and the answer is 401 "Invalid Access Token". Hawkin uses one host and one header for both steps, so the secure form cannot serve it. No athlete or test data has been read yet.
+- This does not affect the hub itself: a deployed hub reads `HAWKIN_REFRESH_TOKEN` and `HAWKIN_API_BASE` from its own server environment and makes both calls directly (`src/lib/integrations/hawkin/client.ts`, `scripts/hawkin-sync.ts`).
+
+To read Hawkin from a cloud session: remove the saved network secret for `cloud.hawkindynamics.com` in the environment's settings and add the key there as the environment variable `HAWKIN_REFRESH_TOKEN` instead (stored in plain text on that environment; Rod's choice), then start a new session.
