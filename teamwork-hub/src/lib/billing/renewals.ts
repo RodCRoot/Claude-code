@@ -47,6 +47,13 @@ export async function generateRenewals(tx: Tx, orgId: string, today: string): Pr
       and status in ('active','trialing','past_due','pending','on_hold')`);
   s.skippedProviderBilled = Number((prov.rows[0] as { n: number }).n);
 
+  // Holds that start or end today change the household head count. Flip those statuses and recalculate
+  // the family rate BEFORE billing, so a member back from a hold is billed at the household's rate and a
+  // member whose sibling's hold starts today is billed at the lower tier. (Cancellations and expiries
+  // are processed by the loop below and recalculated after it, as before.)
+  const holdFlips = await syncHoldStatuses(tx, orgId, today);
+  s.familyDiscountChanges += (await syncFamilyDiscount(tx, SYSTEM(orgId), orgId)).changes.length;
+
   const due = await tx
     .select()
     .from(memberships)
@@ -61,7 +68,6 @@ export async function generateRenewals(tx: Tx, orgId: string, today: string): Pr
     )
     .for("update", { skipLocked: true });
 
-  const endedPayers = new Set<string>();
   const { agreementSettings, syncMembershipAgreement } = await import("@/lib/agreements/issue");
   const billingWaits = (await agreementSettings(tx, orgId)).billingWaitsForSignature;
   for (let m of due) {
@@ -76,7 +82,6 @@ export async function generateRenewals(tx: Tx, orgId: string, today: string): Pr
         const ended = m.kind === "in_season" ? "expired" : "cancelled";
         await tx.update(memberships).set({ status: ended, endDate: m.endDate ?? m.cancelAt, nextBillDate: null, updatedAt: new Date() }).where(eq(memberships.id, m.id));
         await tx.insert(membershipEvents).values({ membershipId: m.id, type: ended, effectiveOn: m.cancelAt, details: { by: "renewal_job" } });
-        if (m.payerAccountId) endedPayers.add(m.payerAccountId);
         s.cancelled++;
         break;
       }
@@ -151,24 +156,18 @@ export async function generateRenewals(tx: Tx, orgId: string, today: string): Pr
       m = fresh;
     }
   }
-  const sync = await syncMembershipStatuses(tx, orgId, today, endedPayers);
-  s.statusChanges = sync;
-  // Family discount follows enrollment: re-check families where a membership just ended.
-  for (const payerId of [...endedPayers].sort()) {
-    const r = await syncFamilyDiscount(tx, SYSTEM(orgId), orgId, payerId);
-    s.familyDiscountChanges += r.changes.length;
-  }
+  s.statusChanges = holdFlips + (await syncMembershipStatuses(tx, orgId, today));
+  // The family rate follows the household head count: recalculate every household after memberships
+  // ended, holds started or ended, or people moved household. Idempotent; writes only on a change.
+  s.familyDiscountChanges += (await syncFamilyDiscount(tx, SYSTEM(orgId), orgId)).changes.length;
   if (s.invoicesCreated || s.cancelled || s.deferredForHold) {
     await audit(tx, SYSTEM(orgId), "billing.renewals.run", "org", orgId, { summary: `Renewals for ${today}: ${JSON.stringify(s)}` });
   }
   return s;
 }
 
-/**
- * Derive statuses from holds, cancellations and overdue invoices.
- * External (Zen Planner) memberships are left as imported.
- */
-export async function syncMembershipStatuses(tx: Tx, orgId: string, today: string, endedPayers?: Set<string>): Promise<number> {
+/** Hold statuses only (safe to run before billing: the renewal loop decides holds by date, not by status). */
+export async function syncHoldStatuses(tx: Tx, orgId: string, today: string): Promise<number> {
   let changed = 0;
   const onHold = await tx.execute(sql`
     update memberships m set status = 'on_hold', updated_at = now()
@@ -180,14 +179,22 @@ export async function syncMembershipStatuses(tx: Tx, orgId: string, today: strin
     where m.org_id = ${orgId} and m.status = 'on_hold' and m.billing_provider <> 'external_zenplanner'
       and not exists (select 1 from membership_holds h where h.membership_id = m.id and h.start_date <= ${today} and h.end_date >= ${today})`);
   changed += offHold.rowCount ?? 0;
+  return changed;
+}
+
+/**
+ * Derive statuses from holds, cancellations and overdue invoices.
+ * External (Zen Planner) memberships are left as imported.
+ */
+export async function syncMembershipStatuses(tx: Tx, orgId: string, today: string): Promise<number> {
+  let changed = await syncHoldStatuses(tx, orgId, today);
   const ended = await tx.execute(sql`
     update memberships set status = case when kind = 'in_season' then 'expired' else 'cancelled' end,
       end_date = coalesce(end_date, cancel_at), next_bill_date = null, updated_at = now()
     where org_id = ${orgId} and billing_provider <> 'external_zenplanner' and status in ('active','past_due','pending','trialing','on_hold')
       and cancel_at is not null and cancel_at <= ${today}
-    returning payer_account_id`);
+`);
   changed += ended.rowCount ?? 0;
-  for (const r of ended.rows as { payer_account_id: string | null }[]) if (r.payer_account_id) endedPayers?.add(r.payer_account_id);
   const pastDue = await tx.execute(sql`
     update memberships m set status = 'past_due', updated_at = now()
     where m.org_id = ${orgId} and m.billing_provider <> 'external_zenplanner' and m.status in ('active','pending','trialing')

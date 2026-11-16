@@ -173,17 +173,57 @@ Tests: `tests/billing-membership-policy.test.ts`.
 - **Cancellation.** Effective = max(request + notice, commitment end + 1); notice = version's own if set,
   else policy (30). Channel recorded. `cancellationPreview` shows effective date, last bill date, remaining
   periods/amount and open balance (membership page).
-- **Family discount.** `syncFamilyDiscount` runs on create, immediate cancel and when the renewal job ends a
-  membership: 2+ athletes with live memberships on one payer account → "Family discount N%" on each
-  Teamwork-billed membership; below 2 → removed. Other discounts are never replaced; provider-billed ones get a
-  task. Events + audit for every change. Both directions are tested (`tests/billing-agreement-rules.test.ts`:
-  second sibling enrols, sibling leaves at once, sibling returns, with the next invoice following each change;
-  `tests/billing-membership-policy.test.ts`: sibling leaves through a scheduled cancellation).
-  **What decides eligibility is the payer account, not the household graph**: two siblings in one household who
-  are billed to two different payer accounts get no discount automatically (tested), and a sibling whose
-  membership is still billed by Zen Planner (imported, no payer account) does not count toward the two. A plan
-  change, a hold and an In Season term do not re-run the check; a held membership still counts as enrolled.
-  These are open decisions for Rod in `DECISIONS.md`.
+- **Family rate (household tier).** Owner's rule, decided 2026-11-16 (relayed through his Zen Planner session);
+  it replaced the flat 10% per payer account. Code: `src/lib/billing/family-rate.ts`; tests:
+  `tests/billing-family-rate.test.ts`.
+  - **Household, not payer.** Head count is taken over `household_members` (person ↔ household; the athlete is
+    found through `athletes.person_id`). Imports build these households from the Zen Planner Family ID. The payer
+    account plays no part: siblings billed to two accounts get the rate, two households that share a payer do not.
+    Anyone in the household with an athlete record and an active membership counts, a parent included.
+  - **An athlete in no household** is a household of one: no rate, never grouped with anyone.
+    **An athlete in two households** (separated co-parents) gets the rate of the household with more active
+    members; households are never merged.
+  - **Rate** = `familyDiscountStepPercent` (5) × active members in the household, 0 below 2: 2 → 10% each,
+    3 → 15% each, 4 → 20% each. Every active member gets the same rate, as a "Family discount N%" discount row
+    on the membership.
+  - **Active** = at least one hub membership with status `pending`, `trialing`, `active` or `past_due`.
+    Not-started (pending) counts, as in the owner's exports; past due counts (the family is still enrolled, and
+    dropping the tier would raise the siblings' price because one bill is late). `on_hold`, `cancelled` and
+    `expired` do not count. A membership on hold also loses the rate while held. An athlete whose regular
+    membership is on hold for an In Season term still counts through the In Season membership.
+  - **Cap.** `familyDiscountCapPercent` (default 25, flagged "Needs confirmation"; the owner stated no ceiling).
+    A household past it (6 members at 5%) gets the cap, and staff get a high-priority task "Family rate capped
+    at 25% for <household>" (`tasks`, source `billing`, related to the household, one per household and head
+    count). Both numbers are in Settings → Membership policy.
+  - **Recalculation.** `syncFamilyDiscount(tx, actor, orgId)` recalculates every household in the organization
+    and reprices every membership whose rate is out of date, not only the one that changed. It runs on sign-up
+    (`createMembership`, the guided sign-up flow), immediate cancel, hold start, hold removal, In Season start,
+    Stripe/PayPal status changes, and twice in the daily renewal job (before billing, after hold statuses are
+    refreshed; and after billing, once memberships that ended have been closed). The daily run is also what
+    picks up a person moving household (no staff screen moves a person between households today; imports and
+    their undo do). Idempotent: a second run writes nothing. One run per organization at a time (advisory lock).
+  - **Timing (not decided by the owner; this is what the code does).** The sync only sets the discount on the
+    membership. A bill is priced from that discount when it is issued; a bill already issued is never re-priced,
+    credited or topped up, and nothing is prorated. So a change shows on the next bill issued after it:
+    - *Gaining a member:* the tier rises the moment the new membership is created (even if it starts later).
+      The new member's first bill (the partial first month included) is at the new tier. The siblings' next
+      bills are at the new tier; their bill for the current period stays as issued.
+    - *Losing a member, staff cancel effective today or a hold entered for today:* the tier drops at once and
+      the remaining members' next bills are at the lower tier.
+    - *Losing a member through the daily job:* a hold that starts by date is applied before that day's bills, so
+      the siblings' bill of that day is already at the lower tier. A scheduled cancellation or an In Season
+      expiry is applied after that day's bills (as before this change), so a sibling billed on the same day
+      still gets the higher tier once more and the lower tier from the bill after.
+    - *A hold ending:* applied before that day's bills, so the returning member and the siblings are billed at
+      the restored tier on the restart date.
+    No setting was added for this: an "immediate with proration" mode would have to re-price issued bills.
+  - **Left alone.** A membership carrying any other discount is not stacked or replaced (its athlete still
+    counts). Stripe/PayPal subscription memberships are not changed (the provider amount is fixed); staff get a
+    task. **Zen Planner-billed (imported) memberships do not count toward the head count and are never
+    re-priced, billed or otherwise touched**; whether they should count is an open decision.
+  - **Old settings.** A saved flat `familyDiscountPercent` is ignored and dropped on the next save (a saved 0
+    still means "off"). No database migration.
+  Open for Rod in `DECISIONS.md`: timing, imported memberships counting, the cap value.
 - **Restart nudges.** Each hold / in-season term enqueues `automation.evaluate` (trigger
   `membership_restart_upcoming`, deduped `restart_nudge:<holdId>`, run at restart − `restartNudgeDaysBefore`,
   09:00 local) plus a deduped staff task. Families are messaged only if an enabled automation rule exists;

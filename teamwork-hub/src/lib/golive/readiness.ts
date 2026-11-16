@@ -4,7 +4,7 @@ import { auditEvents, calendarConnections, formTemplateVersions, formTemplates, 
 import { assertCan, type Viewer } from "@/lib/authz/policy";
 import { autopaySettingsOf } from "@/lib/billing/autopay-settings";
 import { growthFromSettings } from "@/lib/growth/settings";
-import { POLICY_FIELDS, policyFromSettings } from "@/lib/membership-policy";
+import { familyRateSummary, POLICY_FIELDS, policyFromSettings } from "@/lib/membership-policy";
 import { policiesOf } from "@/lib/settings";
 import { fmtDate } from "@/lib/time";
 import { catalogStatus } from "@/lib/zenplanner/catalog";
@@ -680,14 +680,14 @@ export async function goLiveReadiness(tx: Tx, v: Viewer, opts: { env?: GoLiveEnv
   });
   const mp = policyFromSettings(settings);
   const labelOf = (k: string) => POLICY_FIELDS.find((f) => f.key === k)?.label ?? k;
-  const otherUnconfirmed = mp.unconfirmed.filter((k) => k !== "familyDiscountPercent");
+  const otherUnconfirmed = mp.unconfirmed.filter((k) => k !== "familyDiscountCapPercent");
   add({
     id: "catalog.family_discount",
     section: "catalog",
-    title: "The family discount percent is confirmed",
-    status: mp.unconfirmed.includes("familyDiscountPercent") ? "attention" : "done",
-    why: "It comes off every bill for a family with two or more athletes, and the sources disagree on 10% or 15%.",
-    detail: mp.unconfirmed.includes("familyDiscountPercent") ? `${mp.familyDiscountPercent}% is in use and still flagged "Needs confirmation".` : `${mp.familyDiscountPercent}%. ${await who("org.membership_policy_update")}`.trim(),
+    title: "The family rate cap is confirmed",
+    status: mp.unconfirmed.includes("familyDiscountCapPercent") ? "attention" : "done",
+    why: "The family rate comes off every bill for a household with two or more active members (the owner's rule: 5% per active member). No ceiling was stated, so the cap is a placeholder until an owner confirms it.",
+    detail: mp.unconfirmed.includes("familyDiscountCapPercent") ? `${familyRateSummary(mp)}. The cap is in use and still flagged "Needs confirmation".` : `${familyRateSummary(mp)}. ${await who("org.membership_policy_update")}`.trim(),
     href: "/settings",
     hrefLabel: "Settings, Membership policy",
   });

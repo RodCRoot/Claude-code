@@ -201,7 +201,7 @@ export async function choosePlan(tx: Tx, v: Viewer, input: { flowId: string; pro
       const cur = await currentAgreement(tx, m.id);
       if (cur && cur.requestStatus !== "completed") await tx.update(formRequests).set({ status: "voided" }).where(eq(formRequests.id, cur.formRequestId));
       const { syncFamilyDiscount } = await import("@/lib/billing/memberships");
-      await syncFamilyDiscount(tx, actorOf(v), v.orgId, flow.payerAccountId);
+      await syncFamilyDiscount(tx, actorOf(v), v.orgId);
     }
   }
   const { membership } = await createMembership(
@@ -270,10 +270,9 @@ export async function signupView(tx: Tx, v: Viewer, flowId: string, today: strin
   const policy = await membershipPolicy(tx, v.orgId);
   const adapter = getSavedMethodProvider();
   const plans = flow.kind === "new" ? await publishedPlans(tx, v.orgId, today) : [];
-  // Family discount applies once two or more athletes on the payer account are enrolled (this one included).
-  const others = await tx.execute(sql`select count(distinct athlete_id)::int as n from memberships where org_id = ${v.orgId} and payer_account_id = ${flow.payerAccountId}
-    and status in ('pending','trialing','active','on_hold','past_due') and athlete_id <> ${flow.athleteId}`);
-  const familyDiscountPercent = Number((others.rows[0] as { n: number }).n) >= 1 && policy.familyDiscountPercent > 0 ? policy.familyDiscountPercent : 0;
+  // Family rate this athlete gets once enrolled: 5% per active member of the household, this one included.
+  const { familyRateIfEnrolled } = await import("@/lib/billing/family-rate");
+  const familyDiscountPercent = (await familyRateIfEnrolled(tx, v.orgId, flow.athleteId, policy)).percent;
   const rewards = await tx.select({ amount: referralRewards.amountMinor }).from(referralRewards).where(and(eq(referralRewards.orgId, v.orgId), eq(referralRewards.payerAccountId, flow.payerAccountId), eq(referralRewards.kind, "invoice_discount"), eq(referralRewards.status, "pending")));
   const referralPending = rewards.reduce((s, r) => s + (r.amount ?? 0), 0);
 

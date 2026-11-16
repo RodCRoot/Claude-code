@@ -264,11 +264,15 @@ describe("membership audit sweep (synthetic fixture per exception type)", () => 
     expect(j.impactMinor).toBe(3 * 26199);
   });
 
-  it("family with 2+ active athletes missing the family discount", () => {
+  it("household with 2+ active members: every active member without the family rate is flagged", () => {
+    // Maya and Eli share the Parker household and both are active: the household rate is 10% on each.
     const fam = result.exceptions.filter((e) => e.type === "family_discount_missing");
-    expect(fam).toHaveLength(1);
-    expect(["Maya Parker", "Eli Parker"]).toContain(fam[0].athleteNames);
-    expect(fam[0].impactMinor).toBe(1990);
+    expect(fam.map((e) => e.athleteNames).sort()).toEqual(["Eli Parker", "Maya Parker"]);
+    for (const e of fam) {
+      expect(e.impactMinor).toBe(1990);
+      expect(e.detail).toContain("2 active members in Parker Household (Alex & Jordan)");
+      expect(e.recommendation).toContain("10% family rate");
+    }
   });
 
   it("unsigned required documents blocking attendance while billed", () => {
@@ -375,12 +379,15 @@ describe("membership status page", () => {
     await expect(membershipStatusReport(db(), alex, ctx.people.maya_parker, TODAY)).rejects.toBeInstanceOf(AuthzError);
   });
 
-  it("discount on one sibling clears the family flag", async () => {
+  it("a discount on one member clears that member's flag only: every active member gets the rate", async () => {
     const [d] = await db().insert(discounts).values({ orgId: ctx.orgId, name: "Sibling discount 10%", kind: "percent", value: 10 }).returning();
-    const fam = result.exceptions.find((e) => e.type === "family_discount_missing")!;
-    await db().update(memberships).set({ discountId: d.id }).where(eq(memberships.id, fam.membershipId!));
+    const fam = result.exceptions.filter((e) => e.type === "family_discount_missing");
+    await db().update(memberships).set({ discountId: d.id }).where(eq(memberships.id, fam[0].membershipId!));
     const again = await membershipAuditSweep(db(), ctx.orgId, { today: TODAY });
-    expect(again.exceptions.filter((e) => e.type === "family_discount_missing")).toHaveLength(0);
+    expect(again.exceptions.filter((e) => e.type === "family_discount_missing").map((e) => e.membershipId)).toEqual([fam[1].membershipId]);
+    await db().update(memberships).set({ discountId: d.id }).where(eq(memberships.id, fam[1].membershipId!));
+    const clear = await membershipAuditSweep(db(), ctx.orgId, { today: TODAY });
+    expect(clear.exceptions.filter((e) => e.type === "family_discount_missing")).toHaveLength(0);
   });
 });
 

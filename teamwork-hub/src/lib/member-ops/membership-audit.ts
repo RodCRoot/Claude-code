@@ -1,7 +1,8 @@
 import { sql, type SQL } from "drizzle-orm";
 import type { Tx } from "@/db";
 import type { MemberRequestStatus, MemberRequestType, MembershipStatus } from "@/db/schema";
-import { membershipPolicy, type MembershipPolicy } from "@/lib/membership-policy";
+import { familyRateSummary, membershipPolicy, type MembershipPolicy } from "@/lib/membership-policy";
+import { FAMILY_COUNTED_STATUSES, householdFamilyRates, type HouseholdRate } from "@/lib/billing/family-rate";
 import { percentOf } from "@/lib/money";
 import { addDaysYmd, daysBetween, localDayBounds, localYmd, startOfWeekYmd } from "@/lib/time";
 import { addMonthsYmd } from "@/lib/billing/util";
@@ -135,7 +136,7 @@ function netPerPeriod(m: Pick<MRow, "priceMinor" | "discountKind" | "discountVal
 }
 
 /** Facts for the sweep; `athleteIds` limits the scope (status page) — otherwise the whole org. */
-async function loadFacts(tx: Tx, orgId: string, today: string, tz: string, athleteIds?: string[]) {
+async function loadFacts(tx: Tx, orgId: string, today: string, tz: string, policy: MembershipPolicy, athleteIds?: string[]) {
   const scopeM = athleteIds ? (athleteIds.length ? sql`and m.athlete_id in (${inList(athleteIds)})` : sql`and false`) : sql``;
   const scopeB = athleteIds ? (athleteIds.length ? sql`and b.athlete_id in (${inList(athleteIds)})` : sql`and false`) : sql``;
   const raw = await rowsOf<Record<string, unknown>>(
@@ -310,8 +311,12 @@ async function loadFacts(tx: Tx, orgId: string, today: string, tz: string, athle
     if (row) row.forms = `Membership agreement, ${row.forms}`;
     else docs.push({ athlete_id: a.athlete_id, forms: "Membership agreement" });
   }
+  // Family rate per athlete, from the same household head count billing uses (always org-wide).
+  const rates = await householdFamilyRates(tx, orgId, policy);
+  const familyRates = new Map<string, HouseholdRate>(memberships.map((m) => [m.athleteId, rates.rateOf(m.athleteId)]));
   return {
     memberships,
+    familyRates,
     holds,
     invoices,
     zpBills,
@@ -563,32 +568,22 @@ export function detectExceptions(f: AuditFacts, policy: MembershipPolicy, today:
     });
   }
 
-  // 6. Families with 2+ billed athletes missing the family discount (grouped by payer account).
-  const byPayer = new Map<string, MRow[]>();
-  let noPayer = 0;
-  for (const m of live.filter((x) => x.billingProvider !== "none" && x.productKind === "recurring_membership")) {
-    if (!m.payerAccountId) {
-      noPayer++;
-      continue;
-    }
-    byPayer.set(m.payerAccountId, [...(byPayer.get(m.payerAccountId) ?? []), m]);
-  }
-  for (const [, ms] of byPayer) {
-    if (new Set(ms.map((m) => m.athleteId)).size < 2) continue;
-    const sorted = [...ms].sort((a, b) => (b.monthlyMinor ?? 0) - (a.monthlyMinor ?? 0));
-    for (const m of sorted.slice(1)) {
-      if (m.discountId && m.discountActive !== false) continue;
-      const pct = m.siblingPercentOff ?? policy.familyDiscountPercent;
-      const unconfirmed = m.siblingPercentOff == null && policy.unconfirmed.includes("familyDiscountPercent");
-      push({
-        ...base(m),
-        type: "family_discount_missing",
-        detail: `${sorted.length} athletes billed to ${m.payerName ?? "this payer"}; ${m.athleteName}'s ${m.productName} has no family discount.`,
-        impactMinor: m.monthlyMinor == null ? null : percentOf(m.monthlyMinor, pct),
-        impactBasis: `per month (${pct}% of ${m.monthlyMinor == null ? "rate" : money(m.monthlyMinor)}${unconfirmed ? "; percent still needs owner confirmation" : ""})`,
-        recommendation: `Apply the ${pct}% family discount (policy: once 2+ athletes in a family are enrolled) and review bills since the second athlete enrolled for a credit.`,
-      });
-    }
+  // 6. Households with 2+ active members where an active, hub-billed membership has no family rate.
+  //    Same rule as billing (`syncFamilyDiscount`): head count over the household, members on hold and
+  //    Zen Planner-billed memberships not counted, every active member gets step × head count.
+  for (const m of live.filter((x) => x.billingProvider !== "none" && x.billingProvider !== "external_zenplanner" && x.productKind === "recurring_membership" && FAMILY_COUNTED_STATUSES.includes(x.status))) {
+    const rate = f.familyRates.get(m.athleteId);
+    if (!rate || rate.percent <= 0) continue;
+    if (m.discountId && m.discountActive !== false) continue;
+    const capUnconfirmed = rate.capped && policy.unconfirmed.includes("familyDiscountCapPercent");
+    push({
+      ...base(m),
+      type: "family_discount_missing",
+      detail: `${rate.headCount} active members in ${rate.householdName ?? "this household"}; ${m.athleteName}'s ${m.productName} has no family discount.`,
+      impactMinor: m.monthlyMinor == null ? null : percentOf(m.monthlyMinor, rate.percent),
+      impactBasis: `per month (${rate.percent}% of ${m.monthlyMinor == null ? "rate" : money(m.monthlyMinor)}${capUnconfirmed ? "; capped, and the cap still needs owner confirmation" : ""})`,
+      recommendation: `Apply the ${rate.percent}% family rate (policy: ${policy.familyDiscountStepPercent}% per active household member, ${rate.headCount} active) and review bills since the household reached this head count for a credit.`,
+    });
   }
 
   // 7. Billed while unsigned required documents block attendance.
@@ -689,12 +684,11 @@ export function detectExceptions(f: AuditFacts, policy: MembershipPolicy, today:
   if (zpEstimatedOnly)
     skipped.push(`${zpEstimatedOnly} Zen Planner-billed membership(s) have no imported bill history, so their amounts are estimates (bill dates on the anchor day × plan rate) and their card status is not visible here. Verify in Zen Planner.`);
   if (none) skipped.push(`${none} live membership(s) with no billing provider were skipped for billing checks.`);
-  if (noPayer) skipped.push(`${noPayer} live membership(s) with no payer account were skipped for the family-discount check.`);
   if (uncapped) skipped.push(`${uncapped} live membership(s) have no weekly cap (unlimited or no credits) and were skipped for over-use.`);
   skipped.push(
-    "Families are grouped by payer account for the family discount; siblings billed to separate payer accounts are not compared.",
+    "Families are grouped by household for the family rate (not by payer account); members on hold and Zen Planner-billed memberships are not counted, and only memberships the hub bills are checked.",
     "In-season plans are recognized by plan name (\"In Season\"). Hold/in-season months use 30.44-day months.",
-    `Policy used: dormant after ${policy.dormantAfterDays} days, hold max ${policy.holdMaxMonthsPerMembershipYear} mo/membership year, in-season max ${policy.inSeasonMaxMonthsPer365Days} mo/365 days, ${policy.cancellationNoticeDays}-day cancellation notice, family discount ${policy.familyDiscountPercent}%${policy.unconfirmed.length ? ` (unconfirmed: ${policy.unconfirmed.join(", ")})` : ""}.`,
+    `Policy used: dormant after ${policy.dormantAfterDays} days, hold max ${policy.holdMaxMonthsPerMembershipYear} mo/membership year, in-season max ${policy.inSeasonMaxMonthsPer365Days} mo/365 days, ${policy.cancellationNoticeDays}-day cancellation notice, family rate ${familyRateSummary(policy)}${policy.unconfirmed.length ? ` (unconfirmed: ${policy.unconfirmed.join(", ")})` : ""}.`,
     "Read-only: nothing was changed. Every recommendation needs a staff decision.",
   );
   return { exceptions: out, skipped, billedCount: billed.length };
@@ -704,7 +698,7 @@ export function detectExceptions(f: AuditFacts, policy: MembershipPolicy, today:
 export async function membershipAuditSweep(tx: Tx, orgId: string, opts: { today: string; athleteIds?: string[]; unprocessedAfterDays?: number }): Promise<AuditResult> {
   const policy = await membershipPolicy(tx, orgId);
   const { settings, tz } = await requestSettings(tx, orgId);
-  const facts = await loadFacts(tx, orgId, opts.today, tz, opts.athleteIds);
+  const facts = await loadFacts(tx, orgId, opts.today, tz, policy, opts.athleteIds);
   const { exceptions, skipped, billedCount } = detectExceptions(facts, policy, opts.today, {
     unprocessedAfterDays: opts.unprocessedAfterDays ?? settings.unprocessedAfterDays,
     repeatWindowDays: settings.repeatWindowDays,

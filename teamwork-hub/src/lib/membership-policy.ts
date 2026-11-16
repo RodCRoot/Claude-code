@@ -40,8 +40,17 @@ export type MembershipPolicy = {
   holdCreditEligibleCommitmentMonths: number;
   /** After a commitment ends the membership continues month-to-month at the committed rate (agreement §5). */
   commitmentRollsToMonthToMonth: boolean;
-  /** Sibling/family discount percent once 2+ athletes in a family are enrolled. `confirm`: 10% (hold playbook) vs "15% Off" (add-membership playbook). */
-  familyDiscountPercent: number;
+  /**
+   * Family rate (owner's rule, 2026-11-16): every active member of a household gets
+   * `familyDiscountStepPercent` × (active members in the household), nothing below
+   * `FAMILY_RATE_MIN_MEMBERS`. 5 → 2 members 10% each, 3 → 15%, 4 → 20%.
+   */
+  familyDiscountStepPercent: number;
+  /**
+   * Ceiling on the family rate. The owner stated no ceiling, so this is a defensive default (`confirm`):
+   * a household that would go past it gets the cap and staff get a task.
+   */
+  familyDiscountCapPercent: number;
   /** Days before a hold / in-season term ends to nudge the family (playbooks say 1–2 weeks). */
   restartNudgeDaysBefore: number;
   /** Members inactive this many days while still billed are flagged in the audit. */
@@ -63,12 +72,40 @@ export const DEFAULT_MEMBERSHIP_POLICY: MembershipPolicy = {
   makeupRequiresActiveMembership: true,
   holdCreditEligibleCommitmentMonths: 12,
   commitmentRollsToMonthToMonth: true,
-  familyDiscountPercent: 10,
+  familyDiscountStepPercent: 5,
+  familyDiscountCapPercent: 25,
   restartNudgeDaysBefore: 14,
   dormantAfterDays: 30,
   attendanceGapDays: 21,
-  unconfirmed: ["familyDiscountPercent"],
+  unconfirmed: ["familyDiscountCapPercent"],
 };
+
+/** The family rate starts at this many active members in one household. */
+export const FAMILY_RATE_MIN_MEMBERS = 2;
+
+type FamilyRatePolicy = Pick<MembershipPolicy, "familyDiscountStepPercent" | "familyDiscountCapPercent">;
+
+/** Family rate for a household with `activeMembers` active members: step × head count, capped; 0 below the minimum. */
+export function familyRatePercent(policy: FamilyRatePolicy, activeMembers: number): { percent: number; uncappedPercent: number; capped: boolean } {
+  const step = Math.max(0, policy.familyDiscountStepPercent);
+  if (activeMembers < FAMILY_RATE_MIN_MEMBERS || step === 0) return { percent: 0, uncappedPercent: 0, capped: false };
+  const uncappedPercent = step * activeMembers;
+  const cap = Math.max(0, Math.min(100, policy.familyDiscountCapPercent));
+  return { percent: Math.min(uncappedPercent, cap), uncappedPercent, capped: uncappedPercent > cap };
+}
+
+/** "2 members 10% each, 3 members 15% each, 4 members 20% each" (staff and sample family wording; no em dashes). */
+export function familyRateLadder(policy: FamilyRatePolicy, upTo = 4): string {
+  const parts: string[] = [];
+  for (let n = FAMILY_RATE_MIN_MEMBERS; n <= upTo; n++) parts.push(`${n} members ${familyRatePercent(policy, n).percent}% each`);
+  return parts.join(", ");
+}
+
+/** One-line description of the rule for staff screens. */
+export function familyRateSummary(policy: FamilyRatePolicy): string {
+  if (policy.familyDiscountStepPercent <= 0) return "No family rate";
+  return `${policy.familyDiscountStepPercent}% per active household member (${familyRateLadder(policy)}), capped at ${policy.familyDiscountCapPercent}%`;
+}
 
 /**
  * Reference plan shapes from Rod's playbooks. Prices conflict between sources
@@ -84,8 +121,15 @@ export const REFERENCE_PLANS = [
 ] as const;
 
 export function policyFromSettings(settings: Record<string, unknown> | null | undefined): MembershipPolicy {
-  const saved = (settings?.membershipPolicy ?? {}) as Partial<MembershipPolicy>;
-  return { ...DEFAULT_MEMBERSHIP_POLICY, ...saved };
+  const { familyDiscountPercent: legacyFlat, ...saved } = (settings?.membershipPolicy ?? {}) as Partial<MembershipPolicy> & { familyDiscountPercent?: number };
+  const policy: MembershipPolicy = { ...DEFAULT_MEMBERSHIP_POLICY, ...saved };
+  // Settings saved before the household tier rule held a flat `familyDiscountPercent`. It is dropped
+  // (a saved 0 still means "no family rate"), and the new cap starts out needing confirmation.
+  if (legacyFlat === 0 && saved.familyDiscountStepPercent == null) policy.familyDiscountStepPercent = 0;
+  if (saved.unconfirmed && saved.familyDiscountCapPercent == null) {
+    policy.unconfirmed = [...saved.unconfirmed.filter((k) => k !== "familyDiscountPercent" && k !== "familyDiscountCapPercent"), "familyDiscountCapPercent"];
+  }
+  return policy;
 }
 
 export async function membershipPolicy(tx: Tx, orgId: string): Promise<MembershipPolicy> {
@@ -107,7 +151,8 @@ export const POLICY_FIELDS: { key: EditableKey; label: string; hint: string; kin
   { key: "makeupRequiresActiveMembership", label: "Makeup / punch-card sessions need an active membership", hint: "A 1x/week membership counts as active.", kind: "bool" },
   { key: "holdCreditEligibleCommitmentMonths", label: "Punch card eligibility: commitment (months)", hint: "Members on at least this commitment get a punch card automatically; others are a staff decision.", kind: "int", min: 0, max: 36 },
   { key: "commitmentRollsToMonthToMonth", label: "After a commitment ends, continue month-to-month at the committed rate", hint: "Never rolls silently into a new commitment.", kind: "bool" },
-  { key: "familyDiscountPercent", label: "Family discount (%)", hint: "Applied to every active athlete on a payer account once 2 or more are enrolled.", kind: "int", min: 0, max: 100 },
+  { key: "familyDiscountStepPercent", label: "Family rate: percent per active household member", hint: "Every active member of a household gets this percent times the number of active members, from 2 up (5 gives 2 members 10% each, 3 members 15%, 4 members 20%). Members on hold do not count. 0 turns it off.", kind: "int", min: 0, max: 50 },
+  { key: "familyDiscountCapPercent", label: "Family rate: cap (%)", hint: "The most a household can get. A household that would go past it gets the cap and staff get a task. The owner has not stated a ceiling; 25 is a placeholder.", kind: "int", min: 0, max: 100 },
   { key: "restartNudgeDaysBefore", label: "Restart nudge (days before a hold / in-season term ends)", hint: "Schedules the family message (if a rule is enabled) and a staff task.", kind: "int", min: 1, max: 60 },
   { key: "dormantAfterDays", label: "Flag billed members inactive for (days)", hint: "Used by the membership audit.", kind: "int", min: 1, max: 365 },
   { key: "attendanceGapDays", label: "Attendance gap reported after (days)", hint: "Used by the membership audit.", kind: "int", min: 1, max: 365 },

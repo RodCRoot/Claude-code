@@ -38,6 +38,7 @@ import type { NormalizedEvent, SubscriptionHint } from "@/lib/payments/provider"
 import { addDaysYmd, todayLocal } from "@/lib/time";
 import { DeferError, UserError } from "./errors";
 import { createInvoiceRecord, invoiceMoney, settleInvoiceIfCovered } from "./invoices";
+import { syncFamilyDiscount } from "./family-rate";
 import { earliestCancelDate, isProviderBilled, periodPrice } from "./memberships";
 import { billingTask } from "./tasks";
 import { actorOf, addIntervalYmd } from "./util";
@@ -434,6 +435,8 @@ async function setStatus(tx: Tx, m: Membership, status: Membership["status"], ty
   if (m.status === status) return false;
   await tx.update(memberships).set({ status, updatedAt: new Date() }).where(eq(memberships.id, m.id));
   await tx.insert(membershipEvents).values({ membershipId: m.id, type, effectiveOn: todayLocal(), details: { from: m.status, ...details } });
+  // A status change can change the household head count for the family rate.
+  await syncFamilyDiscount(tx, SYSTEM(m.orgId), m.orgId);
   return true;
 }
 
@@ -484,6 +487,7 @@ export async function applySubscriptionStatus(tx: Tx, provider: Provider, ev: Ex
     await tx.update(memberships).set({ status: "cancelled", endDate: end, cancelAt: m.cancelAt ?? end, updatedAt: new Date() }).where(eq(memberships.id, m.id));
     await tx.insert(membershipEvents).values({ membershipId: m.id, type: "cancelled", effectiveOn: end, details: { by: provider, providerSubscriptionId: ev.providerSubscriptionId, rawStatus: ev.rawStatus } });
     await audit(tx, actor, "billing.membership.cancel", "membership", m.id, { summary: `${LABEL[provider]} subscription ended; membership cancelled ${end}` });
+    await syncFamilyDiscount(tx, actor, m.orgId);
     return { outcome: "processed", detail: "membership cancelled by provider" };
   }
 

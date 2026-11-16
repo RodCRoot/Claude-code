@@ -316,18 +316,19 @@ describe("helpful offers: each rule with a fixture and a control athlete", () =>
     const [o] = await offersFor("ethan", "sibling_discount");
     expect(o).toBeTruthy();
     expect(o.title).toBe("Nico is on file but not enrolled");
-    expect(o.familyVisible).toBe(false); // 10% vs 15% is unconfirmed in the seed policy
+    expect(o.familyVisible).toBe(false); // the family rate cap is unconfirmed in the seed policy
     expect(o.evidence[1]).toMatch(/not confirmed by an owner yet/);
     expect(o.estMonthlyMinor).toBeNull();
     expect(await offersFor("sofia", "sibling_discount")).toHaveLength(0); // control: only child on the account
 
     const [org] = await db.select().from(organizations).where(eq(organizations.id, ctx.orgId));
-    await db.update(organizations).set({ settings: { ...org.settings, membershipPolicy: { familyDiscountPercent: 10, unconfirmed: [] } } }).where(eq(organizations.id, ctx.orgId));
+    await db.update(organizations).set({ settings: { ...org.settings, membershipPolicy: { familyDiscountStepPercent: 5, familyDiscountCapPercent: 25, unconfirmed: [] } } }).where(eq(organizations.id, ctx.orgId));
     const [confirmed] = await offersFor("ethan", "sibling_discount");
     expect(confirmed.familyVisible).toBe(true);
-    expect(confirmed.familyText).toContain("10% off");
+    expect(confirmed.familyText).toContain("2 members 10% each, 3 members 15% each");
+    expect(confirmed.familyText).not.toMatch(/—/);
     // No family discount configured → no mention at all.
-    await db.update(organizations).set({ settings: { ...org.settings, membershipPolicy: { familyDiscountPercent: 0, unconfirmed: [] } } }).where(eq(organizations.id, ctx.orgId));
+    await db.update(organizations).set({ settings: { ...org.settings, membershipPolicy: { familyDiscountStepPercent: 0, unconfirmed: [] } } }).where(eq(organizations.id, ctx.orgId));
     expect(await offersFor("ethan", "sibling_discount")).toHaveLength(0);
     await db.update(organizations).set({ settings: org.settings }).where(eq(organizations.id, ctx.orgId));
     // Once the sibling enrolls, the suggestion goes away.

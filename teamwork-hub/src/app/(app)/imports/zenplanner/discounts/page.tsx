@@ -12,7 +12,7 @@ import { ImportTabs } from "../../tabs";
 export const metadata = { title: "Discount review" };
 
 const GROUPS = [
-  { key: "family", title: "Matches the family discount", help: "Payment Amount equals the list price less the family discount at the configured percent." },
+  { key: "family", title: "Matches the family discount", help: "Payment Amount equals the list price less a family rate (the household tier: percent per active household member, from Settings). The note says when it is not the rate for that household's head count." },
   { key: "in_season_rate", title: "In Season rate on another plan", help: "Paying the In Season rate while the membership is on a plan that is not an In Season plan." },
   { key: "other", title: "Other discounts and differences", help: "Any other difference from the list price, or a named discount." },
   { key: "unknown", title: "Cannot tell", help: "No Payment Amount in the export, or no list price to compare against." },
@@ -112,19 +112,19 @@ export default async function DiscountReviewPage({ searchParams }: { searchParam
           <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <Stat label="Current memberships reviewed" value={r.reviewed} hint={r.endedExcluded ? `${r.endedExcluded} cancelled or expired left out` : undefined} />
             <Stat label="At list price" value={r.fullPrice} />
-            <Stat label={`Family discount (${r.familyPercent}%)`} value={r.groups.family.length} hint={`${formatMoney(r.totals.family)} per period`} />
+            <Stat label="Family rate" value={r.groups.family.length} hint={`${formatMoney(r.totals.family)} per period`} />
             <Stat label="In Season rate" value={r.groups.in_season_rate.length} hint={`${formatMoney(r.totals.in_season_rate)} per period`} />
             <Stat label="Other" value={r.groups.other.length} hint={`${formatMoney(r.totals.other)} per period`} tone={r.groups.other.length ? "warn" : undefined} />
           </div>
-          {!r.familyPercentConfirmed ? (
-            <Callout tone="warn" title={`Family discount is ${r.familyPercent}% and still needs confirmation`} className="mb-5">
-              The family group is worked out at the percent saved in{" "}
-              <Link className="underline" href="/settings">
-                Settings
-              </Link>
-              . If the real figure is different, change it there and this page regroups.
-            </Callout>
-          ) : null}
+          <Callout tone={r.familyCapConfirmed ? "info" : "warn"} title={r.familyCapConfirmed ? "Family rate: by household head count" : `Family rate: by household head count. The ${r.familyCapPercent}% cap still needs confirmation`} className="mb-5">
+            {r.familyRule}. A household here is a Zen Planner Family ID; members on hold do not count and get no rate while held.
+            {r.familyCapConfirmed ? " " : " The owner has not stated a ceiling, so the cap is a placeholder. "}
+            Change the percent per member or the cap in{" "}
+            <Link className="underline" href="/settings">
+              Settings
+            </Link>{" "}
+            and this page regroups.
+          </Callout>
 
           {GROUPS.map((g) =>
             r.groups[g.key].length ? (
@@ -144,13 +144,14 @@ export default async function DiscountReviewPage({ searchParams }: { searchParam
           ) : null}
 
           <Card className="mb-5" id="siblings">
-            <CardHeader title="Siblings without the family discount" action={<Badge variant={r.siblingsWithoutFamilyDiscount.length ? "yellow" : "green"}>{`${r.siblingsWithoutFamilyDiscount.length}`}</Badge>} />
+            <CardHeader title="Not on the household family rate" action={<Badge variant={r.siblingsWithoutFamilyDiscount.length ? "yellow" : "green"}>{`${r.siblingsWithoutFamilyDiscount.length}`}</Badge>} />
             <CardBody>
               <p className="mb-3 text-sm text-ink-3">
-                Two or more athletes share a Family ID and each has a current membership, but this member is not on the family discount. In Zen Planner the sibling discount is applied by hand, which is how it gets missed.
+                Two or more members share a Family ID and are active (current, not on hold), so the household has a family rate, but this member pays something else: no family rate at all, or the rate for a different head count. In Zen Planner the
+                sibling discount is applied by hand, which is how it gets missed or left at an old tier.
               </p>
               {r.siblingsWithoutFamilyDiscount.length ? (
-                <Table caption="Siblings without the family discount">
+                <Table caption="Not on the household family rate">
                   <thead>
                     <tr>
                       <Th>Family ID</Th>
@@ -158,20 +159,22 @@ export default async function DiscountReviewPage({ searchParams }: { searchParam
                       <Th>Plan</Th>
                       <Th align="right">Payment Amount</Th>
                       <Th>Currently</Th>
-                      <Th align="right">{`${r.familyPercent}% would take off`}</Th>
+                      <Th align="right">Household rate</Th>
+                      <Th align="right">Change per period at that rate</Th>
                     </tr>
                   </thead>
                   <tbody>
                     {r.siblingsWithoutFamilyDiscount.map((s) => (
                       <tr key={`${s.familyId}-${s.name}-${s.plan}`}>
                         <Td>
-                          {s.familyId} <span className="text-xs text-ink-3">({s.membersInFamily} athletes)</span>
+                          {s.familyId} <span className="text-xs text-ink-3">({s.membersInFamily} active)</span>
                         </Td>
                         <Td>{s.name}</Td>
                         <Td>{s.plan}</Td>
                         <Td align="right">{s.paymentMinor == null ? "not in export" : formatMoney(s.paymentMinor)}</Td>
-                        <Td>{patternLabel(s.pattern)}</Td>
-                        <Td align="right">{s.wouldSaveMinor == null ? "" : formatMoney(s.wouldSaveMinor)}</Td>
+                        <Td>{s.paidPercent ? `Family rate ${s.paidPercent}%` : patternLabel(s.pattern)}</Td>
+                        <Td align="right">{`${s.expectedPercent}%`}</Td>
+                        <Td align="right">{s.wouldSaveMinor == null ? "" : s.wouldSaveMinor >= 0 ? `${formatMoney(s.wouldSaveMinor)} less` : `${formatMoney(-s.wouldSaveMinor)} more`}</Td>
                       </tr>
                     ))}
                   </tbody>

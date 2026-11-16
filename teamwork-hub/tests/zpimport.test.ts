@@ -307,6 +307,11 @@ describe("discount review", () => {
     expect(classifyDiscount({ ...base, listPriceMinor: 9900, paymentMinor: 9900, familyPercent: 10, planIsInSeason: true }).pattern).toBe("full_price");
     expect(classifyDiscount({ ...base, listPriceMinor: 17899, paymentMinor: null, familyPercent: 10 }).pattern).toBe("unknown");
     expect(classifyDiscount({ ...base, listPriceMinor: 17899, paymentMinor: 17899, familyPercent: 10, discountName: "13 off" }).pattern).toBe("other");
+    // Household tier: a 3-member household expects 15%. Someone still on 10% is on a family rate, but not this household's.
+    const tiers = [10, 15, 20, 25];
+    expect(classifyDiscount({ ...base, listPriceMinor: 17899, paymentMinor: 15214, familyPercent: 15, familyTiers: tiers })).toMatchObject({ pattern: "family", paidFamilyPercent: 15 });
+    expect(classifyDiscount({ ...base, listPriceMinor: 17899, paymentMinor: 16109, familyPercent: 15, familyTiers: tiers })).toMatchObject({ pattern: "family", paidFamilyPercent: 10, note: "Pays a 10% family rate; this household's rate is 15%." });
+    expect(classifyDiscount({ ...base, listPriceMinor: 17899, paymentMinor: 16109, familyPercent: 0, familyTiers: tiers }).note).toMatch(/does not qualify/);
   });
 
   it("matches plans to the ladder by name, Att. Limit and Months", () => {
@@ -319,8 +324,8 @@ describe("discount review", () => {
 
   it("groups imported memberships by pattern and lists siblings without the family discount", async () => {
     const r = await tx((t) => discountReview(t, rod, { batchId: membershipBatch }));
-    expect(r.familyPercent).toBe(10);
-    expect(r.familyPercentConfirmed).toBe(false);
+    expect(r).toMatchObject({ familyStepPercent: 5, familyCapPercent: 25, familyCapConfirmed: false });
+    expect(r.familyRule).toContain("2 members 10% each, 3 members 15% each");
     expect(r.reviewed).toBe(5);
     expect(r.endedExcluded).toBe(1); // the cancelled one
     expect(r.groups.family.map((x) => [x.name, x.differenceMinor, x.listBasis])).toEqual([["Nova Fictional", 1790, "catalog"]]);
@@ -330,14 +335,17 @@ describe("discount review", () => {
     expect(r.fullPrice).toBe(2); // Orbit (catalog) and Vega (highest in import)
     expect(r.totals).toEqual({ family: 1790, in_season_rate: 16299, other: 6900 });
     // Orbit shares Family ID F-100 with Nova and pays list price.
-    expect(r.siblingsWithoutFamilyDiscount.map((s) => [s.familyId, s.name, s.wouldSaveMinor])).toEqual([
-      ["F-100", "Orbit Fictional", 1790],
-      ["F-200", "Juno Madeup", null],
-      ["F-200", "Vega Madeup", 1500],
+    // Both Family IDs have 2 active members, so each household's rate is 10%.
+    expect(r.siblingsWithoutFamilyDiscount.map((s) => [s.familyId, s.name, s.membersInFamily, s.expectedPercent, s.wouldSaveMinor])).toEqual([
+      ["F-100", "Orbit Fictional", 2, 10, 1790],
+      ["F-200", "Juno Madeup", 2, 10, null],
+      ["F-200", "Vega Madeup", 2, 10, 1500],
     ]);
+    expect(r.groups.family[0]).toMatchObject({ activeInFamily: 2, expectedFamilyPercent: 10, paidFamilyPercent: 10 });
     const csv = discountReviewCsv(r);
     expect(csv).toMatch(/Discounts,Family discount,Nova Fictional,F-100/);
-    expect(csv).toMatch(/Siblings without the family discount,List price,Orbit Fictional,F-100/);
+    expect(csv).toMatch(/Not on the household family rate,List price,Orbit Fictional,F-100/);
+    expect(csv).toContain("2 active members share this Family ID, so the household rate is 10% each");
     // Read-only and owner/admin only.
     await expect(tx((t) => discountReview(t, erin))).rejects.toThrow();
     await expect(tx((t) => discountReview(t, marcus))).rejects.toThrow();

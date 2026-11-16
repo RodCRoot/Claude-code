@@ -6,7 +6,7 @@ import { UserError } from "@/lib/billing/errors";
 import { mandateText, MANDATE_TEXT_VERSION } from "@/lib/billing/mandate-text";
 import { computeStub, isStubStart, periodPrice, type StubComputation } from "@/lib/billing/memberships";
 import { canonicalJson, sha256Hex } from "@/lib/forms/hash";
-import { effectiveNoticeDays, membershipPolicy, PRORATION_LABELS, type MembershipPolicy } from "@/lib/membership-policy";
+import { effectiveNoticeDays, familyRateLadder, membershipPolicy, PRORATION_LABELS, type MembershipPolicy } from "@/lib/membership-policy";
 import { formatMoney } from "@/lib/money";
 import { addDaysYmd, fmtDate } from "@/lib/time";
 
@@ -225,7 +225,7 @@ export function mergeValues(t: AgreementTerms, policy: MembershipPolicy, auto: A
         : "The membership continues month to month until cancelled.",
     hold_rules: `A membership can be put on hold for up to ${plural(policy.holdMaxMonthsPerMembershipYear, "month")} in each membership year, with a firm restart date. A hold is not a cancellation.`,
     cancellation_notice: `${plural(t.noticeDays, "day")} written notice${t.commitmentEndsOn ? `; a cancellation cannot take effect before the commitment ends on ${fmtDate(t.commitmentEndsOn)}` : ""}`,
-    family_discount: policy.familyDiscountPercent > 0 ? `${policy.familyDiscountPercent}% off each membership while two or more athletes in the family are enrolled${t.discountPercent != null ? ` (currently applied: ${t.discountPercent}%)` : " (not currently applied)"}` : "No family discount is offered.",
+    family_discount: policy.familyDiscountStepPercent > 0 ? `${policy.familyDiscountStepPercent}% off each membership for every active member of the household, from two members up (${familyRateLadder(policy)}), to a most of ${policy.familyDiscountCapPercent}%. A member on hold does not count and gets no family discount while on hold${t.discountPercent != null ? ` (currently applied: ${t.discountPercent}%)` : " (not currently applied)"}` : "No family discount is offered.",
     payment_terms: `Bills are due on the billing day. ${retries} A bank payment returned for insufficient funds is tried once more after ${plural(auto.achRetryWaitDays, "day")}. Unpaid bills can pause reservations until they are paid.`,
     payment_method: t.paymentMethodType === "us_bank_account" ? "Automatic payment from a bank account (ACH debit)" : t.paymentMethodType === "card" ? "Automatic payment by card" : "Each bill is paid by the payer (no automatic payment method on file)",
     ach_authorization: t.paymentMethodType === "us_bank_account" ? `${mandateText(t.organizationName)} (Authorization text version ${MANDATE_TEXT_VERSION}.)` : "Not applicable: this membership is not paid automatically from a bank account.",

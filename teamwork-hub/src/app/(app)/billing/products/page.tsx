@@ -29,7 +29,7 @@ function VersionFields({ prefix, recurring }: { prefix: string; recurring?: bool
       <Field label="Commitment (months)" htmlFor={id("cm")}><Input id={id("cm")} name="commitmentMonths" type="number" min={0} /></Field>
       <Field label="Cancellation notice (days)" htmlFor={id("nd")}><Input id={id("nd")} name="noticeDays" type="number" min={0} /></Field>
       <Field label="Classes per week" htmlFor={id("cpw")} hint="1x / 2x / 3x plans. Leave empty for no weekly limit."><Input id={id("cpw")} name="classesPerWeek" type="number" min={1} max={14} /></Field>
-      <Field label="Sibling discount (%)" htmlFor={id("sd")} hint="Informational. The family discount from Settings → Membership policy applies automatically."><Input id={id("sd")} name="siblingPercentOff" type="number" min={0} max={100} /></Field>
+      <Field label="Sibling discount (%)" htmlFor={id("sd")} hint="Informational. The family rate (by household head count) from Settings → Membership policy applies automatically."><Input id={id("sd")} name="siblingPercentOff" type="number" min={0} max={100} /></Field>
       <label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" name="unlimited" /> Unlimited sessions</label>
     </div>
   );

@@ -5,7 +5,8 @@ describe("membership policy", () => {
   it("defaults come from Teamwork's documented procedures and saved settings override them", () => {
     expect(DEFAULT_MEMBERSHIP_POLICY.holdMaxMonthsPerMembershipYear).toBe(2);
     expect(DEFAULT_MEMBERSHIP_POLICY.punchCardExpiryMonths).toBe(3);
-    expect(policyFromSettings({ membershipPolicy: { familyDiscountPercent: 15 } }).familyDiscountPercent).toBe(15);
+    expect(policyFromSettings({ membershipPolicy: { familyDiscountCapPercent: 30 } }).familyDiscountCapPercent).toBe(30);
+    expect(policyFromSettings({})).toMatchObject({ familyDiscountStepPercent: 5, familyDiscountCapPercent: 25 });
   });
 
   it("stub pricing: Teamwork half-month rule, daily, and no stub on the 1st", () => {
