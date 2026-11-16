@@ -79,7 +79,7 @@ export default async function DiscountReviewPage({ searchParams }: { searchParam
         title="Discount review"
         description="Every imported Zen Planner membership whose Payment Amount differs from its plan's list price, or that carries a discount, grouped by pattern. Read-only: decide for each one whether to keep it, convert it to the hub's family discount, or end it."
         actions={
-          listed || r.siblingsWithoutFamilyDiscount.length ? (
+          listed || r.siblingsWithoutFamilyDiscount.length || r.renewsIntoFixedTerm.length ? (
             <a className={buttonClass("outline")} href={exportHref} download>
               Download CSV
             </a>
@@ -179,6 +179,47 @@ export default async function DiscountReviewPage({ searchParams }: { searchParam
               ) : (
                 <p className="text-sm">None found.</p>
               )}
+            </CardBody>
+          </Card>
+
+          <Card className="mb-5" id="renewals">
+            <CardHeader title="Set to renew into another fixed term" action={<Badge variant={r.renewsIntoFixedTerm.length ? "yellow" : "green"}>{`${r.renewsIntoFixedTerm.length}`}</Badge>} />
+            <CardBody>
+              <p className="mb-3 text-sm text-ink-3">
+                The member agreement says a fixed-term commitment rolls to month-to-month at the committed rate when the term ends. These current memberships have Auto Renew on in Zen Planner with a Renewal Type that is not month-to-month, so Zen
+                Planner will start another fixed term. Change the Renewal Type in Zen Planner; nothing here changes a membership, and Teamwork never charges or renews an imported membership.
+              </p>
+              {r.renewsIntoFixedTerm.length ? (
+                <Table caption="Set to renew into another fixed term">
+                  <thead>
+                    <tr>
+                      <Th>Member</Th>
+                      <Th>Plan</Th>
+                      <Th>Status</Th>
+                      <Th align="right">Term</Th>
+                      <Th>Term ends</Th>
+                      <Th>Renewal Type in Zen Planner</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {r.renewsIntoFixedTerm.map((x) => (
+                      <tr key={x.membershipId}>
+                        <Td>{x.name}</Td>
+                        <Td>{x.plan}</Td>
+                        <Td>{x.status.replace("_", " ")}</Td>
+                        <Td align="right">{`${x.months} months`}</Td>
+                        <Td>{x.endDate ?? "not in export"}</Td>
+                        <Td>{x.renewalType}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              ) : (
+                <p className="text-sm">None found.</p>
+              )}
+              {r.renewalTypeUnknown ? (
+                <p className="mt-3 text-xs text-ink-3">{`${r.renewalTypeUnknown} more current fixed-term membership(s) have Auto Renew on but no Renewal Type in the export, so this page cannot tell how they renew.`}</p>
+              ) : null}
             </CardBody>
           </Card>
 

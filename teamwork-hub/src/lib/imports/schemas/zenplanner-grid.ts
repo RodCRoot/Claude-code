@@ -1,3 +1,4 @@
+import { RENEWS_INTO_FIXED_TERM_FLAG, zpRenewalOutcome } from "@/lib/zenplanner/renewal";
 import { matchVocab, PROSPECT_STATUS_TO_STAGE, type VocabKey } from "@/lib/zenplanner/vocab";
 import { asText, parseDate, parseDateAndTime, parseMoneyMinor, parseNumber, parseTimeRange, syntheticId, zonedLocalToInstant } from "../normalize";
 import type { Evidence, FieldDef, FieldValue, ImportSchemaDef, NormalizeCtx } from "../types";
@@ -424,14 +425,22 @@ export const zpMembershipGrid: ImportSchemaDef = {
     }
     const inSeasonPlan = /in[\s-]?season/i.test(plan);
     if (inSeasonPlan && !endDate) r.warnings.push("In Season membership with no end date; imported as a regular membership.");
+    const months = int(f.months, "Months", r.warnings);
+    const autoRenew = yes(f.auto_renew, "Auto Renew", r.warnings);
+    const renewalType = asText(f.renewal_type);
+    // The member agreement rolls a fixed term to month-to-month; Zen Planner set to start another term is flagged.
+    if (zpRenewalOutcome({ months, autoRenew, renewalType }) === "fixed_term") {
+      flags.push(RENEWS_INTO_FIXED_TERM_FLAG);
+      r.warnings.push(`Zen Planner is set to renew this ${months}-month membership into another fixed term (Renewal Type "${renewalType}"); the member agreement rolls it to month-to-month. Flagged for review; nothing is changed.`);
+    }
     r.data = {
       plan,
       status: status ?? null,
       startDate: asText(f.start_date),
       endDate,
-      months: int(f.months, "Months", r.warnings),
-      autoRenew: yes(f.auto_renew, "Auto Renew", r.warnings),
-      renewalType: asText(f.renewal_type),
+      months,
+      autoRenew,
+      renewalType,
       trialMember: yes(f.trial_member, "Trial Member?", r.warnings),
       cancelDate,
       cancelBy: asText(f.cancel_by),

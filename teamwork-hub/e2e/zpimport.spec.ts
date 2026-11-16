@@ -51,9 +51,10 @@ test("owner imports a fictional Person and Membership export with the exact pres
     `Orbit,${last},09/10/2013,Member,${family},Quill,${last},quill.${sfx}@example.test,,Basketball,L`,
   ].join("\n");
   const membership = [
-    "First Name,Last Name,Birth Date,Membership,Status,Mbr. Begin Date,Mbr. End Date,Months,Payment Amount,Att. Limit,Att. Limit Type,Autopay?,Family ID",
-    `Nova,${last},04/02/2011,Sports Performance 2x per Week 12 Month,Active,01/05/2026,01/04/2027,12,$161.09,2,Weekly,Yes,${family}`,
-    `Orbit,${last},09/10/2013,Sports Performance 2x per Week 12 Month,Active,01/05/2026,01/04/2027,12,$178.99,2,Weekly,Yes,${family}`,
+    "First Name,Last Name,Birth Date,Membership,Status,Mbr. Begin Date,Mbr. End Date,Months,Auto Renew,Renewal Type,Payment Amount,Att. Limit,Att. Limit Type,Autopay?,Family ID",
+    // Nova's term is set to renew into another 12 months (against the member agreement); Orbit's rolls to month-to-month.
+    `Nova,${last},04/02/2011,Sports Performance 2x per Week 12 Month,Active,01/05/2026,01/04/2027,12,ON,12 Months,$161.09,2,Weekly,Yes,${family}`,
+    `Orbit,${last},09/10/2013,Sports Performance 2x per Week 12 Month,Active,01/05/2026,01/04/2027,12,ON,Month to Month,$178.99,2,Weekly,Yes,${family}`,
   ].join("\n");
 
   await login(page, USERS.rod);
@@ -103,13 +104,25 @@ test("owner imports a fictional Person and Membership export with the exact pres
   await expect(siblings).toContainText(`Orbit ${last}`);
   await expect(siblings).toContainText(family);
   await expect(page.getByText(/still needs confirmation/)).toBeVisible();
+  // Fixed terms that Zen Planner will renew into another fixed term: listed and counted, nothing changed.
+  const renewals = page.getByRole("region", { name: "Set to renew into another fixed term" });
+  await expect(renewals).toContainText(`Nova ${last}`);
+  await expect(renewals).toContainText("12 Months");
+  await expect(renewals).not.toContainText(`Orbit ${last}`);
+  await expect(renewals).toContainText("rolls to month-to-month at the committed rate");
   await noSideScroll(page);
+  if (process.env.SCREENSHOT_DIR) {
+    await renewals.evaluate((el) => el.scrollIntoView({ behavior: "instant", block: "start" }));
+    await page.screenshot({ path: `${process.env.SCREENSHOT_DIR}/discount-review-renewals-${test.info().project.name}.png` });
+  }
   const dl = page.getByRole("link", { name: "Download CSV" });
   await expect(dl).toHaveAttribute("download", "");
   const csv = await page.request.get((await dl.getAttribute("href"))!);
   expect(csv.status()).toBe(200);
   expect(csv.headers()["content-type"]).toContain("text/csv");
-  expect(await csv.text()).toContain(`Siblings without the family discount,List price,Orbit ${last},${family}`);
+  const csvText = await csv.text();
+  expect(csvText).toContain(`Siblings without the family discount,List price,Orbit ${last},${family}`);
+  expect(csvText).toContain(`Set to renew into another fixed term,,Nova ${last},,Sports Performance 2x per Week 12 Month,active`);
 
   // Reconciliation page loads with the hub's figures and the entry form.
   await page.goto("/imports/zenplanner/reconcile");

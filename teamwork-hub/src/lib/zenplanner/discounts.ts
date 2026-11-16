@@ -4,6 +4,7 @@ import { athletes, memberships, people, productVersions, zpMembershipDetails, zp
 import { assertCan, type Viewer } from "@/lib/authz/policy";
 import { membershipPolicy } from "@/lib/membership-policy";
 import { catalogListPrices, matchCatalogPlan } from "./catalog";
+import { zpRenewalOutcome } from "./renewal";
 
 /**
  * Discount review for imported Zen Planner memberships. READ-ONLY: it lists, it never changes a
@@ -36,6 +37,9 @@ export type DiscountRow = {
 
 export type SiblingRow = { familyId: string; membersInFamily: number; name: string; plan: string; paymentMinor: number | null; listPriceMinor: number | null; pattern: DiscountPattern; wouldSaveMinor: number | null };
 
+/** A current fixed-term membership that Zen Planner will renew into another fixed term instead of month-to-month. */
+export type FixedTermRenewalRow = { membershipId: string; name: string; plan: string; status: string; months: number; renewalType: string; endDate: string | null; paymentMinor: number | null };
+
 export type DiscountReview = {
   familyPercent: number;
   familyPercentConfirmed: boolean;
@@ -45,6 +49,10 @@ export type DiscountReview = {
   groups: Record<Exclude<DiscountPattern, "full_price">, DiscountRow[]>;
   fullPrice: number;
   siblingsWithoutFamilyDiscount: SiblingRow[];
+  /** Current memberships with Months > 1 and Auto Renew on whose Renewal Type is not month-to-month. */
+  renewsIntoFixedTerm: FixedTermRenewalRow[];
+  /** Current fixed-term memberships with Auto Renew on and no Renewal Type in the export: cannot tell. */
+  renewalTypeUnknown: number;
   totals: { family: number; in_season_rate: number; other: number };
   notes: string[];
 };
@@ -93,6 +101,8 @@ export async function discountReview(tx: Tx, v: Viewer, opts: { batchId?: string
     groups: { family: [], in_season_rate: [], other: [], unknown: [] },
     fullPrice: 0,
     siblingsWithoutFamilyDiscount: [],
+    renewsIntoFixedTerm: [],
+    renewalTypeUnknown: 0,
     totals: { family: 0, in_season_rate: 0, other: 0 },
     notes: [
       "Read-only. Nothing on this page changes a membership or a price.",
@@ -105,6 +115,11 @@ export async function discountReview(tx: Tx, v: Viewer, opts: { batchId?: string
     if (!CURRENT.includes(r.m.status)) {
       review.endedExcluded++;
       continue;
+    }
+    const renewal = zpRenewalOutcome({ months: r.d.months, autoRenew: r.d.autoRenew, renewalType: r.d.renewalType });
+    if (renewal === "unknown") review.renewalTypeUnknown++;
+    if (renewal === "fixed_term") {
+      review.renewsIntoFixedTerm.push({ membershipId: r.m.id, name: `${r.first} ${r.last}`, plan: r.d.planName, status: r.m.status, months: r.d.months!, renewalType: r.d.renewalType!, endDate: r.m.endDate, paymentMinor: r.d.paymentAmountMinor });
     }
     const cat = matchCatalogPlan({ plan: r.d.planName, attLimit: r.d.attLimit, attLimitType: r.d.attLimitType, months: r.d.months });
     let list: number | null = null;
@@ -164,6 +179,7 @@ export async function discountReview(tx: Tx, v: Viewer, opts: { batchId?: string
       });
     }
   }
+  review.renewsIntoFixedTerm.sort((a, b) => (a.endDate ?? "9999").localeCompare(b.endDate ?? "9999") || a.name.localeCompare(b.name));
   review.siblingsWithoutFamilyDiscount.sort((a, b) => a.familyId.localeCompare(b.familyId) || a.name.localeCompare(b.name));
   if (!review.familyPercentConfirmed) review.notes.push(`The family discount percent (${policy.familyDiscountPercent}%) is still marked "needs confirmation" in Settings; the family group uses it as it stands.`);
   return review;
@@ -196,6 +212,13 @@ export function discountReviewCsv(r: DiscountReview): string {
   for (const s of r.siblingsWithoutFamilyDiscount) {
     lines.push(
       ["Siblings without the family discount", PATTERN_LABEL[s.pattern], s.name, s.familyId, s.plan, "", money(s.listPriceMinor), "", money(s.paymentMinor), money(s.wouldSaveMinor), "", `${s.membersInFamily} athletes share this Family ID. Difference column = what ${r.familyPercent}% would take off.`]
+        .map(esc)
+        .join(","),
+    );
+  }
+  for (const x of r.renewsIntoFixedTerm) {
+    lines.push(
+      ["Set to renew into another fixed term", "", x.name, "", x.plan, x.status, "", "", money(x.paymentMinor), "", "", `${x.months}-month term${x.endDate ? ` ending ${x.endDate}` : ""}; Renewal Type in Zen Planner: ${x.renewalType}. The member agreement rolls a fixed term to month-to-month at the committed rate.`]
         .map(esc)
         .join(","),
     );
