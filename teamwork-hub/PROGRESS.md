@@ -182,3 +182,10 @@ Weekday sweep: `scripts/e2e-at.sh "<date time>"` runs the whole Playwright suite
 Not done: the Attendance grid has not been exported yet (nine yearly files are expected, with Bar Code). Re-importing a bill does not refresh its paid amount. An import commit still runs inside one web request.
 
 Verified on the merged branch (2026-11-16): typecheck and lint clean, no schema drift, `npx vitest run` 1373/1373 (91 files), full Playwright 652 passed, 2 skipped, 0 failed (31 minutes).
+
+## Checkpoint 15 — Attendance by Barcode, bill refresh, agreement rules audit, Hawkin key (2026-11-16)
+Merged from a build agent: the Attendance grid attaches visits by Barcode and tolerates a bad email or birth date on a row; re-importing a Bill grid updates paid amounts and status on bills already imported (audited, revertible; migration `0035_attend` adds `zp_bills.paid_date`); fixed-term memberships set in Zen Planner to renew into another fixed term are flagged (`renews_into_fixed_term`, 131 in the real file) and listed on the discount review; tests prove hub renewals roll to month-to-month at the committed rate and that the family discount is applied and removed automatically. Family discount eligibility today is "same payer account"; a household-based, tiered rule (10% at two, 15% at three, holds not counting) has been relayed as Rod's decision but is not confirmed or built, and the 4+ rate and timing are unanswered.
+
+Hawkin: an integration key was saved through the secure form; the token exchange works (Americas host) but data calls cannot be made from the cloud session, see `docs/HAWKIN-CONNECTORS.md`. No Hawkin data has been read.
+
+Verified: typecheck and lint clean, no schema drift, `npx vitest run` 1394/1394 (94 files), full Playwright 652 passed, 2 skipped, 0 failed (36 minutes). Still not received: the nine yearly Attendance files.
