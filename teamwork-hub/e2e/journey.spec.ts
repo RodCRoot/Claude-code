@@ -142,8 +142,11 @@ test("coach sees only their athletes, never billing steps, and keeps a weekly sc
   await noSideScroll(page);
 
   await page.goto("/follow-ups/report");
+  // Wait for each redirect to finish before the next navigation, so one cannot interrupt the other.
+  await page.waitForURL(/\/denied$/);
   await expect(page.getByRole("heading", { level: 1, name: "Journey report" })).toHaveCount(0);
   await page.goto("/settings/journey");
+  await page.waitForURL(/\/denied$/);
   await expect(page.getByRole("heading", { level: 1, name: "Member journey" })).toHaveCount(0);
 
   await page.goto("/follow-ups/scorecard");

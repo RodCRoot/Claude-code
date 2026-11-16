@@ -46,9 +46,9 @@ test("owner imports a fictional Person and Membership export with the exact pres
   const last = `Fictional${sfx}`;
   const family = `E2E-${sfx}`;
   const person = [
-    "First Name,Last Name,Birth Date,Status,Family ID,Parent First,Parent Last,Parent Email,Allergies,Groups,Bar Code",
-    `Nova,${last},04/02/2011,Member,${family},Quill,${last},quill.${sfx}@example.test,Peanuts (fictional),Soccer,X1`,
-    `Orbit,${last},09/10/2013,Member,${family},Quill,${last},quill.${sfx}@example.test,,Basketball,X2`,
+    "First Name,Last Name,Birth Date,Status,Family ID,Parent First,Parent Last,Parent Email,Allergies,Groups,Shirt Size",
+    `Nova,${last},04/02/2011,Member,${family},Quill,${last},quill.${sfx}@example.test,Peanuts (fictional),Soccer,M`,
+    `Orbit,${last},09/10/2013,Member,${family},Quill,${last},quill.${sfx}@example.test,,Basketball,L`,
   ].join("\n");
   const membership = [
     "First Name,Last Name,Birth Date,Membership,Status,Mbr. Begin Date,Mbr. End Date,Months,Payment Amount,Att. Limit,Att. Limit Type,Autopay?,Family ID",
@@ -69,7 +69,7 @@ test("owner imports a fictional Person and Membership export with the exact pres
   await upload(page, `person-${sfx}.csv`, person, "zenplanner.person_grid");
   const preset = page.getByTestId("preset-status");
   await expect(preset).toContainText("10 of 11 columns in this file were recognized without manual mapping");
-  await expect(preset).toContainText("Not recognized (will not be imported): Bar Code");
+  await expect(preset).toContainText("Not recognized (will not be imported): Shirt Size");
   await expect(page.getByText("required fields mapped")).toBeVisible();
   await noSideScroll(page);
   await press(page, "Validate rows");

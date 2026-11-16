@@ -19,6 +19,8 @@ test("owner sees the scheduled jobs, runs one now and gets its result; operation
   await page.context().clearCookies();
   await login(page, USERS.erin);
   await page.goto("/settings/jobs");
+  // Wait for the redirect to finish, so the test does not end (or go on) while it is still in flight.
+  await page.waitForURL(/\/denied$/);
   await expect(page.getByRole("heading", { level: 1, name: "Scheduled jobs" })).toHaveCount(0);
 });
 
