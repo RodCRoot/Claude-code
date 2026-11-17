@@ -189,3 +189,10 @@ Merged from a build agent: the Attendance grid attaches visits by Barcode and to
 Hawkin: an integration key was saved through the secure form; the token exchange works (Americas host) but data calls cannot be made from the cloud session, see `docs/HAWKIN-CONNECTORS.md`. No Hawkin data has been read.
 
 Verified: typecheck and lint clean, no schema drift, `npx vitest run` 1394/1394 (94 files), full Playwright 652 passed, 2 skipped, 0 failed (36 minutes). Still not received: the nine yearly Attendance files.
+
+## Checkpoint 16 — Household family rate (2026-11-17)
+The family rate follows the owner's rule, relayed through his Zen Planner session on 2026-11-16: 5% per active member of the household (households come from Zen Planner's Family ID; the payer account plays no part), nothing below two members, every active member gets the same rate, a member on hold neither counts nor receives it, and the whole household is recalculated on every membership event and by the daily job. Counted as active: not started, trial, active, past due. A 25% cap raises a staff task instead of growing without limit. The rate is set on the membership and shows on the next bill issued; issued bills are never re-priced and nothing is prorated. Memberships still billed by Zen Planner do not count and are never repriced. Code: `src/lib/billing/family-rate.ts`; settings `familyDiscountStepPercent`, `familyDiscountCapPercent`.
+
+Open for Rod (`DECISIONS.md`): next bill versus immediate with proration; whether Zen Planner-billed members count during the overlap; the cap value; stacking with another discount. There is no staff screen for moving a person between households.
+
+Verified: typecheck and lint clean, no schema drift, `npx vitest run` 1412/1412 (95 files), full Playwright 652 passed, 2 skipped, 0 failed (36 minutes).
