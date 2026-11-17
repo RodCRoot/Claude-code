@@ -4,7 +4,7 @@ import { auditEvents, calendarConnections, formTemplateVersions, formTemplates, 
 import { assertCan, type Viewer } from "@/lib/authz/policy";
 import { autopaySettingsOf } from "@/lib/billing/autopay-settings";
 import { growthFromSettings } from "@/lib/growth/settings";
-import { familyRateSummary, POLICY_FIELDS, policyFromSettings } from "@/lib/membership-policy";
+import { FAMILY_RATE_CONFIRM_KEYS, familyRateConfirmed, familyRateSummary, POLICY_FIELDS, policyFromSettings } from "@/lib/membership-policy";
 import { policiesOf } from "@/lib/settings";
 import { fmtDate } from "@/lib/time";
 import { catalogStatus } from "@/lib/zenplanner/catalog";
@@ -680,14 +680,14 @@ export async function goLiveReadiness(tx: Tx, v: Viewer, opts: { env?: GoLiveEnv
   });
   const mp = policyFromSettings(settings);
   const labelOf = (k: string) => POLICY_FIELDS.find((f) => f.key === k)?.label ?? k;
-  const otherUnconfirmed = mp.unconfirmed.filter((k) => k !== "familyDiscountCapPercent");
+  const otherUnconfirmed = mp.unconfirmed.filter((k) => !(FAMILY_RATE_CONFIRM_KEYS as readonly string[]).includes(k));
   add({
     id: "catalog.family_discount",
     section: "catalog",
     title: "The family rate cap is confirmed",
-    status: mp.unconfirmed.includes("familyDiscountCapPercent") ? "attention" : "done",
+    status: !familyRateConfirmed(mp) ? "attention" : "done",
     why: "The family rate comes off every bill for a household with two or more active members (the owner's rule: 5% per active member). No ceiling was stated, so the cap is a placeholder until an owner confirms it.",
-    detail: mp.unconfirmed.includes("familyDiscountCapPercent") ? `${familyRateSummary(mp)}. The cap is in use and still flagged "Needs confirmation".` : `${familyRateSummary(mp)}. ${await who("org.membership_policy_update")}`.trim(),
+    detail: !familyRateConfirmed(mp) ? `${familyRateSummary(mp)}. A family rate setting is in use and still flagged "Needs confirmation".` : `${familyRateSummary(mp)}. ${await who("org.membership_policy_update")}`.trim(),
     href: "/settings",
     hrefLabel: "Settings, Membership policy",
   });

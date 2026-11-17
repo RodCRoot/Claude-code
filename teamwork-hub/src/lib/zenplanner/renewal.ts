@@ -18,6 +18,8 @@ export type ZpRenewalOutcome =
   | "unknown";
 
 export const RENEWS_INTO_FIXED_TERM_FLAG = "renews_into_fixed_term";
+/** Zen Planner Installment Plan "Single Payment": a one-off purchase, not a recurring membership. */
+export const SINGLE_PAYMENT_FLAG = "single_payment";
 
 const MONTH_TO_MONTH = /month[\s-]*(to|2)[\s-]*month|^m2m$|^mtm$|^monthly$/i;
 

@@ -33,8 +33,8 @@ export const OPEN_DECISIONS: OpenDecision[] = [
   {
     id: "family_discount_percent",
     ref: "Membership policy 1",
-    question: "What is the ceiling on the family rate, and when does a change take effect?",
-    currentBehaviour: "Owner's rule (2026-11-16): 5% per active household member, from 2 members up, the same rate for every active member; members on hold do not count. A cap (default 25%) was added because no ceiling was stated. A change shows on the next bill issued; bills already issued are not re-priced.",
+    question: "When does a change to a household's family rate take effect?",
+    currentBehaviour: "Owner's rule (2026-11-16): 5% per active household member, from 2 members up, the same rate for every active member; members on hold do not count. The 25% cap and no stacking with another discount were confirmed on 2026-11-17. A change shows on the next bill issued; bills already issued are not re-priced.",
     changeHref: "/settings",
     changeLabel: "Settings, Membership policy",
     value: (s) => familyRateSummary(policyFromSettings(s)),

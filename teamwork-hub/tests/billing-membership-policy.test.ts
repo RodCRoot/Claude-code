@@ -495,9 +495,9 @@ describe("Settings → Membership policy", () => {
   it("validates, confirms flagged values, audits, and is owner/admin only", async () => {
     const v = await rod();
     const current = await membershipPolicy(db(), ctx.orgId);
-    // The 5% step is the owner's decision; the cap is a placeholder until an owner confirms it.
+    // The 5% step is the owner's decision; the cap was confirmed on 2026-11-17; counting Zen Planner-billed members still awaits the owner.
     expect(current).toMatchObject({ familyDiscountStepPercent: 5, familyDiscountCapPercent: 25 });
-    expect(current.unconfirmed).toEqual(["familyDiscountCapPercent", "familyRateCountsZenPlannerMembers"]);
+    expect(current.unconfirmed).toEqual(["familyRateCountsZenPlannerMembers"]);
     expect(parseMembershipPolicy({ ...current, familyDiscountCapPercent: "150", familyDiscountStepPercent: "-1", cancellationNoticeDays: "x" }, current).errors).toMatchObject({
       familyDiscountCapPercent: expect.any(String),
       familyDiscountStepPercent: expect.any(String),

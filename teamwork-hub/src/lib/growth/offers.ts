@@ -6,7 +6,7 @@ import { audit } from "@/lib/audit";
 import { listCatalog } from "@/lib/billing/catalog";
 import { UserError } from "@/lib/billing/errors";
 import { actorOf } from "@/lib/billing/util";
-import { familyRateLadder, familyRateSummary, policyFromSettings } from "@/lib/membership-policy";
+import { familyRateConfirmed, familyRateLadder, familyRateSummary, policyFromSettings } from "@/lib/membership-policy";
 import { formatMoney } from "@/lib/money";
 import { addDaysYmd, DEFAULT_TZ, fmtDate, startOfWeekYmd } from "@/lib/time";
 import { growthFromSettings, type GrowthSettings } from "./settings";
@@ -258,7 +258,7 @@ export async function computeOffers(tx: Tx, orgId: string, opts: { today: string
 
   // --- 4. Sibling on file but not enrolled, and a family discount exists ----------------------
   if (policy.familyDiscountStepPercent > 0) {
-    const confirmed = !policy.unconfirmed.includes("familyDiscountCapPercent");
+    const confirmed = familyRateConfirmed(policy);
     const sibs = await rows<{ payer_account_id: string; athlete_id: string; first_name: string }>(
       tx,
       sql`select pb.payer_account_id, a.id as athlete_id, coalesce(p.preferred_name, p.first_name) as first_name

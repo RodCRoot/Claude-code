@@ -544,4 +544,9 @@ describe("what the full-history real exports showed", () => {
     expect(rows.find((x) => x.rowNumber === 2)).toMatchObject({ matchConfidence: "strong", matchPersonId: ids.rowan2 });
     expect(rows.find((x) => x.rowNumber === 3)).toMatchObject({ matchConfidence: "ambiguous", matchPersonId: null });
   });
+  it("flags a Single Payment item on the Membership grid as a one-off purchase", () => {
+    const base = { Number: "70001", "First Name": "Niko", "Last Name": "Madeup", "Membership Label": "Drop In", "Mbr. Status": "CURRENT", "Mbr. Begin Date": "Nov 1, 2026" };
+    expect((row(zpMembershipGrid, { ...base, "Installment Plan": "Single Payment" }).data.flags as string[])).toContain("single_payment");
+    expect((row(zpMembershipGrid, { ...base, "Installment Plan": "Every Month" }).data.flags as string[])).not.toContain("single_payment");
+  });
 });

@@ -2,7 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Tx } from "@/db";
 import { athletes, memberships, people, productVersions, zpMembershipDetails, zpPersonDetails } from "@/db/schema";
 import { assertCan, type Viewer } from "@/lib/authz/policy";
-import { FAMILY_RATE_MIN_MEMBERS, familyRatePercent, familyRateSummary, membershipPolicy } from "@/lib/membership-policy";
+import { FAMILY_RATE_MIN_MEMBERS, familyRateConfirmed, familyRatePercent, familyRateSummary, membershipPolicy } from "@/lib/membership-policy";
 import { catalogListPrices, matchCatalogPlan } from "./catalog";
 import { zpRenewalOutcome } from "./renewal";
 
@@ -133,7 +133,7 @@ export async function discountReview(tx: Tx, v: Viewer, opts: { batchId?: string
     familyStepPercent: policy.familyDiscountStepPercent,
     familyCapPercent: policy.familyDiscountCapPercent,
     familyRule: familyRateSummary(policy),
-    familyCapConfirmed: !policy.unconfirmed.includes("familyDiscountCapPercent"),
+    familyCapConfirmed: familyRateConfirmed(policy),
     inSeasonRateMinor,
     reviewed: 0,
     endedExcluded: 0,

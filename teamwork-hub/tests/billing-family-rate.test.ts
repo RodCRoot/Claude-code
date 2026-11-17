@@ -7,7 +7,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, asc, eq, like, sql } from "drizzle-orm";
-import { athletes, auditEvents, discounts, householdMembers, households, invoices, membershipEvents, memberships, organizations, payerAccounts, payerBeneficiaries, people, tasks } from "@/db/schema";
+import { athletes, auditEvents, discounts, householdMembers, households, invoices, membershipEvents, memberships, organizations, zpMembershipDetails, payerAccounts, payerBeneficiaries, people, tasks } from "@/db/schema";
 import { familyRateIfEnrolled, householdFamilyRates, syncFamilyDiscount } from "@/lib/billing/family-rate";
 import { addHold, cancelMembership, createMembership, previewMembershipStart, removeHold, startInSeason } from "@/lib/billing/memberships";
 import { generateRenewals } from "@/lib/billing/renewals";
@@ -78,7 +78,7 @@ describe("the rule itself", () => {
     expect(familyRateLadder(p)).toBe("2 members 10% each, 3 members 15% each, 4 members 20% each");
     // Saved before the rule changed: the flat percent is dropped, the new cap needs an owner's confirmation.
     const legacy = policyFromSettings({ membershipPolicy: { familyDiscountPercent: 15, unconfirmed: [] } });
-    expect(legacy).toMatchObject({ familyDiscountStepPercent: 5, familyDiscountCapPercent: 25, unconfirmed: ["familyDiscountCapPercent"] });
+    expect(legacy).toMatchObject({ familyDiscountStepPercent: 5, familyDiscountCapPercent: 25, unconfirmed: [] });
     expect(legacy).not.toHaveProperty("familyDiscountPercent");
     // A facility that had switched the family discount off keeps it off.
     expect(policyFromSettings({ membershipPolicy: { familyDiscountPercent: 0 } }).familyDiscountStepPercent).toBe(0);
@@ -352,6 +352,13 @@ describe("what is left alone", () => {
     await sync();
     expect(await rateOf(hub.id)).toBe(0);
     await db().update(organizations).set({ settings: saved }).where(eq(organizations.id, ctx.orgId));
+    await sync();
+    expect(await rateOf(hub.id)).toBe(10);
+    // A one-off purchase in Zen Planner (Installment Plan "Single Payment") is not a membership and does not count.
+    await db().insert(zpMembershipDetails).values({ orgId: ctx.orgId, membershipId: zp.id, planName: "Drop In (fictional)", flags: ["single_payment"] });
+    await sync();
+    expect(await rateOf(hub.id)).toBe(0);
+    await db().update(zpMembershipDetails).set({ flags: [] }).where(eq(zpMembershipDetails.membershipId, zp.id));
     await sync();
     expect(await rateOf(hub.id)).toBe(10);
     await db().transaction((t) => generateRenewals(t, ctx.orgId, "2026-11-01"));

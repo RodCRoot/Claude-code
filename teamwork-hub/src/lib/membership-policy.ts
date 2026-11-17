@@ -47,7 +47,7 @@ export type MembershipPolicy = {
    */
   familyDiscountStepPercent: number;
   /**
-   * Ceiling on the family rate. The owner stated no ceiling, so this is a defensive default (`confirm`):
+   * Ceiling on the family rate, confirmed by the owner on 2026-11-17 as a guard against a data error:
    * a household that would go past it gets the cap and staff get a task.
    */
   familyDiscountCapPercent: number;
@@ -84,11 +84,15 @@ export const DEFAULT_MEMBERSHIP_POLICY: MembershipPolicy = {
   restartNudgeDaysBefore: 14,
   dormantAfterDays: 30,
   attendanceGapDays: 21,
-  unconfirmed: ["familyDiscountCapPercent", "familyRateCountsZenPlannerMembers"],
+  unconfirmed: ["familyRateCountsZenPlannerMembers"],
 };
 
 /** The family rate starts at this many active members in one household. */
 export const FAMILY_RATE_MIN_MEMBERS = 2;
+
+/** Family rate settings that can still be waiting for the owner. The cap was confirmed on 2026-11-17. */
+export const FAMILY_RATE_CONFIRM_KEYS = ["familyDiscountCapPercent", "familyRateCountsZenPlannerMembers"] as const;
+export const familyRateConfirmed = (policy: Pick<MembershipPolicy, "unconfirmed">) => !policy.unconfirmed.some((k) => (FAMILY_RATE_CONFIRM_KEYS as readonly string[]).includes(k));
 
 type FamilyRatePolicy = Pick<MembershipPolicy, "familyDiscountStepPercent" | "familyDiscountCapPercent">;
 
@@ -131,11 +135,10 @@ export function policyFromSettings(settings: Record<string, unknown> | null | un
   const { familyDiscountPercent: legacyFlat, ...saved } = (settings?.membershipPolicy ?? {}) as Partial<MembershipPolicy> & { familyDiscountPercent?: number };
   const policy: MembershipPolicy = { ...DEFAULT_MEMBERSHIP_POLICY, ...saved };
   // Settings saved before the household tier rule held a flat `familyDiscountPercent`. It is dropped
-  // (a saved 0 still means "no family rate"), and the new cap starts out needing confirmation.
+  // (a saved 0 still means "no family rate"), and no longer listed as needing confirmation.
   if (legacyFlat === 0 && saved.familyDiscountStepPercent == null) policy.familyDiscountStepPercent = 0;
-  if (saved.unconfirmed && saved.familyDiscountCapPercent == null) {
-    policy.unconfirmed = [...saved.unconfirmed.filter((k) => k !== "familyDiscountPercent" && k !== "familyDiscountCapPercent"), "familyDiscountCapPercent"];
-  }
+  // Saved lists from before the tier rule may still name the flat percent, or the cap (confirmed by the owner 2026-11-17).
+  if (saved.unconfirmed) policy.unconfirmed = saved.unconfirmed.filter((k) => k !== "familyDiscountPercent" && k !== "familyDiscountCapPercent");
   return policy;
 }
 
@@ -159,7 +162,7 @@ export const POLICY_FIELDS: { key: EditableKey; label: string; hint: string; kin
   { key: "holdCreditEligibleCommitmentMonths", label: "Punch card eligibility: commitment (months)", hint: "Members on at least this commitment get a punch card automatically; others are a staff decision.", kind: "int", min: 0, max: 36 },
   { key: "commitmentRollsToMonthToMonth", label: "After a commitment ends, continue month-to-month at the committed rate", hint: "Never rolls silently into a new commitment.", kind: "bool" },
   { key: "familyDiscountStepPercent", label: "Family rate: percent per active household member", hint: "Every active member of a household gets this percent times the number of active members, from 2 up (5 gives 2 members 10% each, 3 members 15%, 4 members 20%). Members on hold do not count. 0 turns it off.", kind: "int", min: 0, max: 50 },
-  { key: "familyDiscountCapPercent", label: "Family rate: cap (%)", hint: "The most a household can get. A household that would go past it gets the cap and staff get a task. The owner has not stated a ceiling; 25 is a placeholder.", kind: "int", min: 0, max: 100 },
+  { key: "familyDiscountCapPercent", label: "Family rate: cap (%)", hint: "The most a household can get. A household that would go past it gets the cap and staff get a task.", kind: "int", min: 0, max: 100 },
   { key: "familyRateCountsZenPlannerMembers", label: "Family rate: count household members still billed in Zen Planner", hint: "While families move over one at a time, a sibling still billed by Zen Planner counts toward the household, so the sibling billed here keeps the family rate. Zen Planner memberships are never repriced or billed by Teamwork.", kind: "bool" },
   { key: "restartNudgeDaysBefore", label: "Restart nudge (days before a hold / in-season term ends)", hint: "Schedules the family message (if a rule is enabled) and a staff task.", kind: "int", min: 1, max: 60 },
   { key: "dormantAfterDays", label: "Flag billed members inactive for (days)", hint: "Used by the membership audit.", kind: "int", min: 1, max: 365 },

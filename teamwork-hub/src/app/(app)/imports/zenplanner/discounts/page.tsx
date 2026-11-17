@@ -118,7 +118,7 @@ export default async function DiscountReviewPage({ searchParams }: { searchParam
           </div>
           <Callout tone={r.familyCapConfirmed ? "info" : "warn"} title={r.familyCapConfirmed ? "Family rate: by household head count" : `Family rate: by household head count. The ${r.familyCapPercent}% cap still needs confirmation`} className="mb-5">
             {r.familyRule}. A household here is a Zen Planner Family ID; members on hold do not count and get no rate while held.
-            {r.familyCapConfirmed ? " " : " The owner has not stated a ceiling, so the cap is a placeholder. "}
+            {r.familyCapConfirmed ? " " : " One family rate setting still needs the owner's confirmation in Settings. "}
             Change the percent per member or the cap in{" "}
             <Link className="underline" href="/settings">
               Settings

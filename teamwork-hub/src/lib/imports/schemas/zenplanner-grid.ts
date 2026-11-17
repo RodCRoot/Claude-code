@@ -1,4 +1,4 @@
-import { RENEWS_INTO_FIXED_TERM_FLAG, zpRenewalOutcome } from "@/lib/zenplanner/renewal";
+import { RENEWS_INTO_FIXED_TERM_FLAG, SINGLE_PAYMENT_FLAG, zpRenewalOutcome } from "@/lib/zenplanner/renewal";
 import { matchVocab, PROSPECT_STATUS_TO_STAGE, type VocabKey } from "@/lib/zenplanner/vocab";
 import { asText, parseDate, parseDateAndTime, parseMoneyMinor, parseNumber, parseTimeRange, syntheticId, zonedLocalToInstant } from "../normalize";
 import type { Evidence, FieldDef, FieldValue, ImportSchemaDef, NormalizeCtx } from "../types";
@@ -324,7 +324,7 @@ export const zpMembershipGrid: ImportSchemaDef = {
   allowCreatePerson: false,
   limitations:
     GRID_LIMITS +
-    " Each distinct plan (and weekly limit) becomes an inactive, unlisted product so it is never sold here; its price is the highest Payment Amount seen for that plan in the file, and each member's own Payment Amount is kept beside the membership. A weekly Att. Limit becomes the weekly class limit; other limit types are recorded but not enforced. Class Card Att. Remaining becomes an imported punch-card balance with no expiry date (Zen Planner's expiry is not in the grid). Installment, Signup Fee and Acct Name columns are not imported.",
+    " Each distinct plan (and weekly limit) becomes an inactive, unlisted product so it is never sold here; its price is the highest Payment Amount seen for that plan in the file, and each member's own Payment Amount is kept beside the membership. A weekly Att. Limit becomes the weekly class limit; other limit types are recorded but not enforced. Class Card Att. Remaining becomes an imported punch-card balance with no expiry date (Zen Planner's expiry is not in the grid). Installment Plan is read only to mark one-off purchases (Single Payment); the number of installments, Signup Fee and Acct Name columns are not imported.",
   exportHelp: {
     grid: "Memberships (Membership report grid)",
     path: `${EXPORT_BASE}membership/index.cfm`,
@@ -359,6 +359,7 @@ export const zpMembershipGrid: ImportSchemaDef = {
     { key: "cancel_reason", label: "Cancel Reason", type: "text", aliases: ["cancel reason", "drop reason", "cancellation reason"] },
     { key: "cancel_comments", label: "Cancel Comments", type: "text", aliases: ["cancel comments", "cancel comment", "cancellation comments"] },
     { key: "payment_amount", label: "Payment Amount", type: "text", aliases: ["payment amount", "paymentamount", "payment amt", "amount"] },
+    { key: "installment_plan", label: "Installment Plan", type: "text", aliases: ["installment plan", "installmentplan", "installments plan"], hint: "Single Payment marks a one-off purchase (drop-in, one class): it is imported but does not count toward a household's family rate." },
     { key: "first_bill_due", label: "First Bill Due", type: "date", aliases: ["first bill due", "first bill due date", "first bill"] },
     { key: "income_category", label: "Income Category", type: "text", aliases: ["income category", "incomecategory"] },
     { key: "membership_category", label: "Membership Category", type: "text", aliases: ["membership category", "category", "mbr category"] },
@@ -419,6 +420,8 @@ export const zpMembershipGrid: ImportSchemaDef = {
     // Zen Planner writes ERROR when autopay is on but its saved payment method is failing.
     const autopayText = asText(f.autopay);
     const autopayError = !!autopayText && autopayText.trim().toLowerCase() === "error";
+    // A one-off purchase (drop-in, single class) is not a recurring membership: it never lifts a sibling's family rate.
+    if (asText(f.installment_plan)?.trim().toLowerCase().replace(/\s+/g, " ") === "single payment") flags.push(SINGLE_PAYMENT_FLAG);
     if (autopayError) {
       flags.push("autopay_error");
       r.warnings.push("Autopay? is ERROR in Zen Planner (the saved payment method is failing there); recorded as unknown and flagged.");

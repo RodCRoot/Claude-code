@@ -198,3 +198,5 @@ Open for Rod (`DECISIONS.md`): next bill versus immediate with proration; whethe
 Verified: typecheck and lint clean, no schema drift, `npx vitest run` 1412/1412 (95 files), full Playwright 652 passed, 2 skipped, 0 failed (36 minutes).
 
 Follow-up (2026-11-17): a current membership still billed by Zen Planner now counts toward the household's head count (setting `familyRateCountsZenPlannerMembers`, on by default, awaiting Rod), so a family moved to hub billing one child at a time keeps its rate. Imported memberships are still never re-priced or billed.
+
+Follow-up (2026-11-17, later): Rod confirmed the 25% cap, no stacking, and moving whole households on one date (relayed). The cap is no longer flagged; the overlap setting still is. A Zen Planner item with Installment Plan "Single Payment" is flagged `single_payment` at import and does not count toward a household's head count (110 of the current items in the real file have no label, 94 of them single payments). Unit tests 1413/1413; the browser suite was not rerun for these two follow-ups.

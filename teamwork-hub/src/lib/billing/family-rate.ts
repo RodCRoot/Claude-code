@@ -4,6 +4,7 @@ import { athletes, discounts, householdMembers, households, membershipEvents, me
 import { audit, type AuditActor } from "@/lib/audit";
 import { FAMILY_RATE_MIN_MEMBERS, familyRatePercent, membershipPolicy, type MembershipPolicy } from "@/lib/membership-policy";
 import { todayLocal } from "@/lib/time";
+import { SINGLE_PAYMENT_FLAG } from "@/lib/zenplanner/renewal";
 import { billingTask } from "./tasks";
 
 /**
@@ -16,7 +17,8 @@ import { billingTask } from "./tasks";
  *   member gets the same rate.
  * - "Active" = an athlete with at least one hub membership that is pending, trialing, active or past due.
  *   On hold, cancelled and expired do not count; a membership on hold also loses the rate while held.
- * - Zen Planner-billed (imported) memberships do not count and are never touched.
+ * - Zen Planner-billed (imported) memberships are never touched. A current one counts toward the head count
+ *   (setting) unless it is a one-off purchase (Installment Plan "Single Payment").
  * - An athlete in no household is a household of one (no rate). An athlete in several households gets
  *   the rate of the one with the most active members; households are never merged.
  */
@@ -53,6 +55,8 @@ export async function householdFamilyRates(tx: Tx, orgId: string, policy: Member
         inArray(memberships.status, FAMILY_COUNTED_STATUSES),
         // A sibling still billed by Zen Planner counts toward the household (never repriced: see syncFamilyDiscount).
         policy.familyRateCountsZenPlannerMembers ? undefined : ne(memberships.billingProvider, "external_zenplanner"),
+        // ...unless it is a one-off purchase in Zen Planner (a drop-in or single class), which is not a membership.
+        sql`not exists (select 1 from zp_membership_details d where d.membership_id = ${memberships.id} and d.flags @> ${JSON.stringify([SINGLE_PAYMENT_FLAG])}::jsonb)`,
       ),
     );
   const active = new Set(counted.map((r) => r.athleteId));
