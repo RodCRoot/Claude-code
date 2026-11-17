@@ -60,7 +60,7 @@ export type MembershipPolicy = {
   /**
    * Whether a one-off Zen Planner purchase (Installment Plan "Single Payment": a drop-in, a single class) counts
    * toward the household's head count. Off: only recurring memberships count. In the real export, turning this on
-   * takes qualifying households from 19 to 28. Awaiting the owner.
+   * takes qualifying households from 19 to 28. The owner said on 2026-11-17 to leave it off.
    */
   familyRateCountsSinglePayments: boolean;
   /** Days before a hold / in-season term ends to nudge the family (playbooks say 1–2 weeks). */
@@ -91,7 +91,7 @@ export const DEFAULT_MEMBERSHIP_POLICY: MembershipPolicy = {
   restartNudgeDaysBefore: 14,
   dormantAfterDays: 30,
   attendanceGapDays: 21,
-  unconfirmed: ["familyRateCountsZenPlannerMembers", "familyRateCountsSinglePayments"],
+  unconfirmed: ["familyRateCountsZenPlannerMembers"],
 };
 
 /** The family rate starts at this many active members in one household. */
