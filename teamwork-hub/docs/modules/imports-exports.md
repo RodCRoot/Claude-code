@@ -108,6 +108,10 @@ Still open:
 
 Of the 355 memberships that are current, not started or on hold, 316 have Auto Renew on, and every one of those has the Renewal Type `RENEW by copying the current settings`. 131 of them have a term longer than one month (mostly 12, 6 and 3 months), so Zen Planner would renew them into another fixed term; the member agreement says they roll to month-to-month at the committed rate. All 131 carry the `renews_into_fixed_term` flag and appear on the discount review's "Set to renew into another fixed term" card. The hub's own renewals already follow the agreement.
 
+#### Installment Plan in the real Membership file (2026-11-17)
+
+Realigned, every one of the 15,812 rows has an Installment Plan: Single Payment 10,526, Every Month 5,016, Every 1 Week 268, Every 4 Weeks 1, 1st and 15th 1. Read without realigning the 85 malformed-address rows, 85 rows look blank; they are not. `single_payment` is flagged on 10,525 imported memberships (one row belongs to the person held for review). Follow-up not built: a genuinely blank Installment Plan on a current membership should be treated as not recurring and warned on the row, so it cannot lift a household's family rate unnoticed.
+
 ### Bill and Attendance grids: made ready before the real files arrive (2026-11-15)
 
 Neither grid has been exported yet. Using what the Person and Membership files showed, both presets were gone through field by field. Tests use fictional people only (`tests/zpimport-hardening.test.ts`, `tests/zpimport-volume.test.ts`); nobody has seen a real Bill or Attendance file, so every item below is a guess at the format that is now tolerated, not a confirmed format.
