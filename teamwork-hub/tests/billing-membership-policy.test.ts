@@ -497,7 +497,7 @@ describe("Settings → Membership policy", () => {
     const current = await membershipPolicy(db(), ctx.orgId);
     // The 5% step is the owner's decision; the cap was confirmed on 2026-11-17; counting Zen Planner-billed members still awaits the owner.
     expect(current).toMatchObject({ familyDiscountStepPercent: 5, familyDiscountCapPercent: 25 });
-    expect(current.unconfirmed).toEqual(["familyRateCountsZenPlannerMembers"]);
+    expect(current.unconfirmed).toEqual(["familyRateCountsZenPlannerMembers", "familyRateCountsSinglePayments"]);
     expect(parseMembershipPolicy({ ...current, familyDiscountCapPercent: "150", familyDiscountStepPercent: "-1", cancellationNoticeDays: "x" }, current).errors).toMatchObject({
       familyDiscountCapPercent: expect.any(String),
       familyDiscountStepPercent: expect.any(String),
@@ -505,7 +505,7 @@ describe("Settings → Membership policy", () => {
     });
     const bad = await db().transaction((tx) => saveMembershipPolicy(tx, v, { ...current, familyDiscountCapPercent: 150 }));
     expect(bad.ok).toBe(false);
-    const r = await db().transaction((tx) => saveMembershipPolicy(tx, v, { ...current, familyDiscountCapPercent: "30", confirm: ["familyDiscountCapPercent", "familyRateCountsZenPlannerMembers"] }));
+    const r = await db().transaction((tx) => saveMembershipPolicy(tx, v, { ...current, familyDiscountCapPercent: "30", confirm: ["familyDiscountCapPercent", "familyRateCountsZenPlannerMembers", "familyRateCountsSinglePayments"] }));
     expect(r.ok).toBe(true);
     const saved = await membershipPolicy(db(), ctx.orgId);
     expect(saved).toMatchObject({ familyDiscountStepPercent: 5, familyDiscountCapPercent: 30, unconfirmed: [] });

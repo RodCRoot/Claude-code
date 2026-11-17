@@ -57,6 +57,12 @@ export type MembershipPolicy = {
    * so the sibling the hub bills keeps the family rate. Imported memberships are never repriced or billed.
    */
   familyRateCountsZenPlannerMembers: boolean;
+  /**
+   * Whether a one-off Zen Planner purchase (Installment Plan "Single Payment": a drop-in, a single class) counts
+   * toward the household's head count. Off: only recurring memberships count. In the real export, turning this on
+   * takes qualifying households from 19 to 28. Awaiting the owner.
+   */
+  familyRateCountsSinglePayments: boolean;
   /** Days before a hold / in-season term ends to nudge the family (playbooks say 1–2 weeks). */
   restartNudgeDaysBefore: number;
   /** Members inactive this many days while still billed are flagged in the audit. */
@@ -81,17 +87,18 @@ export const DEFAULT_MEMBERSHIP_POLICY: MembershipPolicy = {
   familyDiscountStepPercent: 5,
   familyDiscountCapPercent: 25,
   familyRateCountsZenPlannerMembers: true,
+  familyRateCountsSinglePayments: false,
   restartNudgeDaysBefore: 14,
   dormantAfterDays: 30,
   attendanceGapDays: 21,
-  unconfirmed: ["familyRateCountsZenPlannerMembers"],
+  unconfirmed: ["familyRateCountsZenPlannerMembers", "familyRateCountsSinglePayments"],
 };
 
 /** The family rate starts at this many active members in one household. */
 export const FAMILY_RATE_MIN_MEMBERS = 2;
 
 /** Family rate settings that can still be waiting for the owner. The cap was confirmed on 2026-11-17. */
-export const FAMILY_RATE_CONFIRM_KEYS = ["familyDiscountCapPercent", "familyRateCountsZenPlannerMembers"] as const;
+export const FAMILY_RATE_CONFIRM_KEYS = ["familyDiscountCapPercent", "familyRateCountsZenPlannerMembers", "familyRateCountsSinglePayments"] as const;
 export const familyRateConfirmed = (policy: Pick<MembershipPolicy, "unconfirmed">) => !policy.unconfirmed.some((k) => (FAMILY_RATE_CONFIRM_KEYS as readonly string[]).includes(k));
 
 type FamilyRatePolicy = Pick<MembershipPolicy, "familyDiscountStepPercent" | "familyDiscountCapPercent">;
@@ -164,6 +171,7 @@ export const POLICY_FIELDS: { key: EditableKey; label: string; hint: string; kin
   { key: "familyDiscountStepPercent", label: "Family rate: percent per active household member", hint: "Every active member of a household gets this percent times the number of active members, from 2 up (5 gives 2 members 10% each, 3 members 15%, 4 members 20%). Members on hold do not count. 0 turns it off.", kind: "int", min: 0, max: 50 },
   { key: "familyDiscountCapPercent", label: "Family rate: cap (%)", hint: "The most a household can get. A household that would go past it gets the cap and staff get a task.", kind: "int", min: 0, max: 100 },
   { key: "familyRateCountsZenPlannerMembers", label: "Family rate: count household members still billed in Zen Planner", hint: "While families move over one at a time, a sibling still billed by Zen Planner counts toward the household, so the sibling billed here keeps the family rate. Zen Planner memberships are never repriced or billed by Teamwork.", kind: "bool" },
+  { key: "familyRateCountsSinglePayments", label: "Family rate: count one-off Zen Planner purchases (drop-ins, single classes)", hint: "Off: only recurring memberships count toward a household. On: someone whose only current item in Zen Planner is a single payment also counts, which gives more households the rate and can lift a household to a higher tier.", kind: "bool" },
   { key: "restartNudgeDaysBefore", label: "Restart nudge (days before a hold / in-season term ends)", hint: "Schedules the family message (if a rule is enabled) and a staff task.", kind: "int", min: 1, max: 60 },
   { key: "dormantAfterDays", label: "Flag billed members inactive for (days)", hint: "Used by the membership audit.", kind: "int", min: 1, max: 365 },
   { key: "attendanceGapDays", label: "Attendance gap reported after (days)", hint: "Used by the membership audit.", kind: "int", min: 1, max: 365 },

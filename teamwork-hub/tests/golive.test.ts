@@ -216,7 +216,7 @@ describe("manual ticks", () => {
 
     const [org] = await db.select().from(organizations).where(eq(organizations.id, ctx.orgId));
     const cur = policyFromSettings(org.settings);
-    const raw: Record<string, unknown> = { ...cur, familyDiscountCapPercent: 30, confirm: ["familyDiscountCapPercent", "familyRateCountsZenPlannerMembers"] };
+    const raw: Record<string, unknown> = { ...cur, familyDiscountCapPercent: 30, confirm: ["familyDiscountCapPercent", "familyRateCountsZenPlannerMembers", "familyRateCountsSinglePayments"] };
     for (const f of POLICY_FIELDS) if (f.kind === "bool") raw[f.key] = cur[f.key];
     const saved = await db.transaction((tx) => saveMembershipPolicy(tx, rod, raw));
     expect(saved.ok).toBe(true);

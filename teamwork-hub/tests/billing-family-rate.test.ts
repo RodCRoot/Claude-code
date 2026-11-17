@@ -358,6 +358,14 @@ describe("what is left alone", () => {
     await db().insert(zpMembershipDetails).values({ orgId: ctx.orgId, membershipId: zp.id, planName: "Drop In (fictional)", flags: ["single_payment"] });
     await sync();
     expect(await rateOf(hub.id)).toBe(0);
+    // The owner can choose to count one-off purchases: then the drop-in sibling lifts the household again.
+    const [o2] = await db().select().from(organizations).where(eq(organizations.id, ctx.orgId));
+    await db().update(organizations).set({ settings: { ...(o2.settings as Record<string, unknown>), membershipPolicy: { ...((o2.settings as { membershipPolicy?: object }).membershipPolicy ?? {}), familyRateCountsSinglePayments: true } } }).where(eq(organizations.id, ctx.orgId));
+    await sync();
+    expect(await rateOf(hub.id)).toBe(10);
+    await db().update(organizations).set({ settings: o2.settings }).where(eq(organizations.id, ctx.orgId));
+    await sync();
+    expect(await rateOf(hub.id)).toBe(0);
     await db().update(zpMembershipDetails).set({ flags: [] }).where(eq(zpMembershipDetails.membershipId, zp.id));
     await sync();
     expect(await rateOf(hub.id)).toBe(10);

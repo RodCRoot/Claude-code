@@ -55,8 +55,8 @@ export async function householdFamilyRates(tx: Tx, orgId: string, policy: Member
         inArray(memberships.status, FAMILY_COUNTED_STATUSES),
         // A sibling still billed by Zen Planner counts toward the household (never repriced: see syncFamilyDiscount).
         policy.familyRateCountsZenPlannerMembers ? undefined : ne(memberships.billingProvider, "external_zenplanner"),
-        // ...unless it is a one-off purchase in Zen Planner (a drop-in or single class), which is not a membership.
-        sql`not exists (select 1 from zp_membership_details d where d.membership_id = ${memberships.id} and d.flags @> ${JSON.stringify([SINGLE_PAYMENT_FLAG])}::jsonb)`,
+        // ...unless it is a one-off purchase in Zen Planner (a drop-in or single class); a setting, off by default.
+        policy.familyRateCountsSinglePayments ? undefined : sql`not exists (select 1 from zp_membership_details d where d.membership_id = ${memberships.id} and d.flags @> ${JSON.stringify([SINGLE_PAYMENT_FLAG])}::jsonb)`,
       ),
     );
   const active = new Set(counted.map((r) => r.athleteId));
