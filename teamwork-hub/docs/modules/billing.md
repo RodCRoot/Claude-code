@@ -219,8 +219,10 @@ Tests: `tests/billing-membership-policy.test.ts`.
     No setting was added for this: an "immediate with proration" mode would have to re-price issued bills.
   - **Left alone.** A membership carrying any other discount is not stacked or replaced (its athlete still
     counts). Stripe/PayPal subscription memberships are not changed (the provider amount is fixed); staff get a
-    task. **Zen Planner-billed (imported) memberships do not count toward the head count and are never
-    re-priced, billed or otherwise touched**; whether they should count is an open decision.
+    task. **Zen Planner-billed (imported) memberships are never re-priced, billed or otherwise touched, but a
+    current one counts toward the household's head count** (setting `familyRateCountsZenPlannerMembers`, on by
+    default, awaiting Rod's confirmation). Without that, a family moved to hub billing one child at a time reads
+    as a household of one and the moved child loses the rate.
   - **Old settings.** A saved flat `familyDiscountPercent` is ignored and dropped on the next save (a saved 0
     still means "off"). No database migration.
   Open for Rod in `DECISIONS.md`: timing, imported memberships counting, the cap value.

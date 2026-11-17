@@ -47,7 +47,14 @@ export async function householdFamilyRates(tx: Tx, orgId: string, policy: Member
   const counted = await tx
     .selectDistinct({ athleteId: memberships.athleteId })
     .from(memberships)
-    .where(and(eq(memberships.orgId, orgId), inArray(memberships.status, FAMILY_COUNTED_STATUSES), ne(memberships.billingProvider, "external_zenplanner")));
+    .where(
+      and(
+        eq(memberships.orgId, orgId),
+        inArray(memberships.status, FAMILY_COUNTED_STATUSES),
+        // A sibling still billed by Zen Planner counts toward the household (never repriced: see syncFamilyDiscount).
+        policy.familyRateCountsZenPlannerMembers ? undefined : ne(memberships.billingProvider, "external_zenplanner"),
+      ),
+    );
   const active = new Set(counted.map((r) => r.athleteId));
   if (opts.assumeActiveAthleteId) active.add(opts.assumeActiveAthleteId);
   const links = await tx

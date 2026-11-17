@@ -51,6 +51,12 @@ export type MembershipPolicy = {
    * a household that would go past it gets the cap and staff get a task.
    */
   familyDiscountCapPercent: number;
+  /**
+   * During the move off Zen Planner a household can be split: one sibling billed by the hub, another still
+   * billed by Zen Planner. When on, a current imported membership counts toward the household's head count,
+   * so the sibling the hub bills keeps the family rate. Imported memberships are never repriced or billed.
+   */
+  familyRateCountsZenPlannerMembers: boolean;
   /** Days before a hold / in-season term ends to nudge the family (playbooks say 1–2 weeks). */
   restartNudgeDaysBefore: number;
   /** Members inactive this many days while still billed are flagged in the audit. */
@@ -74,10 +80,11 @@ export const DEFAULT_MEMBERSHIP_POLICY: MembershipPolicy = {
   commitmentRollsToMonthToMonth: true,
   familyDiscountStepPercent: 5,
   familyDiscountCapPercent: 25,
+  familyRateCountsZenPlannerMembers: true,
   restartNudgeDaysBefore: 14,
   dormantAfterDays: 30,
   attendanceGapDays: 21,
-  unconfirmed: ["familyDiscountCapPercent"],
+  unconfirmed: ["familyDiscountCapPercent", "familyRateCountsZenPlannerMembers"],
 };
 
 /** The family rate starts at this many active members in one household. */
@@ -153,6 +160,7 @@ export const POLICY_FIELDS: { key: EditableKey; label: string; hint: string; kin
   { key: "commitmentRollsToMonthToMonth", label: "After a commitment ends, continue month-to-month at the committed rate", hint: "Never rolls silently into a new commitment.", kind: "bool" },
   { key: "familyDiscountStepPercent", label: "Family rate: percent per active household member", hint: "Every active member of a household gets this percent times the number of active members, from 2 up (5 gives 2 members 10% each, 3 members 15%, 4 members 20%). Members on hold do not count. 0 turns it off.", kind: "int", min: 0, max: 50 },
   { key: "familyDiscountCapPercent", label: "Family rate: cap (%)", hint: "The most a household can get. A household that would go past it gets the cap and staff get a task. The owner has not stated a ceiling; 25 is a placeholder.", kind: "int", min: 0, max: 100 },
+  { key: "familyRateCountsZenPlannerMembers", label: "Family rate: count household members still billed in Zen Planner", hint: "While families move over one at a time, a sibling still billed by Zen Planner counts toward the household, so the sibling billed here keeps the family rate. Zen Planner memberships are never repriced or billed by Teamwork.", kind: "bool" },
   { key: "restartNudgeDaysBefore", label: "Restart nudge (days before a hold / in-season term ends)", hint: "Schedules the family message (if a rule is enabled) and a staff task.", kind: "int", min: 1, max: 60 },
   { key: "dormantAfterDays", label: "Flag billed members inactive for (days)", hint: "Used by the membership audit.", kind: "int", min: 1, max: 365 },
   { key: "attendanceGapDays", label: "Attendance gap reported after (days)", hint: "Used by the membership audit.", kind: "int", min: 1, max: 365 },

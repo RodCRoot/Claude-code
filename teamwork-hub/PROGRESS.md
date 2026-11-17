@@ -196,3 +196,5 @@ The family rate follows the owner's rule, relayed through his Zen Planner sessio
 Open for Rod (`DECISIONS.md`): next bill versus immediate with proration; whether Zen Planner-billed members count during the overlap; the cap value; stacking with another discount. There is no staff screen for moving a person between households.
 
 Verified: typecheck and lint clean, no schema drift, `npx vitest run` 1412/1412 (95 files), full Playwright 652 passed, 2 skipped, 0 failed (36 minutes).
+
+Follow-up (2026-11-17): a current membership still billed by Zen Planner now counts toward the household's head count (setting `familyRateCountsZenPlannerMembers`, on by default, awaiting Rod), so a family moved to hub billing one child at a time keeps its rate. Imported memberships are still never re-priced or billed.

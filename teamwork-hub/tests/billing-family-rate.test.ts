@@ -334,7 +334,7 @@ describe("what is left alone", () => {
     expect(await rates(ms)).toEqual([25, 25, 25, 25, 25, 25]);
   });
 
-  it("an imported Zen Planner membership does not count and is never repriced or billed", async () => {
+  it("a sibling still billed by Zen Planner counts toward the household, and is never repriced or billed", async () => {
     const { kids } = await family("Importedsib", 2);
     const hub = await enrol(kids[0]);
     const [zp] = await db()
@@ -342,8 +342,18 @@ describe("what is left alone", () => {
       .values({ orgId: ctx.orgId, athleteId: kids[1].athleteId, payerAccountId: null, productVersionId: B.ref_perf_1x_m2m, status: "active", startDate: "2026-01-01", billingProvider: "external_zenplanner", nextBillDate: "2026-11-01", source: "zenplanner" })
       .returning();
     await sync();
-    expect(await rateOf(hub.id)).toBe(0);
+    // The hub-billed sibling keeps the family rate while the household is split across the two systems.
+    expect(await rateOf(hub.id)).toBe(10);
     expect(await rateOf(zp.id)).toBe(0);
+    // With the setting off, a household split across the two systems reads as a household of one.
+    const [org] = await db().select().from(organizations).where(eq(organizations.id, ctx.orgId));
+    const saved = org.settings;
+    await db().update(organizations).set({ settings: { ...(saved as Record<string, unknown>), membershipPolicy: { ...((saved as { membershipPolicy?: object }).membershipPolicy ?? {}), familyRateCountsZenPlannerMembers: false } } }).where(eq(organizations.id, ctx.orgId));
+    await sync();
+    expect(await rateOf(hub.id)).toBe(0);
+    await db().update(organizations).set({ settings: saved }).where(eq(organizations.id, ctx.orgId));
+    await sync();
+    expect(await rateOf(hub.id)).toBe(10);
     await db().transaction((t) => generateRenewals(t, ctx.orgId, "2026-11-01"));
     expect(await db().select().from(invoices).where(eq(invoices.membershipId, zp.id))).toEqual([]);
     const [after] = await db().select().from(memberships).where(eq(memberships.id, zp.id));
