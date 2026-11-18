@@ -1,0 +1,7 @@
+First Name,Last Name,Birth Date,Membership,Status,Mbr. Begin Date,Mbr. End Date,Months,Auto Renew,Renewal Type,Trial Member?,Cancel Date,Cancel By,Cancel Reason,Cancel Comments,Payment Amount,First Bill Due,Income Category,Att. Limit,Att. Limit Type,Class Card Att. Remaining,Shared?,Autopay?,Family ID,Hold Reason,Hold Start Date,Hold End Date,Signup Fee
+Nova,Fictional,04/02/2011,Sports Performance 2x per Week 12 Month,Active,01/05/2026,01/04/2027,12,Yes,Month to Month,No,,,,,$161.09,01/05/2026,Sports Performance,2,Weekly,,No,Yes,F-100,,,,0
+Orbit,Fictional,09/10/2013,Sports Performance 2x per Week 12 Month,Active,01/05/2026,01/04/2027,12,Yes,Month to Month,No,,,,,$178.99,01/05/2026,Youth,2,Weekly,,No,Yes,F-100,,,,0
+Juno,Madeup,06/15/2010,Sports Performance 3x per Week 6 Month,Active,02/01/2026,07/31/2026,6,Yes,Month to Month,No,,,,,$99.00,02/01/2026,Sports Performance,3,Weekly,,No,Yes,F-200,,,,0
+Vega,Madeup,03/03/1984,Adult Class Card,Active,02/01/2026,,,No,,No,,,,,$150.00,02/01/2026,Adult Performance Training,,,7,No,No,F-200,,,,0
+Atlas,Nonreal,12/12/2009,Sports Performance Unlimited Month to Month,On Hold,04/01/2025,,1,Yes,Month to Month,No,,,,,$500.00,04/01/2025,Sports Performance,,,,No,Yes,F-500,sports,11/01/2026,12/31/2026,0
+Sable,Invented,07/07/2008,Sports Performance 2x per Week 12 Month,Cancelled,03/01/2024,02/28/2025,12,No,,No,02/28/2025,Front Desk (fictional),Moved to Mars,Fictional comment,$178.99,03/01/2024,Sports Performance,2,Weekly,,No,No,F-400,,,,0

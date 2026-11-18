@@ -1,0 +1,5 @@
+Athlete,Exercise,Date,Time,Weight (kg),Rep #,Mean Velocity (m/s),Peak Velocity (m/s),Mean Power (W),Device
+Maya Parker,Trap Bar Deadlift,2026-02-26,16:05:00,80,1,0.71,1.02,540,Synthetic sensor A
+Maya Parker,Trap Bar Deadlift,2026-02-26,16:12:00,110,1,0.48,0.80,505,Synthetic sensor A
+Riley Example,Back Squat,2026-02-26,16:20:00,70,1,0.66,0.98,455,Synthetic sensor A
+dana.brooks@example.test,Bench Press,2026-02-26,16:30:00,50,1,0.55,0.81,270,Synthetic sensor A

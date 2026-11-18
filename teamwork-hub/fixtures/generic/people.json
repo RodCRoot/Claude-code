@@ -1,0 +1,6 @@
+[
+  { "external_id": "GEN-1", "first_name": "Rowan", "last_name": "Ellis", "dob": "2010-06-14", "email": null, "is_athlete": "yes", "sport": "Soccer" },
+  { "external_id": "GEN-2", "first_name": "Casey", "last_name": "Ellis", "dob": null, "email": "ellis.family@example.test", "is_athlete": "no", "sport": null },
+  { "external_id": "GEN-3", "first_name": "Dana", "last_name": "Brooks", "dob": "2004-01-22", "email": "dana.brooks@example.test", "is_athlete": "yes", "sport": "Track & Field" },
+  { "external_id": "GEN-4", "first_name": "Sam", "last_name": "Rivera", "dob": null, "email": null, "is_athlete": "no", "sport": null }
+]

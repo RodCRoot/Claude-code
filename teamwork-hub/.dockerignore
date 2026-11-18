@@ -1,0 +1,21 @@
+# Never send secrets, local data, or build output into the image build context.
+.env
+.env.*
+!.env.example
+node_modules
+.next
+.storage
+backups
+coverage
+test-results
+playwright-report
+*.tsbuildinfo
+next-env.d.ts
+.git
+docs/screenshots
+e2e
+tests
+fixtures
+*.sandbox-ca.crt
+.sandbox-ca.crt
+Dockerfile.sandbox

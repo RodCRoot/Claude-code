@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Invented test feed. Every paper, school and person here is fictional. -->
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Sampleton Gazette (fictional) - sports</title>
+    <link>https://gazette.example.com/sports</link>
+    <description>Invented feed for tests</description>
+    <ttl>30</ttl>
+    <item>
+      <title>Zyra Quillfeather scores 22 as Fictional Falls tops Makebelieve Central</title>
+      <description><![CDATA[<p>The Fictional Falls volleyball team won in four sets on Tuesday. <b>It was the first home win of the season.</b> A third sentence that must be cut off. And a fourth.</p><img src="https://gazette.example.com/photo.jpg" />]]></description>
+      <pubDate>Sat, 28 Feb 2026 19:40:00 -0500</pubDate>
+      <guid isPermaLink="false">gazette-1</guid>
+      <link>https://gazette.example.com/sports/article_1.html?utm_source=rss&amp;utm_medium=feed</link>
+      <enclosure url="https://gazette.example.com/photo.jpg" length="1234" type="image/jpeg" />
+    </item>
+    <item>
+      <title>Road closure for culvert replacement</title>
+      <description>The invented county highway department will close Pretend Road on Monday.</description>
+      <pubDate>Fri, 27 Feb 2026 08:00:00 -0500</pubDate>
+      <link>https://gazette.example.com/news/article_2.html</link>
+    </item>
+    <item>
+      <title>Fictional Falls honors its fall athletes</title>
+      <description>Senior Zyra Quillfeather was named most valuable player. The banquet was held Thursday.</description>
+      <pubDate>Thu, 26 Feb 2026 21:00:00 -0500</pubDate>
+      <link>https://gazette.example.com/sports/article_3.html</link>
+    </item>
+    <item>
+      <title>Quillfeather Hardware marks 40 years downtown</title>
+      <description>Zyra's Bakery next door will host the party. No athlete is named here.</description>
+      <pubDate>Thu, 26 Feb 2026 10:00:00 -0500</pubDate>
+      <link>https://gazette.example.com/business/article_4.html</link>
+    </item>
+    <item>
+      <title>Zyra Quillfeather sidelined with a knee injury</title>
+      <description>Invented summary about a recovery timeline.</description>
+      <pubDate>Wed, 25 Feb 2026 10:00:00 -0500</pubDate>
+      <link>https://gazette.example.com/sports/article_5.html</link>
+    </item>
+    <item>
+      <title>Otherville teen Zyra Quillfeather arrested after crash, police say</title>
+      <description>Invented summary about a different person with the same name.</description>
+      <pubDate>Wed, 25 Feb 2026 09:00:00 -0500</pubDate>
+      <link>https://gazette.example.com/news/article_6.html</link>
+    </item>
+    <item>
+      <title>An item with no link is skipped</title>
+      <pubDate>Wed, 25 Feb 2026 09:00:00 -0500</pubDate>
+    </item>
+    <item>
+      <title>Very old story about Zyra Quillfeather</title>
+      <pubDate>Tue, 04 Dec 2012 03:07:25 GMT</pubDate>
+      <link>https://gazette.example.com/sports/article_old.html</link>
+    </item>
+  </channel>
+</rss>

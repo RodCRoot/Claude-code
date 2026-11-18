@@ -1,0 +1,6 @@
+Family ID,Family Name,Guardian ID,Guardian Name,Guardian Email,Child ID,Child Name,Child DOB,Relationship
+FAM-77,Parker-Lane Household,ZP1021,Morgan Parker,morgan.parker@example.test,ZP1020,Riley Parker,2012-05-30,Parent
+FAM-77,Parker-Lane Household,ZP1021,Morgan Parker,morgan.parker@example.test,ZP1023,Sky Parker,2015-02-11,Parent
+FAM-77,Parker-Lane Household,ZP1022,Jesse Lane,jesse.lane@example.test,ZP1020,Riley Parker,2012-05-30,Stepparent
+FAM-77,Parker-Lane Household,ZP1022,Jesse Lane,jesse.lane@example.test,ZP1023,Sky Parker,2015-02-11,Stepparent
+FAM-90,Unknown Household,ZP9999,Pat Unknown,pat.unknown@example.test,ZP1040,Quinn Avery,2008-11-03,Parent

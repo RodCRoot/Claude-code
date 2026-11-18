@@ -1,0 +1,33 @@
+{
+  "data": [
+    {
+      "id": "hkapi-0001",
+      "timestamp": 1772952300,
+      "segment": "Countermovement Jump:1",
+      "active": true,
+      "testType": { "id": "7nNduHeM5zETPjHxvm7s", "name": "Countermovement Jump" },
+      "athlete": { "id": "hkath-maya", "name": "Maya Parker", "active": true },
+      "Jump Height(m)": 0.4315,
+      "Peak Propulsive Force(N)": 1843.2,
+      "Braking RFD(N/s)": null,
+      "RSI-modified(m/s)": 0.512,
+      "Countermovement Depth(m)": -0.31,
+      "deviceFirmware": "v9-sample"
+    },
+    {
+      "id": "hkapi-0004",
+      "timestamp": 1794000000,
+      "segment": "Countermovement Jump:1",
+      "active": true,
+      "testType": { "id": "7nNduHeM5zETPjHxvm7s", "name": "Countermovement Jump" },
+      "athlete": { "id": "hkath-new", "name": "Jamie Ortiz", "active": true },
+      "Jump Height(m)": 0.3999,
+      "Peak Propulsive Force(N)": 1500,
+      "RSI-modified(m/s)": 0.45
+    }
+  ],
+  "hasMore": false,
+  "nextCursor": null,
+  "lastSyncTime": 1794003600,
+  "count": 2
+}

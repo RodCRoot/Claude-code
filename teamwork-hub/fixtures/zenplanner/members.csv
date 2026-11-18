@@ -1,0 +1,15 @@
+Member ID,First Name,Last Name,Birth Date,Email,Phone,Status,Type,Signup Date
+ZP1001,Maya,Parker,01/21/2011,,,Active,Member,2024-08-15
+ZP1002,Eli,Parker,,,,Active,Member,2024-08-15
+ZP1003,Alex,Parker,,alex.parker@example.test,+1 812 555 0101,Active,Parent,2024-08-15
+ZP1004,Jordan,Parker,,jordan.parker@example.test,,Active,Parent,2024-08-15
+ZP1010,Chris,Parker,,alex.parker@example.test,,Active,Parent,2025-01-10
+ZP1011,Ava,Parker,2013-08-14,,,Active,Member,2025-01-10
+ZP1020,Riley,Parker,2012-05-30,,,Active,Member,2025-09-02
+ZP1021,Morgan,Parker,,morgan.parker@example.test,+1 812 555 0177,Active,Parent,2025-09-02
+ZP1022,Jesse,Lane,,jesse.lane@example.test,,Active,Parent,2025-09-02
+ZP1023,Sky,Parker,2015-02-11,,,Active,Member,2025-09-02
+ZP1030,Noah,Kim,2009-01-21,,,Inactive,Member,2023-04-01
+ZP1040,Quinn,Avery,2008-11-03,quinn.avery@example.test,,Active,Member,2026-01-05
+ZP1040,Quinn,Avery,2008-11-03,quinn.avery@example.test,,Active,Member,2026-01-05
+ZP1050,Taylor,,13/45/2020,not-an-email,,Active,Member,

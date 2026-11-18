@@ -1,0 +1,204 @@
+# Progress log
+
+## Checkpoint 1 — Foundation (2026-10-12)
+- Scaffolded `teamwork-hub/` (Next 16.2, React 19.2, Tailwind 4, Drizzle 0.45, Postgres 16, pnpm).
+- Full relational schema (~80 tables) across core identity, scheduling, billing/credits, CRM/messaging/jobs, documents/signatures, training, sports science, imports/integrations. Migrations `0000_init` + `0001_integrity_constraints` (exclusion constraints, CHECKs, append-only triggers).
+- Auth: hashed opaque sessions, lockout, TOTP MFA path, logout, demo-only role switcher (`/dev/switch`).
+- Authorization policy with per-role and per-guardian-link capabilities; 9 tests passing.
+- UI kit + responsive shell (sidebar desktop / menu mobile), login, denied, error/loading states.
+- Synthetic seed: staff, 3 family structures (2 guardians/2 kids; unrelated same-surname; separated co-parents), adult self-payer, inactive athlete, 10 roster athletes, groups, coach scopes, notes, alerts, tasks, integration rows.
+
+Verified: `pnpm test` (9/9), `pnpm lint` clean, browser login → /today.
+
+## Checkpoint 2 — Lead modules (2026-10-12)
+- People: directory/search with coach scoping and contact redaction, person page (contact, athlete profile, guardians with independent permission flags, households, payer accounts, notes by visibility, tasks, tags, kiosk alerts, attendance), unified permission-gated timeline, registration that flags duplicates instead of merging.
+- Role dashboards (staff, coach, parent with child switcher, athlete), 13 reports with written definitions + CSV export, Settings (org/branding/policies, users/invites/reset links/roles, TOTP MFA enrollment + staff enforcement, integrations status, audit log), public site, security headers via `proxy.ts`.
+- Fix: React 19 form reset wiped user input on validation errors → `ActionForm` submits through a transition.
+
+## Checkpoint 3 — Seven modules merged (2026-10-12)
+Built in parallel worktrees and merged: scheduling/booking/kiosk/calendar adapter; billing/payments/ledger/POS; CRM/inbox/messaging/automations/worker; forms/signatures/PDFs; training/logging/weight room; sports science/performance/progress reports; Import Center/Hawkin sync/exports.
+Integration fixes during merge: seed ordering + per-test seed scoping, job runner claims only types it handles, per-org source-record uniqueness (`0003`), billing/calendar/export jobs registered with the worker, attendance panel on athlete profiles, body-map review tasks linked to the athlete and stripped of health details (operations can see tasks), table captions contained on mobile, inquiry layout de-duplicated.
+
+Verified (2026-10-12): `pnpm test` 273/273 (19 files, incl. cross-module acceptance paths), `pnpm typecheck` clean, `pnpm lint` clean, `pnpm build` succeeds, Playwright `e2e/` 10/10 (desktop + mobile), training offline-recovery e2e 1/1, browser sweep of every nav route for owner/operations/coach/3 guardians/2 athletes/kiosk with no page errors or horizontal overflow at 390px. Screenshots in `docs/screenshots/`.
+
+## Checkpoint 4 — Hardening wave (2026-10-12)
+Merged: security review (10 fixes + tests: coach export scope, export download route, CSV formula injection, cross-org ids, inquiry rate limit, login/MFA enumeration and brute force, admin MFA reset), Stripe Billing + PayPal subscriptions and server-side Venmo checkout (never double-billed: 4 guards), Google Calendar OAuth with encrypted tokens, signer identity step-up (email code / MFA / staff-witnessed) + Unicode PDFs + version-status trigger, observability (redacted logs, optional Sentry), nonce CSP, S3 storage + deletes, restore rehearsal, Dockerfile + private Render staging blueprint (not deployed), `pnpm bootstrap:owner`.
+Migrations renumbered after parallel work: 0004 cal tokens, 0005 provider plans, 0006 provider billing guard, 0007 signer step-up, 0008 form version status guard; `drizzle-kit generate` reports no drift.
+
+Verified: `pnpm test` 364/364 (23 files), typecheck/lint clean, production build OK, Playwright against the production build 24/24 (auth/access + CSP sweep for every role, desktop + mobile), training offline e2e 1/1, `/api/health` ok.
+
+## Checkpoint 5 — Product depth wave (2026-10-12)
+Merged: scheduling depth (series edits this/following/all with capacity-conflict choices, family multi-athlete and N-week booking, kiosk PIN check-in + PIN-only mode, attendance corrections re-settle credits); training (scoped service worker so athletes can reload offline and keep logging, shared-tablet cache purging, web manifest, accessible drag-and-drop/keyboard program builder; fixed a stuck-queue bug and a post-sync display race); messaging (family communication preferences with immutable consent history, saved segments + approved broadcast campaigns, Postmark/SendGrid/Twilio webhooks for bounces, complaints, STOP/START, threaded replies); custom fields (Settings + person page + list filters + export), report charts with text/table fallbacks, axe accessibility audit (263 violations → 0 across 217 page audits) with app-wide fixes.
+Migrations: 0009 crm preferences/campaigns/inbound, 0010 kiosk pins, 0011 custom fields (renumbered at merge; `drizzle-kit generate` reports no drift).
+Test infrastructure: vitest hook timeout 180 s and max 4 workers (seeding grew); job-count assertion scoped per org.
+
+Verified: `pnpm test` 455/455, typecheck/lint clean, production build OK; Playwright against the production build 234/234 (auth/access, CSP sweep, axe WCAG 2.1 AA sweep for every role at desktop + 390px) and training offline/builder suite 4/4.
+
+## Checkpoint 6 — Teamwork policies wave (2026-10-12)
+Merged:
+- **Multi-location:** locations; membership, product and credit scope per location, with a family-facing explanation when a plan doesn't cover a session's location.
+- **GoHighLevel adapter:** contacts import, not configured by default.
+- **Family message style lint.**
+- **Membership policy engine**, from Rod's documented procedures; policies only, no member data:
+  - billing on the 1st with a half-month stub;
+  - commitments roll to month to month;
+  - holds: capped, backdated only to the request date, punch-card makeup;
+  - fixed-term In Season memberships;
+  - weekly class caps enforced under a row lock;
+  - 30-day cancellation notice;
+  - automatic family discount;
+  - restart nudges;
+  - decline classification;
+  - Settings → Membership policy.
+- **Member requests log** (with suggestions from inbound messages), a read-only membership status page, and a membership audit sweep with a dollar figure for each exception.
+- **Staff time clock** (Today card plus kiosk PIN pad) and **payroll:** abnormality flags, estimates, approve/lock, CSV export, Zen Planner paste import.
+
+Migrations: 0012 locations, 0013 GHL integration row, 0014 membership policy, 0015–0016 payroll (and run/time-entry guard triggers), 0017 member requests (renumbered at merge; no drift).
+Policy questions for Rod are listed in DECISIONS.md.
+
+Verified:
+- `pnpm test` 568/568 (48 files); typecheck and lint clean; production build OK.
+- Playwright against the production build: 234/234.
+- The axe and CSP sweeps now also cover payroll, `/time`, member requests, the membership audit and the kiosk staff clock. Owner, coach and kiosk passed 180/180 at desktop and 390px.
+
+## Checkpoint 7 — Studio-style redesign (2026-10-12)
+Rod asked for the look and feel of Zen Planner (operations) and TeamBuildr (training). Layout and interaction patterns only: no logos, product names or brand colors were copied, and the accent stays configurable per org.
+- **App frame:**
+  - Dark navy sidebar with icons, grouped Front desk / Members / Coaching / Business.
+  - Top bar: member search, a "+ New" menu filtered by capability, and an account menu.
+  - Denser components: title-bar cards, striped tables, KPI tiles with an accent bar.
+- **Calendar (Zen Planner style):**
+  - Week view as an hour grid; day view with one column per coach; month grid.
+  - Session roster as a check-in table.
+  - Agenda list on phones.
+- **Dashboard, People, Billing:**
+  - Widget dashboard.
+  - Dense member directory.
+  - Member profile: header band, info column, tabs.
+  - Leads kanban.
+  - Ledger-style billing tables with totals.
+  - Checkout-style point of sale.
+- **Training, Sports Science, Performance (TeamBuildr / AMS style):**
+  - Week calendar with group progress.
+  - Phone-first workout cards.
+  - Dark weight-room board.
+  - Program builder with day columns.
+  - Leaderboards.
+  - Readiness heat table: values shown as text and symbols, not color alone.
+- Before/after screenshots at 1440px and 390px are in `docs/screenshots/redesign/`.
+
+Verified:
+- `pnpm test` 594/594; typecheck and lint clean; build OK.
+- Playwright 252/252: auth, CSP, and axe for every role at desktop and mobile.
+- Training offline/builder suite 4/4.
+
+## Checkpoint 8 — Planning brief reconciled (2026-10-14)
+Rod's planning brief was checked against the build. Most of it was already implemented; the gaps were filled:
+- `docs/REPLACEMENT-PLAN.md`: four separate replacement decisions with cutover criteria; Hawkin capture is not replaceable by this project.
+- `docs/HAWKIN-CONNECTORS.md`: every documented Hawkin route evaluated (public docs only; account not inspected).
+- `docs/VALIDATION.md`: brief scenarios mapped to the real tests, with gaps listed.
+- `DECISIONS.md` opens with the five decisions that change architecture or migration.
+- Code: performance trends exclude and disclose points from a different protocol, device, unit or aggregation (`science/comparability.ts`); staff MFA policy extracted and tested, fixing a blank page after login when MFA is required; Hawkin assessment-date, explicit-window, includeInactive and in-place-update behaviour now asserted by tests.
+
+Verified: `pnpm test` 611/611; typecheck, lint, build clean; Playwright 253/253 (now including `staff-mfa.spec.ts`); training offline/builder 4/4.
+
+## Checkpoint 9 — Athlete experience, retention and growth wave (2026-11-11)
+Six modules built in parallel worktrees and merged (migrations 0018 to 0023), each with its own `docs/modules/<name>.md`:
+- **Retention** (`/people/retention`, win-back, session feedback, milestones): at-risk list with reasons, next steps and an audit of what staff did.
+- **Engagement** (Athlete Home on `/today`, `/goals`): XP ledger, levels, weekly streaks in facility-local weeks (holds skipped), badges, goals linked to measured results.
+- **Growth** (`/refer`, `/shop`, `/people/referrals`, `/billing/opportunities`): referrals with staff-approved account credit ($50, Rod's decision), shop listings, revenue opportunities.
+- **Anywhere** (`/anywhere`, My Season, coach library): at-home sessions that count toward streaks and load; load chart split by origin.
+- **Showcase** (`/showcase`, public `/s/[token]`, PDF, `/recap`): consented recruiting page from an allowlist of verified metrics; monthly recaps.
+- **Community** (`/display` gym TV board, `/leaderboards`, coach shoutouts, team challenges): display-name consent, revocable TV tokens that can read only the board.
+
+Also in this wave:
+- Next.js 16.2.12 to 16.4.6. On 16.2.12 a form could stay on its pending label on phone-size screens after the server had answered (reproduced 4 runs in 5 on "Revoke screen"; the server response was correct every time). 16.4.6 passes 5 of 5; the mobile skip on that test was removed.
+- CSP crawl opens a fresh tab every 40 pages and retries an aborted or crashed navigation once.
+- `scripts/setup-dev.sh` rebuilds a machine from nothing (verified after a container restart).
+- Walkthrough for Rod: https://claude.ai/artifact/QNvGMDEQfbdPhhTUkQrR9h (private to him).
+
+Verified on 16.4.6: `pnpm test` 908/908 (65 files); typecheck and lint clean; migration drift check clean; Playwright full run with one worker 401 passed, 1 skipped (the mobile staff-MFA case, skipped by design), 0 failed; CSP crawl 0 findings for every role (owner 237 pages, coach 116, guardian 85); training offline 4/4.
+
+Not verified: any provider in a sandbox; anything against real Zen Planner, TeamBuildr or Hawkin data. See the "athlete experience wave" list in DECISIONS.md for choices waiting on Rod.
+
+## Checkpoint 10 — Parent screens, camps, bar speed, nightly jobs (2026-11-11)
+Four more pieces built in parallel and merged (migrations 0024 events, 0025 vbt, 0026 jobs):
+- **Family scheduling and billing in the layout parents know** (`docs/modules/zp-parity.md`): day-first Calendar with week strip, Reserve with a "Who is this for?" checklist, My Reservations, My Attendance, Appointments; My Profile tabs Family, Memberships, Bills (Pay Now, upcoming, history), Payment Methods, Payment History. Presentation only; no business rule changed. Parity is from memory, not checked against the real member site; the checklist of details to verify is in that doc.
+- **Camps and clinics sold online** (`docs/modules/events.md`): staff events with sessions, capacity, early-bird and sibling pricing; family registration creates a bill and holds the spot (48 h default); confirmed only when the bill is paid; roster CSV and revenue per event. No waitlist yet.
+- **Bar-speed tools** (`docs/modules/training.md`): coach-confirmed estimated maxes, live estimated %1RM in the logger, relative strength for staff with health access, GymAware-style CSV import through identity review. Estimates never appear as measured maxes on boards, showcases or recaps. FMS screen skipped.
+- **Nightly jobs** (`/settings/jobs`): referral progress, challenge completion and engagement refresh run from the worker at 2:00 AM facility time; no worker is deployed, so this has only run in tests and by hand.
+- **Rod's decisions built:** the new family also gets $50 off their first bill (automatic, one per new account, refund-aware); parents with training and booking access can log at-home sessions for athletes under 13; one TV board for the business.
+
+Verified: `pnpm test` 990/990 (71 files); typecheck, lint, drift check clean; Playwright full run 447 passed, 2 skipped, 3 failed, 10 not run. The 3 failures: two were the CSP crawl following the roster CSV download link (crawl now ignores `a[download]`; rerun 243 pages, 0 findings on both projects) and one login timeout in `anywhere.spec.ts` that passed on rerun (whole spec 8/8, which covers the 10 not run). Training offline 4/4 on a fresh seed. A second uninterrupted full run after these fixes has not been done.
+
+Note: the training offline suite needs a fresh `pnpm db:fresh`; the main e2e run logs Maya's workout for today.
+
+## Checkpoint 11 — Owner tools, wins, journey, check-ins, news watch (2026-11-13)
+Five modules built in parallel and merged (migrations 0027 scoreboard, 0028 wins, 0029 journey, 0030 checkins, 0031 newswatch). Each has `docs/modules/<name>.md`.
+- **Owner scoreboard** (`/scoreboard`): daily numbers with one definition each and a list behind every number, monthly funnel with targets and a rule-of-thumb bottleneck read-out, class-slot utilisation and payroll share, marketing economics from manual spend, a money view labelled as a management estimate. Coaches have no access.
+- **Wins and competitions** (`/wins`): gym-wide competition calendar from My Season plus staff team schedules; wins submitted by families or staff and approved by staff; three consent levels (in-app, TV, public marketing with recorded guardian consent); marketing queue with caption drafts. The app posts nothing externally.
+- **Member journey** (`/follow-ups`, Settings → Member journey): onboarding, touchpoints at 6 weeks and 6/12/18/24 months, visit milestones, review/referral asks, hold and offboarding checklists generated from real events with auto-completion; operations checklist; coach weekly scorecard; journey report.
+- **Session check-ins** (`/check-ins`): ready check before and after check after each session (readiness, sleep, soreness, pain with body map, session RPE feeding the existing load numbers once, likes/dislikes chips, rating, notes); coach readiness strip; alerts as staff tasks; trends against the athlete's own baseline; kiosk ready check. Replaces the old 1 to 5 feedback form; the old link redirects.
+- **News watch** (`/wins/news`, Settings → News watch): nightly fetch of publisher feeds and news search feeds for opted-in athletes and staff-listed alumni; full-name matching only; every clip needs approval by owner/admin before it appears anywhere (Rod's decision, 2026-11-12); headline, source, date and link only. Off by default. Live check on 2026-11-12: Herald-Times 66 current items via news search (titles only); Greene County Daily World 50 current items via its publisher feed; Bedford Times-Mail only 2012 items, so effectively not covered.
+
+Test harness: the a11y sweep opened a browser context per test and never closed it; after about 190 the browser slowed until axe timed out at the same position in three full runs. Postgres lock and slow-query logging showed nothing during the stall. Contexts are now closed.
+
+Verified: `pnpm test` 1177/1177 (79 files); typecheck, lint, drift check clean. Playwright full run before the harness fix: 580 passed, 2 skipped, 2 failed (both the context-leak stall); CSP crawl 0 findings for every role on both projects (owner 304 pages, coach 144, guardian 94, athlete 71). After the fix the whole a11y spec passes 484/484. One uninterrupted full run with the fix in place is still owed.
+
+Known gaps: `/reports/session-checkins` page loads slowly (about 11 s in a11y runs; the query is about 100 ms; cause not found). `journey.spec.ts` at 390px failed once late in a long run and passes on a fresh seed (order dependence suspected, not confirmed). Check-in and journey generators run on page view as well as nightly; no worker is deployed.
+
+In progress: saved payment methods (card and US bank account through Stripe-hosted collection), autopay, membership agreements filled from the plan, one sign-up flow (branch `claude/teamwork-hub-wip-signup`).
+
+## Checkpoint 12 — Sign-up and autopay, Zen Planner import, go-live readiness (2026-11-14)
+Merged migrations 0032 signup, 0033 zpimport, 0034 golive.
+- **Sign-up and autopay** (`/billing/signup`, `/billing/payment-methods`, Settings → Payments, `/reports/processing-fees`): cards and US bank accounts saved through Stripe-hosted collection, agreements filled from the plan and frozen once rendered, one sign-up flow, Charge now / Retry now. All Stripe calls are mocked; no keys exist. See `docs/modules/payments-autopay.md`.
+- **Zen Planner import** (`/imports/zenplanner/*`, webhooks under `/api/webhooks/zenplanner/`): grid-export schemas, discount review, reconciliation, a 20-plan draft catalog. Not yet run against a real export. See `docs/ZENPLANNER-MAP.md`.
+- **Go-live readiness** (`/settings/go-live`, Today card for owner/admin): about forty items in eight sections computed on each load; four manual attestations only; one sample-text marker everywhere (`src/lib/sample-text.ts`). See `docs/modules/go-live.md`.
+- **Lead lists and UTM**: Source, Interest and Priority pick-lists; old values normalised on read; `/reports/leads-by-source`.
+- **Camp and clinic waitlist**: released spots are offered to the first in line for 24 hours (setting); nothing is charged or sent automatically; nightly job `events.holds.nightly`.
+- **Coach-entered check-ins** (`/check-ins/<bookingId>/coach`): labelled "entered by coach", replacing a family answer needs a reason and keeps the earlier answer.
+
+Verified after the merge: typecheck, lint and drift check clean; `pnpm test` 1321/1321 (88 files). Full Playwright run (one worker, production build): 642 passed, 2 skipped, 0 failed, including the a11y sweep and the CSP crawl; offline suite 4/4 on a fresh seed.
+
+Tightening pass (same day, no migration): live waitlist offers appear on the family Home and on staff Today, and an expired offer is never shown as live; browser test for a coach replacing a family's answer; UTM on the referral-link form; an Integrations section on the go-live page (PayPal and Venmo, Hawkin, Google Calendar, TeamBuildr, visitor address). The one-off `golive.spec.ts` failure was reproduced (2 in 15) and traced to the test ending while the redirect to `/denied` was still in flight; the test now waits for the redirect (30 of 30). `pnpm test` 1334/1334 (89 files).
+
+Known gaps: families get no email or text about a waitlist offer (no provider), only the Home card; after an offer expires the next family is offered the spot only when a sweep runs (a camps page view, a registration, or the nightly job; no worker is deployed); no setting for which proxy hop to trust; the offline sign-out purge test failed once on 2026-11-13 and has passed every run since, cause unknown.
+
+## Checkpoint 13 — First real Zen Planner export (2026-11-15)
+Another session exported the Person and Membership grids into Rod's private Drive folder and loaded Teamwork's draft member documents into the templates (still flagged as sample text). The export was dry-run on a throwaway local database; totals and the fixes it forced are in `docs/modules/imports-exports.md` → "Dry run of the real export". Result: 1,374 people and 15,498 of 15,797 membership rows import; 299 rows (41 people) need staff review. Bills and Attendance grids have not been exported.
+
+Verified: `pnpm test` 1339/1339 (89 files); typecheck and lint clean. Full Playwright run on Sunday 2026-11-15: 646 passed, 2 skipped, 4 failed (two tests at two sizes). Both were weekday-dependent tests, not app faults: the reserve test took the first class on the day even when it was full, and the wins test looked for tomorrow's game in this week's view. Both are fixed and their specs pass; a full rerun after the fix has not been done. Offline suite 4/4.
+
+Pattern worth knowing: three tests so far have failed only on a weekend because the seed is relative to today. Running the suite on each weekday would find the rest.
+
+
+## Checkpoint 14 — Full-history Zen Planner export, import hardening, weekday sweep (2026-11-16)
+Rod's Zen Planner session exported the unfiltered People, Membership and Bill grids (`zp-01`, `zp-02`, `zp-03` in the private Drive folder). They were dry-run on a throwaway local database; totals are in `docs/modules/imports-exports.md`. People 1,696 of 1,698; memberships 15,797 of 15,812; bills 15,422 of 18,709 (151 need a person chosen by staff, 3,135 old paid bills name nobody). What changed because of the real files: Bar Code is the person key on the Person and Membership grids; rows split by a malformed address are put back in line; Paid On Time reads On-Time, Early, Late; `Create Date` is the bill date; an email or birth date picks between people who share a name.
+
+Import hardening from a build agent: each row of a Zen Planner grid commits in its own savepoint, so a row the database refuses is rejected with its reason and the rest commit (other sources stay all-or-nothing); the review step is one decision per person, paged, searchable and filterable, with a bulk "confirm all name-only matches" action; 20,000-row files validate in under 20 seconds and commit in under 45.
+
+Weekday sweep: `scripts/e2e-at.sh "<date time>"` runs the whole Playwright suite with the server clock set to a chosen moment (libfaketime, its own PostgreSQL cluster; nothing in `src/` reads a test clock). Ten runs, Monday to Friday at 10:00 and 20:30 facility time, found no weekday- or time-dependent test. Two failures were unrelated: a sign-in racing a `/denied` redirect (fixed in three specs) and a spec that used Bar Code as its unknown column. One app bug was found by reading: coach assignment dates, the under-13 at-home logging check and the news watch list used the UTC date and were a day ahead during a US evening; they now use the facility date. Month ends were not run.
+
+Not done: the Attendance grid has not been exported yet (nine yearly files are expected, with Bar Code). Re-importing a bill does not refresh its paid amount. An import commit still runs inside one web request.
+
+Verified on the merged branch (2026-11-16): typecheck and lint clean, no schema drift, `npx vitest run` 1373/1373 (91 files), full Playwright 652 passed, 2 skipped, 0 failed (31 minutes).
+
+## Checkpoint 15 — Attendance by Barcode, bill refresh, agreement rules audit, Hawkin key (2026-11-16)
+Merged from a build agent: the Attendance grid attaches visits by Barcode and tolerates a bad email or birth date on a row; re-importing a Bill grid updates paid amounts and status on bills already imported (audited, revertible; migration `0035_attend` adds `zp_bills.paid_date`); fixed-term memberships set in Zen Planner to renew into another fixed term are flagged (`renews_into_fixed_term`, 131 in the real file) and listed on the discount review; tests prove hub renewals roll to month-to-month at the committed rate and that the family discount is applied and removed automatically. Family discount eligibility today is "same payer account"; a household-based, tiered rule (10% at two, 15% at three, holds not counting) has been relayed as Rod's decision but is not confirmed or built, and the 4+ rate and timing are unanswered.
+
+Hawkin: an integration key was saved through the secure form; the token exchange works (Americas host) but data calls cannot be made from the cloud session, see `docs/HAWKIN-CONNECTORS.md`. No Hawkin data has been read.
+
+Verified: typecheck and lint clean, no schema drift, `npx vitest run` 1394/1394 (94 files), full Playwright 652 passed, 2 skipped, 0 failed (36 minutes). Still not received: the nine yearly Attendance files.
+
+## Checkpoint 16 — Household family rate (2026-11-17)
+The family rate follows the owner's rule, relayed through his Zen Planner session on 2026-11-16: 5% per active member of the household (households come from Zen Planner's Family ID; the payer account plays no part), nothing below two members, every active member gets the same rate, a member on hold neither counts nor receives it, and the whole household is recalculated on every membership event and by the daily job. Counted as active: not started, trial, active, past due. A 25% cap raises a staff task instead of growing without limit. The rate is set on the membership and shows on the next bill issued; issued bills are never re-priced and nothing is prorated. Memberships still billed by Zen Planner do not count and are never repriced. Code: `src/lib/billing/family-rate.ts`; settings `familyDiscountStepPercent`, `familyDiscountCapPercent`.
+
+Open for Rod (`DECISIONS.md`): next bill versus immediate with proration; whether Zen Planner-billed members count during the overlap; the cap value; stacking with another discount. There is no staff screen for moving a person between households.
+
+Verified: typecheck and lint clean, no schema drift, `npx vitest run` 1412/1412 (95 files), full Playwright 652 passed, 2 skipped, 0 failed (36 minutes).
+
+Follow-up (2026-11-17): a current membership still billed by Zen Planner now counts toward the household's head count (setting `familyRateCountsZenPlannerMembers`, on by default, awaiting Rod), so a family moved to hub billing one child at a time keeps its rate. Imported memberships are still never re-priced or billed.
+
+Follow-up (2026-11-17, later): Rod confirmed the 25% cap, no stacking, and moving whole households on one date (relayed). The cap is no longer flagged; the overlap setting still is. A Zen Planner item with Installment Plan "Single Payment" is flagged `single_payment` at import and does not count toward a household's head count (110 of the current items in the real file have no label, 94 of them single payments). Unit tests 1413/1413; the browser suite was not rerun for these two follow-ups.
+
+Decision (Rod, 2026-11-17): the family rate applies to new memberships going forward; nothing existing is switched or repriced, and one-off Zen Planner purchases stay out of the household count. See `DECISIONS.md`.
