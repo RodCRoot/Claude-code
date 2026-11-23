@@ -5,6 +5,7 @@ import { audit, type AuditActor } from "@/lib/audit";
 import { FAMILY_RATE_MIN_MEMBERS, familyRatePercent, membershipPolicy, type MembershipPolicy } from "@/lib/membership-policy";
 import { todayLocal } from "@/lib/time";
 import { SINGLE_PAYMENT_FLAG } from "@/lib/zenplanner/renewal";
+import { grantSiblingCredit, siblingCreditFor } from "./family-credit";
 import { billingTask } from "./tasks";
 
 /**
@@ -97,21 +98,27 @@ async function familyDiscountId(tx: Tx, orgId: string, percent: number) {
   return nd.id;
 }
 
-export type FamilyRateChange = { membershipId: string; action: "applied" | "changed" | "removed"; percent: number; previousPercent: number | null };
+export type FamilyRateChange = { membershipId: string; action: "applied" | "changed" | "removed"; percent: number; previousPercent: number | null; /** Sibling credit granted for the already-billed period (rate went up), in minor units. */ creditMinor?: number };
 
 /**
  * Recalculate the family rate for every household in the organization and reprice every hub-billed
  * membership whose rate is out of date. Call it after any membership event (sign-up, cancel, hold start
  * or end, expiry, a person moving household); the renewal job also runs it every day.
  *
- * Idempotent: a second run with nothing changed writes nothing. It only ever sets `memberships.discount_id`
- * (what the NEXT invoice is priced with); it never creates, voids or re-prices an invoice.
+ * Idempotent: a second run with nothing changed writes nothing. It sets `memberships.discount_id` (what
+ * the NEXT invoice is priced with); it never creates, voids or re-prices an invoice.
+ * - Rate goes UP on a hub-invoiced membership whose current period is already billed: the member gets a
+ *   sibling credit for the rest of that period, taken off the next bill (owner's decision 2026-11-23,
+ *   setting `familyRateSiblingCredit`; see family-credit.ts). `opts.today` is the day the rate changed.
+ * - Rate goes DOWN: nothing is charged or clawed back for the period already billed; the lower rate
+ *   applies from the next bill.
  * - A membership carrying another (non-family) discount is left alone: discounts are not stacked.
  * - Zen Planner-billed memberships are never touched and do not count.
  * - Stripe/PayPal subscription memberships are not changed here (the provider amount is fixed); staff get a task.
  * - A household past the cap gets the cap, and staff get a task naming the household.
  */
-export async function syncFamilyDiscount(tx: Tx, actor: AuditActor, orgId: string, opts: { policy?: MembershipPolicy } = {}) {
+export async function syncFamilyDiscount(tx: Tx, actor: AuditActor, orgId: string, opts: { policy?: MembershipPolicy; today?: string } = {}) {
+  const today = opts.today ?? todayLocal();
   // One recalculation per organization at a time, so two sign-ups in one household cannot miss each other.
   await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`family-rate:${orgId}`}))`);
   const policy = opts.policy ?? (await membershipPolicy(tx, orgId));
@@ -139,7 +146,7 @@ export async function syncFamilyDiscount(tx: Tx, actor: AuditActor, orgId: strin
     if (m.billingProvider === "stripe" || m.billingProvider === "paypal") {
       await billingTask(tx, orgId, {
         title: `Family rate change needs the ${m.billingProvider === "stripe" ? "Stripe" : "PayPal"} subscription updated`,
-        description: `${rate.headCount} active member(s) in ${rate.householdName ?? "this athlete's household"}; the family rate on this membership should be ${rate.percent > 0 ? `${rate.percent}%` : held ? "removed while it is on hold" : "removed"}. The hub cannot change what the provider charges.`,
+        description: `${rate.headCount} active member(s) in ${rate.householdName ?? "this athlete's household"}; the family rate on this membership should be ${rate.percent > 0 ? `${rate.percent}%` : held ? "removed while it is on hold" : "removed"}. The hub cannot change what the provider charges.${rate.percent > (d?.value ?? 0) ? " No sibling credit was created for the rest of the current billing period: the hub cannot take a credit off a bill the provider charges. If the family should get one, adjust the subscription or refund the difference at the provider." : ""}`,
         relatedType: "membership",
         relatedId: m.id,
         dedupeKey: `family-discount:${m.id}:${want ?? "none"}`,
@@ -149,12 +156,13 @@ export async function syncFamilyDiscount(tx: Tx, actor: AuditActor, orgId: strin
     await tx.update(memberships).set({ discountId: want, updatedAt: new Date() }).where(eq(memberships.id, m.id));
     const action = !want ? "removed" : d ? "changed" : "applied";
     const previousPercent = d ? d.value : null;
-    changes.push({ membershipId: m.id, action, percent: rate.percent, previousPercent });
+    const change: FamilyRateChange = { membershipId: m.id, action, percent: rate.percent, previousPercent };
+    changes.push(change);
     const why = held ? "membership on hold" : `${rate.headCount} active member${rate.headCount === 1 ? "" : "s"} in ${rate.householdName ?? "no household"}`;
     await tx.insert(membershipEvents).values({
       membershipId: m.id,
       type: `family_discount_${action}`,
-      effectiveOn: todayLocal(),
+      effectiveOn: today,
       actorUserId: actor.actorUserId,
       details: {
         percent: want ? rate.percent : null,
@@ -173,6 +181,14 @@ export async function syncFamilyDiscount(tx: Tx, actor: AuditActor, orgId: strin
       before: { discountId: m.discountId },
       after: { discountId: want },
     });
+    // Rate went up mid-period: credit the extra discount for the rest of the period already billed.
+    if (want && !held && policy.familyRateSiblingCredit && rate.percent > (previousPercent ?? 0)) {
+      const calc = await siblingCreditFor(tx, m, { oldPercent: previousPercent ?? 0, newPercent: rate.percent, today });
+      if (calc) {
+        const granted = await grantSiblingCredit(tx, actor, m, calc, { today, rate });
+        if (granted) change.creditMinor = granted.creditMinor;
+      }
+    }
   }
   // Never cap silently: one task per household and head count, so a further change raises it again.
   const capped = rates.households.filter((h) => h.capped);

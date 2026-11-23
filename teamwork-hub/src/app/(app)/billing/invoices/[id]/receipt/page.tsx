@@ -48,7 +48,8 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
         </tbody>
       </table>
       <dl className="ml-auto mt-3 grid max-w-xs grid-cols-2 gap-y-1 text-sm">
-        {inv.discountMinor ? (<><dt>Discount</dt><dd className="text-right">−<Money minor={inv.discountMinor} currency={inv.currency} /></dd></>) : null}
+        {inv.discountMinor - d.familyCreditMinor > 0 ? (<><dt>Discount</dt><dd className="text-right">−<Money minor={inv.discountMinor - d.familyCreditMinor} currency={inv.currency} /></dd></>) : null}
+        {d.familyCreditMinor > 0 ? (<><dt>Family rate credit</dt><dd className="text-right">−<Money minor={d.familyCreditMinor} currency={inv.currency} /></dd></>) : null}
         <dt className="font-semibold">Total</dt><dd className="text-right font-semibold"><Money minor={inv.totalMinor} currency={inv.currency} /></dd>
         <dt>Paid</dt><dd className="text-right"><Money minor={d.money.settledMinor} currency={inv.currency} /></dd>
         {d.money.refundedMinor ? (<><dt>Refunded</dt><dd className="text-right"><Money minor={d.money.refundedMinor} currency={inv.currency} /></dd></>) : null}

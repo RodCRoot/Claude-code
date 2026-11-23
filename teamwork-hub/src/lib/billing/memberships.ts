@@ -26,12 +26,12 @@ import { grantCredits } from "@/lib/credits";
 import { enqueue } from "@/lib/jobs";
 import { CAP_DAYS_PER_MONTH, effectiveNoticeDays, membershipPolicy, partialPeriodPriceMinor, type MembershipPolicy } from "@/lib/membership-policy";
 import { formatMoney, percentOf } from "@/lib/money";
-import { addDaysYmd, daysBetween, localToUtc } from "@/lib/time";
+import { addDaysYmd, daysBetween, localToUtc, todayLocal } from "@/lib/time";
 import { UserError } from "./errors";
 import { createInvoiceRecord, invoiceMoney } from "./invoices";
 import { billingTask } from "./tasks";
 import { actorOf, addIntervalYmd, addMonthsYmd } from "./util";
-import { familyRateIfEnrolled, syncFamilyDiscount } from "./family-rate";
+import { familyRateIfEnrolled, isFamilyDiscount, syncFamilyDiscount } from "./family-rate";
 
 export { syncFamilyDiscount };
 
@@ -199,6 +199,9 @@ export async function previewMembershipStart(tx: Tx, v: Viewer, input: Pick<Crea
     firstRegularBillDate: firstRegular,
     regular: { grossMinor: version.priceMinor, discountMinor: percentOf(version.priceMinor, discountPercent), netMinor: version.priceMinor - percentOf(version.priceMinor, discountPercent) },
     discountPercent,
+    /** Estimated sibling credit for each household member already enrolled, if this membership is created today. */
+    siblingCredits: await (await import("./family-credit")).estimateSiblingCredits(tx, v.orgId, input.athleteId, todayLocal(), { policy }),
+    siblingCreditOn: policy.familyRateSiblingCredit && policy.familyDiscountStepPercent > 0,
     commitment: version.commitmentMonths > 0 ? { startsOn: firstRegular, endsOn: addDaysYmd(addMonthsYmd(firstRegular, version.commitmentMonths), -1), months: version.commitmentMonths } : null,
   };
 }
@@ -272,7 +275,7 @@ export async function createMembership(tx: Tx, v: Viewer, input: CreateMembershi
     after: m,
   });
 
-  await syncFamilyDiscount(tx, actorOf(v), v.orgId, { policy });
+  await syncFamilyDiscount(tx, actorOf(v), v.orgId, { policy, today: input.today });
   const [fresh] = await tx.select().from(memberships).where(eq(memberships.id, m.id));
 
   // Internally invoiced plans bill the first period now. A mid-month start bills its stub right away
@@ -334,7 +337,19 @@ export async function billPeriod(
   const { autopaySettings, bankPayDiscountMinor } = await import("./autopay-settings");
   const autopayMethod = await resolveAutopayMethod(tx, m);
   const bankDiscount = autopayMethod?.type === "us_bank_account" && version.interval === "month" ? bankPayDiscountMinor(await autopaySettings(tx, m.orgId), price.net) : 0;
-  const memoParts = [rule ? `Partial period (${rule}).` : null, bankDiscount > 0 ? `Bank pay discount: ${formatMoney(bankDiscount, version.currency)} off this bill for paying by bank account.` : null].filter(Boolean);
+  // Sibling credit earned when the household's family rate went up during an earlier, already billed period
+  // (family-credit.ts). It comes off this bill, never below $0; what is left stays for the bill after.
+  const { recordSiblingCreditApplied, siblingCreditOutstanding, siblingCreditToApply } = await import("./family-credit");
+  const siblingCredit = await siblingCreditToApply(tx, m, price.net - bankDiscount);
+  const siblingCreditLeft = siblingCredit > 0 ? (await siblingCreditOutstanding(tx, m)) - siblingCredit : 0;
+  const familyDiscount = await discountRow(tx, m.discountId);
+  const memoParts = [
+    rule ? `Partial period (${rule}).` : null,
+    bankDiscount > 0 ? `Bank pay discount: ${formatMoney(bankDiscount, version.currency)} off this bill for paying by bank account.` : null,
+    siblingCredit > 0
+      ? `Family rate credit: ${formatMoney(siblingCredit, version.currency)} off this bill, for the higher family discount over the rest of an earlier billing period.${siblingCreditLeft > 0 ? ` ${formatMoney(siblingCreditLeft, version.currency)} more is carried to the next bill.` : ""}`
+      : null,
+  ].filter(Boolean);
   const fraction = version.priceMinor > 0 ? gross / version.priceMinor : 1;
   const credits = version.unlimited || version.classesPerWeek != null || !version.creditsPerPeriod ? undefined : Math.max(1, Math.ceil(version.creditsPerPeriod * Math.min(1, fraction)));
   const res = await createInvoiceRecord(tx, actor, {
@@ -345,7 +360,8 @@ export async function billPeriod(
     periodEnd,
     source: "membership_renewal",
     idempotencyKey: `membership:${m.id}:${periodStart}`,
-    discountMinor: price.discount + bankDiscount,
+    discountMinor: price.discount + bankDiscount + siblingCredit,
+    familyRatePercent: familyDiscount?.active && familyDiscount.kind === "percent" && isFamilyDiscount(familyDiscount) ? familyDiscount.value : 0,
     dueDate: periodStart,
     isDemo: m.isDemo,
     memo: memoParts.length ? memoParts.join(" ") : undefined,
@@ -368,6 +384,7 @@ export async function billPeriod(
     .update(memberships)
     .set({ nextBillDate: m.endDate && nextBillDate > m.endDate ? null : nextBillDate, updatedAt: new Date() })
     .where(eq(memberships.id, m.id));
+  if (res.created && siblingCredit > 0) await recordSiblingCreditApplied(tx, actor, m, res.invoice, siblingCredit);
   if (res.created && bankDiscount > 0) {
     await event(tx, m, "bank_pay_discount", actor.actorUserId ?? null, { effectiveOn: periodStart, details: { invoiceId: res.invoice.id, discountMinor: bankDiscount, methodId: autopayMethod?.id } });
   }
@@ -624,7 +641,7 @@ export async function addHold(tx: Tx, v: Viewer, input: AddHoldInput) {
   if (input.startDate <= input.today && endDate >= input.today && m.status !== "on_hold") {
     await tx.update(memberships).set({ status: "on_hold", updatedAt: new Date() }).where(eq(memberships.id, m.id));
     // A member on hold stops counting toward the household's family rate and loses it while held.
-    await syncFamilyDiscount(tx, actorOf(v), v.orgId, { policy });
+    await syncFamilyDiscount(tx, actorOf(v), v.orgId, { policy, today: input.today });
   }
   await audit(tx, actorOf(v), "billing.membership.hold", "membership", m.id, {
     summary: `Hold ${input.startDate} → restart ${restartDate}: ${input.reason}${h.overrideReason ? ` (hold cap overridden: ${h.overrideReason})` : ""}${makeup?.granted ? `; punch card ${makeup.granted} session(s)` : ""}`,
@@ -649,7 +666,7 @@ export async function removeHold(tx: Tx, v: Viewer, holdId: string, today: strin
   }
   if (m.status === "on_hold") {
     await tx.update(memberships).set({ status: "active", updatedAt: new Date() }).where(eq(memberships.id, m.id));
-    await syncFamilyDiscount(tx, actorOf(v), v.orgId);
+    await syncFamilyDiscount(tx, actorOf(v), v.orgId, { today });
   }
   await event(tx, m, "hold_removed", v.userId, { effectiveOn: today, details: { holdId } });
   await audit(tx, actorOf(v), "billing.membership.hold_remove", "membership", m.id, { summary: `Hold ${h.startDate}→${h.endDate} ended early/removed`, before: h });
@@ -773,7 +790,7 @@ export async function startInSeason(
   if (input.startDate <= input.today && input.endDate >= input.today && m.status !== "on_hold") {
     await tx.update(memberships).set({ status: "on_hold", updatedAt: new Date() }).where(eq(memberships.id, m.id));
     // The regular membership is on hold; the athlete still counts through the In Season membership.
-    await syncFamilyDiscount(tx, actorOf(v), v.orgId, { policy });
+    await syncFamilyDiscount(tx, actorOf(v), v.orgId, { policy, today: input.today });
   }
   await event(tx, m, "in_season_started", v.userId, {
     effectiveOn: input.startDate,
@@ -928,7 +945,7 @@ export async function cancelMembership(
   await audit(tx, actorOf(v), "billing.membership.cancel", "membership", m.id, {
     summary: `Cancellation ${immediate ? "effective" : "scheduled"} ${cancelAt}${input.requestChannel ? ` (requested ${input.requestedOn} by ${input.requestChannel.replaceAll("_", " ")})` : ""}${input.overrideCancelAt ? " (terms overridden)" : ""}: ${input.reason}`,
   });
-  if (immediate) await syncFamilyDiscount(tx, actorOf(v), v.orgId);
+  if (immediate) await syncFamilyDiscount(tx, actorOf(v), v.orgId, { today: input.today });
   return { cancelAt, earliest, immediate, preview };
 }
 

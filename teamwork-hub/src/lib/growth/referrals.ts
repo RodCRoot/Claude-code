@@ -642,12 +642,17 @@ export async function declineReward(tx: Tx, v: Viewer, input: { rewardId: string
 // Account credit
 // ---------------------------------------------------------------------------
 
+/**
+ * A payer's general account credit (referral rewards less what staff applied). Entries tied to a membership
+ * (the family rate sibling credit and its automatic applications, billing/family-credit.ts) are a separate
+ * pool: they are not part of this balance and staff cannot spend them on another invoice.
+ */
 export async function accountCreditBalances(tx: Tx, orgId: string, payerAccountIds?: string[]): Promise<Record<string, number>> {
   if (payerAccountIds && !payerAccountIds.length) return {};
   const rows = await tx
     .select({ payerAccountId: accountCreditLedger.payerAccountId, n: sql<string>`coalesce(sum(${accountCreditLedger.deltaMinor}),0)::bigint` })
     .from(accountCreditLedger)
-    .where(and(eq(accountCreditLedger.orgId, orgId), payerAccountIds ? inArray(accountCreditLedger.payerAccountId, payerAccountIds) : undefined))
+    .where(and(eq(accountCreditLedger.orgId, orgId), sql`${accountCreditLedger.membershipId} is null`, payerAccountIds ? inArray(accountCreditLedger.payerAccountId, payerAccountIds) : undefined))
     .groupBy(accountCreditLedger.payerAccountId);
   return Object.fromEntries(rows.map((r) => [r.payerAccountId, int(r.n)]));
 }

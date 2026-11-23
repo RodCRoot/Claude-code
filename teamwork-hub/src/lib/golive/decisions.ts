@@ -33,11 +33,11 @@ export const OPEN_DECISIONS: OpenDecision[] = [
   {
     id: "family_discount_percent",
     ref: "Membership policy 1",
-    question: "When does a change to a household's family rate take effect?",
-    currentBehaviour: "Owner's rule (2026-11-16): 5% per active household member, from 2 members up, the same rate for every active member; members on hold do not count. The 25% cap and no stacking with another discount were confirmed on 2026-11-17. A change shows on the next bill issued; bills already issued are not re-priced.",
+    question: "Is the family rate, and its timing, set the way you decided?",
+    currentBehaviour: "Owner's rule (2026-11-16): 5% per active household member, from 2 members up, the same rate for every active member; members on hold do not count. The 25% cap and no stacking with another discount were confirmed on 2026-11-17. Timing, decided 2026-11-23 (\"immediately\", with a bill credit for the sibling): when the rate goes up partway through a period that is already billed, each member already enrolled gets a credit on the next bill for the extra discount over the days left; the bill already issued is not re-priced and nothing is refunded in cash. When the rate goes down, nothing is charged back; the lower rate starts with the next bill.",
     changeHref: "/settings",
     changeLabel: "Settings, Membership policy",
-    value: (s) => familyRateSummary(policyFromSettings(s)),
+    value: (s) => `${familyRateSummary(policyFromSettings(s))}; sibling credit when the rate goes up mid-period: ${policyFromSettings(s).familyRateSiblingCredit ? "on" : "off"}`,
   },
   {
     id: "cancellation_notice_days",

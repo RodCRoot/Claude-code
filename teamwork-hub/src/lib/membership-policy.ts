@@ -63,6 +63,12 @@ export type MembershipPolicy = {
    * takes qualifying households from 19 to 28. The owner said on 2026-11-17 to leave it off.
    */
   familyRateCountsSinglePayments: boolean;
+  /**
+   * Sibling credit (owner's decision, 2026-11-23): when a household's family rate goes up in the middle of
+   * a billing period that is already billed, each existing member gets a bill credit for the extra discount
+   * over the rest of that period, taken off their next bill. Off: a higher rate only shows on the next bill.
+   */
+  familyRateSiblingCredit: boolean;
   /** Days before a hold / in-season term ends to nudge the family (playbooks say 1–2 weeks). */
   restartNudgeDaysBefore: number;
   /** Members inactive this many days while still billed are flagged in the audit. */
@@ -88,6 +94,7 @@ export const DEFAULT_MEMBERSHIP_POLICY: MembershipPolicy = {
   familyDiscountCapPercent: 25,
   familyRateCountsZenPlannerMembers: true,
   familyRateCountsSinglePayments: false,
+  familyRateSiblingCredit: true,
   restartNudgeDaysBefore: 14,
   dormantAfterDays: 30,
   attendanceGapDays: 21,
@@ -172,6 +179,7 @@ export const POLICY_FIELDS: { key: EditableKey; label: string; hint: string; kin
   { key: "familyDiscountCapPercent", label: "Family rate: cap (%)", hint: "The most a household can get. A household that would go past it gets the cap and staff get a task.", kind: "int", min: 0, max: 100 },
   { key: "familyRateCountsZenPlannerMembers", label: "Family rate: count household members still billed in Zen Planner", hint: "While families move over one at a time, a sibling still billed by Zen Planner counts toward the household, so the sibling billed here keeps the family rate. Zen Planner memberships are never repriced or billed by Teamwork.", kind: "bool" },
   { key: "familyRateCountsSinglePayments", label: "Family rate: count one-off Zen Planner purchases (drop-ins, single classes)", hint: "Off: only recurring memberships count toward a household. On: someone whose only current item in Zen Planner is a single payment also counts, which gives more households the rate and can lift a household to a higher tier.", kind: "bool" },
+  { key: "familyRateSiblingCredit", label: "Family rate: credit existing members when the rate goes up mid-period", hint: "When a sibling enrolls partway through a billing period that is already billed, each member already enrolled gets a credit on their next bill: the extra discount, for the days left in that period. The bill already issued is not changed, and nothing is refunded in cash. Nothing is charged back when the rate goes down. Off: a higher rate only shows on the next bill.", kind: "bool" },
   { key: "restartNudgeDaysBefore", label: "Restart nudge (days before a hold / in-season term ends)", hint: "Schedules the family message (if a rule is enabled) and a staff task.", kind: "int", min: 1, max: 60 },
   { key: "dormantAfterDays", label: "Flag billed members inactive for (days)", hint: "Used by the membership audit.", kind: "int", min: 1, max: 365 },
   { key: "attendanceGapDays", label: "Attendance gap reported after (days)", hint: "Used by the membership audit.", kind: "int", min: 1, max: 365 },

@@ -210,6 +210,8 @@ export const invoices = pgTable(
     membershipId: uuid("membership_id").references(() => memberships.id),
     periodStart: date("period_start"),
     periodEnd: date("period_end"),
+    /** Family rate percent this membership bill was priced with (0 = none). Null on bills issued before 0036 and on non-membership invoices. */
+    familyRatePercent: integer("family_rate_percent"),
     source: text("source").$type<"teamwork" | "pos" | "membership_renewal" | "imported" | "booking">().notNull().default("teamwork"),
     memo: text("memo"),
     idempotencyKey: text("idempotency_key"),

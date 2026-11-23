@@ -52,6 +52,8 @@ export type CreateInvoiceInput = {
   periodStart?: string | null;
   periodEnd?: string | null;
   discountMinor?: number;
+  /** Membership bills: the family rate percent the bill was priced with (0 = none). */
+  familyRatePercent?: number | null;
   source?: (typeof invoices.$inferInsert)["source"];
   idempotencyKey?: string | null;
   currency?: string;
@@ -120,6 +122,7 @@ export async function createInvoiceRecord(tx: Tx, actor: AuditActor, input: Crea
       membershipId: input.membershipId ?? null,
       periodStart: input.periodStart ?? null,
       periodEnd: input.periodEnd ?? null,
+      familyRatePercent: input.familyRatePercent ?? null,
       source: input.source ?? "teamwork",
       memo: input.memo ?? null,
       idempotencyKey: input.idempotencyKey ?? null,

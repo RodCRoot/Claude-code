@@ -52,7 +52,7 @@ export async function generateRenewals(tx: Tx, orgId: string, today: string): Pr
   // member whose sibling's hold starts today is billed at the lower tier. (Cancellations and expiries
   // are processed by the loop below and recalculated after it, as before.)
   const holdFlips = await syncHoldStatuses(tx, orgId, today);
-  s.familyDiscountChanges += (await syncFamilyDiscount(tx, SYSTEM(orgId), orgId)).changes.length;
+  s.familyDiscountChanges += (await syncFamilyDiscount(tx, SYSTEM(orgId), orgId, { today })).changes.length;
 
   const due = await tx
     .select()
@@ -159,7 +159,7 @@ export async function generateRenewals(tx: Tx, orgId: string, today: string): Pr
   s.statusChanges = holdFlips + (await syncMembershipStatuses(tx, orgId, today));
   // The family rate follows the household head count: recalculate every household after memberships
   // ended, holds started or ended, or people moved household. Idempotent; writes only on a change.
-  s.familyDiscountChanges += (await syncFamilyDiscount(tx, SYSTEM(orgId), orgId)).changes.length;
+  s.familyDiscountChanges += (await syncFamilyDiscount(tx, SYSTEM(orgId), orgId, { today })).changes.length;
   if (s.invoicesCreated || s.cancelled || s.deferredForHold) {
     await audit(tx, SYSTEM(orgId), "billing.renewals.run", "org", orgId, { summary: `Renewals for ${today}: ${JSON.stringify(s)}` });
   }

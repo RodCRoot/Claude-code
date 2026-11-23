@@ -81,7 +81,8 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
             </Table>
             <dl className="ml-auto mt-3 grid max-w-xs grid-cols-2 gap-y-1 text-sm">
               <dt className="text-ink-3">Subtotal</dt><dd className="text-right"><Money minor={inv.subtotalMinor} currency={inv.currency} /></dd>
-              {inv.discountMinor ? (<><dt className="text-ink-3">Discount</dt><dd className="text-right">−<Money minor={inv.discountMinor} currency={inv.currency} /></dd></>) : null}
+              {inv.discountMinor - d.familyCreditMinor > 0 ? (<><dt className="text-ink-3">Discount</dt><dd className="text-right">−<Money minor={inv.discountMinor - d.familyCreditMinor} currency={inv.currency} /></dd></>) : null}
+              {d.familyCreditMinor > 0 ? (<><dt className="text-ink-3">Family rate credit</dt><dd className="text-right">−<Money minor={d.familyCreditMinor} currency={inv.currency} /></dd></>) : null}
               <dt className="font-semibold">Total</dt><dd className="text-right font-semibold"><Money minor={inv.totalMinor} currency={inv.currency} /></dd>
               <dt className="text-ink-3">Paid (settled)</dt><dd className="text-right text-ok"><Money minor={money.settledMinor} currency={inv.currency} /></dd>
               {money.pendingMinor ? (<><dt className="text-ink-3">Pending (not settled)</dt><dd className="text-right text-warn"><Money minor={money.pendingMinor} currency={inv.currency} /></dd></>) : null}

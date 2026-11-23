@@ -210,7 +210,7 @@ describe("manual ticks", () => {
     await db.transaction((tx) => attest(tx, rod, { key }));
     let i = item(await report(), "decisions.family_discount_percent");
     expect(i.status).toBe("done");
-    expect(i.detail).toMatch(/Current setting: 5% per active household member \(2 members 10% each, 3 members 15% each, 4 members 20% each\), capped at 25%\. Confirmed as is by/);
+    expect(i.detail).toMatch(/Current setting: 5% per active household member \(2 members 10% each, 3 members 15% each, 4 members 20% each\), capped at 25%; sibling credit when the rate goes up mid-period: on\. Confirmed as is by/);
     const [a] = await db.select().from(auditEvents).where(and(eq(auditEvents.orgId, ctx.orgId), eq(auditEvents.action, "golive.decision_confirmed")));
     expect(a.summary).toContain("capped at 25%");
 
@@ -223,7 +223,7 @@ describe("manual ticks", () => {
     const r = await report();
     i = item(r, "decisions.family_discount_percent");
     expect(i.status).toBe("attention");
-    expect(i.detail).toMatch(/capped at 30%.*It was "5% per active household member.*capped at 25%"/);
+    expect(i.detail).toMatch(/capped at 30%.*It was "5% per active household member.*capped at 25%; sibling credit when the rate goes up mid-period: on"/);
     // The catalog item follows the policy's own flag, not the tick.
     expect(item(r, "catalog.family_discount").status).toBe("done");
   });
