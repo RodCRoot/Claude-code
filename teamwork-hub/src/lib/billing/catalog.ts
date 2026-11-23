@@ -79,7 +79,7 @@ function versionValues(productId: string, version: number, v: VersionInput, crea
 export async function createProduct(
   tx: Tx,
   v: Viewer,
-  input: { name: string; kind: ProductKind; description?: string | null; category?: string | null; sku?: string | null; trackInventory?: boolean; publiclyListed?: boolean; isDemo?: boolean; version: VersionInput },
+  input: { name: string; kind: ProductKind; description?: string | null; category?: string | null; sku?: string | null; trackInventory?: boolean; taxable?: boolean; publiclyListed?: boolean; isDemo?: boolean; version: VersionInput },
 ) {
   assertCan(v, "billing.manage");
   if (!input.name.trim()) throw new UserError("Name is required.");
@@ -94,6 +94,8 @@ export async function createProduct(
       category: input.category ?? null,
       sku: input.sku ?? null,
       trackInventory: input.kind === "retail" ? (input.trackInventory ?? true) : false,
+      // Only retail can be taxed. The staff form sends true unless the item is marked exempt food or drink.
+      taxable: input.kind === "retail" ? (input.taxable ?? false) : false,
       publiclyListed: input.publiclyListed ?? false,
       isDemo: input.isDemo ?? false,
     })
@@ -167,7 +169,8 @@ export async function setProductActive(tx: Tx, v: Viewer, productId: string, act
 }
 
 /**
- * The per-product "taxable" switch. Off for every product until staff turn it on. Only retail
+ * The per-product "taxable" switch. A retail product created on the Products screen starts taxable unless staff
+ * mark it exempt food or drink (owner's rule, 2026-11-23); anything created another way starts untaxed. Only retail
  * products can be taxable: memberships, training, camps, packs and other services cannot be switched
  * into sales tax (also enforced by a CHECK on the table). Whether a particular retail item should be
  * taxed is the owner's and their accountant's call; this only records it. Bills already created keep

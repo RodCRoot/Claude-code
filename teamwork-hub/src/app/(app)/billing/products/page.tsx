@@ -150,6 +150,13 @@ export default async function ProductsPage() {
                 <Field label="Category" htmlFor="pcat"><Input id="pcat" name="category" /></Field>
                 <Field label="Description" htmlFor="pdesc" className="sm:col-span-3"><Input id="pdesc" name="description" /></Field>
               </div>
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" name="taxExempt" className="mt-0.5 size-4" />
+                <span>
+                  Retail only: this item is food or drink exempt from sales tax
+                  <span className="block text-xs text-ink-3">A new retail product (shirts, bottles, gear) is charged sales tax unless you tick this. Ready-to-drink protein such as Muscle Milk is exempt as food. Services are never taxed. You can change it later on the product.</span>
+                </span>
+              </label>
               <VersionFields prefix="new" />
               <SubmitButton>Create product</SubmitButton>
             </ActionForm>

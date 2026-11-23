@@ -141,7 +141,7 @@ Default 7.00%, labelled "Indiana state sales tax", shown as "Needs confirmation"
 admin saves it. Settings, Payments, "Sales tax" card; `settings.manage` (owner, admin) only; audited
 as `billing.sales_tax.rate` with before and after. A rate of 0 or an empty field means no tax.
 
-**Taxable switch.** `products.taxable`, default off for every existing and new product. Only retail
+**Taxable switch.** `products.taxable`. Owner's rule (2026-11-23): physical goods are taxed, food and drink (for example ready-to-drink protein) are exempt. A retail product created on Billing → Products starts taxable unless staff tick "food or drink exempt from sales tax"; products created by imports or seeds, and every product that existed before, start untaxed. Only retail
 products can be switched on: the switch is shown only on retail rows of Billing, Products,
 `setProductTaxable` refuses other kinds, and the table has a CHECK (`products_taxable_retail_ck`).
 Memberships, training, camps, session packs, drop-ins, assessments, trials and one-time add-ons

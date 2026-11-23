@@ -79,10 +79,12 @@ export async function createProductAction(_p: ActionState, fd: FormData) {
         description: opt(fd, "description"),
         category: opt(fd, "category"),
         sku: opt(fd, "sku"),
+        // Owner's rule (2026-11-23): physical products are taxed; food and drink are exempt.
+        taxable: s(fd, "kind") === "retail" && fd.get("taxExempt") !== "on",
         version: versionFromForm(fd),
       }),
     );
-    return { ok: true, message: `Created ${r.product.name} (v1).` };
+    return { ok: true, message: `Created ${r.product.name} (v1).${r.product.kind === "retail" ? (r.product.taxable ? " Sales tax applies." : " Exempt from sales tax.") : ""}` };
   });
 }
 

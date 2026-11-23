@@ -104,6 +104,19 @@ describe("the rate setting", () => {
 });
 
 describe("the taxable switch", () => {
+  it("createProduct takes the taxable choice for retail and ignores it for services", async () => {
+    const db = testDb();
+    const rod = await viewerFor(ctx, "rod");
+    const made = await db.transaction(async (tx) => ({
+      gear: await createProduct(tx, rod, { name: "Test Shaker Bottle", kind: "retail", taxable: true, version: { priceMinor: 900, effectiveFrom: "2026-01-01" } }),
+      food: await createProduct(tx, rod, { name: "Test Ready Shake", kind: "retail", taxable: false, version: { priceMinor: 400, effectiveFrom: "2026-01-01" } }),
+      plain: await createProduct(tx, rod, { name: "Test Unmarked Item", kind: "retail", version: { priceMinor: 400, effectiveFrom: "2026-01-01" } }),
+    }));
+    expect([made.gear.product.taxable, made.food.product.taxable, made.plain.product.taxable]).toEqual([true, false, false]);
+    const service = await db.transaction((tx) => createProduct(tx, rod, { name: "Test Taxless Clinic", kind: "one_time", taxable: true, version: { priceMinor: 4000, effectiveFrom: "2026-01-01" } }));
+    expect(service.product.taxable).toBe(false);
+    await db.transaction((tx) => setProductTaxable(tx, rod, made.gear.product.id, false));
+  });
   it("is off for every seeded and new product, and only retail products can be switched on", async () => {
     const db = testDb();
     const rod = await viewerFor(ctx, "rod");

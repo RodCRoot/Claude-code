@@ -58,7 +58,7 @@ export function RetailOptions({
                 <input type="checkbox" name="taxable" defaultChecked={p.taxable} className="mt-0.5 size-4" />
                 <span>
                   Taxable: add sales tax ({taxRateBps > 0 ? formatRate(taxRateBps) : "no rate set"}) when this item is sold
-                  <span className="block text-xs text-ink-3">Off unless you turn it on. Ask your accountant which items are taxable. Changing this affects new bills only.</span>
+                  <span className="block text-xs text-ink-3">Physical goods (shirts, bottles, gear) are taxed. Food and drink such as ready-to-drink protein are exempt: leave this off for them. Changing this affects new bills only.</span>
                 </span>
               </label>
               <SubmitButton size="sm" variant="secondary">
