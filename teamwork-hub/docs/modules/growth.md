@@ -138,11 +138,19 @@ have no link.
 
 - A product appears only when staff tick **Sellable online** under Billing → Products (stored in
   `shop_listings`, default off, audited). Staff can add a short "what it includes" text.
-- Sellable kinds: session packs, single sessions (drop-in), assessments and one-time add-ons.
+- Sellable kinds: session packs, single sessions (drop-in), assessments, one-time add-ons and,
+  since 2026-11-23, retail goods ("Gear": shirts, drinks). Retail orders are picked up at the front
+  desk; nothing is shipped.
   **Camps and clinics are not shop products**: they are sold as events with their own seat count
   (`docs/modules/events.md`, family page `/shop/camps`, linked from the shop). Catalog `camp`
   products are not linked to scheduled sessions and stay off the shop; the Products page says so.
-  Memberships use the membership flow; retail uses the point of sale (stock); free items are never listed.
+  Memberships use the membership flow; free items are never listed.
+- **Retail in the shop.** An item with sizes shows a required "Size" choice with out-of-stock sizes
+  disabled and low counts shown ("2 left"); an item at zero shows "Out of stock" and no order
+  button. A taxable item shows "Plus $1.75 sales tax (7.00%). Total $26.75" on the card before
+  ordering, and the order page lists price, tax and total. Checkout uses the same locked stock and
+  variant check as the front desk (`priceSaleItems`) and takes the stock when the order is placed;
+  voiding the unpaid bill puts it back. Rule and rounding: `docs/modules/billing.md`, "Sales tax".
 - Each card shows the name, what it includes, facts from the catalog version (credits, expiry) and
   the price in effect today. Product names and descriptions are shown without em dashes.
 - **Who can buy:** people with `can_pay` on a payer account, for athletes who are beneficiaries of
@@ -197,7 +205,7 @@ The lead stays open; converting it later reuses that athlete.
 All need `reports.financial`, state their definitions on the page, and export CSV.
 
 - **Referrals funnel** (`growth-referrals`): per referring family, referred / started / earned / not counted, rewards pending and approved, account credit approved.
-- **Shop sales by item** (`growth-shop-sales`): orders, paid, open, voided; ordered (billed) and paid (settled) dollars kept separate.
+- **Shop sales by item** (`growth-shop-sales`): orders, paid, open, voided; ordered (billed) and paid (settled) dollars kept separate. One row per variant for items sold by size. Dollar columns are bill totals and include sales tax.
 - **Suggestions shown, followed and dismissed** (`growth-offers`): per rule. "Followed" means the button was used, not that anything was bought.
 - **Trial pass conversion** (`growth-trial-passes`): sessions used, converted, joined.
 

@@ -125,8 +125,110 @@ there. The same matrix appears in the UI at `/billing/providers` (`src/lib/payme
   - refunds, disputes and payouts;
   - invoice-vs-ledger mismatches.
 - **POS.** Counter sales of non-membership products. Sales use a walk-in payer account, or a payer +
-  athlete when credits are involved. Tracked stock is checked under product row locks.
-  `inventory_movements` records receive, adjust (note required), return and sale.
+  athlete when credits are involved. Tracked stock is checked under row locks on the product and its
+  variants. `inventory_movements` records receive, adjust (note required), return and sale, each with
+  the variant when the product has variants. The sale screen shows subtotal, sales tax and total
+  before the sale is confirmed. Voiding an unpaid sale puts its stock back (a `return` movement).
+
+## Sales tax (migration `0037_retail`, owner's decision 2026-11-23)
+
+This is software, not tax advice. It records and applies what staff set; it does not decide which
+goods are taxable.
+
+**Settings.** One rate for the organization, in basis points (700 = 7.00%), kept in
+`organizations.settings.salesTax = { rateBps, label, confirmed }` (`src/lib/billing/sales-tax.ts`).
+Default 7.00%, labelled "Indiana state sales tax", shown as "Needs confirmation" until an owner or
+admin saves it. Settings, Payments, "Sales tax" card; `settings.manage` (owner, admin) only; audited
+as `billing.sales_tax.rate` with before and after. A rate of 0 or an empty field means no tax.
+
+**Taxable switch.** `products.taxable`, default off for every existing and new product. Only retail
+products can be switched on: the switch is shown only on retail rows of Billing, Products,
+`setProductTaxable` refuses other kinds, and the table has a CHECK (`products_taxable_retail_ck`).
+Memberships, training, camps, session packs, drop-ins, assessments, trials and one-time add-ons
+cannot be taxed. `billing.manage` (owner, admin, operations); audited as `billing.product.taxable`.
+
+**The rule** (`src/lib/billing/tax.ts`, pure integer math, also used by the sale screen preview):
+
+1. A bill line is taxable only if its product is a retail product marked taxable at the moment the
+   bill is created. `createInvoiceRecord` looks this up from the line's product version; no caller
+   or form field can set it. A free-text line (no product) is never taxed. The flag is copied to
+   `invoice_lines.taxable`, so later product changes do not touch the bill.
+2. A price discount on the bill (`discount_minor` minus the credit part) is spread over all its
+   lines in proportion to their amounts (largest remainder, whole cents, stored in
+   `invoice_lines.discount_minor`). A taxable line is taxed on its amount after its share.
+3. Credits are not price discounts. The family rate sibling credit is passed as `creditMinor` and
+   never lowers the tax. Referral rewards applied to an open bill after it was issued lower the
+   amount due and leave the tax as issued.
+4. Rounding is **once per bill**: tax = (sum of taxable amounts after discount) x rate, half up to the
+   cent. Stored in `invoices.tax_minor`, with `invoices.tax_rate_bps` (the rate used) and
+   `invoices.taxable_minor` (the amount it was applied to). The bill's tax is then split back over
+   the taxable lines (`invoice_lines.tax_minor`) so the lines always add up to the bill.
+   Per bill rather than per line because the existing invoice code already totals and discounts at
+   bill level, and it avoids the cent drift of rounding each line.
+5. `total_minor = subtotal_minor - discount_minor + tax_minor`.
+6. `tax_rate_bps` is null when the bill has no taxable line (membership bills, packs, imported
+   history, everything before 0037). Those bills show no tax row.
+7. The tax is fixed when the bill is issued. A bill created as a draft is recomputed once, at the
+   rate in force when it is issued (audited with before and after). A rate change, or switching a
+   product off, never alters an issued bill.
+8. Bills imported from Zen Planner (`zp_bills`, and any invoice with `source = 'imported'`) are
+   history only and are never taxed.
+
+Worked example: a taxable $25.00 shirt and an untaxed $12.00 bottle with a $3.70 discount. The
+discount splits $2.50 / $1.20. Taxable amount $22.50, tax at 7.00% = $1.575, rounds to $1.58.
+Total $37.00 - $3.70 + $1.58 = $34.88.
+
+**Where it shows.** Front desk sale screen (subtotal, tax, total before confirming), Family Shop
+card and order page, invoice page (tax row with rate and taxable amount, "Taxable" on the line),
+printable bill and receipt ("(T)" on taxable lines, tax row), family bill pages (they show the bill
+total, which includes tax). Every payment path (hosted checkout, Venmo, autopay, charge now, offline
+payment) charges the bill balance, which is derived from `total_minor`, so the tax is in the amount.
+
+**Refunds.** `refunds.tax_minor` records the sales tax given back with each refund, and
+`refunds.invoice_line_id` the line it was for when staff named one (the refund form offers the
+choice on bills that carry tax). For a line: refund x line tax / (line price after discount + line
+tax). For the whole bill: refund x bill tax / bill total. Half up, never more than the tax not yet
+refunded, and a refund that returns the rest returns exactly the remaining tax. A refund started in
+the provider dashboard (seen only by webhook) uses the whole-bill proportion.
+
+**Reports.** `sales-tax` "Sales tax collected" (Reports, Money; `reports.financial` = owner, admin,
+operations): by month, rate(s) in effect, bills with tax, taxable sales, tax collected, the part on
+unpaid bills, taxable sales refunded, tax refunded, net tax; a written definition of each column on
+the page; CSV export. **Accrual basis**: a bill counts in the month it was issued, paid or not,
+like the Invoiced report; void and draft bills are excluded; refunds count in the month the refund
+was recorded. `retail-sales` "Retail sales by item": units, sales before tax and tax by item and
+variant. "Invoiced (billed)" gained an "of which sales tax" column. "Collected revenue" and the
+scoreboard money figures are money received and therefore include tax; they are not split.
+
+## Retail variants (sizes) and per-variant stock
+
+`product_variants` (`src/lib/billing/variants.ts`): a retail product has one option (name in
+`products.option_name`, default "Size") and an ordered list of variants, each with a label, an
+optional SKU, an optional price override (`price_minor`; empty = the product's price in effect that
+day) and an active flag. Labels are unique per product, case-insensitive. A product without variants
+behaves exactly as before.
+
+- **Managing** (Billing, Products, "Sales tax and sizes" on a retail row; `billing.manage`): add one
+  or several labels, rename, change SKU or price, move up or down, deactivate or reactivate. A
+  variant with any sale or stock movement cannot be deleted, only deactivated; an unused one can be
+  deleted. All audited (`billing.variant.*`).
+- **Stock** is per variant when the product tracks inventory: `inventory_movements.variant_id`. The
+  product page and the point of sale show a table by variant with a product total. Counts of 2 or
+  fewer are highlighted (the rule the point of sale already had); zero shows "out of stock".
+- **Unassigned stock.** Movements recorded before a product had variants keep `variant_id` null and
+  show as "Unassigned". Nothing is guessed. Staff move it to a variant with "Assign unassigned ..."
+  on the point of sale (`moveStock`: two `adjust` movements with a required note; the product total
+  does not change). Unassigned stock is not sellable. New stock for a product with variants must
+  name a variant.
+- **Selling.** A product with active variants must be sold as one of them, at the front desk and in
+  the Family Shop. The bill line reads "Teamwork T-Shirt, Size M" (`<product>, <option> <label>`) and
+  carries `invoice_lines.variant_id`. Selling at zero stock is not allowed for tracked items (the
+  existing rule).
+- **Oversell protection.** `priceSaleItems` locks the product rows and their variant rows
+  `FOR UPDATE` in id order, then reads the stock, then the sale writes its movement in the same
+  transaction. Four concurrent sales of the last one of a size: exactly one succeeds (tested).
+- A manual invoice cannot carry a product that has active variants; it sends staff to the point of
+  sale. (Manual invoices never moved stock, before or now.)
 
 ## Teamwork membership policies (`src/lib/membership-policy.ts`)
 
@@ -386,7 +488,8 @@ verification answered by a mocked verify-webhook-signature call).
 - The PayPal refund and dispute event shapes, and the Stripe refund, dispute and payout field names are unverified. Validate them with sandbox fixtures before go-live. (`verification_status` SUCCESS/FAILURE is now verified from the OpenAPI schema.)
 - Saved payment methods, autopay, fee reporting, membership agreements and the guided sign-up are documented in `payments-autopay.md` (built; configuration required; never run against a Stripe sandbox).
 - `webhook_events` has no `org_id`. Events are attributed through payment attempts. Payout routing assumes one org per provider account. Unmatched and rejected events are visible to every org's billing staff (they hold no customer data beyond the type and the claimed id).
-- Tax is always 0. Partial refunds of ACH are not supported by Stripe; this is not enforced locally.
+- Sales tax: one organization rate on retail products marked taxable (see "Sales tax"). Not built: more than one rate, tax-exempt customers, tax on shipping (nothing is shipped), a tax return or filing export beyond the monthly report, and splitting tax out of the Collected revenue and scoreboard figures. A manual invoice cannot be discounted per line; its discount is spread over all lines.
+- Partial refunds of ACH are not supported by Stripe; this is not enforced locally.
 - Families cannot request holds or cancellations in-app (staff-only actions).
 
 ## Family "My Profile" screens
