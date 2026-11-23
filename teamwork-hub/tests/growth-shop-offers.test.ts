@@ -66,7 +66,8 @@ describe("Family Shop", () => {
     const idOf = async (name: string) => (await db.select().from(products).where(and(eq(products.orgId, ctx.orgId), eq(products.name, name))))[0].id;
     await expect(db.transaction(async (tx) => setShopListing(tx, rod, { productId: await idOf("Sample — Summer Speed Camp"), sellableOnline: true }))).rejects.toThrow(/seat cannot be held online/i);
     await expect(db.transaction(async (tx) => setShopListing(tx, rod, { productId: B.unlimitedProductId, sellableOnline: true }))).rejects.toThrow(/Memberships start from/i);
-    await expect(db.transaction(async (tx) => setShopListing(tx, rod, { productId: B.shirtProductId, sellableOnline: true }))).rejects.toThrow(/point of sale/i);
+    // Retail goods can be listed since sizes and per-size stock exist (owner decision 2026-11-23).
+    expect(shopBlockReason("retail")).toBeNull();
     expect(shopBlockReason("package")).toBeNull();
     expect(shopBlockReason("camp")).toMatch(/not linked to scheduled sessions/);
 
