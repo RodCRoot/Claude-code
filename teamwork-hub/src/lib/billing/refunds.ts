@@ -6,6 +6,7 @@ import { assertCan, type Viewer } from "@/lib/authz/policy";
 import { audit } from "@/lib/audit";
 import { UserError } from "./errors";
 import { getProvider, ProviderNotConfiguredError } from "@/lib/payments";
+import { refundTaxMinor } from "./sales-tax";
 import { billingTask } from "./tasks";
 import { actorOf, assertMinor, int } from "./util";
 
@@ -31,7 +32,7 @@ export type RefundOutcome = { status: "succeeded" | "pending" | "blocked_config"
 export async function requestRefund(
   db: DB,
   v: Viewer,
-  input: { transactionId: string; amountMinor: number; reason: string; offline?: boolean; reference?: string | null },
+  input: { transactionId: string; amountMinor: number; reason: string; offline?: boolean; reference?: string | null; /** The bill line being refunded; omit for the whole bill in proportion. */ invoiceLineId?: string | null },
 ): Promise<RefundOutcome> {
   assertCan(v, "billing.refund");
   assertMinor(input.amountMinor);
@@ -50,6 +51,10 @@ export async function requestRefund(
     if (input.amountMinor > refundable) throw new UserError(`At most ${refundable} cents can still be refunded on this payment.`);
     const offline = charge.provider === "manual" || input.offline;
     const refundId = randomUUID();
+    // Sales tax given back with this refund (0 when the bill carried none). Recorded on the refund row.
+    const invoiceLineId = input.invoiceLineId || null;
+    const taxMinor = await refundTaxMinor(tx, { invoiceId: charge.invoiceId, amountMinor: input.amountMinor, invoiceLineId });
+    const taxNote = taxMinor > 0 ? `, of which ${taxMinor} is sales tax` : "";
 
     if (offline) {
       const reference = (input.reference ?? "").trim();
@@ -64,6 +69,8 @@ export async function requestRefund(
         reason: input.reason.trim(),
         requestedBy: v.userId,
         idempotencyKey: `refund:${refundId}`,
+        taxMinor,
+        invoiceLineId,
       });
       const [rt] = await tx
         .insert(transactions)
@@ -86,7 +93,7 @@ export async function requestRefund(
         })
         .returning();
       await reviewTask(tx, v.orgId, charge.invoiceId, rt.id);
-      await audit(tx, actorOf(v), "billing.refund.manual", "refund", refundId, { summary: `Offline refund ${input.amountMinor} (staff attested, ref ${reference}): ${input.reason}` });
+      await audit(tx, actorOf(v), "billing.refund.manual", "refund", refundId, { summary: `Offline refund ${input.amountMinor}${taxNote} (staff attested, ref ${reference}): ${input.reason}`, after: { amountMinor: input.amountMinor, taxMinor, invoiceLineId } });
       return { done: { status: "succeeded" as const, refundId, message: "Offline refund recorded (staff attested)." } };
     }
 
@@ -103,6 +110,8 @@ export async function requestRefund(
         reason: `${input.reason.trim()} — ${why}`,
         requestedBy: v.userId,
         idempotencyKey: `refund:${refundId}`,
+        taxMinor,
+        invoiceLineId,
       });
       await audit(tx, actorOf(v), "billing.refund.blocked_config", "refund", refundId, { summary: why });
       return { done: { status: "blocked_config" as const, refundId, message: why } };
@@ -118,8 +127,10 @@ export async function requestRefund(
       reason: input.reason.trim(),
       requestedBy: v.userId,
       idempotencyKey: `refund:${refundId}`,
+      taxMinor,
+      invoiceLineId,
     });
-    await audit(tx, actorOf(v), "billing.refund.request", "refund", refundId, { summary: `Refund ${input.amountMinor} requested via ${charge.provider}: ${input.reason}` });
+    await audit(tx, actorOf(v), "billing.refund.request", "refund", refundId, { summary: `Refund ${input.amountMinor}${taxNote} requested via ${charge.provider}: ${input.reason}`, after: { amountMinor: input.amountMinor, taxMinor, invoiceLineId } });
     return { send: { refundId, charge } };
   });
 

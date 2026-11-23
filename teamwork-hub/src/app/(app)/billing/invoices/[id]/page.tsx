@@ -8,6 +8,7 @@ import { can } from "@/lib/authz/policy";
 import { chargeNowView } from "@/lib/billing/autopay";
 import { MANUAL_METHODS } from "@/lib/billing/invoices";
 import { invoiceDetail } from "@/lib/billing/queries";
+import { formatRate } from "@/lib/billing/tax";
 import { formatMoney } from "@/lib/money";
 import { providerStatuses } from "@/lib/payments";
 import { fmt, fmtDate, todayLocal } from "@/lib/time";
@@ -68,6 +69,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
                   <tr key={line.id}>
                     <Td>
                       {line.description}
+                      {line.taxable ? <div className="text-xs text-ink-3">Taxable{line.taxMinor ? <> · sales tax <Money minor={line.taxMinor} currency={inv.currency} /></> : null}</div> : null}
                       {line.entitlement?.credits ? <div className="text-xs text-ink-3">Grants {line.entitlement.credits * line.quantity} credit(s) when paid</div> : null}
                       {line.entitlement?.unlimitedUntil ? <div className="text-xs text-ink-3">Unlimited through {fmtDate(line.entitlement.unlimitedUntil)}</div> : null}
                     </Td>
@@ -83,10 +85,12 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
               <dt className="text-ink-3">Subtotal</dt><dd className="text-right"><Money minor={inv.subtotalMinor} currency={inv.currency} /></dd>
               {inv.discountMinor - d.familyCreditMinor > 0 ? (<><dt className="text-ink-3">Discount</dt><dd className="text-right">−<Money minor={inv.discountMinor - d.familyCreditMinor} currency={inv.currency} /></dd></>) : null}
               {d.familyCreditMinor > 0 ? (<><dt className="text-ink-3">Family rate credit</dt><dd className="text-right">−<Money minor={d.familyCreditMinor} currency={inv.currency} /></dd></>) : null}
+              {inv.taxRateBps != null ? (<><dt className="text-ink-3" data-testid="tax-label">{d.taxLabel} ({formatRate(inv.taxRateBps)}) on <Money minor={inv.taxableMinor} currency={inv.currency} /></dt><dd className="text-right" data-testid="tax-amount"><Money minor={inv.taxMinor} currency={inv.currency} /></dd></>) : null}
               <dt className="font-semibold">Total</dt><dd className="text-right font-semibold"><Money minor={inv.totalMinor} currency={inv.currency} /></dd>
               <dt className="text-ink-3">Paid (settled)</dt><dd className="text-right text-ok"><Money minor={money.settledMinor} currency={inv.currency} /></dd>
               {money.pendingMinor ? (<><dt className="text-ink-3">Pending (not settled)</dt><dd className="text-right text-warn"><Money minor={money.pendingMinor} currency={inv.currency} /></dd></>) : null}
               {money.refundedMinor ? (<><dt className="text-ink-3">Refunded</dt><dd className="text-right"><Money minor={money.refundedMinor} currency={inv.currency} /></dd></>) : null}
+              {d.taxRefundedMinor ? (<><dt className="text-ink-3">…of which sales tax</dt><dd className="text-right"><Money minor={d.taxRefundedMinor} currency={inv.currency} /></dd></>) : null}
               <dt className="font-semibold">Balance due</dt><dd className="text-right font-semibold"><Money minor={inv.status === "void" ? 0 : money.balanceMinor} currency={inv.currency} /></dd>
             </dl>
             <p className="mt-2 text-xs text-ink-3">
@@ -169,6 +173,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
                 <li key={r.id} className="flex flex-wrap items-center gap-2">
                   <Badge variant={r.status === "succeeded" ? "green" : r.status === "blocked_config" || r.status === "failed" ? "red" : "yellow"}>refund {r.status.replace("_", " ")}</Badge>
                   <Money minor={r.amountMinor} currency={r.currency} />
+                  {r.taxMinor ? <span className="text-xs text-ink-2">includes <Money minor={r.taxMinor} currency={r.currency} /> sales tax</span> : null}
                   <span className="text-xs text-ink-3">{r.reason}</span>
                 </li>
               ))}
@@ -234,6 +239,18 @@ function StaffTools({ d, canManage, canRefund }: { d: NonNullable<Awaited<Return
                 <Field label="Amount ($)" htmlFor="ramount" required><Input id="ramount" name="amount" inputMode="decimal" required /></Field>
                 <Field label="Reason" htmlFor="reason" required><Input id="reason" name="reason" required /></Field>
               </div>
+              {inv.taxMinor > 0 ? (
+                <Field label="Refund is for" htmlFor="rline" hint="This bill carries sales tax. The tax share of the refund is worked out from this choice and recorded with the refund.">
+                  <Select id="rline" name="invoiceLineId" defaultValue="">
+                    <option value="">Whole bill (tax in proportion to the amount)</option>
+                    {d.lines.map(({ line }) => (
+                      <option key={line.id} value={line.id}>
+                        {line.description}: up to {formatMoney(line.amountMinor - line.discountMinor + line.taxMinor, inv.currency)}{line.taxMinor ? ` including ${formatMoney(line.taxMinor, inv.currency)} tax` : " (no tax)"}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              ) : null}
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="offline" /> Refunded offline (cash/check) — record as staff attested</label>
               <Field label="Offline reference" htmlFor="rref" hint="Required for offline refunds"><Input id="rref" name="reference" /></Field>
               <p className="text-xs text-ink-3">Provider refunds are sent with an idempotency key; if the provider isn&apos;t configured the refund is recorded as blocked and nothing is sent. Credits are not auto-revoked — a review task is created.</p>

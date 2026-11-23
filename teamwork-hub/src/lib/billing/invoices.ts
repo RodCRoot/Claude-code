@@ -2,6 +2,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Tx } from "@/db";
 import {
   athletes,
+  inventoryMovements,
   invoiceLines,
   invoices,
   memberships,
@@ -19,6 +20,8 @@ import { grantCredits } from "@/lib/credits";
 import { confirmEventRegistration } from "@/lib/events/confirm";
 import { addDaysYmd, localToUtc, todayLocal } from "@/lib/time";
 import { assertCanViewPayer } from "./access";
+import { salesTaxSettings } from "./sales-tax";
+import { computeTax, formatRate } from "./tax";
 import { actorOf, assertMinor, billingSettings, int } from "./util";
 
 export type LineInput = {
@@ -28,6 +31,8 @@ export type LineInput = {
   productVersionId?: string | null;
   athleteId?: string | null;
   entitlement?: EntitlementSpec | null;
+  /** Retail variant sold (the caller has already checked it belongs to the product). */
+  variantId?: string | null;
 };
 
 /** Sequential per-org number, serialized with a transaction-scoped advisory lock. */
@@ -52,6 +57,11 @@ export type CreateInvoiceInput = {
   periodStart?: string | null;
   periodEnd?: string | null;
   discountMinor?: number;
+  /**
+   * The part of discountMinor that is a CREDIT (family rate credit and the like), not a price
+   * reduction. Credits lower the amount due but never the sales tax.
+   */
+  creditMinor?: number;
   /** Membership bills: the family rate percent the bill was priced with (0 = none). */
   familyRatePercent?: number | null;
   source?: (typeof invoices.$inferInsert)["source"];
@@ -101,7 +111,18 @@ export async function createInvoiceRecord(tx: Tx, actor: AuditActor, input: Crea
   const discount = input.discountMinor ?? 0;
   assertMinor(discount, "discount");
   if (discount < 0 || discount > subtotal) throw new UserError("Discount must be between $0 and the subtotal.");
-  const total = subtotal - discount;
+  const credit = input.creditMinor ?? 0;
+  assertMinor(credit, "credit");
+  if (credit < 0 || credit > discount) throw new UserError("The credit part of a discount cannot be more than the discount.");
+  // Sales tax. A line is taxable only when its product is a retail product staff have marked taxable;
+  // the answer is looked up here, never taken from the caller, so a service can never be taxed by a
+  // form field. Imported history is never taxed.
+  const taxableVersions = input.source === "imported" ? new Set<string>() : await taxableVersionIds(tx, input.orgId, lines.map((l) => l.productVersionId));
+  const flagged = lines.map((l) => ({ amountMinor: l.amountMinor, taxable: !!l.productVersionId && taxableVersions.has(l.productVersionId) }));
+  const anyTaxable = flagged.some((l) => l.taxable);
+  const rateBps = anyTaxable ? (await salesTaxSettings(tx, input.orgId)).rateBps : null;
+  const tax = computeTax(flagged, discount - credit, rateBps ?? 0);
+  const total = subtotal - discount + tax.taxMinor;
   const number = await nextInvoiceNumber(tx, input.orgId);
   const status = input.status ?? "open";
   const { invoiceDueDays } = await billingSettings(tx, input.orgId);
@@ -115,7 +136,9 @@ export async function createInvoiceRecord(tx: Tx, actor: AuditActor, input: Crea
       currency,
       subtotalMinor: subtotal,
       discountMinor: discount,
-      taxMinor: 0,
+      taxMinor: tax.taxMinor,
+      taxRateBps: rateBps,
+      taxableMinor: tax.taxableMinor,
       totalMinor: total,
       issuedAt: status === "open" ? new Date() : null,
       dueDate: input.dueDate ?? (status === "open" ? addDaysYmd(todayLocal(), invoiceDueDays) : null),
@@ -133,7 +156,11 @@ export async function createInvoiceRecord(tx: Tx, actor: AuditActor, input: Crea
   const insertedLines = await tx
     .insert(invoiceLines)
     .values(
-      lines.map((l) => ({
+      lines.map((l, i) => ({
+        variantId: l.variantId ?? null,
+        taxable: flagged[i].taxable,
+        discountMinor: tax.lines[i].discountMinor,
+        taxMinor: tax.lines[i].taxMinor,
         invoiceId: inv.id,
         productVersionId: l.productVersionId ?? null,
         athleteId: l.athleteId ?? null,
@@ -145,7 +172,10 @@ export async function createInvoiceRecord(tx: Tx, actor: AuditActor, input: Crea
       })),
     )
     .returning();
-  await audit(tx, actor, "billing.invoice.create", "invoice", inv.id, { summary: `Invoice ${number} for ${total} ${currency} (${status})`, after: { number, total, status } });
+  await audit(tx, actor, "billing.invoice.create", "invoice", inv.id, {
+    summary: `Invoice ${number} for ${total} ${currency} (${status})${tax.taxMinor ? `, including ${tax.taxMinor} sales tax at ${formatRate(rateBps ?? 0)}` : ""}`,
+    after: { number, total, status, taxMinor: tax.taxMinor, taxRateBps: rateBps, taxableMinor: tax.taxableMinor },
+  });
   // A $0 invoice is settled immediately (e.g. 100% discount / comp).
   if (total === 0 && status === "open") await settleInvoiceIfCovered(tx, inv.id, actor);
   if (total > 0 && status === "open" && (await referralHook(tx, input.orgId, inv.payerAccountId))) {
@@ -154,6 +184,18 @@ export async function createInvoiceRecord(tx: Tx, actor: AuditActor, input: Crea
     return { invoice: fresh ?? inv, lines: insertedLines, created: true };
   }
   return { invoice: inv, lines: insertedLines, created: true };
+}
+
+/** Of these product versions, the ones whose product is a retail product marked taxable. */
+async function taxableVersionIds(tx: Tx, orgId: string, versionIds: (string | null | undefined)[]): Promise<Set<string>> {
+  const ids = [...new Set(versionIds.filter((x): x is string => !!x))];
+  if (!ids.length) return new Set();
+  const rows = await tx
+    .select({ id: productVersions.id })
+    .from(productVersions)
+    .innerJoin(products, eq(products.id, productVersions.productId))
+    .where(and(inArray(productVersions.id, ids), eq(products.orgId, orgId), eq(products.kind, "retail"), eq(products.taxable, true)));
+  return new Set(rows.map((r) => r.id));
 }
 
 /**
@@ -196,12 +238,26 @@ export async function issueInvoice(tx: Tx, v: Viewer, invoiceId: string) {
   const inv = await lockInvoice(tx, v.orgId, invoiceId);
   if (inv.status !== "draft") throw new UserError("Only draft invoices can be issued.");
   const { invoiceDueDays } = await billingSettings(tx, v.orgId);
+  // A draft is not a bill yet: its tax is settled now, at the rate in force today, and never changes again.
+  const lines = await tx.select().from(invoiceLines).where(eq(invoiceLines.invoiceId, inv.id)).orderBy(invoiceLines.id);
+  const anyTaxable = lines.some((l) => l.taxable);
+  const rateBps = anyTaxable ? (await salesTaxSettings(tx, v.orgId)).rateBps : null;
+  const priceDiscount = lines.reduce((s, l) => s + l.discountMinor, 0);
+  const tax = computeTax(lines.map((l) => ({ amountMinor: l.amountMinor, taxable: l.taxable })), priceDiscount, rateBps ?? 0);
+  const total = inv.subtotalMinor - inv.discountMinor + tax.taxMinor;
+  for (const [i, l] of lines.entries()) {
+    if (l.taxMinor !== tax.lines[i].taxMinor) await tx.update(invoiceLines).set({ taxMinor: tax.lines[i].taxMinor }).where(eq(invoiceLines.id, l.id));
+  }
   await tx
     .update(invoices)
-    .set({ status: "open", issuedAt: new Date(), dueDate: inv.dueDate ?? addDaysYmd(todayLocal(), invoiceDueDays), updatedAt: new Date() })
+    .set({ status: "open", issuedAt: new Date(), dueDate: inv.dueDate ?? addDaysYmd(todayLocal(), invoiceDueDays), taxMinor: tax.taxMinor, taxRateBps: rateBps, taxableMinor: tax.taxableMinor, totalMinor: total, updatedAt: new Date() })
     .where(eq(invoices.id, inv.id));
-  await audit(tx, actorOf(v), "billing.invoice.issue", "invoice", inv.id, { summary: `Issued ${inv.number}` });
-  if (inv.totalMinor > 0) await referralHook(tx, v.orgId, inv.payerAccountId);
+  await audit(tx, actorOf(v), "billing.invoice.issue", "invoice", inv.id, {
+    summary: `Issued ${inv.number}${total !== inv.totalMinor ? ` (sales tax recalculated at issue: total ${inv.totalMinor} → ${total})` : ""}`,
+    before: { taxMinor: inv.taxMinor, taxRateBps: inv.taxRateBps, totalMinor: inv.totalMinor },
+    after: { taxMinor: tax.taxMinor, taxRateBps: rateBps, totalMinor: total },
+  });
+  if (total > 0) await referralHook(tx, v.orgId, inv.payerAccountId);
 }
 
 export async function voidInvoice(tx: Tx, v: Viewer, invoiceId: string, reason: string) {
@@ -212,7 +268,19 @@ export async function voidInvoice(tx: Tx, v: Viewer, invoiceId: string, reason: 
   const money = await invoiceMoney(tx, inv.id);
   if (money.settledMinor > 0 || money.pendingMinor > 0) throw new UserError("This invoice has payments recorded. Refund them before voiding.");
   await tx.update(invoices).set({ status: "void", updatedAt: new Date() }).where(eq(invoices.id, inv.id));
-  await audit(tx, actorOf(v), "billing.invoice.void", "invoice", inv.id, { summary: `Voided ${inv.number}: ${reason}`, before: { status: inv.status } });
+  // Stock taken for this bill (counter sale left unpaid, shop order) goes back on the shelf count.
+  const sold = await tx
+    .select({ m: inventoryMovements })
+    .from(inventoryMovements)
+    .innerJoin(invoiceLines, eq(invoiceLines.id, inventoryMovements.invoiceLineId))
+    .where(and(eq(invoiceLines.invoiceId, inv.id), eq(inventoryMovements.reason, "sale")));
+  for (const { m } of sold) {
+    await tx.insert(inventoryMovements).values({ orgId: m.orgId, productId: m.productId, variantId: m.variantId, delta: -m.delta, reason: "return", invoiceLineId: m.invoiceLineId, actorUserId: v.userId, note: `Bill ${inv.number} voided` });
+  }
+  await audit(tx, actorOf(v), "billing.invoice.void", "invoice", inv.id, {
+    summary: `Voided ${inv.number}: ${reason}${sold.length ? ` (${sold.reduce((s, x) => s - x.m.delta, 0)} item(s) returned to stock)` : ""}`,
+    before: { status: inv.status },
+  });
 }
 
 export async function markUncollectible(tx: Tx, v: Viewer, invoiceId: string, reason: string) {

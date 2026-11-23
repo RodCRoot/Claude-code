@@ -76,8 +76,13 @@ export async function invoiceDetail(tx: Tx, v: Viewer, invoiceId: string) {
   const money = await invoiceMoney(tx, inv.id);
   const canPay = inScope(await payablePayerIds(tx, v), inv.payerAccountId);
   const { siblingCreditOnInvoices } = await import("./family-credit");
+  const { salesTaxSettings } = await import("./sales-tax");
   return {
     invoice: inv,
+    /** Label for the tax row (the rate shown is the one stored on the bill, not today's). */
+    taxLabel: (await salesTaxSettings(tx, inv.orgId)).label,
+    /** Sales tax given back by refunds that went through. */
+    taxRefundedMinor: refundRows.filter((r) => r.status === "succeeded").reduce((s, r) => s + r.taxMinor, 0),
     /** Part of the discount that is a family rate (sibling) credit; shown as its own row. */
     familyCreditMinor: (await siblingCreditOnInvoices(tx, inv.orgId, [inv.id]))[inv.id] ?? 0,
     payer,

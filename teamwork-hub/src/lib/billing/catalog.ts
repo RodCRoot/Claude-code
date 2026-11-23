@@ -166,6 +166,28 @@ export async function setProductActive(tx: Tx, v: Viewer, productId: string, act
   return p;
 }
 
+/**
+ * The per-product "taxable" switch. Off for every product until staff turn it on. Only retail
+ * products can be taxable: memberships, training, camps, packs and other services cannot be switched
+ * into sales tax (also enforced by a CHECK on the table). Whether a particular retail item should be
+ * taxed is the owner's and their accountant's call; this only records it. Bills already created keep
+ * the flag they were created with.
+ */
+export async function setProductTaxable(tx: Tx, v: Viewer, productId: string, taxable: boolean) {
+  assertCan(v, "billing.manage");
+  const [p] = await tx.select().from(products).where(and(eq(products.id, productId), eq(products.orgId, v.orgId))).for("update");
+  if (!p) throw new UserError("Product not found.");
+  if (taxable && p.kind !== "retail") throw new UserError("Sales tax can only be turned on for retail products. Memberships, training, camps and session packs are not taxed here.");
+  if (p.taxable === taxable) return p;
+  const [row] = await tx.update(products).set({ taxable }).where(eq(products.id, p.id)).returning();
+  await audit(tx, actorOf(v), "billing.product.taxable", "product", p.id, {
+    summary: `${p.name}: sales tax ${taxable ? "ON" : "OFF"} for new bills`,
+    before: { taxable: p.taxable },
+    after: { taxable },
+  });
+  return row;
+}
+
 /** The version in effect on a date (or the latest if the date precedes all versions' end). */
 export async function versionOn(tx: Tx, productId: string, onDate: string) {
   const [ver] = await tx

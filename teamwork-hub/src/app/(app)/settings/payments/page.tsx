@@ -7,12 +7,13 @@ import { agreementSettings, agreementTemplateVersion, unsignedAgreements } from 
 import { MERGE_FIELDS, RESIGN_TRIGGERS } from "@/lib/agreements/terms";
 import { requireCap } from "@/lib/auth/viewer";
 import { autopaySettings, type FeeEstimate } from "@/lib/billing/autopay-settings";
+import { salesTaxSettings } from "@/lib/billing/sales-tax";
 import { MANDATE_TEXT_VERSION } from "@/lib/billing/mandate-text";
 import { expiringCards } from "@/lib/billing/payment-methods";
 import { minorToDecimal } from "@/lib/payments/provider";
 import { getSavedMethodProvider } from "@/lib/payments";
 import { fmtDate } from "@/lib/time";
-import { createSampleAgreementAction, saveAgreementSettingsAction, saveAutopaySettingsAction } from "./actions";
+import { createSampleAgreementAction, saveAgreementSettingsAction, saveAutopaySettingsAction, saveSalesTaxAction } from "./actions";
 
 export const metadata = { title: "Payments and agreements" };
 
@@ -22,6 +23,7 @@ const usd = (n: number | null | undefined) => (n == null ? "" : minorToDecimal(n
 export default async function PaymentsSettingsPage() {
   const v = await requireCap("settings.manage");
   const [auto, agr, tpl, expiring, unsigned] = await Promise.all([autopaySettings(db, v.orgId), agreementSettings(db, v.orgId), agreementTemplateVersion(db, v.orgId), expiringCards(db, v.orgId), unsignedAgreements(db, v.orgId)]);
+  const salesTax = await salesTaxSettings(db, v.orgId);
   const adapter = getSavedMethodProvider();
   const need = (k: string) => (auto.unconfirmed.includes(k) ? <Badge variant="yellow">Needs confirmation</Badge> : null);
   return (
@@ -34,6 +36,33 @@ export default async function PaymentsSettingsPage() {
         </Callout>
       ) : null}
       <div className="grid gap-5 lg:grid-cols-2 [&>*]:min-w-0">
+        <Card id="sales-tax">
+          <CardHeader title="Sales tax" action={salesTax.confirmed ? null : <Badge variant="yellow">Needs confirmation</Badge>} />
+          <CardBody>
+            <ActionForm action={saveSalesTaxAction} className="space-y-4">
+              <Field
+                label="Sales tax rate (%)"
+                htmlFor="salesTaxRate"
+                hint="Indiana has one statewide sales tax rate and no local sales taxes. The starting value here is 7.00%. Confirm the rate with your accountant. Leave empty or enter 0 to charge no sales tax."
+              >
+                <Input id="salesTaxRate" name="salesTaxRate" inputMode="decimal" defaultValue={salesTax.rateBps === 0 ? "" : (salesTax.rateBps / 100).toFixed(2)} className="w-28" />
+              </Field>
+              <Field label="Name shown on bills and receipts" htmlFor="salesTaxLabel">
+                <Input id="salesTaxLabel" name="salesTaxLabel" defaultValue={salesTax.label} maxLength={80} />
+              </Field>
+              <ul className="list-disc space-y-1 pl-5 text-xs text-ink-2">
+                <li>Tax is added only to retail products you mark Taxable under Billing, Products. Every product starts untaxed. Memberships, training, camps and session packs cannot be marked taxable.</li>
+                <li>Which goods are taxable is a question for your accountant. This software does not decide it.</li>
+                <li>A new rate applies to bills created from then on. Bills already issued keep the rate and tax they were issued with.</li>
+                <li>Bills imported from Zen Planner are history only and are never taxed here.</li>
+              </ul>
+              <div className="flex flex-wrap items-center gap-3">
+                <SubmitButton>Save sales tax</SubmitButton>
+                <Link className="text-sm underline" href="/reports/sales-tax">Sales tax collected report</Link>
+              </div>
+            </ActionForm>
+          </CardBody>
+        </Card>
         <Card>
           <CardHeader title="Autopay retries and bank pay discount" />
           <CardBody>

@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { ButtonLink } from "@/components/ui";
 import { getOrg } from "@/lib/auth/viewer";
 import { invoiceDetail } from "@/lib/billing/queries";
+import { formatRate } from "@/lib/billing/tax";
 import { fmt, fmtDate } from "@/lib/time";
 import { METHOD_LABEL, Money, PROVIDER_LABEL, requireBillingViewer } from "../../../_components";
 import { PrintButton } from "../../../_print-button";
@@ -40,7 +41,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
         <tbody>
           {d.lines.map(({ line, athleteFirst, athleteLast }) => (
             <tr key={line.id} className="border-b border-edge/60">
-              <td className="py-1.5">{line.description}{athleteFirst ? <span className="text-ink-3"> · {athleteFirst} {athleteLast}</span> : null}</td>
+              <td className="py-1.5">{line.description}{inv.taxRateBps != null && line.taxable ? <span className="text-ink-3"> (T)</span> : null}{athleteFirst ? <span className="text-ink-3"> · {athleteFirst} {athleteLast}</span> : null}</td>
               <td className="py-1.5 text-right">{line.quantity}</td>
               <td className="py-1.5 text-right"><Money minor={line.amountMinor} currency={inv.currency} /></td>
             </tr>
@@ -50,11 +51,19 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
       <dl className="ml-auto mt-3 grid max-w-xs grid-cols-2 gap-y-1 text-sm">
         {inv.discountMinor - d.familyCreditMinor > 0 ? (<><dt>Discount</dt><dd className="text-right">−<Money minor={inv.discountMinor - d.familyCreditMinor} currency={inv.currency} /></dd></>) : null}
         {d.familyCreditMinor > 0 ? (<><dt>Family rate credit</dt><dd className="text-right">−<Money minor={d.familyCreditMinor} currency={inv.currency} /></dd></>) : null}
+        {inv.taxRateBps != null ? (
+          <>
+            <dt>Subtotal</dt><dd className="text-right"><Money minor={inv.subtotalMinor - inv.discountMinor} currency={inv.currency} /></dd>
+            <dt data-testid="receipt-tax-label">{d.taxLabel} ({formatRate(inv.taxRateBps)})</dt><dd className="text-right" data-testid="receipt-tax"><Money minor={inv.taxMinor} currency={inv.currency} /></dd>
+          </>
+        ) : null}
         <dt className="font-semibold">Total</dt><dd className="text-right font-semibold"><Money minor={inv.totalMinor} currency={inv.currency} /></dd>
         <dt>Paid</dt><dd className="text-right"><Money minor={d.money.settledMinor} currency={inv.currency} /></dd>
         {d.money.refundedMinor ? (<><dt>Refunded</dt><dd className="text-right"><Money minor={d.money.refundedMinor} currency={inv.currency} /></dd></>) : null}
+        {d.taxRefundedMinor ? (<><dt>Sales tax refunded</dt><dd className="text-right"><Money minor={d.taxRefundedMinor} currency={inv.currency} /></dd></>) : null}
         <dt className="font-semibold">Balance</dt><dd className="text-right font-semibold"><Money minor={d.money.balanceMinor} currency={inv.currency} /></dd>
       </dl>
+      {inv.taxRateBps != null ? <p className="mt-2 text-right text-xs text-ink-3">(T) = taxable item</p> : null}
       <section className="mt-6 text-sm">
         <h2 className="font-semibold">Payments</h2>
         <ul className="mt-1 space-y-1">
