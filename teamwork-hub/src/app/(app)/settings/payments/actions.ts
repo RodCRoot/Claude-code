@@ -9,6 +9,8 @@ import { RESIGN_TRIGGERS, type ResignTrigger } from "@/lib/agreements/terms";
 import { assertCan } from "@/lib/authz/policy";
 import { autopaySettings, saveAutopaySettings, type FeeEstimate } from "@/lib/billing/autopay-settings";
 import { UserError as BillingUserError } from "@/lib/billing/errors";
+import { saveSalesTax } from "@/lib/billing/sales-tax";
+import { parseRateToBps } from "@/lib/billing/tax";
 import { parseMoneyToMinor } from "@/lib/money";
 
 async function run(fn: () => Promise<ActionState | void>): Promise<ActionState> {
@@ -63,6 +65,18 @@ export async function saveAutopaySettingsAction(_p: ActionState, fd: FormData) {
       }),
     );
     return { ok: true, message: "Saved." };
+  });
+}
+
+export async function saveSalesTaxAction(_p: ActionState, fd: FormData) {
+  return run(async () => {
+    const v = await requireViewer();
+    assertCan(v, "settings.manage");
+    const bps = parseRateToBps(s(fd, "salesTaxRate"));
+    if (bps == null) throw new UserError("Enter the sales tax rate as a percent with up to two decimals, for example 7 or 7.00. Leave it empty to charge no sales tax.", { salesTaxRate: "For example 7.00" });
+    const after = await db.transaction((tx) => saveSalesTax(tx, v, { rateBps: bps, label: s(fd, "salesTaxLabel") }));
+    revalidatePath("/billing", "layout");
+    return { ok: true, message: after.rateBps === 0 ? "Saved. No sales tax is charged." : "Saved. New bills use this rate; bills already issued keep theirs." };
   });
 }
 

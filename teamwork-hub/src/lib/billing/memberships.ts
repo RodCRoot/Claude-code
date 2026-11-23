@@ -361,6 +361,7 @@ export async function billPeriod(
     source: "membership_renewal",
     idempotencyKey: `membership:${m.id}:${periodStart}`,
     discountMinor: price.discount + bankDiscount + siblingCredit,
+    creditMinor: siblingCredit,
     familyRatePercent: familyDiscount?.active && familyDiscount.kind === "percent" && isFamilyDiscount(familyDiscount) ? familyDiscount.value : 0,
     dueDate: periodStart,
     isDemo: m.isDemo,

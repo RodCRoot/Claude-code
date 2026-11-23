@@ -8,6 +8,8 @@ import { Badge, Callout, EmptyState, PageHeader, Select } from "@/components/ui"
 import { requireViewer } from "@/lib/auth/viewer";
 import { payerAccountIdsFor } from "@/lib/authz/policy";
 import { familyName, onlinePaymentAvailable, shopAthletes, shopItems } from "@/lib/growth/shop";
+import { salesTaxSettings } from "@/lib/billing/sales-tax";
+import { formatRate, taxOn } from "@/lib/billing/tax";
 import { formatMoney } from "@/lib/money";
 import { todayLocal } from "@/lib/time";
 import { shopCheckoutAction } from "../_growth/actions";
@@ -17,12 +19,12 @@ export const metadata = { title: "Shop" };
 export default async function ShopPage() {
   const v = await requireViewer();
   if (v.role !== "guardian" && v.role !== "athlete") redirect("/billing/products");
-  const [items, buyFor, viewable] = await Promise.all([shopItems(db, v.orgId, todayLocal()), shopAthletes(db, v), payerAccountIdsFor(db, v, "view")]);
+  const [items, buyFor, viewable, tax] = await Promise.all([shopItems(db, v.orgId, todayLocal()), shopAthletes(db, v), payerAccountIdsFor(db, v, "view"), salesTaxSettings(db, v.orgId)]);
   const online = onlinePaymentAvailable();
   const viewOnly = buyFor.length === 0 && viewable.length > 0;
   return (
     <>
-      <PageHeader kicker="Shop" title="Shop" description="Session packs, assessments and add-ons you can order for your athletes. Prices come straight from our current price list." />
+      <PageHeader kicker="Shop" title="Shop" description="Session packs, assessments, add-ons and gear you can order for your athletes. Prices come straight from our current price list." />
       <FamilySuggestion viewer={v} className="mb-5" />
       <UpcomingEventsCard v={v} className="mb-5" />
       {buyFor.length === 0 ? (
@@ -40,12 +42,28 @@ export default async function ShopPage() {
         <EmptyState title="Nothing in the shop yet">We have not added items for online ordering. The front desk can help with session packs and assessments.</EmptyState>
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {items.map((it) => (
+          {items.map((it) => {
+            const taxed = it.taxable && tax.rateBps > 0;
+            const onePrice = it.variants.every((x) => x.priceMinor === it.priceMinor);
+            const soldOut = it.variants.length ? it.variants.every((x) => x.onHand === 0) : it.onHand === 0;
+            return (
             <li key={it.productId} id={`item-${it.productId}`} className="flex min-w-0 scroll-mt-24 flex-col rounded-md border border-edge bg-surface shadow-[0_1px_3px_rgb(16_24_40/0.06)] target:ring-2 target:ring-brand">
               <div className="flex-1 space-y-2 px-4 pt-4">
                 <Badge variant="brand">{it.kindLabel}</Badge>
                 <h2 className="text-base font-semibold leading-snug">{it.name}</h2>
                 <p className="text-[26px] font-bold leading-none tabular">{formatMoney(it.priceMinor, it.currency)}</p>
+                {taxed ? (
+                  <p className="text-sm text-ink-2" data-testid="shop-tax">
+                    {onePrice ? (
+                      <>
+                        Plus {formatMoney(taxOn(it.priceMinor, tax.rateBps), it.currency)} sales tax ({formatRate(tax.rateBps)}). Total <span className="font-semibold text-ink">{formatMoney(it.priceMinor + taxOn(it.priceMinor, tax.rateBps), it.currency)}</span>
+                      </>
+                    ) : (
+                      <>Plus {formatRate(tax.rateBps)} sales tax on the price of the {it.optionName?.toLowerCase()} you choose.</>
+                    )}
+                  </p>
+                ) : null}
+                {it.kind === "retail" ? <p className="text-sm text-ink-2">Pick up at the front desk.{soldOut ? " Out of stock right now." : it.onHand != null ? ` ${it.onHand} in stock.` : ""}</p> : null}
                 {it.includes ? <p className="text-sm text-ink-2">{it.includes}</p> : it.description ? <p className="text-sm text-ink-2">{familyName(it.description)}</p> : null}
                 {it.facts.length ? (
                   <ul className="list-disc space-y-0.5 pl-5 text-sm text-ink-2">
@@ -60,6 +78,25 @@ export default async function ShopPage() {
                   <ActionForm action={shopCheckoutAction} className="space-y-2">
                     <input type="hidden" name="productId" value={it.productId} />
                     <input type="hidden" name="key" value={randomUUID()} />
+                    {it.variants.length ? (
+                      <div>
+                        <label htmlFor={`variant-${it.productId}`} className="block text-xs font-semibold text-ink-2">
+                          {it.optionName}
+                        </label>
+                        <Select id={`variant-${it.productId}`} name="variantId" required defaultValue="" className="mt-1">
+                          <option value="" disabled>
+                            Choose a {it.optionName?.toLowerCase()}
+                          </option>
+                          {it.variants.map((x) => (
+                            <option key={x.id} value={x.id} disabled={x.onHand === 0}>
+                              {x.label}
+                              {onePrice ? "" : `: ${formatMoney(x.priceMinor, it.currency)}`}
+                              {x.onHand === 0 ? " (out of stock)" : x.low ? ` (${x.onHand} left)` : ""}
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
+                    ) : null}
                     {buyFor.length === 1 ? (
                       <>
                         <input type="hidden" name="athleteId" value={buyFor[0].athleteId} />
@@ -84,20 +121,25 @@ export default async function ShopPage() {
                         </Select>
                       </div>
                     )}
-                    <SubmitButton className="w-full" pendingText="Creating your order…">
-                      {online ? "Order and pay" : "Place order"}
-                    </SubmitButton>
+                    {soldOut ? (
+                      <p className="text-sm font-semibold text-ink-2">Out of stock</p>
+                    ) : (
+                      <SubmitButton className="w-full" pendingText="Creating your order…">
+                        {online ? "Order and pay" : "Place order"}
+                      </SubmitButton>
+                    )}
                   </ActionForm>
                 ) : (
                   <p className="text-sm text-ink-3">Available at the front desk.</p>
                 )}
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
       <p className="mt-5 max-w-3xl text-xs text-ink-3">
-        Ordering creates a bill on your billing account. Nothing is charged on this page. Sessions and credits are added only after your payment is confirmed. Camps and clinics have their own page with dates and spots left. Memberships are arranged with the front desk.
+        Ordering creates a bill on your billing account. Nothing is charged on this page. Sessions and credits are added only after your payment is confirmed. Gear is picked up at the front desk. Camps and clinics have their own page with dates and spots left. Memberships are arranged with the front desk.
       </p>
     </>
   );

@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { ButtonLink, Callout, Card, CardBody, CardHeader, PageHeader, StatusBadge } from "@/components/ui";
 import { requireViewer } from "@/lib/auth/viewer";
 import { shopOrderView } from "@/lib/growth/shop";
+import { formatRate } from "@/lib/billing/tax";
 import { formatMoney } from "@/lib/money";
 import { fmtDate } from "@/lib/time";
 
@@ -24,13 +25,25 @@ export default async function ShopOrderPage({ params }: { params: Promise<{ id: 
           <CardHeader title={o.productName} kicker={`For ${o.athleteFirst}`} action={<StatusBadge status={o.invoice.status} />} />
           <CardBody className="space-y-3">
             <dl className="grid grid-cols-2 gap-y-2 text-sm">
+              {o.invoice.taxMinor > 0 ? (
+                <>
+                  <dt className="text-ink-3">Price</dt>
+                  <dd className="text-right tabular">{formatMoney(o.invoice.subtotalMinor - o.invoice.discountMinor, o.invoice.currency)}</dd>
+                  <dt className="text-ink-3">
+                    {o.taxLabel} ({formatRate(o.invoice.taxRateBps ?? 0)})
+                  </dt>
+                  <dd className="text-right tabular">{formatMoney(o.invoice.taxMinor, o.invoice.currency)}</dd>
+                  <dt className="text-ink-3">Total</dt>
+                  <dd className="text-right tabular">{formatMoney(o.invoice.totalMinor, o.invoice.currency)}</dd>
+                </>
+              ) : null}
               <dt className="text-ink-3">Amount due</dt>
               <dd className="text-right font-semibold tabular">{formatMoney(o.money.balanceMinor, o.invoice.currency)}</dd>
               <dt className="text-ink-3">Due</dt>
               <dd className="text-right">{fmtDate(o.invoice.dueDate)}</dd>
             </dl>
             {paid ? (
-              <Callout tone="ok">Payment is confirmed. Anything included with this order is now on {o.athleteFirst}&apos;s account.</Callout>
+              <Callout tone="ok">{o.retail ? "Payment is confirmed. Pick up your order at the front desk." : <>Payment is confirmed. Anything included with this order is now on {o.athleteFirst}&apos;s account.</>}</Callout>
             ) : !open ? (
               <Callout tone="info">This order is no longer open. Please ask the front desk if you have questions.</Callout>
             ) : o.money.pendingMinor > 0 ? (
@@ -38,10 +51,10 @@ export default async function ShopOrderPage({ params }: { params: Promise<{ id: 
             ) : !o.canPay ? (
               <Callout tone="info">You can view this order. Payment is made by another adult on the billing account.</Callout>
             ) : o.onlinePayment ? (
-              <Callout tone="info">Nothing has been charged yet. Continue to the bill to pay securely with our payment provider. Sessions are added once the payment is confirmed.</Callout>
+              <Callout tone="info">Nothing has been charged yet. Continue to the bill to pay securely with our payment provider. {o.retail ? "Pick up your order at the front desk." : "Sessions are added once the payment is confirmed."}</Callout>
             ) : (
               <Callout tone="warn" title="Online payment is not set up yet">
-                Nothing has been charged. Please pay this bill at the front desk (cash, check or card). Sessions are added to {o.athleteFirst}&apos;s account as soon as staff record the payment.
+                Nothing has been charged. Please pay this bill at the front desk (cash, check or card). {o.retail ? "You can pick up your order there." : <>Sessions are added to {o.athleteFirst}&apos;s account as soon as staff record the payment.</>}
               </Callout>
             )}
             <div className="flex flex-wrap gap-2">

@@ -162,6 +162,18 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
               )}
             </CardBody>
           </Card>
+          {result.notes?.length ? (
+            <section aria-labelledby="report-notes" className="mt-4 rounded-md border border-edge bg-surface p-4">
+              <h2 id="report-notes" className="text-sm font-semibold">
+                What each column means
+              </h2>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink-2">
+                {result.notes.map((t) => (
+                  <li key={t}>{t}</li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
           <p className="mt-3 text-xs text-ink-3">
             {result.rows.length} rows · {fmtDate(from)} – {fmtDate(to)} ·{" "}
             <Link href="/reports" className="underline">

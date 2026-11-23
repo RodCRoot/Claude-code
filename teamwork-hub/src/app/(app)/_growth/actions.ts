@@ -114,7 +114,7 @@ export async function shopCheckoutAction(_p: ActionState, fd: FormData): Promise
     const v = await requireViewer();
     const athleteId = s(fd, "athleteId");
     if (!athleteId) throw new UserError("Choose who this is for.", { athleteId: "Choose an athlete" });
-    const r = await db.transaction((tx) => shopCheckout(tx, v, { productId: s(fd, "productId"), athleteId, idempotencyKey: s(fd, "key"), today: todayLocal() }));
+    const r = await db.transaction((tx) => shopCheckout(tx, v, { productId: s(fd, "productId"), athleteId, idempotencyKey: s(fd, "key"), today: todayLocal(), variantId: s(fd, "variantId") || null }));
     invoiceId = r.invoiceId;
   });
   if (res.ok && invoiceId) redirect(`/shop/order/${invoiceId}`);

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { refundTaxMinor } from "./sales-tax";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { DB, Tx } from "@/db";
 import {
@@ -402,7 +403,16 @@ async function applyRefund(tx: Tx, provider: WebhookProvider, ev: Extract<Normal
     .limit(1);
   if (req) await tx.update(refunds).set({ status: "succeeded" }).where(eq(refunds.id, req.id));
   else
-    await tx.insert(refunds).values({ orgId: charge.orgId, transactionId: charge.id, amountMinor: delta, currency: charge.currency, status: "succeeded", reason: "Refund initiated at provider" });
+    await tx.insert(refunds).values({
+      orgId: charge.orgId,
+      transactionId: charge.id,
+      amountMinor: delta,
+      currency: charge.currency,
+      status: "succeeded",
+      reason: "Refund initiated at provider",
+      // No line is known for a refund made in the provider dashboard: the tax share is in proportion to the bill.
+      taxMinor: await refundTaxMinor(tx, { invoiceId: charge.invoiceId, amountMinor: delta }),
+    });
   await billingTask(tx, charge.orgId, {
     title: "Review entitlements after refund",
     description: "A refund settled. Credits are NOT auto-revoked (some may be used). Review the athlete's credits/membership and adjust if appropriate.",

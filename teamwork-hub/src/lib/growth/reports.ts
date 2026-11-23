@@ -66,10 +66,11 @@ export const GROWTH_REPORTS: ReportDef[] = [
     title: "Shop sales by item",
     category: "Growth",
     definition:
-      "Family Shop orders placed in the date range, by item. Ordered = invoices created at shop checkout (billed, not collected). Paid = those invoices that are now PAID, which only happens after a verified provider payment or a staff-recorded offline payment. Open = still awaiting payment. Voided orders are listed separately and excluded from the dollar columns.",
+      "Family Shop orders placed in the date range, by item. Ordered = invoices created at shop checkout (billed, not collected). Paid = those invoices that are now PAID, which only happens after a verified provider payment or a staff-recorded offline payment. Open = still awaiting payment. Voided orders are listed separately and excluded from the dollar columns. Items sold by size or another variant get one row per variant. Dollar columns are bill totals, so they include sales tax where it applies.",
     cap: "reports.financial",
     columns: [
       { key: "item", label: "Item" },
+      { key: "variant", label: "Variant" },
       { key: "orders", label: "Orders", kind: "int" },
       { key: "paid", label: "Paid", kind: "int" },
       { key: "open", label: "Open", kind: "int" },
@@ -81,15 +82,17 @@ export const GROWTH_REPORTS: ReportDef[] = [
       const { start, end } = bounds(r);
       const rows = await q(
         tx,
-        sql`select p.name as item, count(*)::int as orders,
+        sql`select p.name as item, coalesce(pv.label, '') as variant, count(*)::int as orders,
               count(*) filter (where i.status = 'paid')::int as paid,
               count(*) filter (where i.status = 'open')::int as open,
               count(*) filter (where i.status in ('void','uncollectible'))::int as voided,
               coalesce(sum(i.total_minor) filter (where i.status in ('open','paid')),0)::bigint as ordered_minor,
               coalesce(sum(i.total_minor) filter (where i.status = 'paid'),0)::bigint as paid_minor
             from shop_orders o join invoices i on i.id = o.invoice_id join products p on p.id = o.product_id
+              left join lateral (select l.variant_id from invoice_lines l where l.invoice_id = i.id limit 1) ln on true
+              left join product_variants pv on pv.id = ln.variant_id
             where o.org_id = ${orgId} and o.created_at >= ${start} and o.created_at < ${end}
-            group by p.name order by ordered_minor desc, p.name`,
+            group by p.name, pv.label, pv.position order by ordered_minor desc, p.name, pv.position`,
       );
       return {
         rows,

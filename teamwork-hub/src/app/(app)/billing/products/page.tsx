@@ -9,6 +9,10 @@ import { listLocations } from "@/lib/locations";
 import { ShopListingToggle } from "@/components/growth/shop-listing-toggle";
 import { shopListingsByProduct } from "@/lib/growth/shop";
 import { BillingTabs, Money, requireBillingStaff } from "../_components";
+import { stockByVariant } from "@/lib/billing/pos";
+import { salesTaxSettings } from "@/lib/billing/sales-tax";
+import { variantIdsWithHistory, variantsByProduct } from "@/lib/billing/variants";
+import { RetailOptions } from "./_retail";
 
 export const metadata = { title: "Products" };
 
@@ -42,6 +46,8 @@ export default async function ProductsPage() {
   const locs = await listLocations(db, v.orgId);
   const shopListings = await shopListingsByProduct(db, v.orgId);
   const locName = new Map(locs.map((l) => [l.id, l.name]));
+  const [variants, stock, tax] = await Promise.all([variantsByProduct(db, v.orgId), stockByVariant(db, v.orgId), salesTaxSettings(db, v.orgId)]);
+  const withHistory = await variantIdsWithHistory(db, [...variants.values()].flat().map((x) => x.id));
   const manage = can(v, "billing.manage");
   return (
     <>
@@ -61,6 +67,9 @@ export default async function ProductsPage() {
                     <div className="font-medium">{p.name}</div>
                     {p.sku ? <div className="text-xs text-ink-3">SKU {p.sku}</div> : null}
                     {!p.active ? <Badge>archived</Badge> : null}
+                    {p.kind === "retail" ? (
+                      <RetailOptions product={p} variants={variants.get(p.id) ?? []} stock={stock[p.id] ?? {}} withHistory={withHistory} priceMinor={current?.priceMinor ?? null} currency={current?.currency ?? "USD"} taxRateBps={tax.rateBps} manage={manage} />
+                    ) : null}
                     <ShopListingToggle productId={p.id} kind={p.kind} name={p.name} listing={shopListings.get(p.id)} manage={manage} />
                     {locs.length ? (
                       <div className="mt-1 text-xs text-ink-3">{p.locationIds.length ? `Only at ${p.locationIds.map((id) => locName.get(id) ?? "?").join(", ")}` : "All locations"}</div>

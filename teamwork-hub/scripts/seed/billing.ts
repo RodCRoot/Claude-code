@@ -15,6 +15,7 @@ import { createInvoiceRecord, recordManualPayment, settleInvoiceIfCovered } from
 import { addHold, createMembership } from "../../src/lib/billing/memberships";
 import { adjustStock, quickSale } from "../../src/lib/billing/pos";
 import { generateRenewals } from "../../src/lib/billing/renewals";
+import { addVariants } from "../../src/lib/billing/variants";
 import { refundableMinor } from "../../src/lib/billing/refunds";
 import { REFERENCE_PLANS } from "../../src/lib/membership-policy";
 import { addDaysYmd } from "../../src/lib/time";
@@ -87,7 +88,16 @@ export async function seedBilling(ctx: SeedCtx) {
     });
     refVersions[`ref_${plan.key}`] = r.version.id;
   }
-  await adjustStock(tx, rod, { productId: shirt.product.id, delta: 24, reason: "receive", note: "Sample opening stock" });
+  // Sizes for the sample shirt, with stock counted per size (XL is deliberately out of stock, L is low).
+  // Neither retail sample is marked taxable: a fresh organization starts with every product untaxed.
+  const sizes = await addVariants(tx, rod, { productId: shirt.product.id, labels: ["YS", "YM", "YL", "S", "M", "L", "XL"] });
+  const sizeStock: Record<string, number> = { YS: 4, YM: 4, YL: 4, S: 5, M: 6, L: 1, XL: 0 };
+  for (const sz of sizes) {
+    if (sizeStock[sz.label]) await adjustStock(tx, rod, { productId: shirt.product.id, variantId: sz.id, delta: sizeStock[sz.label], reason: "receive", note: "Sample opening stock" });
+  }
+  const shirtM = sizes.find((x) => x.label === "M")!;
+  const drink = await createProduct(tx, rod, { name: "Sample — Protein Drink", kind: "retail", description: sample, category: "Retail", sku: "SAMPLE-DRINK", trackInventory: true, isDemo: true, version: { priceMinor: 400, effectiveFrom: from } });
+  await adjustStock(tx, rod, { productId: drink.product.id, delta: 30, reason: "receive", note: "Sample opening stock" });
   await adjustStock(tx, rod, { productId: bottle.product.id, delta: 10, reason: "receive", note: "Sample opening stock" });
 
   const pay = async (invoiceId: string, method: "cash" | "check" | "personal_venmo" | "zelle", ref: string) => {
@@ -245,7 +255,7 @@ export async function seedBilling(ctx: SeedCtx) {
   }
 
   // Walk-in retail sale.
-  await quickSale(tx, erin, { items: [{ productId: shirt.product.id, quantity: 1 }, { productId: bottle.product.id, quantity: 2 }], payment: { kind: "manual", method: "cash", reference: "SAMPLE-REG-0001" }, today: T, isDemo: true });
+  await quickSale(tx, erin, { items: [{ productId: shirt.product.id, variantId: shirtM.id, quantity: 1 }, { productId: bottle.product.id, quantity: 2 }], payment: { kind: "manual", method: "cash", reference: "SAMPLE-REG-0001" }, today: T, isDemo: true });
 
   ctx.extra.billing = {
     unlimitedProductId: unlimited.product.id,
@@ -253,6 +263,9 @@ export async function seedBilling(ctx: SeedCtx) {
     twiceVersionId: twice.version.id,
     packVersionId: pack.version.id,
     shirtProductId: shirt.product.id,
+    ...Object.fromEntries(sizes.map((x) => [`shirtSize${x.label}`, x.id])),
+    bottleProductId: bottle.product.id,
+    drinkProductId: drink.product.id,
     mayaMembershipId: maya.membership.id,
     leoMembershipId: leo.membership.id,
     eliMembershipId: eli.membership.id,

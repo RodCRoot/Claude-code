@@ -2,24 +2,25 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { products, REQUEST_CHANNELS, type ProductKind, type RequestChannel } from "@/db/schema";
+import { products, productVariants, REQUEST_CHANNELS, type ProductKind, type RequestChannel } from "@/db/schema";
 import { requireViewer } from "@/lib/auth/viewer";
 import { safeAction, UserError, type ActionState } from "@/lib/actions";
 import { assertCan } from "@/lib/authz/policy";
-import { createProduct, createProductVersion, setProductActive, setProductLocations, versionOn, type VersionInput } from "@/lib/billing/catalog";
+import { createProduct, createProductVersion, setProductActive, setProductLocations, setProductTaxable, versionOn, type VersionInput } from "@/lib/billing/catalog";
+import { addVariants, deleteVariant, moveVariant, setOptionName, updateVariant } from "@/lib/billing/variants";
 import { chargeInvoiceNow } from "@/lib/billing/autopay";
 import { startCheckout } from "@/lib/billing/checkout";
 import { UserError as BillingUserError } from "@/lib/billing/errors";
 import { createManualInvoice, issueInvoice, markUncollectible, recordManualPayment, voidInvoice, type LineInput, type ManualMethod } from "@/lib/billing/invoices";
 import { addHold, cancelMembership, changePlan, createMembership, cutoverMembership, removeHold, startInSeason, type InternalBillingProvider } from "@/lib/billing/memberships";
-import { adjustStock, quickSale } from "@/lib/billing/pos";
+import { adjustStock, moveStock, quickSale } from "@/lib/billing/pos";
 import { requestRefund } from "@/lib/billing/refunds";
 import { generateRenewals } from "@/lib/billing/renewals";
 import { cancelProviderSubscription, startProviderSubscription, switchToTeamworkBilling } from "@/lib/billing/subscriptions";
 import { env } from "@/lib/env";
-import { parseMoneyToMinor } from "@/lib/money";
+import { formatMoney, parseMoneyToMinor } from "@/lib/money";
 import type { ProviderName, SubscriptionProviderName } from "@/lib/payments";
 import { todayLocal } from "@/lib/time";
 
@@ -285,6 +286,8 @@ export async function createInvoiceAction(_p: ActionState, fd: FormData) {
         const [p] = await db.select().from(products).where(eq(products.id, productId));
         if (!p || p.orgId !== v.orgId) throw new UserError("Product not found.");
         if (p.kind === "recurring_membership") throw new UserError("Memberships are billed from the Memberships page.");
+        const [sized] = await db.select({ id: productVariants.id }).from(productVariants).where(and(eq(productVariants.productId, p.id), eq(productVariants.active, true))).limit(1);
+        if (sized) throw new UserError(`${p.name} comes in more than one ${(p.optionName ?? "size").toLowerCase()}. Sell it from the point of sale, where the ${(p.optionName ?? "size").toLowerCase()} is chosen and stock is counted.`);
         const credits = ver.creditsPerPeriod && p.kind !== "retail" && p.kind !== "camp" ? ver.creditsPerPeriod : null;
         if (credits && !athleteId) throw new UserError(`${p.name} grants credits — choose the athlete.`);
         lines.push({ description: desc || p.name, quantity: qty, unitAmountMinor: ver.priceMinor, productVersionId: ver.id, athleteId, entitlement: credits ? { credits, creditExpiryDays: ver.creditExpiryDays ?? undefined, serviceTypeIds: ver.serviceTypeIds } : null });
@@ -371,6 +374,7 @@ export async function refundAction(_p: ActionState, fd: FormData) {
       reason: s(fd, "reason"),
       offline: fd.get("offline") === "on",
       reference: opt(fd, "reference"),
+      invoiceLineId: opt(fd, "invoiceLineId"),
     });
     if (r.status === "blocked_config" || r.status === "failed") return { ok: false, error: r.message };
     return { ok: true, message: r.message };
@@ -382,11 +386,12 @@ export async function refundAction(_p: ActionState, fd: FormData) {
 export async function posSaleAction(_p: ActionState, fd: FormData) {
   return run(async () => {
     const v = await requireViewer();
-    const items: { productId: string; quantity: number }[] = [];
+    // A cart field holds "productId" or, for a product sold by variant, "productId:variantId".
+    const items: { productId: string; variantId: string | null; quantity: number }[] = [];
     for (let i = 0; i < 5; i++) {
-      const pid = s(fd, `item${i}`);
+      const [pid, variantId] = s(fd, `item${i}`).split(":");
       const q = Number(s(fd, `qty${i}`) || "0");
-      if (pid && q > 0) items.push({ productId: pid, quantity: q });
+      if (pid && q > 0) items.push({ productId: pid, variantId: variantId || null, quantity: q });
     }
     const [athleteId, payerFromAthlete] = s(fd, "athletePayer").split(":");
     const payment = s(fd, "paymentKind") === "invoice" ? ({ kind: "invoice" } as const) : ({ kind: "manual", method: s(fd, "method") as ManualMethod, reference: s(fd, "reference") } as const);
@@ -394,7 +399,8 @@ export async function posSaleAction(_p: ActionState, fd: FormData) {
       quickSale(tx, v, { payerAccountId: payerFromAthlete || opt(fd, "payerAccountId"), athleteId: athleteId || null, items, payment, today: todayLocal() }),
     );
     if (payment.kind === "invoice") redirect(`/billing/invoices/${r.invoice.id}`);
-    return { ok: true, message: `Sale ${r.invoice.number} recorded${r.paid ? " and paid (staff attested)" : ""}.`, data: { invoiceId: r.invoice.id } };
+    const tax = r.invoice.taxMinor > 0 ? `, including ${formatMoney(r.invoice.taxMinor, r.invoice.currency)} sales tax` : "";
+    return { ok: true, message: `Sale ${r.invoice.number} recorded for ${formatMoney(r.invoice.totalMinor, r.invoice.currency)}${tax}${r.paid ? ". Paid (staff attested)" : ""}.`, data: { invoiceId: r.invoice.id } };
   });
 }
 
@@ -402,7 +408,70 @@ export async function stockAction(_p: ActionState, fd: FormData) {
   return run(async () => {
     const v = await requireViewer();
     const reason = s(fd, "reason") as "receive" | "adjust" | "return";
-    await db.transaction((tx) => adjustStock(tx, v, { productId: s(fd, "productId"), delta: Number(s(fd, "delta")), reason, note: opt(fd, "note") }));
+    // The item field holds "productId", "productId:variantId", or "productId:" for a product's unassigned stock.
+    const [productId, variantId] = s(fd, "productId").split(":");
+    await db.transaction((tx) => adjustStock(tx, v, { productId, variantId: variantId || opt(fd, "variantId"), delta: Number(s(fd, "delta")), reason, note: opt(fd, "note") }));
     return { ok: true, message: "Stock updated." };
+  });
+}
+
+export async function moveStockAction(_p: ActionState, fd: FormData) {
+  return run(async () => {
+    const v = await requireViewer();
+    await db.transaction((tx) => moveStock(tx, v, { productId: s(fd, "productId"), fromVariantId: opt(fd, "fromVariantId"), toVariantId: s(fd, "toVariantId"), quantity: Number(s(fd, "quantity")), note: s(fd, "note") }));
+    return { ok: true, message: "Stock moved." };
+  });
+}
+
+// --- Retail: sales tax switch and variants ---------------------------------------
+
+export async function productTaxableAction(_p: ActionState, fd: FormData) {
+  return run(async () => {
+    const v = await requireViewer();
+    const on = fd.get("taxable") === "on";
+    await db.transaction((tx) => setProductTaxable(tx, v, s(fd, "productId"), on));
+    return { ok: true, message: on ? "Sales tax will be added to new bills for this item." : "No sales tax on new bills for this item." };
+  });
+}
+
+export async function addVariantsAction(_p: ActionState, fd: FormData) {
+  return run(async () => {
+    const v = await requireViewer();
+    const labels = s(fd, "labels").split(",").map((x) => x.trim()).filter(Boolean);
+    const price = s(fd, "price") ? money(fd, "price", "the price") : null;
+    const rows = await db.transaction((tx) => addVariants(tx, v, { productId: s(fd, "productId"), labels, sku: opt(fd, "sku"), priceMinor: price }));
+    return { ok: true, message: `Added ${rows.map((x) => x.label).join(", ")}.` };
+  });
+}
+
+export async function updateVariantAction(_p: ActionState, fd: FormData) {
+  return run(async () => {
+    const v = await requireViewer();
+    const price = s(fd, "price") ? money(fd, "price", "the price") : null;
+    await db.transaction((tx) => updateVariant(tx, v, { variantId: s(fd, "variantId"), label: s(fd, "label"), sku: opt(fd, "sku"), priceMinor: price }));
+    return { ok: true, message: "Saved." };
+  });
+}
+
+export async function variantCommandAction(_p: ActionState, fd: FormData) {
+  return run(async () => {
+    const v = await requireViewer();
+    const variantId = s(fd, "variantId");
+    const cmd = s(fd, "cmd");
+    await db.transaction(async (tx) => {
+      if (cmd === "up" || cmd === "down") await moveVariant(tx, v, { variantId, direction: cmd });
+      else if (cmd === "deactivate" || cmd === "activate") await updateVariant(tx, v, { variantId, active: cmd === "activate" });
+      else if (cmd === "delete") await deleteVariant(tx, v, variantId);
+      else throw new UserError("Unknown action.");
+    });
+    return { ok: true, message: cmd === "deactivate" ? "Deactivated. It can no longer be sold; its history is kept." : cmd === "delete" ? "Removed." : "Saved." };
+  });
+}
+
+export async function optionNameAction(_p: ActionState, fd: FormData) {
+  return run(async () => {
+    const v = await requireViewer();
+    await db.transaction((tx) => setOptionName(tx, v, { productId: s(fd, "productId"), optionName: s(fd, "optionName") }));
+    return { ok: true, message: "Saved." };
   });
 }

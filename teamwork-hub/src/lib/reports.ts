@@ -7,6 +7,7 @@ import { RETENTION_REPORTS } from "@/lib/retention/reports";
 import { GROWTH_REPORTS } from "@/lib/growth/reports";
 import { LEAD_REPORTS } from "@/lib/crm/lead-report";
 import { CHECKIN_REPORTS } from "@/lib/checkins/reports";
+import { RETAIL_REPORTS } from "@/lib/billing/tax-report";
 
 export type ReportColumn = { key: string; label: string; kind?: "money" | "int" | "pct" | "date" | "datetime" | "text" };
 /** `locationId` narrows location-aware reports (attendance, utilization) to one location. */
@@ -266,7 +267,7 @@ export const REPORTS: ReportDef[] = [
     title: "Collected revenue (settled)",
     category: "Money",
     definition:
-      "Money actually settled in the range (by settlement time), by provider and verification. 'Provider verified' came from a verified processor webhook; 'staff attested' is cash/check/personal Venmo/Zelle recorded by staff. Pending money is listed separately and NOT counted as collected. Refunds and fees are shown as their own lines.",
+      "Money actually settled in the range (by settlement time), by provider and verification. 'Provider verified' came from a verified processor webhook; 'staff attested' is cash/check/personal Venmo/Zelle recorded by staff. Pending money is listed separately and NOT counted as collected. Refunds and fees are shown as their own lines. Amounts are what customers paid, so they include any sales tax; the Sales tax collected report shows the tax on its own.",
     cap: "reports.financial",
     columns: [
       { key: "provider", label: "Provider" },
@@ -306,19 +307,20 @@ export const REPORTS: ReportDef[] = [
     key: "invoiced",
     title: "Invoiced (billed)",
     category: "Money",
-    definition: "Invoices issued in the range by status. Billed is not the same as collected — see Collected revenue for settled money.",
+    definition: "Invoices issued in the range by status. Billed includes any sales tax on the bill; the tax is also shown on its own. Billed is not the same as collected — see Collected revenue for settled money.",
     cap: "reports.financial",
     columns: [
       { key: "status", label: "Status" },
       { key: "source", label: "Source" },
       { key: "count", label: "Invoices", kind: "int" },
       { key: "total_minor", label: "Billed", kind: "money" },
+      { key: "tax_minor", label: "…of which sales tax", kind: "money" },
     ],
     run: async (tx, orgId, r) => {
       const { start, end } = bounds(r);
       const rows = await q(
         tx,
-        sql`select status, source, count(*)::int as count, sum(total_minor)::bigint as total_minor from invoices
+        sql`select status, source, count(*)::int as count, sum(total_minor)::bigint as total_minor, sum(tax_minor)::bigint as tax_minor from invoices
             where org_id = ${orgId} and coalesce(issued_at, created_at) >= ${start} and coalesce(issued_at, created_at) < ${end} and status <> 'draft'
             group by 1,2 order by 1,2`,
       );
@@ -538,6 +540,7 @@ export const REPORTS: ReportDef[] = [
     },
   },
   ...RETENTION_REPORTS,
+  ...RETAIL_REPORTS,
   ...GROWTH_REPORTS,
   ...LEAD_REPORTS,
   ...CHECKIN_REPORTS,

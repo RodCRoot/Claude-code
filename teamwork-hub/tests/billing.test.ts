@@ -328,11 +328,11 @@ describe("POS and exceptions", () => {
   it("sells retail with stock checks and inventory movements", async () => {
     const db = testDb();
     const erin = await viewerFor(ctx, "erin");
-    const before = (await onHandCounts(db, ctx.orgId))[B.shirtProductId];
-    await expect(db.transaction((tx) => quickSale(tx, erin, { items: [{ productId: B.shirtProductId, quantity: before + 1 }], payment: { kind: "invoice" }, today: T }))).rejects.toThrow(/on hand/);
-    const s = await db.transaction((tx) => quickSale(tx, erin, { items: [{ productId: B.shirtProductId, quantity: 2 }], payment: { kind: "manual", method: "cash", reference: "REG-2" }, today: T }));
+    const before = (await onHandCounts(db, ctx.orgId))[B.bottleProductId];
+    await expect(db.transaction((tx) => quickSale(tx, erin, { items: [{ productId: B.bottleProductId, quantity: before + 1 }], payment: { kind: "invoice" }, today: T }))).rejects.toThrow(/on hand/);
+    const s = await db.transaction((tx) => quickSale(tx, erin, { items: [{ productId: B.bottleProductId, quantity: 2 }], payment: { kind: "manual", method: "cash", reference: "REG-2" }, today: T }));
     expect(s.paid).toBe(true);
-    expect((await onHandCounts(db, ctx.orgId))[B.shirtProductId]).toBe(before - 2);
+    expect((await onHandCounts(db, ctx.orgId))[B.bottleProductId]).toBe(before - 2);
   });
 
   it("paymentExceptions surfaces past-due memberships and pending bank payments", async () => {

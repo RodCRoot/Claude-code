@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  check,
   date,
   index,
   integer,
@@ -28,7 +29,9 @@ export type ProductKind =
   | "trial"
   | "retail";
 
-export const products = pgTable("products", {
+export const products = pgTable(
+  "products",
+  {
   id: id(),
   orgId: orgId(),
   name: text("name").notNull(),
@@ -40,13 +43,50 @@ export const products = pgTable("products", {
   sku: text("sku"),
   trackInventory: boolean("track_inventory").notNull().default(false),
   /**
+   * Sales tax is charged on this product's lines. Off for every product until staff turn it on, and
+   * only retail goods can carry it (CHECK below): memberships, training, camps and packs stay untaxed.
+   */
+  taxable: boolean("taxable").notNull().default(false),
+  /** Name of the one variant option (e.g. "Size"). Null = "Size". Only meaningful when the product has variants. */
+  optionName: text("option_name"),
+  /**
    * Locations this product's memberships/credits are valid at; empty = every location.
    * Lives on the product (not the immutable version) because it is a scope rule, not a price term.
    */
   locationIds: jsonb("location_ids").$type<string[]>().notNull().default([]),
   isDemo: isDemo(),
   createdAt: createdAt(),
-});
+  },
+  (t) => [check("products_taxable_retail_ck", sql`not ${t.taxable} or ${t.kind} = 'retail'`)],
+);
+
+/**
+ * A variant of a retail product along its one option (e.g. Size: YS, YM, S, M, L). Ordered by
+ * `position`. A variant with sales or stock history is deactivated, never deleted.
+ */
+export const productVariants = pgTable(
+  "product_variants",
+  {
+    id: id(),
+    orgId: orgId(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id),
+    label: text("label").notNull(),
+    sku: text("sku"),
+    /** Price override in minor units; null = the product's price in effect on the day of sale. */
+    priceMinor: minor("price_minor"),
+    position: integer("position").notNull().default(0),
+    active: boolean("active").notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("product_variants_label_uq").on(t.productId, sql`lower(${t.label})`),
+    index("product_variants_product_idx").on(t.productId, t.position),
+    check("product_variants_price_ck", sql`${t.priceMinor} is null or ${t.priceMinor} >= 0`),
+  ],
+);
 
 /**
  * Immutable price/terms version. Changing a price creates a new version with an
@@ -202,7 +242,12 @@ export const invoices = pgTable(
     currency: text("currency").notNull().default("USD"),
     subtotalMinor: minor("subtotal_minor").notNull().default(0),
     discountMinor: minor("discount_minor").notNull().default(0),
+    /** Sales tax on this bill, fixed when it is issued. total = subtotal - discount + tax. */
     taxMinor: minor("tax_minor").notNull().default(0),
+    /** Rate (basis points, 700 = 7.00%) the tax was computed with. Null = the bill has no taxable lines (or predates sales tax). */
+    taxRateBps: integer("tax_rate_bps"),
+    /** Sum of the taxable lines after the price discount allocated to them (the amount the rate was applied to). */
+    taxableMinor: minor("taxable_minor").notNull().default(0),
     totalMinor: minor("total_minor").notNull().default(0),
     issuedAt: ts("issued_at"),
     dueDate: date("due_date"),
@@ -254,6 +299,14 @@ export const invoiceLines = pgTable("invoice_lines", {
   unitAmountMinor: minor("unit_amount_minor").notNull(),
   amountMinor: minor("amount_minor").notNull(),
   entitlement: jsonb("entitlement").$type<EntitlementSpec>(),
+  /** Variant sold (retail). The label is also written into the description so it survives a rename. */
+  variantId: uuid("variant_id").references(() => productVariants.id),
+  /** Copied from the product when the bill is created; later product changes never alter the bill. */
+  taxable: boolean("taxable").notNull().default(false),
+  /** Share of the bill's price discount allocated to this line (credits are not allocated). */
+  discountMinor: minor("discount_minor").notNull().default(0),
+  /** Share of the bill's tax that belongs to this line; the lines sum to invoices.tax_minor. */
+  taxMinor: minor("tax_minor").notNull().default(0),
 });
 
 export type PaymentProvider = "stripe" | "paypal" | "venmo" | "manual";
@@ -353,6 +406,10 @@ export const refunds = pgTable("refunds", {
   providerRefundId: text("provider_refund_id").unique(),
   requestedBy: uuid("requested_by"),
   idempotencyKey: text("idempotency_key").unique(),
+  /** Part of amount_minor that is sales tax being given back (0 when the bill carried no tax). */
+  taxMinor: minor("tax_minor").notNull().default(0),
+  /** The bill line this refund is for, when staff named one; null = the whole bill, in proportion. */
+  invoiceLineId: uuid("invoice_line_id").references(() => invoiceLines.id),
   createdAt: createdAt(),
 });
 
@@ -674,6 +731,8 @@ export const inventoryMovements = pgTable("inventory_movements", {
   productId: uuid("product_id")
     .notNull()
     .references(() => products.id),
+  /** Variant the stock belongs to. Null = the product has no variants, or "unassigned" stock counted before it had any. */
+  variantId: uuid("variant_id").references(() => productVariants.id),
   delta: integer("delta").notNull(),
   reason: text("reason").$type<"receive" | "sale" | "adjust" | "return">().notNull(),
   invoiceLineId: uuid("invoice_line_id").references(() => invoiceLines.id),

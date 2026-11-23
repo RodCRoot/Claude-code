@@ -121,7 +121,7 @@ async function NewInvoice({ orgId, today }: { orgId: string; today: string }) {
             <Field label="Due date" htmlFor="dueDate" hint="Defaults to the org's due-days setting">
               <Input id="dueDate" name="dueDate" type="date" />
             </Field>
-            <Field label="Invoice discount ($)" htmlFor="discount" hint="Optional, e.g. 10.00">
+            <Field label="Invoice discount ($)" htmlFor="discount" hint="Optional, e.g. 10.00. Spread across the lines in proportion; sales tax, where a retail product is marked taxable, is added on the discounted price.">
               <Input id="discount" name="discount" inputMode="decimal" placeholder="0.00" />
             </Field>
           </div>
