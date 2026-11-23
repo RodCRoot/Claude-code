@@ -10,6 +10,7 @@ import { familyRateConfirmed, familyRateLadder, familyRateSummary, policyFromSet
 import { formatMoney } from "@/lib/money";
 import { addDaysYmd, DEFAULT_TZ, fmtDate, startOfWeekYmd } from "@/lib/time";
 import { growthFromSettings, type GrowthSettings } from "./settings";
+import { estimateSiblingCredits } from "@/lib/billing/family-credit";
 import { familyName, shopItems } from "./shop";
 
 /**
@@ -274,14 +275,24 @@ export async function computeOffers(tx: Tx, orgId: string, opts: { today: string
       seenPayer.add(m.payer_account_id!);
       const names = others.map((o) => o.first_name).join(" and ");
       const a = A.get(m.athlete_id)!;
+      // Added perk (owner, 2026-11-23): the member already enrolled earns a credit on the next bill.
+      const perk = policy.familyRateSiblingCredit;
+      const estimates = perk ? (await estimateSiblingCredits(tx, orgId, others[0].athlete_id, T, { policy })).filter((c) => c.payerAccountId === m.payer_account_id) : [];
       out.push({
         ...base("sibling_discount", m.athlete_id, m),
         familyVisible: confirmed,
         title: `${names} ${others.length === 1 ? "is" : "are"} on file but not enrolled`,
-        familyText: `${names} ${others.length === 1 ? "is" : "are"} on your account and not enrolled right now. Households with two or more active members get a family discount on each membership (${familyRateLadder(policy)}). If ${others.length === 1 ? names : "they"} would like to train alongside ${a.first_name}, the front desk can help.`,
+        familyText: `${names} ${others.length === 1 ? "is" : "are"} on your account and not enrolled right now. Households with two or more active members get a family discount on each membership (${familyRateLadder(policy)}). ${perk ? ` Enrolling now also earns ${a.first_name} a credit on next month's bill, for the higher family discount over the rest of this billing period.` : ""} If ${others.length === 1 ? names : "they"} would like to train alongside ${a.first_name}, the front desk can help.`,
         evidence: [
           `${a.first_name} is enrolled (${m.product_name}); ${names} ${others.length === 1 ? "is" : "are"} already on file as ${others.length === 1 ? "an athlete" : "athletes"} on the same billing account with no membership`,
           `Family rate in Settings: ${familyRateSummary(policy)}${confirmed ? "" : " (the cap is not confirmed by an owner yet, so families do not see this suggestion)"}`,
+          ...(perk
+            ? [
+                estimates.length
+                  ? `Added perk: enrolling ${others[0].first_name} today would earn a credit on the next bill of ${estimates.map((c) => `${c.firstName} about ${money(c.creditMinor, c.currency)} (family discount ${c.fromPercent}% to ${c.newPercent}%, ${c.daysRemaining} of ${c.daysInPeriod} days left in the billed period)`).join("; ")}. Sample wording, not contract text`
+                  : "Added perk: enrolling a sibling partway through a billed period earns each member already enrolled a credit on the next bill for the rest of that period (no estimate today: no bill issued here covers today, or the rate would not rise)",
+              ]
+            : []),
         ],
         estMonthlyMinor: null,
         estOneTimeMinor: null,

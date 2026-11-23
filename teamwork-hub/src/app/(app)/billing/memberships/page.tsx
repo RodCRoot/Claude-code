@@ -6,6 +6,7 @@ import type { Viewer } from "@/lib/authz/policy";
 import { isBillingStaff } from "@/lib/billing/access";
 import { UserError } from "@/lib/billing/errors";
 import { previewMembershipStart } from "@/lib/billing/memberships";
+import { SIBLING_CREDIT_PERK } from "@/lib/billing/family-credit";
 import { listMemberships, membershipPlanOptions, payerOptions } from "@/lib/billing/queries";
 import { PRORATION_LABELS } from "@/lib/membership-policy";
 import { formatMoney } from "@/lib/money";
@@ -170,6 +171,23 @@ async function NewMembership({ viewer, search }: { viewer: Viewer; search: Searc
                   <dt className="text-ink-3">Commitment</dt><dd>{preview.commitment ? `${preview.commitment.months} months, ${fmtDate(preview.commitment.startsOn)} – ${fmtDate(preview.commitment.endsOn)}, then month-to-month at the same rate` : "None (month-to-month)"}</dd>
                   <dt className="text-ink-3">Weekly classes</dt><dd>{preview.version.classesPerWeek ? `${preview.version.classesPerWeek} per week` : preview.version.unlimited ? "Unlimited" : "—"}</dd>
                 </dl>
+                {preview.siblingCreditOn && preview.discountPercent ? (
+                  <div className="mt-3 rounded-md border border-edge bg-surface-2 p-3 text-sm" data-testid="sibling-credit-preview">
+                    <p>{SIBLING_CREDIT_PERK}</p>
+                    {preview.siblingCredits.length ? (
+                      <ul className="mt-1 list-disc pl-5">
+                        {preview.siblingCredits.map((c) => (
+                          <li key={c.membershipId}>
+                            {c.firstName} ({c.productName}): about <strong><Money minor={c.creditMinor} currency={c.currency} /></strong> off the next bill. Family discount {c.fromPercent}% to {c.newPercent}%, {c.daysRemaining} of {c.daysInPeriod} days left in the period billed through {fmtDate(c.periodEnd)}.
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-1 text-ink-2">No credit is estimated today: no member already enrolled has a bill issued here for a period with days left, or the household rate does not go up.</p>
+                    )}
+                    <p className="mt-1 text-xs text-ink-3">Estimate for a membership created today. The bill already issued is not changed and nothing is refunded in cash. Sample wording, not contract text.</p>
+                  </div>
+                ) : null}
                 <ActionForm action={createMembershipAction} className="mt-4 grid gap-4 sm:grid-cols-3 [&>*]:min-w-0">
                   <input type="hidden" name="athletePayer" value={search.athletePayer} />
                   <input type="hidden" name="productVersionId" value={search.productVersionId} />

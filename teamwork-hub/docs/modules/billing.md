@@ -202,21 +202,66 @@ Tests: `tests/billing-membership-policy.test.ts`.
     refreshed; and after billing, once memberships that ended have been closed). The daily run is also what
     picks up a person moving household (no staff screen moves a person between households today; imports and
     their undo do). Idempotent: a second run writes nothing. One run per organization at a time (advisory lock).
-  - **Timing (not decided by the owner; this is what the code does).** The sync only sets the discount on the
-    membership. A bill is priced from that discount when it is issued; a bill already issued is never re-priced,
-    credited or topped up, and nothing is prorated. So a change shows on the next bill issued after it:
-    - *Gaining a member:* the tier rises the moment the new membership is created (even if it starts later).
-      The new member's first bill (the partial first month included) is at the new tier. The siblings' next
-      bills are at the new tier; their bill for the current period stays as issued.
-    - *Losing a member, staff cancel effective today or a hold entered for today:* the tier drops at once and
-      the remaining members' next bills are at the lower tier.
-    - *Losing a member through the daily job:* a hold that starts by date is applied before that day's bills, so
-      the siblings' bill of that day is already at the lower tier. A scheduled cancellation or an In Season
-      expiry is applied after that day's bills (as before this change), so a sibling billed on the same day
-      still gets the higher tier once more and the lower tier from the bill after.
-    - *A hold ending:* applied before that day's bills, so the returning member and the siblings are billed at
-      the restored tier on the restart date.
-    No setting was added for this: an "immediate with proration" mode would have to re-price issued bills.
+  - **Timing (owner's decision, 2026-11-23).** Rod, in his words: "immediately. You can prorate the sibling for
+    a bill credit for the remainder of the billing period w/ discount so it can be applied to next months bill.
+    Just throw that in as an 'added perk' for the upsell process". Code: `src/lib/billing/family-credit.ts`;
+    tests: `tests/billing-family-credit.test.ts`.
+    - *The rate itself* changes on the membership the moment the event happens, as before. A bill is priced from
+      it when the bill is issued; **a bill already issued is never re-priced**.
+    - *Rate goes UP (sibling credit).* When a recalculation raises the rate on a hub-invoiced membership whose
+      current billing period is already billed, that member gets a bill credit:
+      `credit = round(base × (new % − old %) ÷ 100 × days remaining ÷ days in period)`.
+      - `base` = the amount billed for the membership for that period **before discounts** (the bill's subtotal;
+        for a partial first month, the partial amount). The family rate is a percent of that amount.
+      - `days remaining` = the day the rate changed through the last day of the billed period, **both included**.
+        `days in period` = first through last day of the billed period, both included. A change on the first
+        day credits the whole period; on the last day, one day.
+      - One rounding, half up to the cent (`Math.round`, the rule `percentOf` uses).
+      - `old %` = the highest rate the period has already had: the rate before the change, the rate the bill
+        was priced with (`invoices.family_rate_percent`), or the rate of an earlier credit for the same bill.
+        So a rate that drops and comes back inside one period is not credited twice.
+      - "The day the rate changed" is the day the recalculation ran: the day the new membership was created
+        (also when it starts later, and in the guided sign-up flow the day the plan was chosen), the day a hold
+        ended, or the day of the daily job.
+      - Worked example: Ada is billed $129.00 for 1 to 30 November at 0%. Her brother enrols on 16 November, so
+        the household goes to 10%. Days remaining 16 to 30 = 15 of 30. Credit = 12900 × 10% × 15 ÷ 30 = $6.45.
+        Her December bill is $129.00 − $12.90 (10%) − $6.45 = $109.65. The brother's own first bill is already
+        at 10%, so he gets no credit.
+    - *Where the credit lives.* One `account_credit_ledger` entry, kind `family_rate_credit`, tied to the
+      membership (`membership_id`) and to the bill it was earned on, with a `family_rate_credit` membership event
+      and an audit entry recording household, old and new percent, period, days, base and amount.
+    - *How it is used.* `billPeriod` takes the outstanding credit off that membership's **next bill**
+      automatically: it is added to the bill's discount, written to the ledger as `applied_to_invoice`, named in
+      the bill's memo ("Family rate credit: $6.45 off this bill, ...") and shown as its own "Family rate credit"
+      row on the bill and the printable receipt. It is never a payment, and nothing is refunded in cash.
+    - *Credit larger than the next bill.* The bill goes to $0 (and is then marked paid like any $0 bill), never
+      below; the rest stays in the ledger and comes off the bill after. The memo says how much is carried.
+    - *Who gets none.* The newcomer (their first bill is already at the new rate). A member whose first bill is
+      not issued yet. A membership on another discount (no stacking, so no family rate and no credit). Imported
+      Zen Planner memberships (never touched). Stripe/PayPal subscription memberships: staff get the existing
+      task, which now says that no credit was created because the hub cannot take one off a provider's bill.
+      Complimentary memberships (no bills).
+    - *Idempotent.* A second recalculation or daily job finds the rate unchanged and writes nothing; the ledger
+      entry also has a unique key per membership, billed period and new rate.
+    - *Setting.* Settings → Membership policy → "Family rate: credit existing members when the rate goes up
+      mid-period" (`familyRateSiblingCredit`, on by default, decided by the owner so not flagged). Off: a higher
+      rate only shows on the next bill. Turning it on later does not hand out credits for rises already past.
+    - *Rate goes DOWN* (a member cancels, goes on hold, expires). The hub's reading of "immediately": the rate
+      on the membership drops at once and **the next bill is at the lower rate; nothing is charged or clawed
+      back for the period already billed**, and a credit already earned is kept. The owner described a credit
+      for the gain only, and a top-up charge mid-period would be a surprise bill.
+    - *Order inside the daily job (unchanged).* A hold that starts or ends by date is applied before that day's
+      bills. A scheduled cancellation or an In Season expiry is applied after them, so a sibling billed that
+      same day gets the higher tier once more and the lower tier from the bill after.
+    - *The upsell ("added perk").* One sentence in the sibling helpful offer (family text and staff evidence,
+      with the estimate), in the staff "Preview first bill" box on Billing → Memberships (with the estimated
+      credit per existing member), and on the plan step of the guided sign-up flow (a family sees estimates only
+      for members on its own billing account). Sample wording, not contract text. No message is sent.
+    - *Known limits.* The credit is granted when the new membership is created. If that membership is withdrawn
+      before it ever starts, the credit is not taken back (once per billed period at most). Voiding a bill does
+      not return the credit that came off it. The sibling credit is its own pool in the ledger
+      (entries with a `membership_id`): it is not part of the payer's general account credit balance on the
+      Referrals screen, and staff cannot spend it on another invoice by hand.
   - **Left alone.** A membership carrying any other discount is not stacked or replaced (its athlete still
     counts). Stripe/PayPal subscription memberships are not changed (the provider amount is fixed); staff get a
     task. **Zen Planner-billed (imported) memberships are never re-priced, billed or otherwise touched, but a
@@ -225,7 +270,7 @@ Tests: `tests/billing-membership-policy.test.ts`.
     as a household of one and the moved child loses the rate.
   - **Old settings.** A saved flat `familyDiscountPercent` is ignored and dropped on the next save (a saved 0
     still means "off"). No database migration.
-  Open for Rod in `DECISIONS.md`: timing, imported memberships counting, the cap value.
+  Open for Rod in `DECISIONS.md`: imported memberships counting. Timing was decided on 2026-11-23 (above).
 - **Restart nudges.** Each hold / in-season term enqueues `automation.evaluate` (trigger
   `membership_restart_upcoming`, deduped `restart_nudge:<holdId>`, run at restart − `restartNudgeDaysBefore`,
   09:00 local) plus a deduped staff task. Families are messaged only if an enabled automation rule exists;

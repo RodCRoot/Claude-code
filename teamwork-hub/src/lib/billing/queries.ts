@@ -75,8 +75,11 @@ export async function invoiceDetail(tx: Tx, v: Viewer, invoiceId: string) {
     : [];
   const money = await invoiceMoney(tx, inv.id);
   const canPay = inScope(await payablePayerIds(tx, v), inv.payerAccountId);
+  const { siblingCreditOnInvoices } = await import("./family-credit");
   return {
     invoice: inv,
+    /** Part of the discount that is a family rate (sibling) credit; shown as its own row. */
+    familyCreditMinor: (await siblingCreditOnInvoices(tx, inv.orgId, [inv.id]))[inv.id] ?? 0,
     payer,
     lines,
     // Families see their payments but not staff notes/recorders.

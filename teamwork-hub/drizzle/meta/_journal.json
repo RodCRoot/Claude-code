@@ -253,6 +253,13 @@
       "when": 1794839686719,
       "tag": "0035_attend",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1795453136908,
+      "tag": "0036_credit",
+      "breakpoints": true
     }
   ]
 }

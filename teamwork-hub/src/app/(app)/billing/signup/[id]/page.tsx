@@ -139,6 +139,13 @@ export default async function SignupFlowPage({ params, searchParams }: { params:
                       );
                     })}
                   </fieldset>
+                  {view.siblingCreditPerk && !view.steps.plan ? (
+                    <Callout tone="ok" title="Family discount perk">
+                      Enrolling now also earns each family member already enrolled a credit on next month&apos;s bill, for the higher family discount over the rest of this billing period.
+                      {view.siblingCredits.length ? <> Estimated credit if you enroll today: {view.siblingCredits.map((c) => `${c.firstName} ${formatMoney(c.creditMinor, c.currency)}`).join(", ")}.</> : null}
+                      <span className="mt-1 block text-xs text-ink-3">The exact amount depends on the day you enroll. Sample wording, not contract text.</span>
+                    </Callout>
+                  ) : null}
                   {view.referralDiscountMinor > 0 ? (
                     <Callout tone="ok" title="New family referral discount">
                       {formatMoney(view.referralDiscountMinor)} comes off your first bill (up to the amount of that bill).

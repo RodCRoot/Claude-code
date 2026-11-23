@@ -135,9 +135,12 @@ export const referralRewards = pgTable(
 
 /**
  * Account credit ledger (signed minor units; positive = credit owed to the family). The balance is
- * the sum of entries. Entries are only ever written by a staff action (reward approval, applying
- * credit to an invoice) and carry a unique idempotency key. This is NOT money received: it never
- * appears in the transactions ledger and never marks an invoice paid.
+ * the sum of entries. Entries are written by a staff action (reward approval, applying credit to an
+ * invoice) or by the family rate sibling credit (`family_rate_credit`, see billing/family-credit.ts:
+ * granted when a household's rate rises mid-period, tied to one membership through `membership_id`
+ * and taken off that membership's next bill automatically). Every entry carries a unique idempotency
+ * key. This is NOT money received: it never appears in the transactions ledger and never marks an
+ * invoice paid.
  */
 export const accountCreditLedger = pgTable(
   "account_credit_ledger",
@@ -149,16 +152,19 @@ export const accountCreditLedger = pgTable(
       .references(() => payerAccounts.id),
     deltaMinor: minor("delta_minor").notNull(),
     currency: text("currency").notNull(),
-    kind: text("kind").$type<"referral_reward" | "applied_to_invoice">().notNull(),
+    kind: text("kind").$type<"referral_reward" | "applied_to_invoice" | "family_rate_credit">().notNull(),
     rewardId: uuid("reward_id").references(() => referralRewards.id),
+    /** applied_to_invoice: the bill the credit came off. family_rate_credit: the already-billed period it was earned on. */
     invoiceId: uuid("invoice_id").references(() => invoices.id),
+    /** Set on a sibling credit and on its applications: the credit belongs to this membership's next bill, and is not part of the payer's general balance. */
+    membershipId: uuid("membership_id").references(() => memberships.id),
     reason: text("reason"),
     actorUserId: uuid("actor_user_id").references(() => users.id),
     idempotencyKey: text("idempotency_key").notNull(),
     isDemo: isDemo(),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex("account_credit_idem_uq").on(t.orgId, t.idempotencyKey), index("account_credit_payer_idx").on(t.payerAccountId)],
+  (t) => [uniqueIndex("account_credit_idem_uq").on(t.orgId, t.idempotencyKey), index("account_credit_payer_idx").on(t.payerAccountId), index("account_credit_membership_idx").on(t.membershipId)],
 );
 
 // ---------------------------------------------------------------------------

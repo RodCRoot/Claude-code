@@ -201,7 +201,7 @@ export async function choosePlan(tx: Tx, v: Viewer, input: { flowId: string; pro
       const cur = await currentAgreement(tx, m.id);
       if (cur && cur.requestStatus !== "completed") await tx.update(formRequests).set({ status: "voided" }).where(eq(formRequests.id, cur.formRequestId));
       const { syncFamilyDiscount } = await import("@/lib/billing/memberships");
-      await syncFamilyDiscount(tx, actorOf(v), v.orgId);
+      await syncFamilyDiscount(tx, actorOf(v), v.orgId, { today: input.today });
     }
   }
   const { membership } = await createMembership(
@@ -245,6 +245,13 @@ export type SignupView = {
   viewerIsStaff: boolean;
   plans: Awaited<ReturnType<typeof publishedPlans>>;
   familyDiscountPercent: number;
+  /**
+   * Plan step only: estimated credit on the next bill for each family member already enrolled, if this
+   * athlete enrolls today (family rate sibling credit). A family sees only members on its own billing account.
+   */
+  siblingCredits: { firstName: string; creditMinor: number; currency: string }[];
+  /** The sibling credit setting is on and this athlete would be on a family rate. */
+  siblingCreditPerk: boolean;
   /** Pending referral new-family discount that will come off the first bill (capped at that bill). */
   referralDiscountMinor: number;
   agreementAvailable: boolean;
@@ -273,6 +280,10 @@ export async function signupView(tx: Tx, v: Viewer, flowId: string, today: strin
   // Family rate this athlete gets once enrolled: 5% per active member of the household, this one included.
   const { familyRateIfEnrolled } = await import("@/lib/billing/family-rate");
   const familyDiscountPercent = (await familyRateIfEnrolled(tx, v.orgId, flow.athleteId, policy)).percent;
+  const { estimateSiblingCredits } = await import("@/lib/billing/family-credit");
+  const viewerIsStaff = can(v, "billing.manage");
+  const siblingCreditPerk = flow.kind === "new" && policy.familyRateSiblingCredit && familyDiscountPercent > 0;
+  const siblingCredits = siblingCreditPerk && !flow.membershipId ? await estimateSiblingCredits(tx, v.orgId, flow.athleteId, today, { policy, payerAccountId: viewerIsStaff ? undefined : flow.payerAccountId }) : [];
   const rewards = await tx.select({ amount: referralRewards.amountMinor }).from(referralRewards).where(and(eq(referralRewards.orgId, v.orgId), eq(referralRewards.payerAccountId, flow.payerAccountId), eq(referralRewards.kind, "invoice_discount"), eq(referralRewards.status, "pending")));
   const referralPending = rewards.reduce((s, r) => s + (r.amount ?? 0), 0);
 
@@ -328,9 +339,11 @@ export async function signupView(tx: Tx, v: Viewer, flowId: string, today: strin
     flow,
     athleteName: a ? `${a.first} ${a.last}` : "Athlete",
     payerName: payer?.name ?? "Payer",
-    viewerIsStaff: can(v, "billing.manage"),
+    viewerIsStaff,
     plans: plans.map((p) => ({ ...p })),
     familyDiscountPercent,
+    siblingCredits: siblingCredits.map((c) => ({ firstName: c.firstName, creditMinor: c.creditMinor, currency: c.currency })),
+    siblingCreditPerk,
     referralDiscountMinor: referralPending,
     agreementAvailable: !!(await agreementTemplateVersion(tx, v.orgId)),
     terms,

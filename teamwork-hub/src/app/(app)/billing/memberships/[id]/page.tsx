@@ -12,6 +12,7 @@ import { membershipDetail, membershipPlanOptions } from "@/lib/billing/queries";
 import { addMonthsYmd } from "@/lib/billing/util";
 import { effectiveNoticeDays, membershipPolicy } from "@/lib/membership-policy";
 import { formatMoney } from "@/lib/money";
+import { familyCreditText } from "@/lib/billing/family-credit";
 import { addDaysYmd, fmt, fmtDate, todayLocal } from "@/lib/time";
 import { billingMethodView } from "@/lib/billing/subscriptions";
 import { addHoldAction, cancelMembershipAction, cancelSubscriptionAction, changePlanAction, cutoverAction, removeHoldAction, startInSeasonAction } from "../../actions";
@@ -463,6 +464,7 @@ export default async function MembershipPage({ params }: { params: Promise<{ id:
               {d.events.map(({ e, actor }) => (
                 <li key={e.id} className="border-l-2 border-edge pl-3">
                   <div className="font-medium">{e.type.replaceAll("_", " ")}{e.effectiveOn ? <span className="font-normal text-ink-3"> · effective {fmtDate(e.effectiveOn)}</span> : null}</div>
+                  {e.type === "family_rate_credit" || e.type === "family_rate_credit_applied" ? <div data-testid="family-credit-event">{familyCreditText(e.type, e.details as Record<string, unknown> | null)}</div> : null}
                   <div className="text-xs text-ink-3">{fmt(e.createdAt)}{actor ? ` · ${actor}` : " · system"}</div>
                 </li>
               ))}

@@ -136,7 +136,9 @@ describe("family discount: applied when a second sibling enrols, removed when on
     expect(await discountOf(back.membership.id)).toBe("Family discount 10%");
     await db().transaction((t) => generateRenewals(t, ctx.orgId, "2026-12-01"));
     const [dec] = await db().select().from(invoices).where(and(eq(invoices.membershipId, first.membership.id), eq(invoices.periodStart, "2026-12-01")));
-    expect(dec.totalMinor).toBe(12900 - 1290);
+    // December is at 10%, less the sibling credit (owner's decision 2026-11-23): November was billed at 0% and the
+    // rate rose on 2 November, 29 of 30 days left: 12900 × 10% × 29 ÷ 30 = 1247.
+    expect(dec.totalMinor).toBe(12900 - 1290 - 1247);
   });
 
   it("eligibility follows the household, not the billing account: siblings billed to two accounts both get the family rate", async () => {
